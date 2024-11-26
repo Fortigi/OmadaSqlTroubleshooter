@@ -45,7 +45,7 @@ try {
     $OmadaTroubleShooterIcoPath = $OmadaTroubleShooterPs1Path.Replace(".ps1", ".ico")
     $ShortcutFullPath = Join-Path $WshShell.SpecialFolders("Desktop") -ChildPath "$($ScriptName.Replace(".ps1",".lnk"))"
     $OmadaTroubleShooterCommand = "Push-Location {0};{1};Pop-Location" -f $LocalAppDataPath,$OmadaTroubleShooterPs1Path
-    $Arguments = " -NonInteractive -WindowStyle Hidden -WorkingDirectory {0} -EncodedCommand {1}" -f $LocalAppDataPath, [convert]::ToBase64String([system.text.encoding]::Unicode.GetBytes($OmadaTroubleShooterCommand))
+    $Arguments = " -NoExit -WorkingDirectory {0} -EncodedCommand {1}" -f $LocalAppDataPath, [convert]::ToBase64String([system.text.encoding]::Unicode.GetBytes($OmadaTroubleShooterCommand))
 
 
     $WshShell = New-Object -ComObject WScript.Shell

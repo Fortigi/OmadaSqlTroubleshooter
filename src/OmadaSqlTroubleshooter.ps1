@@ -12,10 +12,6 @@ $ApplicationTitle = ""
 $ScriptRootFolder = (Get-Item $PSScriptRoot).FullName
 Push-Location $ScriptRootFolder
 
-#Set path to the bin folder to be sure that WebView2Loader.dll is found there.
-$Env:Path += ";$ScriptRootFolder\Bin"
-$Env:Path += ";$ScriptRootFolder"
-
 $StartVariables = Get-Variable
 
 $ConfigFileName = $ScriptName -replace ".ps1", ".json"
@@ -52,6 +48,11 @@ try {
 catch {}
 
 #region assemblies
+Import-Module OmadaWeb.PS
+
+#Set path to the bin folder to be sure that WebView2Loader.dll is found there.
+$Env:Path += ";$ScriptRootFolder\Bin"
+$Env:Path += ";$ScriptRootFolder"
 
 Add-Type -AssemblyName System.Windows.Forms
 Add-Type -AssemblyName System.Drawing
@@ -1467,7 +1468,6 @@ try {
     "Application '{0}': Start initialization..." -f $ApplicationTitle | Write-Host -ForegroundColor Green
     Invoke-ProcessConfigSettings
     [System.Windows.Forms.Application]::DoEvents()
-    Import-Module OmadaWeb.PS
     $Result = $Null
 
     $Script:OutputFileName = $Null
