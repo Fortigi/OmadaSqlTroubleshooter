@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Monaco Editor</title>
+    <script src="./min/vs/loader.js"></script>
+    <style>
+        html, body, #editor {
+            height: 100%;
+            width: 100%;
+            margin: 0;
+            padding: 0;
+            overflow: hidden;
+        }
+    </style>
+</head>
+<body>
+    <div id="editor"></div>
+    <script>
+        require.config({ paths: { 'vs': './min/vs' } });
+        require(['vs/editor/editor.main'], function () {
+            editor = monaco.editor.create(document.getElementById('editor'), {
+                value: [].join('\n'),
+                language: 'sql',
+                automaticLayout: true,
+                wordWrap: 'on',
+                minimap: {
+                    enabled: false
+                }
+            });
+        });
+    </script>
+</body>
+</html>
