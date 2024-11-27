@@ -526,7 +526,7 @@ function Update-QueryList {
             "Skip query {0} - {1} because of 'Filter My Queries Only' is enabled" -f $_.Id, $_.DisplayName | Write-LogOutput -LogType DEBUG
 
             if ($DOIDDisplayName -in $ComboBoxSelectQuery.Items.Content) {
-                $ComboBoxSelectQueryItem = $ComboBoxSelectQuery | Where-Object { $_.Content -eq $DOIDDisplayName }
+                $ComboBoxSelectQueryItem = $ComboBoxSelectQuery.Items | Where-Object { $_.Content -eq $DOIDDisplayName }
                 $ComboBoxSelectQuery.Items.Remove($ComboBoxSelectQueryItem) | Out-Null
             }
         }
