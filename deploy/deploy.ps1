@@ -8,6 +8,7 @@ try {
     $DeployScriptRoot = (Get-Item ($MyInvocation.MyCommand.Path | Split-Path )).Parent.FullName
     Push-Location $DeployScriptRoot
     $ScriptName = "OmadaSqlTroubleshooter.ps1"
+    $ScriptTitle = "Fortigi Omada Enterprise Cloud Sql Troubleshooter"
     "Scriptname: {0}" -f $ScriptName | Write-Verbose
 
     $OmadaTroubleShooterPs1 = Join-Path  (Get-Item $DeployScriptRoot).FullName -ChildPath "src\$ScriptName"
@@ -27,6 +28,7 @@ try {
     Get-Item -Path (Join-Path $DeployScriptRoot -ChildPath "src\$($ScriptName.Replace('.ps1','.ico'))") | Copy-Item -Destination $LocalAppDataPath -Force
 
     #"Get Dll files needed"
+    "Get WebView2 from nuget" | Write-Host
     $PackageTempFolder = New-Item (Join-Path $env:TEMP -ChildPath "OmadaTroubleShooter") -ItemType Directory -Force
     $Package = Save-Package Microsoft.Web.WebView2 -MinimumVersion 1.0.2903.40 -Path $PackageTempFolder.FullName
     Get-Item (Join-Path $PackageTempFolder.FullName -ChildPath $Package.PackageFilename) | Expand-Archive -DestinationPath $PackageTempFolder.FullName -Force
@@ -39,17 +41,19 @@ try {
     Get-Item $PackageTempFolder.FullName | Remove-Item -Recurse -Force
 
 
+    "Create shortcuts" | Write-Host
     $WshShell = New-Object -ComObject WScript.Shell
     $PowerShellExecPath = (Get-Command "pwsh.exe").Path
     $OmadaTroubleShooterPs1Path = Join-Path $LocalAppDataPath -ChildPath $ScriptName
     $OmadaTroubleShooterIcoPath = $OmadaTroubleShooterPs1Path.Replace(".ps1", ".ico")
-    $ShortcutFullPath = Join-Path $WshShell.SpecialFolders("Desktop") -ChildPath "$($ScriptName.Replace(".ps1",".lnk"))"
+    $ShortcutFullPath = Join-Path $WshShell.SpecialFolders("Desktop") -ChildPath "("{0}.lnk" -f $ScriptTitle)"
     $OmadaTroubleShooterCommand = "Push-Location {0};{1};Pop-Location" -f $LocalAppDataPath,$OmadaTroubleShooterPs1Path
     $Arguments = " -NoExit -WorkingDirectory {0} -EncodedCommand {1}" -f $LocalAppDataPath, [convert]::ToBase64String([system.text.encoding]::Unicode.GetBytes($OmadaTroubleShooterCommand))
 
 
     $WshShell = New-Object -ComObject WScript.Shell
     $Shortcut = $WshShell.CreateShortcut($ShortcutFullPath)
+
     $Shortcut.TargetPath = $PowerShellExecPath
     $Shortcut.WorkingDirectory = $LocalAppDataPath
     $Shortcut.Arguments = $Arguments
@@ -60,7 +64,7 @@ try {
     Get-Item -Path $ShortcutFullPath | Copy-Item -Destination $WshShell.SpecialFolders("Programs") -Force
 
     Pop-Location
-    "Application copied to '{0}', config can be found here: '{1}'. Shortcut created on desktop and in start-menu." -f $LocalAppDataPath,$RoamingAppDataPath | Write-Host
+    "Application copied to '{0}', config can be found here: '{1}'. Shortcut created on desktop '{2}' and in start-menu '{3}'. To uninstall, just remove the files." -f $LocalAppDataPath,$RoamingAppDataPath,$ShortcutFullPath,$WshShell.SpecialFolders("Programs") | Write-Host -ForegroundColor Green
     "Finished" | Write-Host
 }
 catch {
