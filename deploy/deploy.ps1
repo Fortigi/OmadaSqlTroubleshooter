@@ -46,7 +46,7 @@ try {
     $PowerShellExecPath = (Get-Command "pwsh.exe").Path
     $OmadaTroubleShooterPs1Path = Join-Path $LocalAppDataPath -ChildPath $ScriptName
     $OmadaTroubleShooterIcoPath = $OmadaTroubleShooterPs1Path.Replace(".ps1", ".ico")
-    $ShortcutFullPath = Join-Path $WshShell.SpecialFolders("Desktop") -ChildPath "("{0}.lnk" -f $ScriptTitle)"
+    $ShortcutFullPath = Join-Path $WshShell.SpecialFolders("Desktop") -ChildPath ("{0}.lnk" -f $ScriptTitle)
     $OmadaTroubleShooterCommand = "Push-Location {0};{1};Pop-Location" -f $LocalAppDataPath,$OmadaTroubleShooterPs1Path
     $Arguments = " -NoExit -WorkingDirectory {0} -EncodedCommand {1}" -f $LocalAppDataPath, [convert]::ToBase64String([system.text.encoding]::Unicode.GetBytes($OmadaTroubleShooterCommand))
 
