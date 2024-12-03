@@ -12,7 +12,7 @@ using Microsoft.Web.WebView2.Wpf;
 using Microsoft.Web.WebView2.Core;
 
 
-namespace OmadaSqlTroubleshooter.cs
+namespace OmadaSqlTroubleshooter
 {
     /// <summary>
     /// Interaction logic for MainWindow.xaml

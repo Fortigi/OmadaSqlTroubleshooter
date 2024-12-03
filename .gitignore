@@ -15,6 +15,8 @@
 # C# Exclusions
 src/bin/Debug/**
 src/obj/**
+src/lib/ui/Debug/**
+src/lib/ui/obj/**
 
 # OmadaSqlTroubleshooter exclusions
 !.src/bin/Microsoft.Web.WebView2.Core.dll
