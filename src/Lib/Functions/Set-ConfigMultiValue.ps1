@@ -5,13 +5,12 @@
         $JoinString = " - "
     )
     try {
-        if([string]::IsNullOrEmpty($InputString)) {
-            "Returning null because inputstring is empty" | Write-LogOutput -LogType VERBOSE
-            return $null
+        $Value = Split-NameDoIdString -InputString $InputString -JoinString $JoinString
+        if (($Value | Measure-Object).Count -eq 1) {
+            return ($Value.DoId, $Value.DisplayName -Join (Get-ConfigMultiValueSeparator))
         }
-        else{
-            "Returning config string using join string '{0}'" -f $JoinString | Write-LogOutput -LogType VERBOSE
-            return ($InputString -Split $JoinString) -Join (Get-ConfigMultiValueSeparator)
+        else {
+            return $null
         }
     }
     catch {

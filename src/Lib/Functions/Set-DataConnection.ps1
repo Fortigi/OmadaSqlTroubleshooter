@@ -1,5 +1,7 @@
 function Set-DataConnection {
     try {
+
+
         if (!$Script:MainWindowForm.Elements.ComboBoxSelectDataConnection.Items.Contains((Get-ConfigMultiValue $Script:AppConfig.CurrentDataConnection))) {
             $Script:MainWindowForm.Elements.ComboBoxSelectDataConnection.Items.Add((Get-ConfigMultiValue $Script:AppConfig.CurrentDataConnection)) | Out-Null
             (Get-ConfigMultiValue $Script:AppConfig.CurrentDataConnection -Array)[0] | Invoke-ProcessConfigSettings -Property "CurrentDataConnectionName"

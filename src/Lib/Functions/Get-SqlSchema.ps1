@@ -1,5 +1,9 @@
 function Get-SqlSchemaObject {
     try {
+        if(!(Test-ConnectionRequirements)){
+            "Connection not ready" | Write-LogOutput -LogType DEBUG
+            return
+        }
 
         if(!(Test-ConnectionRequirements)){
             "Connection not ready" | Write-LogOutput -LogType DEBUG

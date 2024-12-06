@@ -21,3 +21,4 @@ $Script:MainWindowForm.Elements.TextBoxPassword.Add_LostFocus({
         "Password cannot be empty!" | Write-LogOutput
     }
 })
+

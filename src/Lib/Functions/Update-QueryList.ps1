@@ -76,7 +76,7 @@ function Update-QueryList {
                     $ClearQuery = $false
                 }
             }
-            if ($ClearQuery -and $null -ne $Script:WebView -and $Script:WebView.IsVisible) {
+            if ($ClearQuery) {
                 "Clear editor window because query is not set" | Write-LogOutput -LogType DEBUG
                 Set-EditorValue
             }

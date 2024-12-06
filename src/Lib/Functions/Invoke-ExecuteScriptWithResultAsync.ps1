@@ -5,10 +5,16 @@ function Invoke-ExecuteScriptWithResultAsync {
         $OnCompletedScriptBlock
     )
     try {
-        if ($null -ne $Script:WebView.CoreWebView2) {
-            $Script:Task = $Script:WebView.CoreWebView2.ExecuteScriptWithResultAsync($ScriptToExecute)
+        
+        if ($null -ne $Script:WebView) {
+            if ($Script:WebView.IsLoaded) {
+                $Script:Task = $Script:WebView.CoreWebView2.ExecuteScriptWithResultAsync($ScriptToExecute)
 
-            $Script:Task.GetAwaiter().OnCompleted($OnCompletedScriptBlock)
+                $Script:Task.GetAwaiter().OnCompleted($OnCompletedScriptBlock)
+            }
+            else {
+                Write-LogOutput -Message "WebView2 is not loaded yet." -LogType DEBUG
+            }
         }
         else {
             Write-LogOutput -Message "WebView2 is not initialized." -LogType ERROR
