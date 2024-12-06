@@ -1,25 +1,34 @@
 function Update-SqlSchemaWindowPosition {
 
     try {
+        $Script:PositionManagerSqlSchemaWindow.MainWindowRight = [int32]::Abs($Script:MainWindowForm.Definition.Left) + [int32]::Abs($Script:MainWindowForm.Definition.Width)
+        "PositionManagerSqlSchemaWindow MainWindowRight: {0}" -f $Script:PositionManagerSqlSchemaWindow.MainWindowRight | Write-LogOutput -LogType DEBUG
+        $Script:PositionManagerSqlSchemaWindow.MainWindowBottom = [int32]::Abs($Script:MainWindowForm.Definition.Top) - [int32]::Abs($Script:MainWindowForm.Definition.Height)
+        "PositionManagerSqlSchemaWindow MainWindowBottom: {0}" -f $Script:PositionManagerSqlSchemaWindow.MainWindowRight | Write-LogOutput -LogType DEBUG
+        $Script:PositionManagerSqlSchemaWindow.ChildWindowRight = [int32]::Abs($Script:SqlSchemaWindowForm.Definition.Left) + [int32]::Abs($Script:SqlSchemaWindowForm.Definition.Width)
+        "PositionManagerSqlSchemaWindow ChildWindowRight: {0}" -f $Script:PositionManagerSqlSchemaWindow.ChildWindowRight | Write-LogOutput -LogType DEBUG
+        $Script:PositionManagerSqlSchemaWindow.ChildWindowBottom = [int32]::Abs($Script:SqlSchemaWindowForm.Definition.Top) - [int32]::Abs($Script:SqlSchemaWindowForm.Definition.Height)
+        "PositionManagerSqlSchemaWindow ChildWindowBottom: {0}" -f $Script:PositionManagerSqlSchemaWindow.ChildWindowBottom | Write-LogOutput -LogType DEBUG
 
-        $Script:PositionManagerSqlSchemaWindow.MainWindowLeft = $Script:MainWindowForm.Definition.Left
-        $Script:PositionManagerSqlSchemaWindow.MainWindowBottom = $Script:MainWindowForm.Definition.Top - $Script:MainWindowForm.Definition.Height
-        $Script:PositionManagerSqlSchemaWindow.ChildWindowLeft = $Script:SqlSchemaWindowForm.Definition.Left - $Script:SqlSchemaWindowForm.Definition.Width - 5
-        $Script:PositionManagerSqlSchemaWindow.ChildWindowBottom = $Script:SqlSchemaWindowForm.Definition.Top - $Script:SqlSchemaWindowForm.Definition.Height
+        if ([int32]::Abs($Script:SqlSchemaWindowForm.Definition.Left) -lt [int32]::Abs($Script:MainWindowForm.Definition.Left)) {
+            $Script:SqlSchemaWindowForm.Definition.Left = [int32]::Abs($Script:MainWindowForm.Definition.Left) + [int32]::Abs($Script:MainWindowForm.Definition.Width)
+            "SqlSchemaWindowForm Definition Left: {0}" -f $Script:SqlSchemaWindowForm.Definition.Left | Write-LogOutput -LogType DEBUG
 
-        if ($Script:SqlSchemaWindowForm.Definition.Left -lt $Script:MainWindowForm.Definition.Left) {
-            $Script:SqlSchemaWindowForm.Definition.Left = $Script:MainWindowForm.Definition.Left + $Script:SqlSchemaWindowForm.Definition.Width - 5
         }
-        elseif ($Script:PositionManagerSqlSchemaWindow.ChildWindowLeft -gt $Script:PositionManagerSqlSchemaWindow.MainWindowLeft) {
-            $Script:SqlSchemaWindowForm.Definition.Left = $Script:MainWindowForm.Definition.Left - $Script:SqlSchemaWindowForm.Definition.Width - 5
+        elseif ($Script:PositionManagerSqlSchemaWindow.ChildWindowRight -gt $Script:PositionManagerSqlSchemaWindow.MainWindowRight) {
+            $Script:SqlSchemaWindowForm.Definition.Left = [int32]::Abs($Script:MainWindowForm.Definition.Left) - $Script:SqlSchemaWindowForm.Definition.Width
+            "SqlSchemaWindowForm Definition Left: {0}" -f $Script:SqlSchemaWindowForm.Definition.Left | Write-LogOutput -LogType DEBUG
         }
 
-        if ($Script:SqlSchemaWindowForm.Definition.Top -lt $Script:MainWindowForm.Definition.Top) {
-            $Script:SqlSchemaWindowForm.Definition.Top = $Script:MainWindowForm.Definition.Top + $Script:MainWindowForm.Definition.Height
+        if ($Script:SqlSchemaWindowForm.Definition.Top -lt [int32]::Abs($Script:MainWindowForm.Definition.Top)) {
+            $Script:SqlSchemaWindowForm.Definition.Top = [int32]::Abs($Script:MainWindowForm.Definition.Top) + [int32]::Abs($Script:MainWindowForm.Definition.Height)
+            "SqlSchemaWindowForm Definition Top: {0}" -f $Script:SqlSchemaWindowForm.Definition.Top | Write-LogOutput -LogType DEBUG
         }
         elseif ($Script:PositionManager.ChildWindowBottom -gt $MainWindowBottom) {
-            $Script:SqlSchemaWindowForm.Definition.Top = $Script:MainWindowForm.Definition.Top - $Script:SqlSchemaWindowForm.Definition.Height
+            $Script:SqlSchemaWindowForm.Definition.Top = [int32]::Abs($Script:MainWindowForm.Definition.Top) - [int32]::Abs($Script:SqlSchemaWindowForm.Definition.Height)
+            "SqlSchemaWindowForm Definition Top: {0}" -f $Script:SqlSchemaWindowForm.Definition.Top | Write-LogOutput -LogType DEBUG
         }
+
     }
     catch {
         $_.Exception.Message | Write-LogOutput -LogType ERROR

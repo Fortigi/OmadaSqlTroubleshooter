@@ -1,9 +1,12 @@
 function Invoke-SaveQuery {
+    PARAM(
+        [switch]$NewQuery
+    )
 
 
     try {
         $ScriptToExecute = "editor.getValue();"
-
+        $Script:NewQuery = $NewQuery
         $OnCompletedScriptBlock = {
             try {
                 if ($Script:Task.Status -eq "RanToCompletion") {
@@ -12,12 +15,36 @@ function Invoke-SaveQuery {
                         $QueryText = $QueryText.ResultAsJson | ConvertFrom-Json
                     }
 
-                    $Result = Get-SqlQueryObject
 
+                    if ($Script:NewQuery) {
+                        "Create new query" | Write-LogOutput -LogType DEBUG
+
+                        $QueryUrl = '{0}/odata/dataobjects/C_P_SQLTROUBLESHOOTING?$filter=Deleted ne true and NAME eq ''{1}''' -f $Script:AppConfig.BaseUrl, $Script:MainWindowForm.Elements.TextBoxDisplayName.Text
+                        "QueryUrl: {0}" -f $QueryUrl | Write-LogOutput -LogType DEBUG
+                        "Check if a query with this name already exists" | Write-LogOutput -LogType DEBUG
+                        $Body = $Null
+                        $Method = "GET"
+                        $Body = $null
+                        $CheckIfExistResult = Invoke-OmadaPSWebRequestWrapper
+                        if ($null -eq $CheckIfExistResult -or ($CheckIfExistResult.Value | Measure-Object).Count -le 0) {
+                            $QueryUrl = "{0}/odata/dataobjects/C_P_SQLTROUBLESHOOTING" -f $Script:AppConfig.BaseUrl
+                            $Method = "POST"
+                        }
+                        else {
+                            $Script:MainWindowForm.Elements.ButtonSaveQuery.IsEnabled = $True
+                            $Script:MainWindowForm.Elements.ButtonExecuteQuery.IsEnabled = $True
+                            "Query with this name already exists!" | Write-LogOutput -LogType ERROR
+                            return
+                        }
+                    }
+                    else {
+                        "Save existing query" | Write-LogOutput -LogType DEBUG
+                        $QueryUrl = "{0}/odata/dataobjects/C_P_SQLTROUBLESHOOTING({1})" -f $Script:AppConfig.BaseUrl, $Script:AppConfig.SqlQueryDoId
+                        $Result = Get-SqlQueryObject
+                        $Method = "PUT"
+                    }
                     $Body = @{}
-                    $QueryUrl = "{0}/odata/dataobjects/C_P_SQLTROUBLESHOOTING({1})" -f $Script:AppConfig.BaseUrl, $Script:AppConfig.SqlQueryDoId
-                    if ($Script:CurrentQueryText -ne $QueryText -or $QueryText -ne $Result.C_QUERY) {
-                        "Update current query for DODI: {0}" -f $Script:AppConfig.SqlQueryDoId | Write-LogOutput -LogType DEBUG
+                    if ($Script:NewQuery -or ($Script:CurrentQueryText -ne $QueryText -or $QueryText -ne $Result.C_QUERY)) {
                         $Body.Add("C_QUERY", $QueryText)
                         if (![string]::IsNullOrWhiteSpace($Script:AppConfig.CurrentDataConnectionId)) {
                             $Body.Add("C_SQLTROUBLESHOOTING_DATACONNECTION", @{Id = $Script:AppConfig.CurrentDataConnectionId })
@@ -26,7 +53,7 @@ function Invoke-SaveQuery {
                     if ($Script:CurrentSqlQueryDisplayName -ne $Script:MainWindowForm.Elements.TextBoxDisplayName.Text) {
                         $Body.Add("NAME", $Script:MainWindowForm.Elements.TextBoxDisplayName.Text)
                     }
-                    if (($Body.Keys | Measure-Object).Count -le 0) {
+                    if (!$Script:NewQuery -and ($Body.Keys | Measure-Object).Count -le 0) {
                         "No changes detected! Saving not needed." | Write-LogOutput -LogType DEBUG
                     }
                     else {
@@ -35,19 +62,29 @@ function Invoke-SaveQuery {
                         "QueryUrl: {0}" -f $QueryUrl | Write-LogOutput -LogType DEBUG
 
                         "Save query" | Write-LogOutput
-                        $Method = "PUT"
                         $Result = Invoke-OmadaPSWebRequestWrapper
-                        "Query saved!" | Write-LogOutput
 
-                        "{0} - {1}" -f $Result.DisplayName, $Result.Id | Invoke-ProcessConfigSettings -Property "SelectedSqlQueryDoId"
-                        if ($Result.DisplayName -ne $Script:CurrentSqlQueryDisplayName) {
-                            "New display name, Current: {0}, New: {1}" -f $Script:CurrentSqlQueryDisplayName, $Result.DisplayName | Write-LogOutput -LogType VERBOSE
-                            Update-QueryList -ForceRefresh
-                            $ComboBoxSelectQueryItem = $Script:MainWindowForm.Elements.ComboBoxSelectQuery.Items | Where-Object { $_.Content -eq $Script:AppConfig.SelectedSqlQueryDoId }
-                            if ($null -ne $ComboBoxSelectQueryItem) {
+                        if ($null -ne $Result -and $Script:NewQuery -or $Result.DisplayName -ne $Script:CurrentSqlQueryDisplayName) {
+                            "Query saved!" | Write-LogOutput
+                            if ($Script:NewQuery) {
+                                $SelectedSqlQueryDoId = "{0} - {1}" -f $Result.Name, $Result.Id
+                                $Result.Id | Invoke-ProcessConfigSettings -Property "SqlQueryDoId"
+                                Set-ConfigMultiValue ("{0} - {1}" -f $Result.Name, $Result.Id ) | Invoke-ProcessConfigSettings -Property "SelectedSqlQueryDoId"
                                 $ComboBoxSelectQueryItem = New-Object System.Windows.Controls.ComboBoxItem
-                                $ComboBoxSelectQueryItem.Content = $Script:AppConfig.SelectedSqlQueryDoId
+                                $ComboBoxSelectQueryItem.Content = $SelectedSqlQueryDoId
                                 $Script:MainWindowForm.Elements.ComboBoxSelectQuery.Items.Add($ComboBoxSelectQueryItem) | Out-Null
+                            }
+                            else {
+                                "New display name, Current: {0}, New: {1}" -f $Script:CurrentSqlQueryDisplayName, $Result.DisplayName | Write-LogOutput -LogType VERBOSE
+                                "Force update query list" | Write-LogOutput -LogType DEBUG
+                                Update-QueryList -ForceRefresh
+                                $SelectedSqlQueryDoId = Get-ConfigMultiValue $Script:AppConfig.SelectedSqlQueryDoId
+                                $ComboBoxSelectQueryItem = $Script:MainWindowForm.Elements.ComboBoxSelectQuery.Items | Where-Object { $_.Content -eq $SelectedSqlQueryDoId }
+                                if ($null -eq $ComboBoxSelectQueryItem) {
+                                    $ComboBoxSelectQueryItem = New-Object System.Windows.Controls.ComboBoxItem
+                                    $ComboBoxSelectQueryItem.Content = $SelectedSqlQueryDoId
+                                    $Script:MainWindowForm.Elements.ComboBoxSelectQuery.Items.Add($ComboBoxSelectQueryItem) | Out-Null
+                                }
                             }
                             $Script:MainWindowForm.Elements.ComboBoxSelectQuery.SelectedItem = $ComboBoxSelectQueryItem
                             $Script:CurrentSqlQueryDisplayName = $Result.DisplayName

@@ -1,19 +1,30 @@
 function Update-QueryList {
 
     PARAM(
-        [switch]$ForceRefresh
+        [switch]$ForceRefresh,
+        [switch]$NotShowPopupWindow
     )
 
     try {
+        if (!(Test-ConnectionRequirements)) {
+            "Connection not ready" | Write-LogOutput -LogType DEBUG
+            return
+        }
+
         $CurrentTimestamp = Get-Date
 
         if (($Script:QueryListCache.QueryList | Measure-Object).Count -eq 0 -or $ForceRefresh -or $Script:QueryListCache.LastRefresh -lt $CurrentTimestamp.AddSeconds( - $($Script:QueryListCache.TTL))) {
             $Script:QueryListCache.QueryList = $null
-            "Refresh queries!" | Write-LogOutput -LogType DEBUG
+            "Cleared query cache!" | Write-LogOutput -LogType DEBUG
         }
 
-        if (($Script:QueryListCache.QueryList | Measure-Object).Count -eq 0) {
+        "Queries in cache: {0}" -f ($Script:QueryListCache.QueryList | Measure-Object).Count | Write-LogOutput -LogType DEBUG
 
+        if (($Script:QueryListCache.QueryList | Measure-Object).Count -le 0) {
+            if (!$NotShowPopupWindow) {
+                $Script:PopUpWindowQueryRefresh = Show-PopupWindow -Message "Refreshing queries..."
+            }
+            $Script:QueryListCache.QueryList = @()
             if ($Script:AppConfig.MyQueriesOnly -and ![string]::IsNullOrWhiteSpace($Script:AppConfig.IdentityUserName)) {
                 $SqlQueryViewContents = Get-SqlTroubleShooterView | Where-Object { $_.$($SqlQueryCreatedByAttribute) -eq $Script:AppConfig.IdentityUserName -or $_.$($SqlQueryChangedByAttribute) -eq $Script:AppConfig.IdentityUserName }
             }
@@ -26,28 +37,52 @@ function Update-QueryList {
             $Body = $null
             $Result = Invoke-OmadaPSWebRequestWrapper
 
+            $SelectedQuery = $Script:MainWindowForm.Elements.ComboBoxSelectQuery.SelectedItem.Content
+            "Stored current selected query (if not empty): {0}" -f $SelectedQuery | Write-LogOutput -LogType DEBUG
+            $SelectedQueryDisplayName = $Script:MainWindowForm.Elements.TextBoxDisplayName.Text
+            "Stored current selected query display name (if not empty): {0}" -f $SelectedQueryDisplayName | Write-LogOutput -LogType DEBUG
+            $Script:MainWindowForm.Elements.ComboBoxSelectQuery.Items.Clear()
+            $Script:MainWindowForm.Elements.TextBoxDisplayName.Text = $Null
 
+            $ClearQuery = $true
             $Result.value | ForEach-Object {
-                $DOIDDisplayName = "{0} - {1}" -f $_.DisplayName, $_.Id
+                $DoIdDisplayName = "{0} - {1}" -f $_.DisplayName, $_.Id
+                $Script:QueryListCache.QueryList += @{
+                    $_.Id = $_.DisplayName
+                }
                 if ($Script:AppConfig.MyQueriesOnly -and $null -ne $SqlQueryViewContents -and $_.Id -notin $SqlQueryViewContents.$SqlQueryDoIdAttribute) {
-                    "Skip query {0} - {1} because of 'Filter My Queries' is enabled" -f $_.Id, $_.DisplayName | Write-LogOutput -LogType DEBUG
-
-                    if ($DOIDDisplayName -in $Script:MainWindowForm.Elements.ComboBoxSelectQuery.Items.Content) {
-                        $ComboBoxSelectQueryItem = $Script:MainWindowForm.Elements.ComboBoxSelectQuery.Items | Where-Object { $_.Content -eq $DOIDDisplayName }
-                        $Script:MainWindowForm.Elements.ComboBoxSelectQuery.Items.Remove($ComboBoxSelectQueryItem) | Out-Null
+                    "Skip query {0} because of 'Filter My Queries' is enabled" -f $DoIdDisplayName | Write-LogOutput -LogType DEBUG
+                    if ($null -ne $SelectedQuery -and $SelectedQuery -eq $DoIdDisplayName) {
+                        "Selected query {0} is filtered, clear selected query" -f $DoIdDisplayName | Write-LogOutput -LogType DEBUG
+                        $SelectedQuery = $null
                     }
                 }
                 else {
-                    $DOIDDisplayName = "{0} - {1}" -f $_.DisplayName, $_.Id
-                    if ($DOIDDisplayName -notin $Script:MainWindowForm.Elements.ComboBoxSelectQuery.Items.Content) {
-                        $ComboBoxSelectQueryItem = New-Object System.Windows.Controls.ComboBoxItem
-                        $ComboBoxSelectQueryItem.Content = $DOIDDisplayName
-                        $Script:MainWindowForm.Elements.ComboBoxSelectQuery.Items.Add($ComboBoxSelectQueryItem) | Out-Null
+                    if ($Script:AppConfig.MyQueriesOnly -and $null -ne $SqlQueryViewContents -and $_.Id -notin $SqlQueryViewContents.$SqlQueryDoIdAttribute) {
+                        "Add query {0} because of 'Filter My Queries' is enabled" -f $DoIdDisplayName | Write-LogOutput -LogType DEBUG
                     }
+                    else {
+                        "Add query {0}" -f $DoIdDisplayName | Write-LogOutput -LogType DEBUG
+                    }
+                    $ComboBoxSelectQueryItem = New-Object System.Windows.Controls.ComboBoxItem
+                    $ComboBoxSelectQueryItem.Content = $DoIdDisplayName
+                    $Script:MainWindowForm.Elements.ComboBoxSelectQuery.Items.Add($ComboBoxSelectQueryItem) | Out-Null
+                }
+                if ($ClearQuery -and $null -ne $SelectedQuery -and $SelectedQuery -eq $DoIdDisplayName) {
+                    "Set query {0} as selected query" -f $DoIdDisplayName | Write-LogOutput -LogType DEBUG
+                    $Script:MainWindowForm.Elements.ComboBoxSelectQuery.SelectedItem = $ComboBoxSelectQueryItem
+                    "Set query display name to: {0}" -f $SelectedQueryDisplayName | Write-LogOutput -LogType DEBUG
+                    $Script:MainWindowForm.Elements.TextBoxDisplayName.Text = $SelectedQueryDisplayName
+                    $ClearQuery = $false
                 }
             }
-            $Script:QueryListCache.QueryList = $Result.value
-            $Script:QueryListCache.LastRefresh = $CurrentTimestamp
+            if ($ClearQuery -and $null -ne $Script:WebView -and $Script:WebView.IsVisible) {
+                "Clear editor window because query is not set" | Write-LogOutput -LogType DEBUG
+                Set-EditorValue
+            }
+            if ($null -ne $Script:PopUpWindowQueryRefresh) {
+                $Script:PopUpWindowQueryRefresh.Close()
+            }
         }
         else {
             "Query list retrieved from cache! Click `"Refresh Queries`" to refresh queries" | Write-LogOutput -LogType INFO
@@ -55,7 +90,10 @@ function Update-QueryList {
 
         $Script:MainWindowForm.Elements.ComboBoxSelectQuery.IsEnabled = $True
         $Script:MainWindowForm.Elements.ButtonRefreshQueries.IsEnabled = $True
-        "{0} queries retrieved!" -f ($Result.Value | Measure-Object).Count | Write-LogOutput
+        $Script:MainWindowForm.Elements.CheckboxMyQueries.IsEnabled = $True
+        $Script:MainWindowForm.Elements.ButtonShowSqlSchema.IsEnabled = $true
+        $Script:QueryListCache.LastRefresh = $CurrentTimestamp
+        "{0} queries retrieved!" -f ($Script:QueryListCache.QueryList | Measure-Object).Count | Write-LogOutput
 
     }
     catch {

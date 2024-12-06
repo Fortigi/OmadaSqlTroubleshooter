@@ -17,9 +17,17 @@ function Invoke-ProcessConfigSettings {
             $Script:AppConfig = $Null
         }
 
-        $ConfigProperties = @("BaseUrl", "SqlQueryDoId", "SelectedSqlQueryDoId", "LastOutputFolder", "LastExtension", "LastAuthentication", "UserName", "LogLevel", "MyQueriesOnly", "IdentityUserName", "CurrentDataConnection", "CurrentDataConnectionId", "CurrentDataConnectionName", "LogWindowFormOpen", "SqlSchemaWindowFormOpen", "MainWindowPosition", "LogWindowPosition", "SqlSchemaWindowPosition", "MainWindowSize", "LogWindowSize", "SqlSchemaWindowSize")
+        $ConfigProperties = @("BaseUrl", "SqlQueryDoId", "SelectedSqlQueryDoId", "LastOutputFolder", "LastExtension", "LastAuthentication", "UserName", "LogLevel", "MyQueriesOnly", "IdentityUserName", "CurrentDataConnection", "CurrentDataConnectionId", "CurrentDataConnectionName", "LogWindowFormOpen", "SqlSchemaWindowFormOpen", "MainWindowPosition", "LogWindowPosition", "SqlSchemaWindowPosition", "MainWindowSize", "LogWindowSize", "SqlSchemaWindowSize", "ConfigMultiValueSeparator","LogWindowWordWrap","CheckboxConsoleLog")
         if ($Null -ne $Script:AppConfig) {
             $Config = $Script:AppConfig | ConvertTo-Json | ConvertFrom-Json
+
+            $Config|Get-Member -MemberType NoteProperty | ForEach-Object {
+                if ($ConfigProperties -notcontains $_.Name) {
+                    "Remove obsolete property {0} from config object!" -f $_.Name | Write-LogOutput -LogType VERBOSE
+                    $Config.PSObject.Properties.Remove($_.Name)
+                }
+            }
+
             $CurrentPoperties = $Config | Get-Member -MemberType NoteProperty
             $ConfigProperties | ForEach-Object {
                 if ($_ -notin $CurrentPoperties.Name) {
@@ -63,8 +71,29 @@ function Invoke-ProcessConfigSettings {
             $Config.$Property = $Value
         }
 
-        "Store config object to {0}. Contents`r`n{1}!" -f $Script:ConfigFilePath, ($Config | ConvertTo-Json) | Write-LogOutput -LogType VERBOSE
-        $Config | ConvertTo-Json | Set-Content $Script:ConfigFilePath -Force
+        "Store config object to {0}. Contents`r`n{1}`r`n" -f $Script:ConfigFilePath, ($Config | ConvertTo-Json) | Write-LogOutput -LogType VERBOSE
+        $Success = $false
+        do {
+            try {
+                if (!$Success) {
+                    $Config | ConvertTo-Json | Set-Content $Script:ConfigFilePath -Force
+                    $Success = $true
+                }
+            }
+            catch {
+                if (!$Success) {
+                    $ErrorObject = $_
+                    "Error writing to file. Retry in 1 second" | Write-LogOutput -LogType WARNING -SkipDialog
+                    Start-Sleep -Seconds 1
+                }
+            }
+        }
+        until($Count -ge 10 -or $Success)
+
+        if (!$Success) {
+            $ErrorObject.Exception.Message | Write-LogOutput -LogType ERROR -SkipDialog
+        }
+
         $Script:AppConfig = $Config
 
     }
@@ -72,3 +101,4 @@ function Invoke-ProcessConfigSettings {
         $_.Exception.Message | Write-LogOutput -LogType ERROR
     }
 }
+

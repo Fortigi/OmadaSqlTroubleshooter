@@ -3,14 +3,13 @@
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
         xmlns:local="clr-x:Namespace:Fortigi"
         Title="SchemaView"
-        Height="1020"
         Width="450"
         MinWidth="450"
-        MinHeight="1020"
+        MinHeight="200"
         Background="{DynamicResource {x:Static SystemColors.ScrollBarBrushKey}}"
-    BorderBrush="{DynamicResource {x:Static SystemColors.ActiveBorderBrushKey}}"
-    Name="SqlSchemaWindow">
-
+        BorderBrush="{DynamicResource {x:Static SystemColors.ActiveBorderBrushKey}}"
+        Name="SqlSchemaWindow"
+        >
 
     <Window.Resources>
         <Style TargetType="Button">

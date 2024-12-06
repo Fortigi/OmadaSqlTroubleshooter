@@ -1,6 +1,11 @@
 function Get-SqlSchemaObject {
     try {
 
+        if(!(Test-ConnectionRequirements)){
+            "Connection not ready" | Write-LogOutput -LogType DEBUG
+            return
+        }
+
         if (![string]::IsNullOrWhiteSpace($Script:AppConfig.CurrentDataConnectionId)) {
             "Retrieve current SqlSchema for data connection DoId: {0}" -f $Script:AppConfig.CurrentDataConnectionId | Write-LogOutput -LogType DEBUG
             $QueryUrl = "{0}/webservice/SyntaxHighlighting.asmx/GetSqlSchema" -f $Script:AppConfig.BaseUrl
@@ -14,7 +19,7 @@ function Get-SqlSchemaObject {
             $Method = "POST"
             $ReturnValue = Invoke-OmadaPSWebRequestWrapper
 
-            $Script:SqlSchemaWindowForm.Definition.Title = "Sql Schema - {0}" -f $Script:AppConfig.CurrentDataConnection
+            $Script:SqlSchemaWindowForm.Definition.Title = "Sql Schema - {0}" -f (Get-ConfigMultiValue $Script:AppConfig.CurrentDataConnection)
 
             "Retrieved object {0}" -f $SqlQueryObject | Write-LogOutput -LogType VERBOSE
 

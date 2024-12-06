@@ -10,12 +10,11 @@ function Get-WindowAllowedMeasurement {
     try {
         if ($Setting -in "Width", "Height") {
 
-
-            if ($Form.$Setting -lt $Form.$("Min{0}" -f $Setting)) {
-                return [double]$Form.$("Min{0}" -f $Setting)
+            if ($Form.$Setting -lt $Form.$("Min{0}" -f $Setting) -and $Form.$Setting -gt 0) {
+                return [int32]$Form.$("Min{0}" -f $Setting)
             }
             else {
-                return [double]$Form.$Setting
+                return [int32]$Form.$Setting
             }
         }
 

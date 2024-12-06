@@ -1,8 +1,13 @@
 function Show-PopupWindow {
     PARAM(
-        $String
+        $Message
     )
     try {
+
+        if($null -eq $Script:MainWindowForm -or $null -eq $Script:MainWindowForm.Definition -or !$Script:MainWindowForm.Definition.IsVisible) {
+            return
+        }
+
         $PopupWindow = New-Object System.Windows.Window
         $PopupWindow.WindowStyle = [System.Windows.WindowStyle]::None
         $PopupWindow.ResizeMode = [System.Windows.ResizeMode]::NoResize
@@ -31,7 +36,7 @@ function Show-PopupWindow {
 
 
         $PopupWindowLabel = New-Object System.Windows.Controls.Label
-        $PopupWindowLabel.Content = $String
+        $PopupWindowLabel.Content = $Message
         $PopupWindowLabel.FontFamily = "Segoe UI"
         $PopupWindowLabel.FontSize = 12
 

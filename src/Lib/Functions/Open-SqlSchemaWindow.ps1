@@ -2,10 +2,9 @@ function Open-SqlSchemaWindow {
     try {
         #Log window creation
         "Opening Sql Schema window" | Write-LogOutput -LogType DEBUG
-        $Script:SqlSchemaWindowForm = New-FormObject -FormPath (Join-Path $ScriptRootFolder -ChildPath "lib\ui\SqlSchemaWindow.xaml")
+        $Script:SqlSchemaWindowForm = New-FormObject -FormPath (Join-Path $ScriptRootFolder -ChildPath "lib\ui\SqlSchemaWindow.xaml") -ParentForm $Script:MainWindowForm.Definition
         $true | Invoke-ProcessConfigSettings -Property "SqlSchemaWindowFormOpen"
 
-        $Script:SqlSchemaWindowForm.Definition.Owner = $Script:MainWindowForm.Definition
         $Script:SqlSchemaWindowForm.Definition.ShowInTaskbar = $false
         $Script:TreeViewSqlSchema = $Script:SqlSchemaWindowForm.Definition.FindName("TreeViewSqlSchema")
 
@@ -24,17 +23,23 @@ function Open-SqlSchemaWindow {
         #region SqlSchemaWindowForm events
 
         $Script:SqlSchemaWindowForm.Definition.Add_LocationChanged({
+                $_ | Show-EventInfo -LogType VERBOSE2
                 if (!$Script:PositionManagerSqlSchemaWindow.Synchronizing) {
                     $Script:PositionManagerSqlSchemaWindow.Synchronizing = $true
+                    "MainWindowForm Position: {0}x{1}, Dimensions: {2}x{3}" -f $Script:MainWindowForm.Definition.Left, $Script:MainWindowForm.Definition.Top, $Script:MainWindowForm.Definition.Width , $Script:MainWindowForm.Definition.Height | Write-LogOutput -LogType VERBOSE2
+                    "SqlSchemaWindowForm Position: {0}x{1}, Dimensions: {2}x{3}" -f $Script:SqlSchemaWindowForm.Definition.Left, $Script:SqlSchemaWindowForm.Definition.Top, $Script:SqlSchemaWindowForm.Definition.Width , $Script:SqlSchemaWindowForm.Definition.Height | Write-LogOutput -LogType VERBOSE2
                     $Script:SqlSchemaWindowForm.Definition.Dispatcher.Invoke({
-                            $Script:PositionManagerSqlSchemaWindow.PositionOffSetTop = $Script:MainWindowForm.Definition.Top - $Script:SqlSchemaWindowForm.Definition.Top
-                            $Script:PositionManagerSqlSchemaWindow.PositionOffSetLeft = $Script:MainWindowForm.Definition.Left - $Script:SqlSchemaWindowForm.Definition.Left
+                            $Script:PositionManagerSqlSchemaWindow.PositionOffSetTop = [int32]::Abs($Script:MainWindowForm.Definition.Top) - [int32]::Abs($Script:SqlSchemaWindowForm.Definition.Top)
+                            "PositionManagerSqlSchemaWindow PositionOffSetLeft: {0}" -f $Script:PositionManagerSqlSchemaWindow.PositionOffSetLeft | Write-LogOutput -LogType VERBOSE2
+                            $Script:PositionManagerSqlSchemaWindow.PositionOffSetLeft = [int32]::Abs($Script:MainWindowForm.Definition.Left) - [int32]::Abs($Script:SqlSchemaWindowForm.Definition.Left)
+                            "PositionManagerSqlSchemaWindow PositionOffSetTop: {0}" -f $Script:PositionManagerSqlSchemaWindow.PositionOffSetTop | Write-LogOutput -LogType VERBOSE2
                             $Script:PositionManagerSqlSchemaWindow.Synchronizing = $false
                         }, [System.Windows.Threading.DispatcherPriority]::Render)
                 }
             })
 
         $Script:SqlSchemaWindowForm.Definition.Add_SizeChanged({
+                $_ | Show-EventInfo -LogType VERBOSE2
                 $Script:SqlSchemaWindowForm.Size = $Script:SqlSchemaWindowForm.Definition | Get-WindowSize
             })
 
@@ -43,8 +48,8 @@ function Open-SqlSchemaWindow {
         if ($null -ne ($Script:SqlSchemaWindowForm.Definition | Get-WindowPositionConfig)) {
             $Position = $Script:SqlSchemaWindowForm.Definition | Get-WindowPositionConfig
             "Sql Schema window position: {0}" -f $Position | Write-LogOutput -LogType DEBUG
-            $Script:SqlSchemaWindowForm.Definition.Left = [double]$Position.Split("x")[0]
-            $Script:SqlSchemaWindowForm.Definition.Top = [double]$Position.Split("x")[1]
+            $Script:SqlSchemaWindowForm.Definition.Left = [int32]::Abs($Position.Split("x")[0])
+            $Script:SqlSchemaWindowForm.Definition.Top = [int32]::Abs($Position.Split("x")[1])
         }
 
         #region SqlSchemaWindowForm events
@@ -54,20 +59,20 @@ function Open-SqlSchemaWindow {
         #         $Script:PositionManagerSqlSchemaWindow.Synchronizing = $true
         #         $Script:SqlSchemaWindowForm.Definition.Dispatcher.Invoke({
         #                 $Script:SqlSchemaWindowForm.Definition.Top = $Script:MainWindowForm.Definition.Top
-        #                 $Script:SqlSchemaWindowForm.Definition.Left = $Script:MainWindowForm.Definition.Left - $Script:MainWindowForm.SqlSchemaWindowForm.Width - 5
-        #                 $Script:PositionManagerSqlSchemaWindow.PositionOffSetTop = $Script:SqlSchemaWindowForm.Definition.Top - $Script:MainWindowForm.Definition.Top
-        #                 $Script:PositionManagerSqlSchemaWindow.PositionOffSetLeft = $Script:SqlSchemaWindowForm.Definition.Left + $Script:SqlSchemaWindowForm.Definition.Width + 5
+        #                 $Script:SqlSchemaWindowForm.Definition.Left = $Script:MainWindowForm.Definition.Left - $Script:MainWindowForm.SqlSchemaWindowForm.Width
+        #                 $Script:PositionManagerSqlSchemaWindow.PositionOffSetTop = $Script:SqlSchemaWindowForm.Definition.Top - [int32]$MainWindowForm.Definition.Top
+        #                 $Script:PositionManagerSqlSchemaWindow.PositionOffSetLeft = $Script:SqlSchemaWindowForm.Definition.Left + $Script:SqlSchemaWindowForm.Definition.Width + 2
         #                 if ($null -ne ($Script:SqlSchemaWindowForm.Definition | Get-WindowSizeConfig)) {
         #                     $Size = $Script:SqlSchemaWindowForm.Definition | Get-WindowSizeConfig
         #                     "Sql window size: {0}" -f $Size | Write-LogOutput -LogType DEBUG
-        #                     $Script:SqlSchemaWindowForm.Definition.Width = [double]$Size.Split("x")[0]
-        #                     $Script:SqlSchemaWindowForm.Definition.Height = [double]$Size.Split("x")[1]
+        #                     $Script:SqlSchemaWindowForm.Definition.Width = [int32]$Size.Split("x")[0]
+        #                     $Script:SqlSchemaWindowForm.Definition.Height = $Size.Split("x")[1]
         #                 }
         #                 $Script:PositionManagerSqlSchemaWindow.Synchronizing = $false
         #             }, [System.Windows.Threading.DispatcherPriority]::Render)
-        #         $Script:MainWindowForm.Elements.ButtonShowSqlSchema.Content = "Hide S_ql Schema"
-        #         $Script:PositionManagerSqlSchemaWindow.PositionOffSetLeft = $Script:SqlSchemaWindowForm.Definition.Left + $Script:SqlSchemaWindowForm.Definition.Width + 5
-        #         $Script:PositionManagerSqlSchemaWindow.PositionOffSetTop = $Script:SqlSchemaWindowForm.Definition.Top - $Script:MainWindowForm.Definition.Top
+        #         $Script:MainWindowForm.Elements.ButtonShowSqlSchema | Set-ButtonContent -Content "Hide S_ql Schema"
+        #         [int32]$Script:PositionManagerSqlSchemaWindow.PositionOffSetLeft = $Script:SqlSchemaWindowForm.Definition.Left + $Script:SqlSchemaWindowForm.Definition.Width + 2
+        #         $Script:PositionManagerSqlSchemaWindow.PositionOffSetTop = $Script:SqlSchemaWindowForm.Definition.Top - [int32]$MainWindowForm.Definition.Top
         #     })
 
         $Script:SqlSchemaWindowForm.Definition.Add_Loaded({
@@ -77,33 +82,45 @@ function Open-SqlSchemaWindow {
 
                 $Script:PositionManagerSqlSchemaWindow.Synchronizing = $true
                 $Script:SqlSchemaWindowForm.Definition.Dispatcher.Invoke({
-                        $Script:SqlSchemaWindowForm.Definition.Top = $Script:MainWindowForm.Definition.Top
-                        $Script:SqlSchemaWindowForm.Definition.Left = $Script:MainWindowForm.Definition.Left - $Script:SqlSchemaWindowForm.Definition.Width - 5
-                        $Script:PositionManagerSqlSchemaWindow.PositionOffSetTop = $Script:MainWindowForm.Definition.Top - $Script:SqlSchemaWindowForm.Definition.Top
-                        $Script:PositionManagerSqlSchemaWindow.PositionOffSetLeft = $Script:MainWindowForm.Definition.Left - $Script:SqlSchemaWindowForm.Definition.Left
+                        $Script:SqlSchemaWindowForm.Definition.Top = [int32]::Abs($Script:MainWindowForm.Definition.Top)
+                        "MainWindowForm Position: {0}x{1}, Dimensions: {2}x{3}" -f $Script:MainWindowForm.Definition.Left, $Script:MainWindowForm.Definition.Top, $Script:MainWindowForm.Definition.Width , $Script:MainWindowForm.Definition.Height | Write-LogOutput -LogType DEBUG
+                        $Script:SqlSchemaWindowForm.Definition.Left = [int32]::Abs($Script:MainWindowForm.Definition.Left) - [int32]::Abs($Script:SqlSchemaWindowForm.Definition.Width)
+                        "SqlSchemaWindowForm Left: {0}" -f $Script:SqlSchemaWindowForm.Definition.Left | Write-LogOutput -LogType DEBUG
+                        $Script:PositionManagerSqlSchemaWindow.PositionOffSetTop = [int32]::Abs($Script:MainWindowForm.Definition.Top) - [int32]::Abs($Script:SqlSchemaWindowForm.Definition.Top)
+                        $Script:PositionManagerSqlSchemaWindow.PositionOffSetLeft = [int32]::Abs($Script:MainWindowForm.Definition.Left) - [int32]::Abs($Script:SqlSchemaWindowForm.Definition.Left)
+                        "PositionManagerSqlSchemaWindow PositionOffSetLeft: {0}" -f $Script:PositionManagerSqlSchemaWindow.PositionOffSetLeft | Write-LogOutput -LogType DEBUG
                         if ($null -ne ($Script:SqlSchemaWindowForm.Definition | Get-WindowSizeConfig)) {
                             $Size = $Script:SqlSchemaWindowForm.Definition | Get-WindowSizeConfig
                             "Sql Schema window size: {0}" -f $Size | Write-LogOutput -LogType DEBUG
-                            $Script:SqlSchemaWindowForm.Definition.Width = [double]$Size.Split("x")[0]
-                            $Script:SqlSchemaWindowForm.Definition.Height = [double]$Size.Split("x")[1]
+                            $Script:SqlSchemaWindowForm.Definition.Width = $Size.Split("x")[0]
+                            $Script:SqlSchemaWindowForm.Definition.Height = $Size.Split("x")[1]
+                            "SqlSchemaWindowForm Height: {0}" -f $Script:SqlSchemaWindowForm.Definition.Height | Write-LogOutput -LogType DEBUG
                         }
                         $Script:PositionManagerSqlSchemaWindow.Synchronizing = $false
                     }, [System.Windows.Threading.DispatcherPriority]::Render)
-                $Script:MainWindowForm.Elements.ButtonShowSqlSchema.Content = "Hide S_ql Schema"
-                $Script:PositionManagerSqlSchemaWindow.PositionOffSetTop = $Script:MainWindowForm.Definition.Top - $Script:SqlSchemaWindowForm.Definition.Top
-                $Script:PositionManagerSqlSchemaWindow.PositionOffSetLeft = $Script:MainWindowForm.Definition.Left - $Script:SqlSchemaWindowForm.Definition.Left
-
+                $Script:MainWindowForm.Elements.ButtonShowSqlSchema.IsEnabled = $true
+                $Script:MainWindowForm.Elements.ButtonShowSqlSchema | Set-ButtonContent -Content "Hide Schema"
+                $Script:PositionManagerSqlSchemaWindow.PositionOffSetTop = [int32]::Abs($Script:MainWindowForm.Definition.Top) - [int32]::Abs($Script:SqlSchemaWindowForm.Definition.Top)
+                "PositionManagerSqlSchemaWindow PositionOffSetLeft: {0}" -f $Script:PositionManagerSqlSchemaWindow.PositionOffSetLeft | Write-LogOutput -LogType DEBUG
+                $Script:PositionManagerSqlSchemaWindow.PositionOffSetLeft = [int32]::Abs($Script:MainWindowForm.Definition.Left) - [int32]::Abs($Script:SqlSchemaWindowForm.Definition.Left)
+                "PositionManagerSqlSchemaWindow PositionOffSetTop: {0}" -f $Script:PositionManagerSqlSchemaWindow.PositionOffSetTop | Write-LogOutput -LogType DEBUG
+                "SqlSchemaWindowForm Position: {0}x{1}, Dimensions: {2}x{3}" -f $Script:SqlSchemaWindowForm.Definition.Left, $Script:SqlSchemaWindowForm.Definition.Top, $Script:SqlSchemaWindowForm.Definition.Width , $Script:SqlSchemaWindowForm.Definition.Height | Write-LogOutput -LogType DEBUG
+                $Script:SqlSchemaWindowForm.State = "Open"
             })
 
         $Script:SqlSchemaWindowForm.Definition.Add_Closing({
                 $_ | Show-EventInfo
                 Save-WindowMeasurements
-                $false | Invoke-ProcessConfigSettings -Property "SqlSchemaWindowFormOpen"
+                $Script:SqlSchemaWindowForm.State = "Closing"
+                if ($Script:MainWindowForm.State -eq "Open") {
+                    $false | Invoke-ProcessConfigSettings -Property "SqlSchemaWindowFormOpen"
+                }
             })
 
         $Script:SqlSchemaWindowForm.Definition.Add_Closed({
                 $_ | Show-EventInfo
-                $Script:MainWindowForm.Elements.ButtonShowSqlSchema.Content = "Show S_ql Schema"
+                $Script:SqlSchemaWindowForm.State = "Closed"
+                $Script:MainWindowForm.Elements.ButtonShowSqlSchema | Set-ButtonContent -Content "Schema"
             })
 
         #endregion

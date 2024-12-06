@@ -18,10 +18,10 @@ try {
     }
     catch {}
 
-    "Deploy Scriptname: {0}" -f $ScriptName | Write-Verbose
+    "Deploy Scriptname: '{0}'" -f $ScriptName | Write-Verbose
 
     $OmadaTroubleShooterPs1 = Join-Path  (Get-Item $DeployScriptRoot).FullName -ChildPath "src\$ScriptName"
-    "OmadaTroubleShooterPath: {0}" -f $OmadaTroubleShooterPs1 | Write-Verbose
+    "OmadaTroubleShooterPath: '{0}'" -f $OmadaTroubleShooterPs1 | Write-Verbose
 
     $LocalAppDataPath = Join-Path $env:LOCALAPPDATA -ChildPath $ScriptName.Replace(".ps1", "")
     New-Item $LocalAppDataPath -ItemType Directory -Force | Out-Null
@@ -29,7 +29,7 @@ try {
     $RoamingAppDataPath = Join-Path $env:APPDATA -ChildPath $ScriptName.Replace(".ps1", "")
     New-Item $RoamingAppDataPath -ItemType Directory -Force | Out-Null
 
-    "Deploy {0} from {1} to {2}" -f $ScriptName, $DeployScriptRoot, $LocalAppDataPath | Write-Host
+    "Deploy '{0}' from '{1}' to '{2}'" -f $ScriptName, $DeployScriptRoot, $LocalAppDataPath | Write-Host
 
     #Clear existing files in root and lib
     Get-ChildItem -Path $LocalAppDataPath -File | ForEach-Object {
@@ -70,20 +70,10 @@ try {
         $File = "bin\Webview2Dlls\{0}" -f $File.Split("\")[-1]
         if (!(Test-Path (Join-Path $LocalAppDataPath -ChildPath $File) -PathType Leaf)) {
             $DownLoadFiles = $true
-            $File
         }
     }
 
     New-Item (Join-Path $LocalAppDataPath -ChildPath "bin\Webview2Runtime") -ItemType Directory -Force | Out-Null
-    if(!(Test-Path (Join-Path $LocalAppDataPath -ChildPath "bin\Webview2Runtime\.downloadWebViewRunTime") -PathType Leaf) -and !(Test-Path (Join-Path $LocalAppDataPath -ChildPath "bin\Webview2Runtime\msedgewebview2.exe") -PathType Leaf)) {
-        "Copy Webview2 RunTime files here if Webview2 is not available on your system. You can download it from: https://developer.microsoft.com/en-us/microsoft-edge/webview2?form=MA13LH#download-section" | Out-File (Join-Path $LocalAppDataPath -ChildPath "bin\Webview2Runtime\.downloadWebViewRunTime") -Force -Encoding utf8
-    }
-    else{
-        try{
-            Get-Item (Join-Path $LocalAppDataPath -ChildPath "bin\Webview2Runtime\.downloadWebViewRunTime") | Remove-Item -Force -Confirm:$false
-        }
-        catch{}
-    }
 
     if ($DownLoadFiles -or $Force) {
         if ($null -eq (Get-PackageSource | Where-Object { $_.Name -eq "NuGet" })) {
@@ -103,8 +93,27 @@ try {
         Get-Item $PackageTempFolder.FullName | Remove-Item -Recurse -Force
     }
     else {
-        "WebView2 already exist. Do download again use Deploy.ps1 -Force" | Write-Host
+        "WebView2 Dll files already present at '{0}'. Do download again use Deploy.ps1 -Force" -f (Join-Path $LocalAppDataPath -ChildPath "Bin\Webview2Dlls") | Write-Host
     }
+
+    if ((Get-Module -Name OmadaWeb.PS -ListAvailable | Measure-Object).Count -le 0) {
+        "OmadaWeb.PS module not in any PowerShell Module path. The application cannot run without it!" | Write-Warning
+    }
+    $WebViewInstalled = $false
+    (Join-Path $env:ProgramFiles -ChildPath "Micorosft\EdgeWebView"), (Join-Path ${env:ProgramFiles(x86)} -ChildPath "Microsoft\EdgeWebView") | ForEach-Object {
+        if (Test-Path $_) {
+            (Get-ChildItem $_ -Filter *.exe -Recurse | Where-Object { $_.Name -eq "msedgewebview2.exe" }) | ForEach-Object {
+                "A webview installation found at '{0}'" -f (Split-Path $_) | Write-Host
+                $WebViewInstalled = $true
+            }
+        }
+    }
+    if (!$WebViewInstalled -and !(Test-Path (Join-Path $LocalAppDataPath -ChildPath "bin\Webview2Runtime\.downloadWebViewRunTime") -PathType Leaf) -and !(Test-Path (Join-Path $LocalAppDataPath -ChildPath "bin\Webview2Runtime\msedgewebview2.exe") -PathType Leaf)) {
+        $Message = "Copy Webview2 RunTime files here because the Webview2 RunTime does not seem to be present at your system. You can download it from: https://developer.microsoft.com/en-us/microsoft-edge/webview2?form=MA13LH#download-section" | Write-Warning
+        $Message | Out-File (Join-Path $LocalAppDataPath -ChildPath "bin\Webview2Runtime\.downloadWebViewRunTime") -Force -Encoding utf8
+    }
+    else { try { Get-Item (Join-Path $LocalAppDataPath -ChildPath "bin\Webview2Runtime\.downloadWebViewRunTime") | Remove-Item -Force -Confirm:$false }catch {} }
+
     Get-ChildItem $LocalAppDataPath -Recurse | Unblock-File
     Get-ChildItem $RoamingAppDataPath -Recurse | Unblock-File
 
@@ -129,6 +138,7 @@ try {
     Get-Item -Path $ShortcutFullPath | Copy-Item -Destination $WshShell.SpecialFolders("Programs") -Force
 
     Pop-Location
+
     "Application copied to '{0}', config can be found here: '{1}'. Shortcut created on desktop '{2}' and in start-menu '{3}'. To uninstall, just remove the files." -f $LocalAppDataPath, $RoamingAppDataPath, $ShortcutFullPath, $WshShell.SpecialFolders("Programs") | Write-Host -ForegroundColor Green
     "Finished" | Write-Host
 }

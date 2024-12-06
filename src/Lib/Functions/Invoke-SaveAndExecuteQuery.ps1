@@ -2,6 +2,12 @@ function Invoke-SaveAndExecuteQuery {
 
 
     try {
+
+        if(!(Test-ConnectionRequirements)){
+            "Connection not ready" | Write-LogOutput -LogType DEBUG
+            return
+        }
+
         $ScriptToExecute = "editor.getValue();"
 
         $OnCompletedScriptBlock = {
@@ -67,7 +73,7 @@ function Invoke-SaveAndExecuteQuery {
 
                     if ($null -ne $Script:QueryResult -and ($Script:QueryResult.d.Rows | Measure-Object).Count -le 0) {
                         "Query did not return any results!" | Write-LogOutput -LogType WARNING
-                        $Script:MainWindowForm.Elements.TextBlockRows.Text = "0 rows"
+                        $Script:MainWindowForm.Elements.TextBlockRows | Set-TextBlockText -Text "0 rows"
                     }
                     else {
                         $Script:MainWindowForm.Elements.DataGridQueryResult.AutoGenerateColumns = $true
@@ -77,16 +83,17 @@ function Invoke-SaveAndExecuteQuery {
                         $Script:MainWindowForm.Elements.ButtonSaveOutputFile.IsEnabled = $True
                         "{0} record(s) retrieved!" -f $Script:QueryResult.d.Records | Write-LogOutput
 
-                        $Script:MainWindowForm.Elements.TextBlockRows.Text = "{0:n0} rows" -f [int32]$Script:QueryResult.d.Records
+                        $Script:MainWindowForm.Elements.TextBlockRows | Set-TextBlockText -Text ("{0:n0} rows" -f [int32]$Script:QueryResult.d.Records)
 
-                        "{0} - {1}" -f $Result.DisplayName, $Result.Id | Invoke-ProcessConfigSettings -Property "SelectedSqlQueryDoId"
+                        Set-ConfigMultiValue ("{0} - {1}" -f $Result.DisplayName, $Result.Id) | Invoke-ProcessConfigSettings -Property "SelectedSqlQueryDoId"
                         if ($Result.DisplayName -ne $Script:CurrentSqlQueryDisplayName) {
                             "New display name, Current: {0}, New: {1}" -f $Script:CurrentSqlQueryDisplayName, $Result.DisplayName | Write-LogOutput -LogType DEBUG
+                            "Force update query list" | Write-LogOutput -LogType DEBUG
                             Update-QueryList -ForceRefresh
                             $ComboBoxSelectQueryItem = $Script:MainWindowForm.Elements.ComboBoxSelectQuery.Items | Where-Object { $_.Content -eq $Script:AppConfig.SelectedSqlQueryDoId }
                             if ($null -ne $ComboBoxSelectQueryItem) {
                                 $ComboBoxSelectQueryItem = New-Object System.Windows.Controls.ComboBoxItem
-                                $ComboBoxSelectQueryItem.Content = $Script:AppConfig.SelectedSqlQueryDoId
+                                $ComboBoxSelectQueryItem.Content = (Get-ConfigMultiValue $Script:AppConfig.SelectedSqlQueryDoId)
                                 $Script:MainWindowForm.Elements.ComboBoxSelectQuery.Items.Add($ComboBoxSelectQueryItem) | Out-Null
                             }
                             $Script:MainWindowForm.Elements.ComboBoxSelectQuery.SelectedItem = $ComboBoxSelectQueryItem
@@ -101,9 +108,9 @@ function Invoke-SaveAndExecuteQuery {
                 }
                 $Script:MainWindowForm.Elements.ButtonSaveQuery.IsEnabled = $True
                 $Script:MainWindowForm.Elements.ButtonExecuteQuery.IsEnabled = $True
-                $Script:MainWindowForm.Elements.ButtonExecuteQuery.Content = "_Execute Query"
-                if($null -ne $Script:PopupWindow) {
-                    $Script:PopupWindow.Close()
+                $Script:MainWindowForm.Elements.ButtonExecuteQuery | Set-ButtonContent -Content "_Execute Query"
+                if($null -ne $Script:PopupWindowExecuteQuery) {
+                    $Script:PopupWindowExecuteQuery.Close()
                 }
 
                 if ($null -ne $Script:StopWatch) {
@@ -119,6 +126,13 @@ function Invoke-SaveAndExecuteQuery {
         Invoke-ExecuteScriptWithResultAsync -ScriptToExecute $ScriptToExecute -OnCompletedScriptBlock $OnCompletedScriptBlock
     }
     catch {
+        if ($null -ne $Script:StopWatch) {
+            $Script:StopWatch.Stop()
+            $Script:MainWindowForm.Elements.TextBlockQueryTime.Text = $Script:StopWatch.Elapsed.ToString()
+        }
+        if($null -ne $Script:PopupWindowExecuteQuery) {
+            $Script:PopupWindowExecuteQuery.Close()
+        }
         $_.Exception.Message | Write-LogOutput -LogType ERROR
     }
 

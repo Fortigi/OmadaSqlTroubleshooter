@@ -6,7 +6,7 @@ function Get-WindowPositionConfig {
     )
     try {
         $Property = "{0}Position" -f $Form.Name
-        if ($null -ne $Script:AppConfig.$Property -and $Script:AppConfig.$Property -match "\d+x\d+") {
+        if ($null -ne $Script:AppConfig.$Property -and $Script:AppConfig.$Property -match "\b\d+x\d+\b") {
             return $Script:AppConfig.$Property
         }
         else {

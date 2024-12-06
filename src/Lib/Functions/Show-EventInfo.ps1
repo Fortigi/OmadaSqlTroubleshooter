@@ -2,26 +2,37 @@ function Show-EventInfo {
 
     PARAM(
         [parameter(Mandatory = $True, Position = 0, ValueFromPipeline = $True)]
-        $Item
+        $Item,
+        [validateSet("DEBUG", "VERBOSE", "VERBOSE2")]
+        $LogType = "DEBUG"
     )
     try {
+        $CallStack = Get-PSCallStack
         if ($Item -is [Microsoft.Web.WebView2.Core.CoreWebView2NavigationCompletedEventArgs]) {
-            "Webview success: '{0}'" -f $Item.IsSuccess | Write-LogOutput -LogType DEBUG
+            "Webview success: '{0}' Source: '{1}'" -f $Item.IsSuccess, $CallStack[1].Location | Write-LogOutput -LogType $LogType
         }
         elseif ($Item -is [System.Windows.Window]) {
-            "Form: '{0}', Event: '{1}', Event Type: '{2}'" -f $Item.Source.Title, $Item.RoutedEvent.Name, $Item.RoutedEvent.OwnerType.FullName | Write-LogOutput -LogType DEBUG
+            "Form: '{0}', Event: '{1}', Event Type: '{2}', Source: '{3}'" -f $Item.Source.Title, $Item.RoutedEvent.Name, $Item.RoutedEvent.OwnerType.FullName, $CallStack[1].Location | Write-LogOutput -LogType $LogType
         }
         elseif ($Item -is [System.Windows.Controls.SelectionChangedEventArgs]) {
-            "Control: '{0}', Event: '{1}', Event Type: '{2}', Added values: {3}, Removed values: {4}" -f $Item.Source.Name, $Item.RoutedEvent.Name, $Item.RoutedEvent.OwnerType.FullName, ($Item.AddedItems | Measure-Object).Count, ($Item.RemovedItems | Measure-Object).Count | Write-LogOutput -LogType DEBUG
+            "Control: '{0}', Event: '{1}', Event Type: '{2}', Added values: {3}, Removed values: {4}, Source: '{5}'" -f $Item.Source.Name, $Item.RoutedEvent.Name, $Item.RoutedEvent.OwnerType.FullName, ($Item.AddedItems | Measure-Object).Count, ($Item.RemovedItems | Measure-Object).Count, $CallStack[1].Location | Write-LogOutput -LogType $LogType
+        }
+        elseif ($Item -is [System.Windows.SizeChangedEventArgs]) {
+            "Control: '{0}', Event: '{1}', Event Type: '{2}', PreviousSize: {3}, NewSize: {4}, Source: {5}" -f $Item.Source.Name, $Item.RoutedEvent.Name, $Item.RoutedEvent.OwnerType.FullName, $Item.PreviousSize, $Item.NewSize, $CallStack[1].Location | Write-LogOutput -LogType $LogType
         }
         elseif ($Item -is [System.Windows.RoutedEventArgs]) {
-            "Event: '{0}', Event Type: '{1}" -f $Item.RoutedEvent.Name, $Item.RoutedEvent.OwnerType.FullName | Write-LogOutput -LogType DEBUG
+            "Event: '{0}', Event Type: '{1}, Source: '{2}'" -f $Item.RoutedEvent.Name, $Item.RoutedEvent.OwnerType.FullName, $CallStack[1].Location | Write-LogOutput -LogType $LogType
         }
         elseif ($Item -is [System.EventArgs]) {
-            "Event: '{0}'" -f $Item.RoutedEvent.Name | Write-LogOutput -LogType DEBUG
+            if ([string]::IsNullOrWhiteSpace($Item.RoutedEvent.Name)) {
+                "Event: '{0}', Source: '{1}'" -f $Item, $CallStack[1].Location | Write-LogOutput -LogType $LogType
+            }
+            else {
+                "Event: '{0}', Source: '{1}'" -f $Item.RoutedEvent.Name, $CallStack[1].Location | Write-LogOutput -LogType $LogType
+            }
         }
         else {
-            "Control: {0}, Event: '{1}', Event Type: '{2}'" -f $Item.Source.Name, $Item.RoutedEvent.Name, $Item.RoutedEvent.OwnerType.FullName | Write-LogOutput -LogType DEBUG
+            "Control: {0}, Event: '{1}', Event Type: '{2}', Source: '{3}'" -f $Item.Source.Name, $Item.RoutedEvent.Name, $Item.RoutedEvent.OwnerType.FullName, $CallStack[1].Location | Write-LogOutput -LogType $LogType
         }
     }
     catch {

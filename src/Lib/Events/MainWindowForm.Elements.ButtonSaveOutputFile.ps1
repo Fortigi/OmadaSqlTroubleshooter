@@ -24,7 +24,7 @@ $Script:MainWindowForm.Elements.ButtonSaveOutputFile.Add_Click({
     else {
         $SaveFileDisplayName = "Output"
     }
-    $SaveFileDialog.FileName = "SqlQuery_{0}_{1}_{2}_{3}_Output{4}" -f $Script:AppConfig.SqlQueryDoId, $SaveFileDisplayName, $Script:AppConfig.CurrentDataConnectionName, [system.uri]::New($Script:AppConfig.BaseUrl).Host, $Script:AppConfig.LastExtension
+    $SaveFileDialog.FileName = "SqlQuery_{0}_{1}_{2}_{3}_Output{4}" -f $Script:AppConfig.SqlQueryDoId, $SaveFileDisplayName, (Get-ConfigMultiValue $Script:AppConfig.CurrentDataConnectionName), [system.uri]::New($Script:AppConfig.BaseUrl).Host, $Script:AppConfig.LastExtension
     if ($SaveFileDialog.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
         $Script:OutputFileName = $SaveFileDialog.FileName
         "Save outputfile: {0}" -f $Script:OutputFileName | Write-LogOutput

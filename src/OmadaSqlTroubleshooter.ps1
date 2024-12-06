@@ -2,9 +2,10 @@
 #requires -Version 7.0
 [cmdletbinding()]
 PARAM(
-    [ValidateSet("INFO", "DEBUG", "VERBOSE", "WARNING", "ERROR", "FATAL")]
+    [ValidateSet("INFO", "DEBUG", "VERBOSE", "WARNING", "ERROR", "FATAL", "VERBOSE2")]
     [string]$LogLevel,
-    [switch]$Reset
+    [switch]$Reset,
+    [switch]$LogToConsole
 )
 $Error.Clear()
 $ScriptRootFolder = (Get-Item $PSScriptRoot).FullName
@@ -18,7 +19,6 @@ Get-ChildItem -Path (Join-Path $ScriptRootFolder -ChildPath "Lib\Functions") -Fi
 #endregion
 
 #region init
-
 $ScriptName = "OmadaSqlTroubleshooter.ps1"
 $ApplicationTitle = ""
 $StartVariables = Get-Variable
@@ -26,6 +26,7 @@ $StartVariables = Get-Variable
 $AppLogObject = [System.Collections.ObjectModel.ObservableCollection[string]]::new()
 $AppLogObject.Add("Application log initialized`r`n")
 
+"Initialize pre-load settings..." | Write-LogOutput -LogType DEBUG
 $ConfigFileName = $ScriptName -replace ".ps1", ".json"
 
 $AppDataRootFolder = Join-Path $Env:APPDATA -ChildPath (Get-Item $ScriptRootFolder).Name
@@ -37,12 +38,12 @@ iF (Test-Path $AppDataRootFolder -PathType Container) {
 else {
     $Script:ConfigFilePath = Join-Path $ScriptRootFolder -ChildPath $ConfigFileName
 }
-
+$Script:LogToConsole = $LogToConsole.IsPresent -or $false
 $SqlQueryDoIdAttribute = "c-13"
 $SqlQueryCreatedByAttribute = "c-2"
 $SqlQueryChangedByAttribute = "c-4"
 $Script:AppConfig = $null
-$Script:AuthenticationNotSet = $false
+$Script:AuthenticationSet = $false
 $QueryText = $null
 $SqlQueryObject = $null
 $Script:CurrentSqlQueryDisplayName = $null
@@ -54,6 +55,9 @@ $Script:CurrentQueryText = $null
 $Script:WebView = $null
 $Script:WebviewUserDataFolder = $null
 $Script:StopWatch = $null
+$Script:VerboseParameterSet = $PSCmdlet.MyInvocation.BoundParameters.Keys.Contains("Verbose")
+
+$Script:LastWindowMeasured = Get-Date
 
 $PositionManagerTemplate = @{
     Synchronizing       = $false
@@ -65,11 +69,12 @@ $PositionManagerTemplate = @{
     ChildWindowLeft     = 0
     ChildWindowRight    = 0
     ChildWindowBottom   = 0
+    LastPositionChange  = Get-Date
 }
 $Script:PositionManagerLogWindow = $PositionManagerTemplate.PsObject.Copy()
-$Script:PositionManagerLogWindow.PositionOffSetLeft = 1200
+[int32]$Script:PositionManagerLogWindow.PositionOffSetLeft = 1200
 $Script:PositionManagerSqlSchemaWindow = $PositionManagerTemplate.PsObject.Copy()
-$Script:PositionManagerSqlSchemaWindow.PositionOffSetRight = 405
+[int32]$Script:PositionManagerSqlSchemaWindow.PositionOffSetRight = 405
 
 $Script:QueryListCache = @{
     QueryList   = $null
@@ -83,8 +88,10 @@ try {
 catch {}
 
 #region assemblies
+"Load module OmadaWeb.PS" | Write-LogOutput -LogType DEBUG
 Import-Module OmadaWeb.PS
 
+"Load Assemblies" | Write-LogOutput -LogType DEBUG
 #Set path to the bin folder to be sure that WebView2Loader.dll is found there.
 $Env:Path += ";$ScriptRootFolder\Bin"
 $Env:Path += ";$ScriptRootFolder\Bin\Webview2Dlls"
@@ -116,8 +123,11 @@ if (!(Test-Path $Script:WebViewLoaderPath -PathType Leaf)) {
 #endregion
 
 #region controls
+
+"Initializing application..." | Write-LogOutput -LogType DEBUG
 [Windows.Forms.Application]::EnableVisualStyles()
 
+"Loading Splash Object" | Write-LogOutput -LogType DEBUG
 $SplashForm = New-Object System.Windows.Forms.Form
 $SplashForm.Text = "Loading..."
 $SplashForm.FormBorderStyle = [System.Windows.Forms.FormBorderStyle]::None
@@ -144,17 +154,17 @@ $SplashLabel.Location = New-Object System.Drawing.Point(55, 180)
 $SplashForm.Controls.Add($SplashLabel)
 #endregion
 
+"Loading Main Window Object" | Write-LogOutput -LogType DEBUG
 $Script:MainWindowForm = New-FormObject -FormPath (Join-Path $ScriptRootFolder -ChildPath "lib\ui\MainWindow.xaml")
-if ($null -eq ($Script:MainWindowForm.Definition | Get-WindowPositionConfig)) {
-    $Script:MainWindowForm.Definition.WindowStartupLocation = [System.Windows.WindowStartupLocation]::CenterScreen
-}
+"Get WebView" | Write-LogOutput -LogType DEBUG
 $Script:WebView = $Script:MainWindowForm.Definition.FindName("webView21")
 
 #region events
 
 #How to lookup events for a button: ([System.Windows.Controls.Button].GetEvents()|where name -eq 'Click').AddMethod.Name
 try {
-    # functions are moved to .\Lib\Functions
+    # Events are moved to .\Lib\Events
+    "Read Events" | Write-LogOutput -LogType DEBUG
     Get-ChildItem -Path (Join-Path $ScriptRootFolder -ChildPath "Lib\Events") -Filter *.ps1 | ForEach-Object {
         . $_.FullName
     }
@@ -171,22 +181,35 @@ catch {
 
 #region process
 try {
+    Invoke-ProcessConfigSettings -Reset:$Reset.IsPresent
+
+    if ($Script:LogToConsole -or $Script:AppConfig.CheckboxConsoleLog) {
+        $Script:LogToConsole = $true
+        "Console logging is enabled" | Write-LogOutput -LogType LOG
+    }
+
+    "Show Splash Screen" | Write-LogOutput -LogType DEBUG
     [void]$SplashForm.Show()
     $ApplicationTitle = $Script:MainWindowForm.Definition.Title.ToString()
     "Application '{0}': Start initialization..." -f $ApplicationTitle | Write-Host -ForegroundColor Green
-    Invoke-ProcessConfigSettings -Reset:$Reset.IsPresent
+
     [System.Windows.Forms.Application]::DoEvents()
+    if ($null -eq ($Script:MainWindowForm.Definition | Get-WindowPositionConfig)) {
+        $Script:MainWindowForm.Definition.WindowStartupLocation = [System.Windows.WindowStartupLocation]::CenterScreen
+    }
     $Result = $Null
 
+    "Pre-set Main Window Components from config" | Write-LogOutput -LogType DEBUG
     $Script:OutputFileName = $Null
     $SqlQueryObject = $Null
     $Script:CurrentSqlQueryDisplayName = $Null
-    $CurrentUrl = $Null
+    $Script:CurrentUrl = $Null
 
     $Script:MainWindowForm.Elements.TextBoxURL.Text = $Script:AppConfig.BaseUrl
     $Script:MainWindowForm.Elements.TextBoxURL.IsEnabled = $True
     if (![String]::IsNullOrWhiteSpace($Script:MainWindowForm.Elements.TextBoxURL.Text)) {
-        $CurrentUrl = $Script:MainWindowForm.Elements.TextBoxURL.Text
+        $Script:CurrentUrl = $Script:MainWindowForm.Elements.TextBoxURL.Text
+        "Config: Current Url: {0}" -f $Script:CurrentUrl | Write-LogOutput -LogType DEBUG
     }
 
     $InvokeOmadaRestMethodParam = @{
@@ -196,41 +219,54 @@ try {
     }
     $Password = $Null
 
+    if([string]::IsNullOrWhiteSpace($Script:Appconfig.ConfigMultiValueSeparator)) {
+        Set-ConfigMultiValueSeparator -Separator "§"
+    }
+
     if ($Script:AppConfig.MyQueriesOnly) {
+        "Config: MyQueriesOnly: True" | Write-LogOutput -LogType DEBUG
         $Script:MainWindowForm.Elements.CheckboxMyQueries.IsChecked = $True
     }
 
     if ($null -ne $Script:LogLevelSetting) {
         $Script:LogLevelSetting | Invoke-ProcessConfigSettings -Property "LogLevel"
+        "Config: LogLevelSetting: {0}" -f $Script:LogLevelSetting | Write-LogOutput -LogType DEBUG
     }
 
     if (![string]::IsNullOrWhiteSpace($Script:AppConfig.SelectedSqlQueryDoId)) {
+        "Config: SelectedSqlQueryDoId: {0}" -f $Script:AppConfig.SelectedSqlQueryDoId | Write-LogOutput -LogType DEBUG
+
         $ComboBoxSelectQueryItem = $null
-        $ComboBoxSelectQueryItem = $Script:MainWindowForm.Elements.ComboBoxSelectQuery.Items | Where-Object { $_.Content -eq $Script:AppConfig.SelectedSqlQueryDoId }
+        $ComboBoxSelectQueryItem = $Script:MainWindowForm.Elements.ComboBoxSelectQuery.Items | Where-Object { $_.Content -eq (Get-ConfigMultiValue $Script:AppConfig.SelectedSqlQueryDoId) }
         if ($null -eq $ComboBoxSelectQueryItem) {
+            "Config: Set SelectedSqlQueryDoId: {0}" -f $Script:AppConfig.SelectedSqlQueryDoId | Write-LogOutput -LogType DEBUG
             $ComboBoxSelectQueryItem = New-Object System.Windows.Controls.ComboBoxItem
-            $ComboBoxSelectQueryItem.Content = $Script:AppConfig.SelectedSqlQueryDoId
+            $ComboBoxSelectQueryItem.Content = (Get-ConfigMultiValue  $Script:AppConfig.SelectedSqlQueryDoId)
             $Script:MainWindowForm.Elements.ComboBoxSelectQuery.Items.Add($ComboBoxSelectQueryItem) | Out-Null
-            $Script:CurrentSqlQueryDisplayName = $Script:AppConfig.SelectedSqlQueryDoId.Split(" - ")[0].Trim()
+            $Script:CurrentSqlQueryDisplayName = (Get-ConfigMultiValue $Script:AppConfig.SelectedSqlQueryDoId -Array)[0]
             $Script:MainWindowForm.Elements.TextBoxDisplayName.Text = $Script:CurrentSqlQueryDisplayName
         }
-        $Script:MainWindowForm.Elements.ComboBoxSelectQuery.SelectedValue = $Script:MainWindowForm.Elements.ComboBoxSelectQuery.Items | Where-Object { $_.Content -eq $Script:AppConfig.SelectedSqlQueryDoId }
+        $Script:MainWindowForm.Elements.ComboBoxSelectQuery.SelectedValue = $ComboBoxSelectQueryItem
     }
 
     if (![string]::IsNullOrWhiteSpace($Script:AppConfig.CurrentDataConnection)) {
+        "Config: CurrentDataConnection: {0}" -f $Script:AppConfig.CurrentDataConnection | Write-LogOutput -LogType DEBUG
         Set-DataConnection
     }
 
     if ([string]::IsNullOrWhiteSpace($Script:AppConfig.LastAuthentication)) {
+        "Config: LastAuthentication: {0}" -f $Script:AppConfig.LastAuthentication | Write-LogOutput -LogType DEBUG
         $Script:MainWindowForm.Elements.ComboBoxSelectAuthenticationOption.SelectedValue = $Script:AppConfig.LastAuthentication
     }
 
     if (![string]::IsNullOrWhiteSpace($Script:AppConfig.UserName)) {
+        "Config: UserName: {0}" -f $Script:AppConfig.UserName | Write-LogOutput -LogType DEBUG
         $Script:MainWindowForm.Elements.TextBoxUserName.Text = $Script:AppConfig.UserName
     }
     Set-OmadaUrl
     Set-AuthenticationOption
     Test-ConnectionSettings
+    "Close Splash Screen" | Write-LogOutput -LogType DEBUG
     $SplashForm.Hide()
     $SplashForm.Dispose()
 }
@@ -240,10 +276,18 @@ catch {
 }
 
 try {
-    "Application '{0}': Initialized!" -f $ApplicationTitle | Write-Host -ForegroundColor Green
+    $Message = "Application '{0}': Initialized!" -f $ApplicationTitle
+    $Message | Write-Host -ForegroundColor Green
+    $Message | Write-LogOutput -LogType DEBUG
+    "Loading Main Window with settings:`r`n{0}" -f ($Script:AppConfig | ConvertTo-Json) | Write-LogOutput -LogType DEBUG
+
     [void]$Script:MainWindowForm.Definition.ShowDialog()
-    "Application '{0}': Closed, cleaning-up!" -f $ApplicationTitle | Write-Host -ForegroundColor Green
+    $Message = "Application '{0}': Closed, cleaning-up!" -f $ApplicationTitle
+    $Message | Write-Host -ForegroundColor Green
+    $Message | Write-LogOutput -LogType DEBUG
+    "Invoke-ProcessConfigSettings" | Write-LogOutput -LogType DEBUG
     Invoke-ProcessConfigSettings
+    "Close Main Window" | Write-LogOutput -LogType DEBUG
     $Script:MainWindowForm.Definition.Close() | Out-Null
     $Script:WebView.Dispose() | Out-Null
 }

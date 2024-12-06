@@ -1,16 +1,23 @@
 function Write-LogOutput {
 
     param(
-        [parameter(Mandatory = $True, Position = 0, ValueFromPipeline = $True)]
+        [parameter(Mandatory = $false, Position = 0, ValueFromPipeline = $True)]
         [string]$Message,
-        [ValidateSet("DEBUG", "INFO", "ERROR", "VERBOSE", "WARNING", "FATAL", "LOG")]
+        [ValidateSet("DEBUG", "INFO", "ERROR", "VERBOSE", "WARNING", "FATAL", "LOG", "VERBOSE2")]
         [string]$LogType = "INFO",
         [switch]$SkipDialog
     )
 
     try {
 
-        $DateTime = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
+        if ($null -eq $Message) {
+            $Message = "-"
+        }
+        $DateTimeObject = Get-Date
+        $DateTime = $DateTimeObject.ToString("yyyy-MM-dd HH:mm:ss")
+        if ($Script:LogLevelSetting -in ("VERBOSE", "VERBOSE2")) {
+            $DateTime = $DateTimeObject.ToString("o")
+        }
 
         $PSCallStack = Get-PSCallStack
         try {
@@ -34,6 +41,7 @@ function Write-LogOutput {
             ShowWarning = $false
             ShowError   = $false
             ShowVerbose = $false
+            Color       = "White"
         }
 
         $LogMessageDialog = @{
@@ -44,20 +52,29 @@ function Write-LogOutput {
         }
 
         switch ($Script:LogLevelSetting) {
+            { $_ -eq "VERBOSE2" -and $LogType -in @( "DEBUG", "INFO", "ERROR", "VERBOSE", "WARNING", "FATAL", "LOG", "VERBOSE2") } {
+                $LogMessage.Show = $true
+                $LogMessage.Color = "Gray"
+            }
             { $_ -eq "VERBOSE" -and $LogType -in @( "DEBUG", "INFO", "ERROR", "VERBOSE", "WARNING", "FATAL", "LOG") } {
                 $LogMessage.Show = $true
+                $LogMessage.Color = "Magenta"
             }
             { $_ -eq "DEBUG" -and $LogType -in @( "DEBUG", "INFO", "ERROR", "WARNING", "FATAL", "LOG") } {
                 $LogMessage.Show = $true
+                $LogMessage.Color = "Cyan"
             }
             { $_ -eq "INFO" -and $LogType -in @( "INFO", "ERROR", "WARNING", "FATAL", "LOG") } {
                 $LogMessage.Show = $true
+                $LogMessage.Color = "White"
             }
             { $_ -eq "WARNING" -and $LogType -in @(  "ERROR", "WARNING", "FATAL", "LOG") } {
                 $LogMessage.Show = $true
+                $LogMessage.Color = "Yellow"
             }
             { $_ -in @("ERROR", "FATAL") -and $LogType -in @(  "ERROR", "FATAL", "LOG") } {
                 $LogMessage.Show = $true
+                $LogMessage.Color = "Red"
             }
             Default {
                 $LogMessage.Show = $false
@@ -65,8 +82,15 @@ function Write-LogOutput {
         }
 
         switch ($LogType) {
+            { $_ -eq "VERBOSE2" -and $LogMessage.Show } {
+                if (!$Script:VerboseParameterSet -and $Script:LogToConsole) {
+                    $LogMessage.ShowVerbose = $true
+                }
+            }
             { $_ -eq "VERBOSE" -and $LogMessage.Show } {
-                $LogMessage.ShowVerbose = $true
+                if (!$Script:VerboseParameterSet -and $Script:LogToConsole) {
+                    $LogMessage.ShowVerbose = $true
+                }
             }
             { $_ -eq "DEBUG" -and $LogMessage.Show } {}
             { $_ -eq "INFO" -and $LogMessage.Show } {}
@@ -89,11 +113,15 @@ function Write-LogOutput {
                 $LogMessageDialog.Title = "Error"
                 $LogMessageDialog.Icon = [System.Windows.Forms.MessageBoxIcon]::Error
             }
+            { $_ -eq "LOG" -and $LogMessage.Show } {}
             Default {}
         }
 
         if ($LogMessage.Show) {
             $AppLogObject.Add(($LogMessage.Text) -join "`r`n")
+            if ($Script:LogToConsole) {
+                $LogMessage.Text | Write-Host -ForegroundColor $LogMessage.Color
+            }
         }
         if ($LogMessage.ShowVerbose) {
             $LogMessage.Text | Write-Verbose
@@ -110,14 +138,14 @@ function Write-LogOutput {
                     $LogMessage.Text | Write-Error
                 }
                 else {
-                    $LogMessage.Text | Write-Host
+                    $LogMessage.Text | Write-Host -ForegroundColor $LogMessage.Color
                 }
             }
         }
         if ($LogMessage.ShowError) {
             $LogMessage.Text | Write-Error
         }
-        if ($null -ne $Script:TextBoxLog) {
+        if ($null -ne $Script:TextBoxLog -and $Script:TextBoxLog.IsLoaded) {
             if (Invoke-LogWindowScrollToEnd) {
                 $Script:TextBoxLog.ScrollToEnd()
             }

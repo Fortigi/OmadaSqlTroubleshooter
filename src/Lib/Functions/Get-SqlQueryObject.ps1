@@ -2,6 +2,11 @@ function Get-SqlQueryObject {
 
     try {
 
+        if(!(Test-ConnectionRequirements)){
+            "Connection not ready" | Write-LogOutput -LogType DEBUG
+            return
+        }
+
         if (![string]::IsNullOrWhiteSpace($Script:AppConfig.SqlQueryDoId)) {
             $Script:MainWindowForm.Elements.TextBoxURL.Text.Trim() | Invoke-ProcessConfigSettings -Property "BaseUrl"
 
@@ -15,7 +20,19 @@ function Get-SqlQueryObject {
 
             $Body = $Null
             $Method = "GET"
-            return Invoke-OmadaPSWebRequestWrapper
+            try {
+                return Invoke-OmadaPSWebRequestWrapper
+            }
+            catch {
+                if ($_.Exception.StatusCode -eq 404) {
+                    "Query {0} not found! Clearing current value." -f $Script:AppConfig.SqlQueryDoId | Write-LogOutput -LogType WARNING
+                    $Script:MainWindowForm.Elements.ComboBoxSelectQuery.SelectedItem = $Null
+                    return $null
+                }
+                else {
+                    $_.Exception.Message | Write-LogOutput -LogType ERROR
+                }
+            }
 
             "Retrieved object {0}" -f $SqlQueryObject | Write-LogOutput -LogType VERBOSE
         }

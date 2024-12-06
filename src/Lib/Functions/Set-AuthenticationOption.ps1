@@ -7,12 +7,12 @@ function Set-AuthenticationOption {
                 { $_ -in @("Basic", "Windows", "OAuth" ) } {
 
                     if ($_ -eq "OAuth") {
-                        $Script:MainWindowForm.Elements.LabelUserName.Content = "Client ID:"
-                        $Script:MainWindowForm.Elements.LabelPassword.Content = "Client Secret:"
+                        $Script:MainWindowForm.Elements.LabelUserName | Set-LabelContent-Content "Client ID:"
+                        $Script:MainWindowForm.Elements.LabelPassword | Set-LabelContent-Content "Client Secret:"
                     }
                     else {
-                        $Script:MainWindowForm.Elements.LabelUserName.Content = "Username:"
-                        $Script:MainWindowForm.Elements.LabelPassword.Content = "Password:"
+                        $Script:MainWindowForm.Elements.LabelUserName | Set-LabelContent-Content "Username:"
+                        $Script:MainWindowForm.Elements.LabelPassword | Set-LabelContent-Content "Password:"
                     }
                     $Script:MainWindowForm.Elements.LabelUserName.Visibility = "Visible"
                     $Script:MainWindowForm.Elements.LabelPassword.Visibility = "Visible"
@@ -32,7 +32,7 @@ function Set-AuthenticationOption {
                     $Script:MainWindowForm.Elements.LabelPassword.Visibility = "Hidden"
                     $Script:MainWindowForm.Elements.TextBoxUserName.Visibility = "Hidden"
                     $Script:MainWindowForm.Elements.TextBoxPassword.Visibility = "Hidden"
-                    $Script:MainWindowForm.Elements.TextBoxUserName.Text = ""
+                    $Script:MainWindowForm.Elements.TextBoxUserName | Set-TextBlockText -Text $null
                     $Script:MainWindowForm.Elements.TextBoxPassword.Password = ""
                     $Null | Invoke-ProcessConfigSettings -Property "UserName"
                     if ($InvokeOmadaRestMethodParam.ContainsKey("Credential")) {
@@ -40,6 +40,7 @@ function Set-AuthenticationOption {
                     }
                 }
             }
+            $Script:AuthenticationSet = $True
             $Script:MainWindowForm.Elements.ComboBoxSelectAuthenticationOption.SelectedItem.Content | Invoke-ProcessConfigSettings -Property "LastAuthentication"
         }
     }
