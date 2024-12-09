@@ -19,7 +19,7 @@ function Set-OmadaUrl {
         ("Input Url {0} is valid." -f $Uri.IsAbsoluteUri) | Write-LogOutput -LogType DEBUG
             }
             else {
-                $Null | Invoke-ProcessConfigSettings -Property "BaseUrl"
+                $Null | Invoke-ConfigSetting -Property "BaseUrl"
                 $Script:MainWindowForm.Elements.TextBoxURL.Text = $Null
                 "Input Url {0} is not valid." -f $Script:MainWindowForm.Elements.TextBoxURL.Text.Trim() | Write-LogOutput -LogType ERROR
                 return
@@ -33,13 +33,13 @@ function Set-OmadaUrl {
                 }
             }
             catch {
-                $Null | Invoke-ProcessConfigSettings -Property "BaseUrl"
+                $Null | Invoke-ConfigSetting -Property "BaseUrl"
                 $Script:MainWindowForm.Elements.TextBoxURL.Text = $Null
                 $Script:MainWindowForm.Elements.TextBlockUrl.Text = $Null
                 "Endpoint {0} not found!" -f $Uri.AbsoluteUri | Write-LogOutput -LogType ERROR
             }
 
-            $Uri.AbsoluteUri.TrimEnd("/") | Invoke-ProcessConfigSettings -Property "BaseUrl"
+            $Uri.AbsoluteUri.TrimEnd("/") | Invoke-ConfigSetting -Property "BaseUrl"
 
             if ($Script:CurrentUrl -ne $Script:AppConfig.BaseUrl) {
                 "Omada Url set to: {0}" -f $Script:AppConfig.BaseUrl | Write-LogOutput -LogType DEBUG

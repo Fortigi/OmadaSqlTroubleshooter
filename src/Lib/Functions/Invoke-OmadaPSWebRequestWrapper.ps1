@@ -16,6 +16,7 @@ function Invoke-OmadaPSWebRequestWrapper {
 
                 $InvokeOmadaRestMethodParam.Body = $Body | ConvertTo-Json
             }
+            "Parameters: {0}" -f ($InvokeOmadaRestMethodParam | ConvertTo-Json -Depth 15) | Write-LogOutput -LogType VERBOSE
             $Result = Invoke-OmadaRestMethod @Script:InvokeOmadaRestMethodParam
             if($null -ne $Script:MainWindowForm -and $null -ne $Script:MainWindowForm.Definitions -and $Script:MainWindowForm.Definitions.IsVisible){
                 $Script:MainWindowForm.Definitions.TextBlockConnectionStatus | Set-TextBlockText -Text "Connected"

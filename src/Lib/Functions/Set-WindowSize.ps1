@@ -7,8 +7,8 @@ function Set-WindowSize {
         [string]$Setting
     )
     try {
-        $Form.Width = [int32]::Abs($Setting.Split("x")[0])
-        $Form.Height = [int32]::Abs($Setting.Split("x")[1])
+        $Form.Width = [Int]::Abs($Setting.Split("x")[0])
+        $Form.Height = [Int]::Abs($Setting.Split("x")[1])
 
     }
     catch {

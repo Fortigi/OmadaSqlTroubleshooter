@@ -1,4 +1,4 @@
-function Get-WindowAllowedMeasurement {
+function Get-ValidWindowMeasurement {
 
     PARAM(
         [parameter(Mandatory = $true, ValueFromPipeline = $true)]
@@ -10,11 +10,12 @@ function Get-WindowAllowedMeasurement {
     try {
         if ($Setting -in "Width", "Height") {
 
-            if ($Form.$Setting -lt $Form.$("Min{0}" -f $Setting) -and $Form.$Setting -gt 0) {
-                return [int32]$Form.$("Min{0}" -f $Setting)
+            $SettingString = "Min{0}" -f $Setting
+            if ($Form.$Setting -lt $Form.$SettingString -and $Form.$Setting -gt 0) {
+                return [Int]$Form.$SettingString
             }
             else {
-                return [int32]$Form.$Setting
+                return [Int]$Form.$Setting
             }
         }
 

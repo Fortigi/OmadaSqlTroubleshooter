@@ -8,7 +8,7 @@ $Script:MainWindowForm.Elements.ButtonSaveOutputFile.Add_Click({
         $SaveFileDialog.InitialDirectory = $Script:AppConfig.LastOutputFolder
     }
     if ([string]::IsNullOrWhiteSpace($Script:AppConfig.LastOutputFolder)) {
-        ".json" | Invoke-ProcessConfigSettings -Property "LastExtension"
+        ".json" | Invoke-ConfigSetting -Property "LastExtension"
     }
     $SaveFileDialog.DefaultExt = $Script:AppConfig.LastExtension
     $InvalidFileNameChars = [System.IO.Path]::GetInvalidFileNameChars()
@@ -24,7 +24,7 @@ $Script:MainWindowForm.Elements.ButtonSaveOutputFile.Add_Click({
     else {
         $SaveFileDisplayName = "Output"
     }
-    $SaveFileDialog.FileName = "SqlQuery_{0}_{1}_{2}_{3}_Output{4}" -f $Script:AppConfig.SqlQueryDoId, $SaveFileDisplayName, (Get-ConfigMultiValue $Script:AppConfig.CurrentDataConnectionName), [system.uri]::New($Script:AppConfig.BaseUrl).Host, $Script:AppConfig.LastExtension
+    $SaveFileDialog.FileName = "SqlQuery_{0}_{1}_{2}_{3}_Output{4}" -f $Script:AppConfig.CurrentSqlQuery.DoId, $SaveFileDisplayName, $Script:AppConfig.CurrentDataConnection.DisplayName, [system.uri]::New($Script:AppConfig.BaseUrl).Host, $Script:AppConfig.LastExtension
     if ($SaveFileDialog.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
         $Script:OutputFileName = $SaveFileDialog.FileName
         "Save outputfile: {0}" -f $Script:OutputFileName | Write-LogOutput
@@ -38,7 +38,7 @@ $Script:MainWindowForm.Elements.ButtonSaveOutputFile.Add_Click({
         elseif ($Script:OutputFileName -like "*.csv") {
             $Script:QueryResult.d.rows | Export-Csv -Path $Script:OutputFileName -Delimiter ";" -NoTypeInformation -Encoding UTF8
         }
-        elseif ($Script:OutputFileName -like "* .xml") {
+        elseif ($Script:OutputFileName -like "*.xml") {
             $Script:QueryResult | Export-Clixml -Path $Script:OutputFileName -Depth 15
         }
         else {
@@ -46,8 +46,8 @@ $Script:MainWindowForm.Elements.ButtonSaveOutputFile.Add_Click({
         }
 
         "Output file saved!" | Write-LogOutput -LogType DEBUG
-        Split-Path $Script:OutputFileName | Invoke-ProcessConfigSettings -Property "LastOutputFolder"
-        [System.IO.Path]::GetExtension($Script:OutputFileName) | Invoke-ProcessConfigSettings -Property "LastExtension"
+        Split-Path $Script:OutputFileName | Invoke-ConfigSetting -Property "LastOutputFolder"
+        [System.IO.Path]::GetExtension($Script:OutputFileName) | Invoke-ConfigSetting -Property "LastExtension"
         $Script:MainWindowForm.Elements.ButtonOpenOutputFile.IsEnabled = $True
     }
     else {

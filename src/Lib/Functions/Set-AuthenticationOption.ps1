@@ -34,14 +34,14 @@ function Set-AuthenticationOption {
                     $Script:MainWindowForm.Elements.TextBoxPassword.Visibility = "Hidden"
                     $Script:MainWindowForm.Elements.TextBoxUserName | Set-TextBlockText -Text $null
                     $Script:MainWindowForm.Elements.TextBoxPassword.Password = ""
-                    $Null | Invoke-ProcessConfigSettings -Property "UserName"
+                    $Null | Invoke-ConfigSetting -Property "UserName"
                     if ($InvokeOmadaRestMethodParam.ContainsKey("Credential")) {
                         $InvokeOmadaRestMethodParam.Remove("Credential")
                     }
                 }
             }
             $Script:AuthenticationSet = $True
-            $Script:MainWindowForm.Elements.ComboBoxSelectAuthenticationOption.SelectedItem.Content | Invoke-ProcessConfigSettings -Property "LastAuthentication"
+            $Script:MainWindowForm.Elements.ComboBoxSelectAuthenticationOption.SelectedItem.Content | Invoke-ConfigSetting -Property "LastAuthentication"
         }
     }
     catch {

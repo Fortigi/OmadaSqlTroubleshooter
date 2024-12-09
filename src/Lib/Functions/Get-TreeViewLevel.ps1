@@ -6,7 +6,7 @@ function Get-TreeViewItemLevel {
         $Level = 0
         $Parent = $TreeViewItem.Parent
 
-        while ($Parent -ne $Null) {
+        while ($null -eq $Parent) {
             if ($Parent -is [System.Windows.Controls.TreeViewItem]) {
                 $Level++
             }

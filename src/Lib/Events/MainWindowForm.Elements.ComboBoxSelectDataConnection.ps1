@@ -19,12 +19,11 @@ $Script:MainWindowForm.Elements.ComboBoxSelectDataConnection.Add_SelectionChange
                 Update-DataConnectionList
             }
             if (![string]::IsNullOrWhiteSpace($Script:MainWindowForm.Elements.ComboBoxSelectDataConnection.SelectedItem.Content)) {
-                (Set-ConfigMultiValue $Script:MainWindowForm.Elements.ComboBoxSelectDataConnection.SelectedItem.Content) | Invoke-ProcessConfigSettings -Property "CurrentDataConnection"
+                $Script:MainWindowForm.Elements.ComboBoxSelectDataConnection.SelectedItem.Content | Invoke-ConfigSetting -Property "CurrentDataConnection"
 
                 if (![string]::IsNullOrWhiteSpace($Script:MainWindowForm.Elements.ComboBoxSelectDataConnection.SelectedItem.Content) -and $Script:MainWindowForm.Elements.ComboBoxSelectDataConnection.SelectedItem.Content -ne " - ") {
-                    (Split-NameDoIdString -InputString  $Script:MainWindowForm.Elements.ComboBoxSelectDataConnection.SelectedItem.Content -JoinString " - ").DoId | Invoke-ProcessConfigSettings -Property "CurrentDataConnectionId"
-                    (Split-NameDoIdString -InputString  $Script:MainWindowForm.Elements.ComboBoxSelectDataConnection.SelectedItem.Content -JoinString " - ").DisplayName | Invoke-ProcessConfigSettings -Property "CurrentDataConnectionName"
-                    $Script:MainWindowForm.Elements.TextBlockDatabaseName.Text = (Split-NameDoIdString -InputString  $Script:MainWindowForm.Elements.ComboBoxSelectDataConnection.SelectedItem.Content -JoinString " - ").DoId
+                    $Script:MainWindowForm.Elements.ComboBoxSelectDataConnection.SelectedItem.Content | Invoke-ConfigSetting -Property "CurrentDataConnection"
+                    $Script:MainWindowForm.Elements.TextBlockDatabaseName.Text = $Script:AppConfig.CurrentDataConnection.DisplayName
 
                     if (Test-SqlSchemaWindowOpen) {
                         Get-SqlSchemaObject

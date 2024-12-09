@@ -1,0 +1,205 @@
+Properties {
+    $Date = Get-Date
+
+    $ParentPath = (Get-Item -Path $PSScriptRoot -Verbose:$false).Parent.FullName
+    $SrcSource = Join-Path -Path $ParentPath -ChildPath 'src'
+    $OutputDir = Join-Path -Path $ParentPath -ChildPath 'buildoutput\OmadaSqlTroubleShooter'
+    $TestSource = Join-Path -Path $ParentPath -ChildPath 'tests'
+}
+
+
+Task default -depends Analyze, Test, Build, ImportScripts
+
+Task Analyze {
+
+    $Profile = @{
+        Severity     = @('Error', 'Warning')
+        IncludeRules = '*'
+        ExcludeRules = '*WriteHost', '*UseDeclaredVarsMoreThanAssignments*', '*AvoidUsingEmptyCatchBlock*', '*ReviewUnusedParameter*', '*UseShouldProcessForStateChangingFunctions*', '*UseSingularNouns*', '*AvoidOverwritingBuiltInCmdlets*', '*UseToExportFieldsInManifest*', '*UseProcessBlockForPipelineCommand*', '*ConvertToSecureStringWithPlainText*', '*PSAvoidGlobalVars*', '*PSAvoidAssignmentToAutomaticVariable*'
+    }
+    $saResults = Invoke-ScriptAnalyzer -Path $SrcSource -Severity @('Error', 'Warning') -Recurse -Profile $Profile -Verbose:$false
+    if ($saResults) {
+        $saResults | Format-Table
+        Write-Error -Message 'One or more Script Analyzer errors/warnings where found. Build cannot continue!'
+    }
+}
+
+Task Test -depends Analyze {
+
+    #$TestResults = Invoke-Pester -Path "$TestSource\*Tests.ps1" -PassThru
+    #if ($TestResults.FailedCount -gt 0) {
+    #    $TestResults | Format-List
+    #    Write-Error -Message 'One or more Pester tests failed. Build cannot continue!'
+    #}
+}
+
+Task Build -depends Test {
+
+    New-Item $OutputDir -ItemType Directory -Force | Out-Null
+
+    $FormattingSettings = @{
+        IncludeRules = @("PSPlaceOpenBrace", "PSUseConsistentIndentation", "PsAvoidUsingCmdletAliases", "PSUseConsistentWhitespace", "PSAlignAssignmentStatement", "PSPlaceCloseBrace")
+        Rules        = @{
+            PSPlaceOpenBrace           = @{
+                Enable             = $true
+                OnSameLine         = $true
+                NewLineAfter       = $true
+                IgnoreOneLineBlock = $true
+            }
+            PSUseConsistentIndentation = @{
+                Enable = $true
+            }
+            PsAvoidUsingCmdletAliases  = @{
+                Enable = $true
+            }
+            PSUseConsistentWhitespace  = @{
+                Enable                                  = $false
+                CheckInnerBrace                         = $true
+                CheckOpenBrace                          = $false
+                CheckOpenParen                          = $false
+                CheckOperator                           = $true
+                CheckPipe                               = $true
+                CheckPipeForRedundantWhitespace         = $false
+                CheckSeparator                          = $true
+                CheckParameter                          = $true
+                IgnoreAssignmentOperatorInsideHashTable = $false
+            }
+            PSAlignAssignmentStatement = @{
+                Enable         = $true
+                CheckHashtable = $true
+            }
+            PSPlaceCloseBrace          = @{
+                Enable             = $true
+                NoEmptyLineBefore  = $false
+                IgnoreOneLineBlock = $true
+                NewLineAfter       = $true
+            }
+        }
+    }
+
+    function New-HeaderRow {
+        PARAM(
+            [string]$Text,
+            [int]$Length = 100,
+            [char]$BeginChar = "#",
+            [char]$FillChar = " ",
+            [char]$EndChar = "#"
+        )
+        $HeaderRow = $null
+        $HeaderRow = "{0}{1}" -f $BeginChar, $FillChar
+        $HeaderRow += $Text
+
+        do {
+            $HeaderRow += $FillChar
+        }
+        until ($HeaderRow.Length -gt ($Length - 1))
+        $HeaderRow += "{0}`n" -f $EndChar
+        return $HeaderRow
+
+    }
+
+    "Build directory structure" -f $_ | Write-Host -ForegroundColor Cyan
+    New-Item (Join-Path $OutputDir -ChildPath "bin") -ItemType Directory -Force | Out-Null
+    New-Item (Join-Path $OutputDir -ChildPath "lib") -ItemType Directory -Force | Out-Null
+    New-Item (Join-Path $OutputDir -ChildPath "lib\ui") -ItemType Directory -Force | Out-Null
+    New-Item (Join-Path $OutputDir -ChildPath "lib\schema") -ItemType Directory -Force | Out-Null
+    New-Item (Join-Path $OutputDir -ChildPath "bin\WebView2Dlls") -ItemType Directory -Force | Out-Null
+    New-Item (Join-Path $OutputDir -ChildPath "bin\Webview2Runtime") -ItemType Directory -Force | Out-Null
+    New-Item (Join-Path $OutputDir -ChildPath "monaco") -ItemType Directory -Force | Out-Null
+
+
+
+    @("events", "functions") | ForEach-Object {
+       "Build '{0}.ps1' bundle" -f $_ | Write-Host -ForegroundColor Cyan
+        $Length = 150
+        $ScriptBundle = $null
+        $ScriptBundle = "#requires -Version 7`n`n"
+        $ScriptBundle += New-HeaderRow -Text "" -Length $Length -FillChar "#"
+        $ScriptBundle += New-HeaderRow -Text  "WARNING: DO NOT EDIT THIS FILE AS IT IS GENERATED AND WILL BE OVERWRITTEN ON THE NEXT UPDATE!" -Length $Length -FillChar " "
+        $ScriptBundle += New-HeaderRow -Text  "" -Length $Length -FillChar " "
+        $ScriptBundle += New-HeaderRow -Text  ('Generated via psake on: {0}' -f $Date.ToString("o")) -Length $Length -FillChar " "
+        $ScriptBundle += New-HeaderRow -Text  ("Version: {0}" -f $Version) -Length $Length -FillChar " "
+        $ScriptBundle += New-HeaderRow -Text  ("This file contains the {0} for OmadaSqlTroubleShooter" -f $_) -Length $Length -FillChar " "
+        $ScriptBundle += New-HeaderRow -Text  "" -Length $Length -FillChar " "
+        $ScriptBundle += New-HeaderRow -Text  ("Copyright Fortigi (C) {0}" -f $Date.ToString("yyyy")) -Length $Length -FillChar " "
+        $ScriptBundle += New-HeaderRow -Text  "" -Length $Length -FillChar "#"
+        $ScriptBundle += "`n`n"
+
+        $ScriptPath = "{0}\lib\{1}" -f $SrcSource, $_
+        $Files = @(Get-ChildItem -Path $ScriptPath -Recurse -Filter "*.ps1" -File)
+
+        Foreach ($File in $Files) {
+            $Content = Get-Content $File.FullName -Encoding UTF8 | Where-Object { $_ -notmatch '^\s*#requires' }
+            $ScriptBundle += ($Content | Where-Object { $_ -notmatch '^\s*$' -and $_ -notmatch '^\s*#' }) -join "`n"
+            $ScriptBundle += "`n`n"
+        }
+        $ScriptBundlePath = Join-Path $OutputDir -ChildPath ("lib\{0}" -f $_)
+        New-Item $ScriptBundlePath -ItemType Directory -Force | Out-Null
+        $ScriptBundleFilePath = "{0}\{1}.ps1" -f $ScriptBundlePath, $_
+        $ScriptBundle -replace "`r?`n", "`r`n" | Invoke-Formatter -Settings $FormattingSettings | Set-Content -Path $ScriptBundleFilePath -Encoding UTF8 -Force
+    }
+
+    $ScriptFile = "OmadaSqlTroubleShooter.ps1"
+    "Build '{0}'" -f $ScriptFile | Write-Host -ForegroundColor Cyan
+    $Length = 150
+    $OmadaSqlTroubleShooterScript = $null
+    $OmadaSqlTroubleShooterScript = "#requires -Version 7`n`n"
+    $OmadaSqlTroubleShooterScript += New-HeaderRow -Text "" -Length $Length -FillChar "#"
+    $OmadaSqlTroubleShooterScript += New-HeaderRow -Text  "WARNING: DO NOT EDIT THIS FILE AS IT IS GENERATED AND WILL BE OVERWRITTEN ON THE NEXT UPDATE!" -Length $Length -FillChar " "
+    $OmadaSqlTroubleShooterScript += New-HeaderRow -Text  "" -Length $Length -FillChar " "
+    $OmadaSqlTroubleShooterScript += New-HeaderRow -Text  ('Generated via psake on: {0}' -f $Date.ToString("o")) -Length $Length -FillChar " "
+    $OmadaSqlTroubleShooterScript += New-HeaderRow -Text  ("Version: {0}" -f $Version) -Length $Length -FillChar " "
+    $OmadaSqlTroubleShooterScript += New-HeaderRow -Text  "" -Length $Length -FillChar " "
+    $OmadaSqlTroubleShooterScript += New-HeaderRow -Text  ("Copyright Fortigi (C) {0}" -f $Date.ToString("yyyy")) -Length $Length -FillChar " "
+    $OmadaSqlTroubleShooterScript += New-HeaderRow -Text  "" -Length $Length -FillChar "#"
+    $ScriptBundle += "`n`n"
+
+    $Content = Get-Content (Join-Path $SrcSource -ChildPath $ScriptFile) | Where-Object { $_ -notmatch '^\s*#requires' }
+    $OmadaSqlTroubleShooterScript += ($Content | Where-Object { $_ -notmatch '^\s*$' -and $_ -notmatch '^\s*#' }) -join "`n"
+    $OmadaSqlTroubleShooterScriptPath = $OutputDir
+    $OmadaSqlTroubleShooterScriptFilePath = Join-Path $OmadaSqlTroubleShooterScriptPath -ChildPath $ScriptFile
+    $OmadaSqlTroubleShooterScript -replace "`r?`n", "`r`n" | Invoke-Formatter -Settings $FormattingSettings | Set-Content -Path $OmadaSqlTroubleShooterScriptFilePath -Encoding UTF8 -Force
+
+    "Copy monaco" | Write-Host -ForegroundColor Cyan
+    Get-Item (Join-Path $SrcSource -ChildPath "monaco") | Copy-Item -Destination "$OutputDir\" -Force -Recurse
+
+    "Copy ui" | Write-Host -ForegroundColor Cyan
+    Get-ChildItem (Join-Path $SrcSource -ChildPath "lib\ui") -Filter *.xaml | Copy-Item -Destination "$OutputDir\lib\ui" -Force -Recurse
+
+    "Copy schema" | Write-Host -ForegroundColor Cyan
+    Get-ChildItem (Join-Path $SrcSource -ChildPath "lib\schema") -Filter *.json | Copy-Item -Destination "$OutputDir\lib\schema" -Force -Recurse
+
+    $ScriptFile = "deploy.ps1"
+    "Build '{0}'" -f $ScriptFile | Write-Host -ForegroundColor Cyan
+    $Length = 150
+    $DeployScript = $null
+    $DeployScript = "#requires -Version 7`n`n"
+    $DeployScript += New-HeaderRow -Text "" -Length $Length -FillChar "#"
+    $DeployScript += New-HeaderRow -Text  "WARNING: DO NOT EDIT THIS FILE AS IT IS GENERATED AND WILL BE OVERWRITTEN ON THE NEXT UPDATE!" -Length $Length -FillChar " "
+    $DeployScript += New-HeaderRow -Text  "" -Length $Length -FillChar " "
+    $DeployScript += New-HeaderRow -Text  ('Generated via psake on: {0}' -f $Date.ToString("o")) -Length $Length -FillChar " "
+    $DeployScript += New-HeaderRow -Text  ("Version: {0}" -f $Version) -Length $Length -FillChar " "
+    $DeployScript += New-HeaderRow -Text  "" -Length $Length -FillChar " "
+    $DeployScript += New-HeaderRow -Text  ("Copyright Fortigi (C) {0}" -f $Date.ToString("yyyy")) -Length $Length -FillChar " "
+    $DeployScript += New-HeaderRow -Text  "" -Length $Length -FillChar "#"
+    $ScriptBundle += "`n`n"
+
+    $Content = Get-Content (Join-Path $ParentPath -ChildPath "deploy\$ScriptFile") | Where-Object { $_ -notmatch '^\s*#requires' }
+    $DeployScript += (($Content | Where-Object { $_ -notmatch '^\s*$' -and $_ -notmatch '^\s*#' }) -replace "src", "\OmadaSqlTroubleShooter\") -join "`n"
+    $DeployScriptPath = (Join-Path (Split-Path $OutputDir) -ChildPath "deploy")
+    New-Item $DeployScriptPath -ItemType Directory -Force | Out-Null
+    $DeployScriptFilePath = Join-Path $DeployScriptPath -ChildPath $ScriptFile
+    $DeployScript -replace "`r?`n", "`r`n" | Invoke-Formatter -Settings $FormattingSettings | Set-Content -Path $DeployScriptFilePath -Encoding UTF8 -Force
+}
+
+Task ImportScripts -depends Build {
+
+}
+
+#Task Deploy -depends Build, Analyze, Test {
+#    Write-Host "Deploy"
+#    Invoke-PSDeploy -Path "$ParentPath\TopdeskApi.psdeploy.ps1" -Force -Verbose:$VerbosePreference
+#}
+
+
+

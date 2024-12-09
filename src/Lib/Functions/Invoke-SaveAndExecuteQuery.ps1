@@ -22,15 +22,15 @@ function Invoke-SaveAndExecuteQuery {
 
                     "Executing SQL Query: {0}" -f $QueryText | Write-LogOutput -LogType DEBUG
                     $Body = @{}
-                    $QueryUrl = "{0}/odata/dataobjects/C_P_SQLTROUBLESHOOTING({1})" -f $Script:AppConfig.BaseUrl, $Script:AppConfig.SqlQueryDoId
+                    $QueryUrl = "{0}/odata/dataobjects/C_P_SQLTROUBLESHOOTING({1})" -f $Script:AppConfig.BaseUrl, $Script:AppConfig.CurrentSqlQuery.DoId
                     if ($Script:CurrentQueryText -ne $QueryText -or $QueryText -ne $Result.C_QUERY) {
-                        "Update current query for DODI: {0}" -f $Script:AppConfig.SqlQueryDoId | Write-LogOutput -LogType DEBUG
+                        "Update current query for DODI: {0}" -f $Script:AppConfig.CurrentSqlQuery.DoId | Write-LogOutput -LogType DEBUG
                         $Body.Add("C_QUERY", $QueryText)
-                        if (![string]::IsNullOrWhiteSpace($Script:AppConfig.CurrentDataConnectionId)) {
-                            $Body.Add("C_SQLTROUBLESHOOTING_DATACONNECTION", @{Id = $Script:AppConfig.CurrentDataConnectionId })
+                        if (![string]::IsNullOrWhiteSpace($Script:AppConfig.CurrentDataConnection.DoId)) {
+                            $Body.Add("C_SQLTROUBLESHOOTING_DATACONNECTION", @{Id = $Script:AppConfig.CurrentDataConnection.DoId })
                         }
                     }
-                    if ($Script:CurrentSqlQueryDisplayName -ne $Script:MainWindowForm.Elements.TextBoxDisplayName.Text) {
+                    if ($Script:CurrentSqlQuery.DisplayName -ne $Script:MainWindowForm.Elements.TextBoxDisplayName.Text) {
                         $Body.Add("NAME", $Script:MainWindowForm.Elements.TextBoxDisplayName.Text)
                     }
                     if (($Body.Keys | Measure-Object).Count -le 0) {
@@ -50,7 +50,7 @@ function Invoke-SaveAndExecuteQuery {
                     $Body = @{
                         "dataType"     = "SqlDataProducer"
                         "dataTypeArgs" = @{
-                            "targetId" = $Script:AppConfig.SqlQueryDoId
+                            "targetId" = $Script:AppConfig.CurrentSqlQuery.DoId
                         }
                         "page"         = 1
                         "rows"         = 100000
@@ -77,23 +77,28 @@ function Invoke-SaveAndExecuteQuery {
                     }
                     else {
                         $Script:MainWindowForm.Elements.DataGridQueryResult.AutoGenerateColumns = $true
-                        $Script:MainWindowForm.Elements.DataGridQueryResult.ItemsSource = $Script:QueryResult.d.Rows
+                        try{
+                            $Script:MainWindowForm.Elements.DataGridQueryResult.ItemsSource = @($Script:QueryResult.d.Rows)
+                        }
+                        catch{
+                            #Work-around issue that Omada can return invalid JSON keys.
+                            $Script:MainWindowForm.Elements.DataGridQueryResult.ItemsSource = @(($Script:QueryResult | ConvertTo-Json -Depth 10 | Invoke-SanitizeJsonKeys | ConvertFrom-Json -Depth 10).d.Rows)
+                        }
                         "Result:`r`n{0}" -f ($Script:QueryResult.d.rows | Format-Table -AutoSize | Out-String -Width 10000000 ) | Write-LogOutput
                         $Script:MainWindowForm.Elements.ButtonShowOutput.IsEnabled = $True
                         $Script:MainWindowForm.Elements.ButtonSaveOutputFile.IsEnabled = $True
                         "{0} record(s) retrieved!" -f $Script:QueryResult.d.Records | Write-LogOutput
 
-                        $Script:MainWindowForm.Elements.TextBlockRows | Set-TextBlockText -Text ("{0:n0} rows" -f [int32]$Script:QueryResult.d.Records)
-
-                        Set-ConfigMultiValue ("{0} - {1}" -f $Result.DisplayName, $Result.Id) | Invoke-ProcessConfigSettings -Property "SelectedSqlQueryDoId"
-                        if ($Result.DisplayName -ne $Script:CurrentSqlQueryDisplayName) {
-                            "New display name, Current: {0}, New: {1}" -f $Script:CurrentSqlQueryDisplayName, $Result.DisplayName | Write-LogOutput -LogType DEBUG
+                        $Script:MainWindowForm.Elements.TextBlockRows | Set-TextBlockText -Text ("{0:n0} rows" -f [Int]$Script:QueryResult.d.Records)
+                        $Result.Id,$Result.DisplayName | Invoke-ConfigSetting -Property "CurrentSqlQuery"
+                        if ($Result.DisplayName -ne $Script:CurrentSqlQuery.DisplayName) {
+                            "New display name, Current: {0}, New: {1}" -f $Script:CurrentSqlQuery.DisplayName, $Result.DisplayName | Write-LogOutput -LogType DEBUG
                             "Force update query list" | Write-LogOutput -LogType DEBUG
                             Update-QueryList -ForceRefresh
-                            $ComboBoxSelectQueryItem = $Script:MainWindowForm.Elements.ComboBoxSelectQuery.Items | Where-Object { $_.Content -eq $Script:AppConfig.SelectedSqlQueryDoId }
+                            $ComboBoxSelectQueryItem = $Script:MainWindowForm.Elements.ComboBoxSelectQuery.Items | Where-Object { $_.Content -eq $Script:AppConfig.CurrentSqlQuery.FullName }
                             if ($null -ne $ComboBoxSelectQueryItem) {
                                 $ComboBoxSelectQueryItem = New-Object System.Windows.Controls.ComboBoxItem
-                                $ComboBoxSelectQueryItem.Content = (Get-ConfigMultiValue $Script:AppConfig.SelectedSqlQueryDoId)
+                                $ComboBoxSelectQueryItem.Content = $Script:AppConfig.CurrentSqlQuery.FullName
                                 $Script:MainWindowForm.Elements.ComboBoxSelectQuery.Items.Add($ComboBoxSelectQueryItem) | Out-Null
                             }
                             $Script:MainWindowForm.Elements.ComboBoxSelectQuery.SelectedItem = $ComboBoxSelectQueryItem
@@ -120,6 +125,12 @@ function Invoke-SaveAndExecuteQuery {
                 }
             }
             catch {
+                $Script:MainWindowForm.Elements.ButtonSaveQuery.IsEnabled = $True
+                $Script:MainWindowForm.Elements.ButtonExecuteQuery.IsEnabled = $True
+                $Script:MainWindowForm.Elements.ButtonExecuteQuery | Set-ButtonContent -Content "_Execute Query"
+                if($null -ne $Script:PopupWindowExecuteQuery) {
+                    $Script:PopupWindowExecuteQuery.Close()
+                }
                 $_.Exception.Message | Write-LogOutput -LogType ERROR
             }
         }
@@ -130,9 +141,13 @@ function Invoke-SaveAndExecuteQuery {
             $Script:StopWatch.Stop()
             $Script:MainWindowForm.Elements.TextBlockQueryTime.Text = $Script:StopWatch.Elapsed.ToString()
         }
+        $Script:MainWindowForm.Elements.ButtonSaveQuery.IsEnabled = $True
+        $Script:MainWindowForm.Elements.ButtonExecuteQuery.IsEnabled = $True
+        $Script:MainWindowForm.Elements.ButtonExecuteQuery | Set-ButtonContent -Content "_Execute Query"
         if($null -ne $Script:PopupWindowExecuteQuery) {
             $Script:PopupWindowExecuteQuery.Close()
         }
+
         $_.Exception.Message | Write-LogOutput -LogType ERROR
     }
 

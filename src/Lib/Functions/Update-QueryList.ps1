@@ -50,7 +50,7 @@ function Update-QueryList {
                 $Script:QueryListCache.QueryList += @{
                     $_.Id = $_.DisplayName
                 }
-                if ($Script:AppConfig.MyQueriesOnly -and $null -ne $SqlQueryViewContents -and $_.Id -notin $SqlQueryViewContents.$SqlQueryDoIdAttribute) {
+                if ($Script:AppConfig.MyQueriesOnly -and $null -ne $SqlQueryViewContents -and $_.Id -notin $SqlQueryViewContents.$SqlQueryDoIdAttributeName) {
                     "Skip query {0} because of 'Filter My Queries' is enabled" -f $DoIdDisplayName | Write-LogOutput -LogType DEBUG
                     if ($null -ne $SelectedQuery -and $SelectedQuery -eq $DoIdDisplayName) {
                         "Selected query {0} is filtered, clear selected query" -f $DoIdDisplayName | Write-LogOutput -LogType DEBUG
@@ -58,7 +58,7 @@ function Update-QueryList {
                     }
                 }
                 else {
-                    if ($Script:AppConfig.MyQueriesOnly -and $null -ne $SqlQueryViewContents -and $_.Id -notin $SqlQueryViewContents.$SqlQueryDoIdAttribute) {
+                    if ($Script:AppConfig.MyQueriesOnly -and $null -ne $SqlQueryViewContents -and $_.Id -notin $SqlQueryViewContents.$SqlQueryDoIdAttributeName) {
                         "Add query {0} because of 'Filter My Queries' is enabled" -f $DoIdDisplayName | Write-LogOutput -LogType DEBUG
                     }
                     else {

@@ -11,26 +11,26 @@ function Save-WindowMeasurements {
         $Script:LastWindowMeasured = Get-Date
 
         if ($Script:MainWindowForm.Definition.IsVisible) {
-            $ValueSize = "{0}x{1}" -f [int32]::Abs(($Script:MainWindowForm.Definition | Get-WindowAllowedMeasurement -Setting "Width")), [int32]::Abs(($Script:MainWindowForm.Definition | Get-WindowAllowedMeasurement -Setting "Height"))
-            $ValueSize | Invoke-ProcessConfigSettings -Property "MainWindowSize"
-            $ValuePosition = "{0}x{1}" -f [int32]::Abs(($Script:MainWindowForm.Definition | Get-WindowAllowedPosition -Setting "Left")), [int32]::Abs(($Script:MainWindowForm.Definition | Get-WindowAllowedPosition -Setting "Top"))
-            $ValuePosition | Invoke-ProcessConfigSettings -Property "MainWindowPosition"
+            $ValueSize = "{0}x{1}" -f [Int]::Abs(($Script:MainWindowForm.Definition | Get-ValidWindowMeasurement -Setting "Width")), [Int]::Abs(($Script:MainWindowForm.Definition | Get-ValidWindowMeasurement -Setting "Height"))
+            $ValueSize | Invoke-ConfigSetting -Property "MainWindowSize"
+            $ValuePosition = "{0}x{1}" -f [Int]::Abs(($Script:MainWindowForm.Definition | Get-ValidWindowPosition -Setting "Left")), [Int]::Abs(($Script:MainWindowForm.Definition | Get-ValidWindowPosition -Setting "Top"))
+            $ValuePosition | Invoke-ConfigSetting -Property "MainWindowPosition"
             "MainWindowForm Size:'{0}', Position: '{1}'" -f $ValueSize, $ValuePosition | Write-LogOutput -LogType VERBOSE2
             if ($null -ne $Script:LogWindowForm -and $null -ne $Script:LogWindowForm.Definition -and $Script:LogWindowForm.Definition.IsVisible) {
-                $ValueSize = "{0}x{1}" -f [int32]::Abs(($Script:LogWindowForm.Definition | Get-WindowAllowedMeasurement -Setting "Width")), [int32]::Abs(($Script:LogWindowForm.Definition | Get-WindowAllowedMeasurement -Setting "Height"))
-                $ValueSize | Invoke-ProcessConfigSettings -Property "LogWindowSize"
-                $ValuePosition = "{0}x{1}" -f [int32]::Abs(($Script:LogWindowForm.Definition | Get-WindowAllowedPosition -Setting "Left")), [int32]::Abs(($Script:LogWindowForm.Definition | Get-WindowAllowedPosition -Setting "Top"))
-                $ValuePosition | Invoke-ProcessConfigSettings -Property "LogWindowPosition"
+                $ValueSize = "{0}x{1}" -f [Int]::Abs(($Script:LogWindowForm.Definition | Get-ValidWindowMeasurement -Setting "Width")), [Int]::Abs(($Script:LogWindowForm.Definition | Get-ValidWindowMeasurement -Setting "Height"))
+                $ValueSize | Invoke-ConfigSetting -Property "LogWindowSize"
+                $ValuePosition = "{0}x{1}" -f [Int]::Abs(($Script:LogWindowForm.Definition | Get-ValidWindowPosition -Setting "Left")), [Int]::Abs(($Script:LogWindowForm.Definition | Get-ValidWindowPosition -Setting "Top"))
+                $ValuePosition | Invoke-ConfigSetting -Property "LogWindowPosition"
                 "LogWindowForm Size:'{0}', Position: '{1}'" -f $ValueSize, $ValuePosition | Write-LogOutput -LogType VERBOSE2
             }
             else {
                 "LogWindowForm is not visible" | Write-LogOutput -LogType VERBOSE2
             }
             if ($null -ne $Script:SqlSchemaWindowForm -and $null -ne $Script:SqlSchemaWindowForm.Definition -and $Script:SqlSchemaWindowForm.Definition.IsVisible) {
-                $ValueSize = "{0}x{1}" -f [int32]::Abs(($Script:SqlSchemaWindowForm.Definition | Get-WindowAllowedMeasurement -Setting "Width")), [int32]::Abs(($Script:SqlSchemaWindowForm.Definition | Get-WindowAllowedMeasurement -Setting "Height"))
-                $ValueSize | Invoke-ProcessConfigSettings -Property "SqlSchemaWindowSize"
-                $ValuePosition = "{0}x{1}" -f [int32]::Abs(($Script:SqlSchemaWindowForm.Definition | Get-WindowAllowedPosition -Setting "Left")), [int32]::Abs(($Script:SqlSchemaWindowForm.Definition | Get-WindowAllowedPosition -Setting "Top"))
-                $ValuePosition | Invoke-ProcessConfigSettings -Property "SqlSchemaWindowPosition"
+                $ValueSize = "{0}x{1}" -f [Int]::Abs(($Script:SqlSchemaWindowForm.Definition | Get-ValidWindowMeasurement -Setting "Width")), [Int]::Abs(($Script:SqlSchemaWindowForm.Definition | Get-ValidWindowMeasurement -Setting "Height"))
+                $ValueSize | Invoke-ConfigSetting -Property "SqlSchemaWindowSize"
+                $ValuePosition = "{0}x{1}" -f [Int]::Abs(($Script:SqlSchemaWindowForm.Definition | Get-ValidWindowPosition -Setting "Left")), [Int]::Abs(($Script:SqlSchemaWindowForm.Definition | Get-ValidWindowPosition -Setting "Top"))
+                $ValuePosition | Invoke-ConfigSetting -Property "SqlSchemaWindowPosition"
                 "SqlSchemaWindowForm Size:'{0}', Position: '{1}'" -f $ValueSize, $ValuePosition | Write-LogOutput -LogType VERBOSE2
             }
             else {

@@ -3,7 +3,7 @@ $Script:MainWindowForm.Elements.ButtonSaveQuery.Add_Click({
         $Script:MainWindowForm.Elements.ButtonSaveQuery.IsEnabled = $False
         $Script:MainWindowForm.Elements.ButtonExecuteQuery.IsEnabled = $False
         try {
-            if (!(Test-ConnectionRequirements) -or [string]::IsNullOrWhiteSpace($Script:AppConfig.SqlQueryDoId)) {
+            if (!(Test-ConnectionRequirements) -or [string]::IsNullOrWhiteSpace($Script:AppConfig.CurrentSqlQuery.DoId)) {
                 "Omada Url not set or Query not selected, cannot retrieve data!" | Write-LogOutput -LogType WARNING
             }
             else {

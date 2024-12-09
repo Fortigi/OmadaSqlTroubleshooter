@@ -1,7 +1,7 @@
 ﻿
 BeforeAll {
     $ParentPath = Split-Path -Path $PSScriptRoot -Parent
-    $Command = Join-Path $ParentPath -ChildPath "lib\functions\Test-Variable.ps1"
+    $Command = Join-Path $ParentPath -ChildPath "src\lib\functions\Test-Variable.ps1"
     . $Command
 }
 

@@ -2,14 +2,11 @@ function Set-DataConnection {
     try {
 
 
-        if (!$Script:MainWindowForm.Elements.ComboBoxSelectDataConnection.Items.Contains((Get-ConfigMultiValue $Script:AppConfig.CurrentDataConnection))) {
-            $Script:MainWindowForm.Elements.ComboBoxSelectDataConnection.Items.Add((Get-ConfigMultiValue $Script:AppConfig.CurrentDataConnection)) | Out-Null
-            (Get-ConfigMultiValue $Script:AppConfig.CurrentDataConnection -Array)[0] | Invoke-ProcessConfigSettings -Property "CurrentDataConnectionName"
-            (Get-ConfigMultiValue $Script:AppConfig.CurrentDataConnection -Array)[1] | Invoke-ProcessConfigSettings -Property "CurrentDataConnectionId"
-
+        if (!$Script:MainWindowForm.Elements.ComboBoxSelectDataConnection.Items.Contains($Script:AppConfig.CurrentDataConnection.FullName)) {
+            $Script:MainWindowForm.Elements.ComboBoxSelectDataConnection.Items.Add($Script:AppConfig.CurrentDataConnection.FullName) | Out-Null
         }
-        $Script:MainWindowForm.Elements.ComboBoxSelectDataConnection.SelectedValue = (Get-ConfigMultiValue $Script:AppConfig.CurrentDataConnection)
-        $Script:MainWindowForm.Elements.TextBlockDatabaseName.Text = $Script:AppConfig.CurrentDataConnectionName
+        $Script:MainWindowForm.Elements.ComboBoxSelectDataConnection.SelectedValue = $Script:AppConfig.CurrentDataConnection.FullName
+        $Script:MainWindowForm.Elements.TextBlockDatabaseName.Text = $Script:AppConfig.CurrentDataConnection.DisplayName
     }
     catch {
         $_.Exception.Message | Write-LogOutput -LogType ERROR

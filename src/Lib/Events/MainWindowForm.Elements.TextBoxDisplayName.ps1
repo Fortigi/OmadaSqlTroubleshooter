@@ -2,7 +2,7 @@
 #         $_ | Show-EventInfo
 #         try {
 #
-#             if ($Script:CurrentSqlQueryDisplayName.Split(" - ")[1] -eq $Script:MainWindowForm.Elements.TextBoxDisplayName.Text) {
+#             if ($Script:CurrentSqlQuery.DisplayName.Split(" - ")[1] -eq $Script:MainWindowForm.Elements.TextBoxDisplayName.Text) {
 #                 "DisplayName not changed" | Write-LogOutput -LogType DEBUG
 #                 return
 #             }
@@ -40,7 +40,7 @@
 #         $_ | Show-EventInfo -LogType VERBOSE2
 #         try {
 
-#             if ($Script:CurrentSqlQueryDisplayName.Split(" - ")[1] -eq $Script:MainWindowForm.Elements.TextBoxDisplayName.Text) {
+#             if ($Script:CurrentSqlQuery.DisplayName.Split(" - ")[1] -eq $Script:MainWindowForm.Elements.TextBoxDisplayName.Text) {
 #                 $Script:TextboxDisplayNameChanged = $true
 #             }
 #             else {

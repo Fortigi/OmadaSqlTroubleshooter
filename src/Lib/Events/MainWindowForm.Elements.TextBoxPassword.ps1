@@ -6,7 +6,7 @@ $Script:MainWindowForm.Elements.TextBoxPassword.Add_LostFocus({
         if ($InvokeOmadaRestMethodParam.ContainsKey("Credential")) {
             if (![string]::IsNullOrWhiteSpace($Script:MainWindowForm.Elements.TextBoxUserName.Text) -and ![string]::IsNullOrWhiteSpace($Script:MainWindowForm.Elements.TextBoxPassword.Password)) {
                 "Create/Update credential with username {0}" -f $Script:MainWindowForm.Elements.TextBoxUserName.Text | Write-LogOutput -LogType DEBUG
-                $Script:MainWindowForm.Elements.TextBoxUserName.Text | Invoke-ProcessConfigSettings -Property "UserName"
+                $Script:MainWindowForm.Elements.TextBoxUserName.Text | Invoke-ConfigSetting -Property "UserName"
                 $InvokeOmadaRestMethodParam.Credential = [System.Management.Automation.PSCredential]::new($Script:AppConfig.UserName, ($Script:MainWindowForm.Elements.TextBoxPassword.Password | ConvertTo-SecureString -AsPlainText -Force))
             }
         }

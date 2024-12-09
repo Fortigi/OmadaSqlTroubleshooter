@@ -12,7 +12,7 @@ $Script:MainWindowForm.Elements.ButtonExecuteQuery.Add_Click({
             $Script:MainWindowForm.Elements.ButtonSaveOutputFile.IsEnabled = $False
             Start-Sleep -Milliseconds 100
 
-            if (!(Test-ConnectionRequirements) -or [string]::IsNullOrWhiteSpace($Script:AppConfig.SqlQueryDoId)) {
+            if (!(Test-ConnectionRequirements) -or [string]::IsNullOrWhiteSpace($Script:AppConfig.CurrentSqlQuery.DoId)) {
                 "Omada Url not set or Query not selected, cannot retrieve data!" | Write-LogOutput -LogType WARNING
             }
             else {

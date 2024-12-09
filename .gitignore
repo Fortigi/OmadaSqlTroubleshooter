@@ -26,3 +26,4 @@ src/lib/ui/obj/**
 !.src/Monaco/**
 OmadaSqlTroubleshooter.json
 **/test.ps1
+buildoutput/**

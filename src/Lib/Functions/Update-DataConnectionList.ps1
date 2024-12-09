@@ -13,7 +13,7 @@ function Update-DataConnectionList {
         "Retrieve data connections" | Write-LogOutput -LogType DEBUG
         $SqlQueryViewContents = Get-SqlTroubleShooterView
         if ($null -ne $SqlQueryViewContents) {
-            $QueryUrl = "{0}/dataobjdlg.aspx?DOID={1}" -f $Script:AppConfig.BaseUrl, $SqlQueryViewContents[0].$SqlQueryDoIdAttribute
+            $QueryUrl = "{0}/dataobjdlg.aspx?DOID={1}" -f $Script:AppConfig.BaseUrl, $SqlQueryViewContents[0].$SqlQueryDoIdAttributeName
             $Body = $null
             $Method = "GET"
             $Result = Invoke-OmadaPSWebRequestWrapper

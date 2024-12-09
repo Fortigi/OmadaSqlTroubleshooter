@@ -14,9 +14,11 @@ try {
 
     $CommitId = "Unknown"
     try {
-        $CommitId = git rev-parse HEAD
+        if ((Get-Command "git.exe" | Measure-Object).Count -gt 0) {
+            $CommitId = git rev-parse HEAD
+        }
     }
-    catch {}
+    catch { $error.clear }
 
     "Deploy Scriptname: '{0}'" -f $ScriptName | Write-Verbose
 
@@ -47,6 +49,9 @@ try {
     Get-ChildItem -Path (Join-Path $DeployScriptRoot -ChildPath "src\lib\ui") -Filter *.xaml | Copy-Item -Destination (Join-Path $LocalAppDataPath -ChildPath "lib\ui") -Force -Recurse
     Get-ChildItem -Path (Join-Path $DeployScriptRoot -ChildPath "src\lib\ui") -Filter *.ico | Copy-Item -Destination (Join-Path $LocalAppDataPath -ChildPath "lib\ui") -Force -Recurse
 
+    New-Item (Join-Path $LocalAppDataPath -ChildPath  "lib\schema") -ItemType Directory -Force | Out-Null
+    Get-ChildItem -Path (Join-Path $DeployScriptRoot -ChildPath "src\lib\schema") -Filter *.json | Copy-Item -Destination (Join-Path $LocalAppDataPath -ChildPath "lib\schema") -Force -Recurse
+
     @("functions", "events") | ForEach-Object {
         $LibSource = $_
         $SourceChildPath = "src\lib\{0}" -f $LibSource
@@ -59,6 +64,7 @@ try {
         }
     }
 
+    New-Item (Join-Path $LocalAppDataPath -ChildPath "Bin\Webview2Dlls") -ItemType Directory -Force | Out-Null
     $FilesToCopy = @(
         "runtimes\win-x64\native\WebView2Loader.dll",
         "lib_manual\netcoreapp3.0\Microsoft.Web.WebView2.Core.dll",
@@ -83,14 +89,23 @@ try {
 
         "Get WebView2 from NuGet (this might take a minute or two to complete)" | Write-Host
         $PackageTempFolder = New-Item (Join-Path $env:TEMP -ChildPath "OmadaTroubleShooter") -ItemType Directory -Force
-        $Package = Save-Package Microsoft.Web.WebView2 -MinimumVersion 1.0.2903.40 -Path $PackageTempFolder.FullName
-        Get-Item (Join-Path $PackageTempFolder.FullName -ChildPath $Package.PackageFilename) | Expand-Archive -DestinationPath $PackageTempFolder.FullName -Force
-
-        New-Item (Join-Path $LocalAppDataPath -ChildPath "Bin\Webview2Dlls") -ItemType Directory -Force | Out-Null
-        foreach ($File in $FilesToCopy) {
-            Get-Item (Join-Path $PackageTempFolder.FullName -ChildPath $File) | Copy-Item -Destination (Join-Path $LocalAppDataPath -ChildPath "Bin\Webview2Dlls")  -Force
+        $WebView2DllsDownloaded = $false
+        try {
+            $Package = Save-Package Microsoft.Web.WebView2 -MinimumVersion 1.0.2903.40 -Path $PackageTempFolder.FullName
+            $WebView2DllsDownloaded = $true
         }
-        Get-Item $PackageTempFolder.FullName | Remove-Item -Recurse -Force
+        catch {
+            "Failed to download WebView2 Dll files from NuGet. Please get the latest release from https://www.nuget.org/packages/microsoft.web.webview2. The following files need to be copied to '{0}': {1}. Error: {2}" -f (Join-Path $LocalAppDataPath -ChildPath "Bin\Webview2Dlls"), $FilesToCopy, $_.Exception.Message | Write-Warning
+            $WebView2DllsDownloaded
+        }
+        if ($WebView2DllsDownloaded) {
+            Get-Item (Join-Path $PackageTempFolder.FullName -ChildPath $Package.PackageFilename) | Expand-Archive -DestinationPath $PackageTempFolder.FullName -Force
+
+            foreach ($File in $FilesToCopy) {
+                Get-Item (Join-Path $PackageTempFolder.FullName -ChildPath $File) | Copy-Item -Destination (Join-Path $LocalAppDataPath -ChildPath "Bin\Webview2Dlls")  -Force
+            }
+            Get-Item $PackageTempFolder.FullName | Remove-Item -Recurse -Force
+        }
     }
     else {
         "WebView2 Dll files already present at '{0}'. Do download again use Deploy.ps1 -Force" -f (Join-Path $LocalAppDataPath -ChildPath "Bin\Webview2Dlls") | Write-Host

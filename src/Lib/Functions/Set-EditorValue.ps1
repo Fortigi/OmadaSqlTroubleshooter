@@ -2,11 +2,9 @@ function Set-EditorValue {
     try {
         if ($null -ne $Script:MainWindowForm.Elements.ComboBoxSelectQuery.SelectedItem) {
             "Selected SQL Query object: {0}" -f $Script:MainWindowForm.Elements.ComboBoxSelectQuery.SelectedItem.Content | Write-LogOutput -LogType DEBUG
-            Set-ConfigMultiValue ($Script:MainWindowForm.Elements.ComboBoxSelectQuery.SelectedItem.Content) | Invoke-ProcessConfigSettings -Property "SelectedSqlQueryDoId"
-            (Split-NameDoIdString -InputString $Script:MainWindowForm.Elements.ComboBoxSelectQuery.SelectedItem.Content -JoinString " - ").DoId | Invoke-ProcessConfigSettings -Property "SqlQueryDoId"
+            $Script:MainWindowForm.Elements.ComboBoxSelectQuery.SelectedItem.Content | Invoke-ConfigSetting -Property "CurrentSqlQuery"
 
-
-            if ([string]::IsNullOrWhiteSpace($Script:AppConfig.SqlQueryDoId)) {
+            if ([string]::IsNullOrWhiteSpace($Script:AppConfig.CurrentSqlQuery.DoId)) {
                 "Omada Url not set or Query not selected. Set correct values to execute queries!" | Write-LogOutput -LogType WARNING
                 return
             }
@@ -18,12 +16,10 @@ function Set-EditorValue {
             $Result = Get-SqlQueryObject
             if ($null -ne $Result) {
 
-                $Script:CurrentSqlQueryDisplayName = $Result.DisplayName
+                $Script:CurrentSqlQuery.DoId = $Result.Id
+                $Script:CurrentSqlQuery.DisplayName = $Result.DisplayName
                 $Script:MainWindowForm.Elements.TextBoxDisplayName.Text = $Result.DisplayName
-                Set-ConfigMultiValue ("{0} - {1}" -f $Result.C_SQLTROUBLESHOOTING_DATACONNECTION.DisplayName, $Result.C_SQLTROUBLESHOOTING_DATACONNECTION.Id) | Invoke-ProcessConfigSettings -Property "CurrentDataConnection"
-                $Result.C_SQLTROUBLESHOOTING_DATACONNECTION.Id | Invoke-ProcessConfigSettings -Property "CurrentDataConnectionId"
-                $Result.C_SQLTROUBLESHOOTING_DATACONNECTION.DisplayName | Invoke-ProcessConfigSettings -Property "CurrentDataConnectionName"
-
+                $Result.C_SQLTROUBLESHOOTING_DATACONNECTION.Id, $Result.C_SQLTROUBLESHOOTING_DATACONNECTION.DisplayName | Invoke-ConfigSetting -Property "CurrentDataConnection"
 
                 Set-DataConnection
 
@@ -38,7 +34,7 @@ function Set-EditorValue {
                     $ScriptToExecute = "editor.setValue('{0}');" -f ($Result.C_QUERY -replace "`n", "\n" -replace "`r", "\r" -replace "`t", "\t" -replace "'", "\'")
                     Push-ToEditor -ScriptToExecute $ScriptToExecute
                     $Script:CurrentQueryText = $Result.C_QUERY
-                    "Query {0} retrieved!" -f $Script:AppConfig.SqlQueryDoId | Write-LogOutput
+                    "Query {0} retrieved!" -f $Script:AppConfig.CurrentSqlQuery.DoId | Write-LogOutput
                 }
             }
         }

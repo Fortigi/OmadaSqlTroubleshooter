@@ -6,7 +6,7 @@ $Script:MainWindowForm.Elements.CheckboxMyQueries.Add_Checked({
             return
         }
 
-        $True | Invoke-ProcessConfigSettings -Property "MyQueriesOnly"
+        $True | Invoke-ConfigSetting -Property "MyQueriesOnly"
 
         $QueryUrl = "{0}/actusersettingsdlg.aspx?HIDEBACKARRICON=1" -f $Script:AppConfig.BaseUrl
         $Body = $null
@@ -17,11 +17,11 @@ $Script:MainWindowForm.Elements.CheckboxMyQueries.Add_Checked({
             $Match = $Matches[0]
             $IdentityUserName = $Match.Split(":")[1].Trim().TrimStart("'").TrimEnd(",").TrimEnd("'")
             if (![string]::IsNullOrWhiteSpace($IdentityUserName)) {
-                $IdentityUserName | Invoke-ProcessConfigSettings -Property "IdentityUserName"
+                $IdentityUserName | Invoke-ConfigSetting -Property "IdentityUserName"
             }
         }
         else {
-            $null | Invoke-ProcessConfigSettings -Property "IdentityUserName"
+            $null | Invoke-ConfigSetting -Property "IdentityUserName"
         }
         "Force update query list" | Write-LogOutput -LogType DEBUG
         Update-QueryList -ForceRefresh
@@ -29,8 +29,8 @@ $Script:MainWindowForm.Elements.CheckboxMyQueries.Add_Checked({
 
 $Script:MainWindowForm.Elements.CheckboxMyQueries.Add_Unchecked({
         $_ | Show-EventInfo
-        $False | Invoke-ProcessConfigSettings -Property "MyQueriesOnly"
-        $null | Invoke-ProcessConfigSettings -Property "IdentityUserName"
+        $False | Invoke-ConfigSetting -Property "MyQueriesOnly"
+        $null | Invoke-ConfigSetting -Property "IdentityUserName"
         "Force update query list" | Write-LogOutput -LogType DEBUG
         Update-QueryList -ForceRefresh
     })

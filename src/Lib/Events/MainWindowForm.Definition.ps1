@@ -1,15 +1,3 @@
-<#
-#To get all events for a control
-[System.Windows.Controls.Textbox].GetEvents() | Foreach-Object{
-    "`$Script.{0}.Defintion.{1}({{
-    `$_ | Show-EventInfo -LogType VERBOSE2
-    }})" -f "Form",$_.AddMethod.Name;
-    "`$Script.{0}.Defintion.{1}({{
-    `$_ | Show-EventInfo -LogType VERBOSE2
-    }})`r`n" -f "Form",$_.RemoveMethod.Name;
-    }
-#>
-
 $Script:MainWindowForm.Definition.Add_Closed({
         $_ | Show-EventInfo
 
@@ -40,14 +28,14 @@ $Script:MainWindowForm.Definition.Add_Loaded({
             if ($null -ne ($Script:MainWindowForm.Definition | Get-WindowPositionConfig)) {
                 $Position = $Script:MainWindowForm.Definition | Get-WindowPositionConfig
                 "Main window position: {0}" -f $Position | Write-LogOutput -LogType DEBUG
-                $Script:MainWindowForm.Definition.Left = [int32]::Abs($Position.Split("x")[0])
-                $Script:MainWindowForm.Definition.Top = [int32]::Abs($Position.Split("x")[1])
+                $Script:MainWindowForm.Definition.Left = [Int]::Abs($Position.Split("x")[0])
+                $Script:MainWindowForm.Definition.Top = [Int]::Abs($Position.Split("x")[1])
             }
             if ($null -ne ($Script:MainWindowForm.Definition | Get-WindowSizeConfig)) {
                 $Size = $Script:MainWindowForm.Definition | Get-WindowSizeConfig
                 "Main window size: {0}" -f $Size | Write-LogOutput -LogType DEBUG
-                $Script:MainWindowForm.Definition.Width = [int32]::Abs($Size.Split("x")[0])
-                $Script:MainWindowForm.Definition.Height = [int32]::Abs($Size.Split("x")[1])
+                $Script:MainWindowForm.Definition.Width = [Int]::Abs($Size.Split("x")[0])
+                $Script:MainWindowForm.Definition.Height = [Int]::Abs($Size.Split("x")[1])
             }
 
             if ($Null -eq $Script:WebView) {
@@ -121,8 +109,8 @@ $Script:MainWindowForm.Definition.Add_LocationChanged({
             "LogWindow Position: {0}x{1}, Dimensions: {2}x{3} (Id:{4})" -f $Script:LogWindowForm.Definition.Left, $Script:LogWindowForm.Definition.Top, $Script:LogWindowForm.Definition.Width , $Script:LogWindowForm.Definition.Height, $ActionId | Write-LogOutput -LogType VERBOSE2
             $Script:PositionManagerLogWindow.Synchronizing = $true
             $Script:MainWindowForm.Definition.Dispatcher.Invoke({
-                    $Script:LogWindowForm.Definition.Left = [int32]::Abs($Script:MainWindowForm.Definition.Left) + [int32]::Abs($Script:PositionManagerLogWindow.PositionOffSetLeft)
-                    $Script:LogWindowForm.Definition.Top = [int32]::Abs($Script:MainWindowForm.Definition.Top) + [int32]::Abs($Script:PositionManagerLogWindow.PositionOffSetTop)
+                    $Script:LogWindowForm.Definition.Left = [Int]::Abs($Script:MainWindowForm.Definition.Left) + [Int]::Abs($Script:PositionManagerLogWindow.PositionOffSetLeft)
+                    $Script:LogWindowForm.Definition.Top = [Int]::Abs($Script:MainWindowForm.Definition.Top) + [Int]::Abs($Script:PositionManagerLogWindow.PositionOffSetTop)
                     "LogWindow Position: {0}x{1}, Dimensions: {2}x{3}, PositionManagerOffSet: {4}x{5} (Id:{6})" -f $Script:LogWindowForm.Definition.Left, $Script:LogWindowForm.Definition.Top, $Script:LogWindowForm.Definition.Width , $Script:LogWindowForm.Definition.Height, $Script:PositionManagerLogWindow.PositionOffSetLeft, $Script:PositionManagerLogWindow.PositionOffSetTop, $ActionId | Write-LogOutput -LogType VERBOSE2
                     $Script:PositionManagerLogWindow.Synchronizing = $false
                 }, [System.Windows.Threading.DispatcherPriority]::Render)
@@ -136,8 +124,8 @@ $Script:MainWindowForm.Definition.Add_LocationChanged({
             "SqlSchemaWindow Position: {0}x{1}, Dimensions: {2}x{3} (Id:{4})" -f $Script:SqlSchemaWindow.Definition.Left, $Script:SqlSchemaWindow.Definition.Top, $Script:SqlSchemaWindow.Definition.Width , $Script:SqlSchemaWindow.Definition.Height, $ActionId | Write-LogOutput -LogType VERBOSE2
             $Script:PositionManagerSqlSchemaWindow.Synchronizing = $true
             $Script:MainWindowForm.Definition.Dispatcher.Invoke({
-                    $Script:SqlSchemaWindowForm.Definition.Left = [int32]::Abs($Script:MainWindowForm.Definition.Left) - [int32]::Abs($Script:PositionManagerSqlSchemaWindow.PositionOffSetLeft)
-                    $Script:SqlSchemaWindowForm.Definition.Top = [int32]::Abs($Script:MainWindowForm.Definition.Top) - [int32]::Abs($Script:PositionManagerSqlSchemaWindow.PositionOffSetTop)
+                    $Script:SqlSchemaWindowForm.Definition.Left = [Int]::Abs($Script:MainWindowForm.Definition.Left) - [Int]::Abs($Script:PositionManagerSqlSchemaWindow.PositionOffSetLeft)
+                    $Script:SqlSchemaWindowForm.Definition.Top = [Int]::Abs($Script:MainWindowForm.Definition.Top) - [Int]::Abs($Script:PositionManagerSqlSchemaWindow.PositionOffSetTop)
                     "SqlSchemaWindow Position: {0}x{1}, Dimensions: {2}x{3}, PositionManagerOffSet: {4}x{5} (Id:{6})" -f $Script:SqlSchemaWindowForm.Definition.Left, $Script:SqlSchemaWindowForm.Definition.Top, $Script:SqlSchemaWindowForm.Definition.Width, $Script:SqlSchemaWindowForm.Definition.Height, $Script:PositionManagerSqlSchemaWindow.PositionOffSetLeft, $Script:PositionManagerSqlSchemaWindow.PositionOffSetTop, $ActionId | Write-LogOutput -LogType VERBOSE2
                     $Script:PositionManagerSqlSchemaWindow.Synchronizing = $false
                 }, [System.Windows.Threading.DispatcherPriority]::Render)

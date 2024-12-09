@@ -15,24 +15,21 @@
 
         if (!$SkipTextBoxURL) {
             $Script:MainWindowForm.Elements.TextBoxURL.Text = $null
-            $null | Invoke-ProcessConfigSettings -Property "BaseUrl"
+            $null | Invoke-ConfigSetting -Property "BaseUrl"
             $Script:MainWindowForm.Elements.ComboBoxSelectDataConnection.SelectedItem = $Null
             $Script:MainWindowForm.Elements.ComboBoxSelectDataConnection.Clear()
-            $null | Invoke-ProcessConfigSettings -Property "CurrentDataConnection"
-            $null | Invoke-ProcessConfigSettings -Property "CurrentDataConnectionId"
-            $null | Invoke-ProcessConfigSettings -Property "CurrentDataConnectionName"
+            $null, $null | Invoke-ConfigSetting -Property "CurrentDataConnection"
             $Script:MainWindowForm.Elements.ComboBoxSelectQuery.SelectedItem = $Null
             $Script:MainWindowForm.Elements.ComboBoxSelectQuery.Items.Clear()
             $Script:MainWindowForm.Elements.CheckboxMyQueries.IsChecked = $False
             $Script:MainWindowForm.Elements.CheckboxMyQueries.IsEnabled = $False
-            $null | Invoke-ProcessConfigSettings -Property "SqlQueryDoId"
-            $null | Invoke-ProcessConfigSettings -Property "SelectedSqlQueryDoId"
+            $null, $null | Invoke-ConfigSetting -Property "CurrentSqlQuery"
         }
         $Script:MainWindowForm.Elements.TextBoxURL.IsEnabled = $True
 
         if (!$SkipAuthentication) {
             $Script:MainWindowForm.Elements.ComboBoxSelectAuthenticationOption.SelectedItem = $Null
-            $null | Invoke-ProcessConfigSettings -Property "LastAuthentication"
+            $null | Invoke-ConfigSetting -Property "LastAuthentication"
             if ($Script:MainWindowForm.Elements.TextBoxUserName.IsEnabled) {
                 $Script:MainWindowForm.Elements.TextBoxUserName.Text = $Null
                 $Script:MainWindowForm.Elements.TextBoxUserName.IsEnabled = $false

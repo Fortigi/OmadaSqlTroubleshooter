@@ -1,4 +1,4 @@
-﻿function Get-WindowAllowedPosition {
+﻿function Get-ValidWindowPosition {
 
     PARAM(
         [parameter(Mandatory = $true, ValueFromPipeline = $true)]
@@ -22,11 +22,11 @@
             if ($Form.$Setting -gt $PrimaryScreenSetting -or $Form.$Setting -lt 0) {
                 $Form.$Setting = ($PrimaryScreenSetting - $Form.$Setting) / 2
                 "{0} position from screen height '{1}x{2}'. Setting: '{3}' (Id:{4})" -f $Form.Name, $Form.Left, $Form.Top, $Setting, $ActionId | Write-LogOutput -LogType VERBOSE2
-                return [int32]::Abs($Form.$Setting)
+                return [Int]::Abs($Form.$Setting)
             }
             else {
                 "{0} setting '{1}' (Id:{2})" -f $Form.Name, $Form.$Setting, $ActionId | Write-LogOutput -LogType VERBOSE2
-                return [int32]::Abs($Form.$Setting)
+                return [Int]::Abs($Form.$Setting)
             }
         }
         else {

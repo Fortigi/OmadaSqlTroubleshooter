@@ -15,7 +15,7 @@ function Set-TextBlockText {
                 $TextBlockObject.Text = $Text
             }
             $TextBlockObject.Text = $Text
-            "{0} set from '{1}' to '{2}'" -f $TextBlockObject.Name, $CurrentButtonContent, $TextBlockObject.Content | Write-LogOutput -LogType DEBUG
+            "{0} set from '{1}' to '{2}'" -f $TextBlockObject.Name, $CurrentButtonContent, $TextBlockObject.Text | Write-LogOutput -LogType DEBUG
 
         }
         catch {

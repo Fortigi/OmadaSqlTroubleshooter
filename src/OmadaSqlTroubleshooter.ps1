@@ -39,14 +39,18 @@ else {
     $Script:ConfigFilePath = Join-Path $ScriptRootFolder -ChildPath $ConfigFileName
 }
 $Script:LogToConsole = $LogToConsole.IsPresent -or $false
-$SqlQueryDoIdAttribute = "c-13"
+$SqlQueryDoIdAttributeName = "c-13"
 $SqlQueryCreatedByAttribute = "c-2"
 $SqlQueryChangedByAttribute = "c-4"
 $Script:AppConfig = $null
 $Script:AuthenticationSet = $false
 $QueryText = $null
 $SqlQueryObject = $null
-$Script:CurrentSqlQueryDisplayName = $null
+$Script:CurrentSqlQuery = [PSCustomObject]@{
+    DoId = $null
+    DisplayName = $null
+    FullName = $null
+}
 $Result = $null
 $Script:QueryResult = $null
 $Script:LogLevelSetting = [string]::IsNullOrWhiteSpace($LogLevel) ? $null : $LogLevel
@@ -72,9 +76,9 @@ $PositionManagerTemplate = @{
     LastPositionChange  = Get-Date
 }
 $Script:PositionManagerLogWindow = $PositionManagerTemplate.PsObject.Copy()
-[int32]$Script:PositionManagerLogWindow.PositionOffSetLeft = 1200
+[Int]$Script:PositionManagerLogWindow.PositionOffSetLeft = 1200
 $Script:PositionManagerSqlSchemaWindow = $PositionManagerTemplate.PsObject.Copy()
-[int32]$Script:PositionManagerSqlSchemaWindow.PositionOffSetRight = 405
+[Int]$Script:PositionManagerSqlSchemaWindow.PositionOffSetRight = 405
 
 $Script:QueryListCache = @{
     QueryList   = $null
@@ -181,7 +185,8 @@ catch {
 
 #region process
 try {
-    Invoke-ProcessConfigSettings -Reset:$Reset.IsPresent
+
+    Invoke-ConfigSetting -Reset:$Reset.IsPresent
 
     if ($Script:LogToConsole -or $Script:AppConfig.CheckboxConsoleLog) {
         $Script:LogToConsole = $true
@@ -202,15 +207,19 @@ try {
     "Pre-set Main Window Components from config" | Write-LogOutput -LogType DEBUG
     $Script:OutputFileName = $Null
     $SqlQueryObject = $Null
-    $Script:CurrentSqlQueryDisplayName = $Null
+    $Script:CurrentSqlQuery = [PSCustomObject]@{
+        DoId = $null
+        DisplayName = $null
+        FullName = $null
+    }
     $Script:CurrentUrl = $Null
-
     $Script:MainWindowForm.Elements.TextBoxURL.Text = $Script:AppConfig.BaseUrl
     $Script:MainWindowForm.Elements.TextBoxURL.IsEnabled = $True
     if (![String]::IsNullOrWhiteSpace($Script:MainWindowForm.Elements.TextBoxURL.Text)) {
         $Script:CurrentUrl = $Script:MainWindowForm.Elements.TextBoxURL.Text
         "Config: Current Url: {0}" -f $Script:CurrentUrl | Write-LogOutput -LogType DEBUG
     }
+
 
     $InvokeOmadaRestMethodParam = @{
         Uri                = $Null
@@ -219,38 +228,35 @@ try {
     }
     $Password = $Null
 
-    if([string]::IsNullOrWhiteSpace($Script:Appconfig.ConfigMultiValueSeparator)) {
-        Set-ConfigMultiValueSeparator -Separator "§"
-    }
-
     if ($Script:AppConfig.MyQueriesOnly) {
         "Config: MyQueriesOnly: True" | Write-LogOutput -LogType DEBUG
         $Script:MainWindowForm.Elements.CheckboxMyQueries.IsChecked = $True
     }
 
     if ($null -ne $Script:LogLevelSetting) {
-        $Script:LogLevelSetting | Invoke-ProcessConfigSettings -Property "LogLevel"
+        $Script:LogLevelSetting | Invoke-ConfigSetting -Property "LogLevel"
         "Config: LogLevelSetting: {0}" -f $Script:LogLevelSetting | Write-LogOutput -LogType DEBUG
     }
 
-    if (![string]::IsNullOrWhiteSpace($Script:AppConfig.SelectedSqlQueryDoId)) {
-        "Config: SelectedSqlQueryDoId: {0}" -f $Script:AppConfig.SelectedSqlQueryDoId | Write-LogOutput -LogType DEBUG
+    if (![string]::IsNullOrWhiteSpace($Script:AppConfig.CurrentSqlQuery.DoId)) {
+        "Config: CurrentSqlQuery.DoId: {0}" -f $Script:AppConfig.CurrentSqlQuery.DoId | Write-LogOutput -LogType DEBUG
 
         $ComboBoxSelectQueryItem = $null
-        $ComboBoxSelectQueryItem = $Script:MainWindowForm.Elements.ComboBoxSelectQuery.Items | Where-Object { $_.Content -eq (Get-ConfigMultiValue $Script:AppConfig.SelectedSqlQueryDoId) }
+        $ComboBoxSelectQueryItem = $Script:MainWindowForm.Elements.ComboBoxSelectQuery.Items | Where-Object { $_.Content -eq $Script:AppConfig.CurrentSqlQuery.FullName }
         if ($null -eq $ComboBoxSelectQueryItem) {
-            "Config: Set SelectedSqlQueryDoId: {0}" -f $Script:AppConfig.SelectedSqlQueryDoId | Write-LogOutput -LogType DEBUG
+            "Config: Set CurrentSqlQuery.DoId: {0}" -f $Script:AppConfig.CurrentSqlQuery.DoId | Write-LogOutput -LogType DEBUG
             $ComboBoxSelectQueryItem = New-Object System.Windows.Controls.ComboBoxItem
-            $ComboBoxSelectQueryItem.Content = (Get-ConfigMultiValue  $Script:AppConfig.SelectedSqlQueryDoId)
+            $ComboBoxSelectQueryItem.Content = $Script:AppConfig.CurrentSqlQuery.FullName
             $Script:MainWindowForm.Elements.ComboBoxSelectQuery.Items.Add($ComboBoxSelectQueryItem) | Out-Null
-            $Script:CurrentSqlQueryDisplayName = (Get-ConfigMultiValue $Script:AppConfig.SelectedSqlQueryDoId -Array)[0]
-            $Script:MainWindowForm.Elements.TextBoxDisplayName.Text = $Script:CurrentSqlQueryDisplayName
+            $Script:CurrentSqlQuery.DisplayName = $Script:AppConfig.CurrentSqlQuery.DisplayName
+            $Script:MainWindowForm.Elements.TextBoxDisplayName.Text = $Script:CurrentSqlQuery.DisplayName
         }
         $Script:MainWindowForm.Elements.ComboBoxSelectQuery.SelectedValue = $ComboBoxSelectQueryItem
     }
 
-    if (![string]::IsNullOrWhiteSpace($Script:AppConfig.CurrentDataConnection)) {
-        "Config: CurrentDataConnection: {0}" -f $Script:AppConfig.CurrentDataConnection | Write-LogOutput -LogType DEBUG
+
+    if (![string]::IsNullOrWhiteSpace($Script:AppConfig.CurrentDataConnection.FullName)) {
+        "Config: CurrentDataConnection: {0}" -f $Script:AppConfig.CurrentDataConnection.FullName | Write-LogOutput -LogType DEBUG
         Set-DataConnection
     }
 
@@ -285,8 +291,8 @@ try {
     $Message = "Application '{0}': Closed, cleaning-up!" -f $ApplicationTitle
     $Message | Write-Host -ForegroundColor Green
     $Message | Write-LogOutput -LogType DEBUG
-    "Invoke-ProcessConfigSettings" | Write-LogOutput -LogType DEBUG
-    Invoke-ProcessConfigSettings
+    "Invoke-ConfigSetting" | Write-LogOutput -LogType DEBUG
+    Invoke-ConfigSetting
     "Close Main Window" | Write-LogOutput -LogType DEBUG
     $Script:MainWindowForm.Definition.Close() | Out-Null
     $Script:WebView.Dispose() | Out-Null

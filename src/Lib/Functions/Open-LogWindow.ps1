@@ -3,7 +3,7 @@ function Open-LogWindow {
         #Log window creation
         "Opening Log window" | Write-LogOutput -LogType DEBUG
         $Script:LogWindowForm = New-FormObject -FormPath (Join-Path $ScriptRootFolder -ChildPath "lib\ui\LogWindow.xaml") -ParentForm $Script:MainWindowForm.Definition
-        $true | Invoke-ProcessConfigSettings -Property "LogWindowFormOpen"
+        $true | Invoke-ConfigSetting -Property "LogWindowFormOpen"
 
         $Script:LogWindowForm.Definition.ShowInTaskbar = $false
         $Script:TextBoxLog = $Script:LogWindowForm.Definition.FindName("TextBoxLog")
@@ -11,21 +11,21 @@ function Open-LogWindow {
             $Script:TextBoxLog.TextWrapping = "WrapWithOverflow"
             $Script:LogWindowForm.Elements.CheckboxWordWrap.IsChecked = $true
             "Word wrap is enabled" | Write-LogOutput -LogType LOG
-            $true | Invoke-ProcessConfigSettings -Property "LogWindowWordWrap"
+            $true | Invoke-ConfigSetting -Property "LogWindowWordWrap"
         }
         else {
             $Script:TextBoxLog.TextWrapping = "NoWrap"
             $Script:LogWindowForm.Elements.CheckboxWordWrap.IsChecked = $false
-            $false | Invoke-ProcessConfigSettings -Property "LogWindowWordWrap"
+            $false | Invoke-ConfigSetting -Property "LogWindowWordWrap"
         }
         if ($Script:LogToConsole) {
             $Script:LogWindowForm.Elements.CheckboxConsoleLog.IsChecked = $true
             "Console logging is enabled" | Write-LogOutput -LogType LOG
-            $true | Invoke-ProcessConfigSettings -Property "CheckboxConsoleLog"
+            $true | Invoke-ConfigSetting -Property "CheckboxConsoleLog"
         }
         else {
             $Script:LogWindowForm.Elements.CheckboxConsoleLog.IsChecked = $false
-            $false | Invoke-ProcessConfigSettings -Property "CheckboxConsoleLog"
+            $false | Invoke-ConfigSetting -Property "CheckboxConsoleLog"
         }
 
         #Set log level to show
@@ -60,9 +60,9 @@ function Open-LogWindow {
                     "LogWindowForm Position: {0}x{1}, Dimensions: {2}x{3}" -f $Script:LogWindowForm.Definition.Left, $Script:LogWindowForm.Definition.Top, $Script:LogWindowForm.Definition.Width , $Script:LogWindowForm.Definition.Height | Write-LogOutput -LogType VERBOSE2
                     $Script:LogWindowForm.Definition.Dispatcher.Invoke({
                             $_ | Show-EventInfo -LogType VERBOSE2
-                            $Script:PositionManagerLogWindow.PositionOffSetLeft = [int32]::Abs($Script:LogWindowForm.Definition.Left) - [int32]::Abs($Script:MainWindowForm.Definition.Left)
+                            $Script:PositionManagerLogWindow.PositionOffSetLeft = [Int]::Abs($Script:LogWindowForm.Definition.Left) - [Int]::Abs($Script:MainWindowForm.Definition.Left)
                             "PositionManagerLogWindow PositionOffSetLeft: {0}" -f $Script:PositionManagerLogWindow.PositionOffSetLeft | Write-LogOutput -LogType VERBOSE2
-                            $Script:PositionManagerLogWindow.PositionOffSetTop = [int32]::Abs($Script:LogWindowForm.Definition.Top) - [int32]::Abs($Script:MainWindowForm.Definition.Top)
+                            $Script:PositionManagerLogWindow.PositionOffSetTop = [Int]::Abs($Script:LogWindowForm.Definition.Top) - [Int]::Abs($Script:MainWindowForm.Definition.Top)
                             "PositionManagerLogWindow PositionOffSetTop: {0}" -f $Script:PositionManagerLogWindow.PositionOffSetTop | Write-LogOutput -LogType VERBOSE2
                             $Script:PositionManagerLogWindow.Synchronizing = $false
                         }, [System.Windows.Threading.DispatcherPriority]::Render)
@@ -79,8 +79,8 @@ function Open-LogWindow {
         if ($null -ne ($Script:LogWindowForm.Definition | Get-WindowPositionConfig)) {
             $Position = $Script:LogWindowForm.Definition | Get-WindowPositionConfig
             "Log window position: {0}" -f $Position | Write-LogOutput -LogType DEBUG
-            $Script:LogWindowForm.Definition.Left = [int32]::Abs($Position.Split("x")[0])
-            $Script:LogWindowForm.Definition.Top = [int32]::Abs($Position.Split("x")[1])
+            $Script:LogWindowForm.Definition.Left = [Int]::Abs($Position.Split("x")[0])
+            $Script:LogWindowForm.Definition.Top = [Int]::Abs($Position.Split("x")[1])
         }
 
         #region LogWindowForm events
@@ -89,29 +89,29 @@ function Open-LogWindow {
                 $Script:PositionManagerLogWindow.Synchronizing = $true
                 $Script:LogWindowForm.Definition.Dispatcher.Invoke({
                         "MainWindowForm Position: {0}x{1}, Dimensions: {2}x{3}" -f $Script:MainWindowForm.Definition.Left, $Script:MainWindowForm.Definition.Top, $Script:MainWindowForm.Definition.Width , $Script:MainWindowForm.Definition.Height | Write-LogOutput -LogType DEBUG
-                        $Script:LogWindowForm.Definition.Top = [int32]::Abs($Script:MainWindowForm.Definition.Top)
+                        $Script:LogWindowForm.Definition.Top = [Int]::Abs($Script:MainWindowForm.Definition.Top)
                         "LogWindowForm Top: {0}" -f $Script:LogWindowForm.Definition.Top | Write-LogOutput -LogType DEBUG
-                        $Script:LogWindowForm.Definition.Left = [int32]::Abs($Script:MainWindowForm.Definition.Left) + [int32]::Abs($Script:MainWindowForm.Definition.Width)
+                        $Script:LogWindowForm.Definition.Left = [Int]::Abs($Script:MainWindowForm.Definition.Left) + [Int]::Abs($Script:MainWindowForm.Definition.Width)
                         "LogWindowForm Left: {0}" -f $Script:LogWindowForm.Definition.Left | Write-LogOutput -LogType DEBUG
-                        $Script:PositionManagerLogWindow.PositionOffSetLeft = [int32]::Abs($Script:LogWindowForm.Definition.Left) - [int32]::Abs($Script:MainWindowForm.Definition.Left)
+                        $Script:PositionManagerLogWindow.PositionOffSetLeft = [Int]::Abs($Script:LogWindowForm.Definition.Left) - [Int]::Abs($Script:MainWindowForm.Definition.Left)
                         "PositionManagerLogWindow PositionOffSetLeft: {0}" -f $Script:PositionManagerLogWindow.PositionOffSetLeft | Write-LogOutput -LogType DEBUG
-                        $Script:PositionManagerLogWindow.PositionOffSetTop = [int32]::Abs($Script:LogWindowForm.Definition.Top) - [int32]::Abs($Script:MainWindowForm.Definition.Top)
+                        $Script:PositionManagerLogWindow.PositionOffSetTop = [Int]::Abs($Script:LogWindowForm.Definition.Top) - [Int]::Abs($Script:MainWindowForm.Definition.Top)
                         "PositionManagerLogWindow PositionOffSetTop: {0}" -f $Script:PositionManagerLogWindow.PositionOffSetTop | Write-LogOutput -LogType DEBUG
                         if ($null -ne ($Script:LogWindowForm.Definition | Get-WindowSizeConfig)) {
                             $Size = $Script:LogWindowForm.Definition | Get-WindowSizeConfig
                             "Log window size: {0}" -f $Size | Write-LogOutput -LogType DEBUG
-                            $Script:LogWindowForm.Definition.Width = [int32]::Abs($Size.Split("x")[0])
+                            $Script:LogWindowForm.Definition.Width = [Int]::Abs($Size.Split("x")[0])
                             "LogWindowForm Width: {0}" -f $Script:LogWindowForm.Definition.Width | Write-LogOutput -LogType DEBUG
-                            $Script:LogWindowForm.Definition.Height = [int32]::Abs($Size.Split("x")[1])
+                            $Script:LogWindowForm.Definition.Height = [Int]::Abs($Size.Split("x")[1])
                             "LogWindowForm Height: {0}" -f $Script:LogWindowForm.Definition.Height | Write-LogOutput -LogType DEBUG
                         }
                         $Script:PositionManagerLogWindow.Synchronizing = $false
                     }, [System.Windows.Threading.DispatcherPriority]::Render)
                 $Script:MainWindowForm.Elements.ButtonShowLog | Set-ButtonContent -Content "_Hide Log"
                 $Script:TextBoxLog.Text = $AppLogObject
-                $Script:PositionManagerLogWindow.PositionOffSetLeft = [int32]::Abs($Script:LogWindowForm.Definition.Left) - [int32]::Abs($Script:MainWindowForm.Definition.Left)
+                $Script:PositionManagerLogWindow.PositionOffSetLeft = [Int]::Abs($Script:LogWindowForm.Definition.Left) - [Int]::Abs($Script:MainWindowForm.Definition.Left)
                 "PositionManagerLogWindow PositionOffSetLeft: {0}" -f $Script:PositionManagerLogWindow.PositionOffSetLeft | Write-LogOutput -LogType DEBUG
-                $Script:PositionManagerLogWindow.PositionOffSetTop = [int32]::Abs($Script:LogWindowForm.Definition.Top) - [int32]::Abs($Script:MainWindowForm.Definition.Top)
+                $Script:PositionManagerLogWindow.PositionOffSetTop = [Int]::Abs($Script:LogWindowForm.Definition.Top) - [Int]::Abs($Script:MainWindowForm.Definition.Top)
                 "PositionManagerLogWindow PositionOffSetTop: {0}" -f $Script:PositionManagerLogWindow.PositionOffSetTop | Write-LogOutput -LogType DEBUG
                 "LogWindowForm Position: {0}x{1}, Dimensions: {2}x{3}" -f $Script:LogWindowForm.Definition.Left, $Script:LogWindowForm.Definition.Top, $Script:LogWindowForm.Definition.Width , $Script:LogWindowForm.Definition.Height | Write-LogOutput -LogType DEBUG
                 $Script:LogWindowForm.State = "Open"
@@ -122,7 +122,7 @@ function Open-LogWindow {
                 $Script:LogWindowForm.State = "Closing"
                 Save-WindowMeasurements
                 if ($Script:MainWindowForm.State -eq "Open") {
-                    $false | Invoke-ProcessConfigSettings -Property "LogWindowFormOpen"
+                    $false | Invoke-ConfigSetting -Property "LogWindowFormOpen"
                 }
             })
 
@@ -171,7 +171,7 @@ function Open-LogWindow {
 
         $Script:LogWindowForm.Elements.ComboBoxSelectLogLevel.Add_SelectionChanged({
                 $_ | Show-EventInfo
-                $Script:LogWindowForm.Elements.ComboBoxSelectLogLevel.SelectedItem.Content | Invoke-ProcessConfigSettings -Property "LogLevel"
+                $Script:LogWindowForm.Elements.ComboBoxSelectLogLevel.SelectedItem.Content | Invoke-ConfigSetting -Property "LogLevel"
                 $Script:LogLevelSetting = $Script:LogWindowForm.Elements.ComboBoxSelectLogLevel.SelectedItem.Content
                 "Logging set to {0}!" -f $Script:LogLevelSetting | Write-LogOutput -LogType LOG
             })
@@ -181,14 +181,14 @@ function Open-LogWindow {
                 $_ | Show-EventInfo
                 $Script:TextBoxLog.TextWrapping = "WrapWithOverflow"
                 "Word wrap is enabled" | Write-LogOutput -LogType LOG
-                $true | Invoke-ProcessConfigSettings -Property "LogWindowWordWrap"
+                $true | Invoke-ConfigSetting -Property "LogWindowWordWrap"
             })
 
         $Script:LogWindowForm.Elements.CheckboxWordWrap.Add_UnChecked({
                 $_ | Show-EventInfo
                 $Script:TextBoxLog.TextWrapping = "NoWrap"
                 "Word wrap is disabled" | Write-LogOutput -LogType LOG
-                $false | Invoke-ProcessConfigSettings -Property "LogWindowWordWrap"
+                $false | Invoke-ConfigSetting -Property "LogWindowWordWrap"
 
             })
 
@@ -196,14 +196,14 @@ function Open-LogWindow {
                 $_ | Show-EventInfo
                 $Script:LogToConsole = $true
                 "Console logging is enabled" | Write-LogOutput -LogType LOG
-                $true | Invoke-ProcessConfigSettings -Property "CheckboxConsoleLog"
+                $true | Invoke-ConfigSetting -Property "CheckboxConsoleLog"
             })
 
         $Script:LogWindowForm.Elements.CheckboxConsoleLog.Add_UnChecked({
                 $_ | Show-EventInfo
                 $Script:LogToConsole = $false
                 "Console logging is disabled" | Write-LogOutput -LogType LOG
-                $false | Invoke-ProcessConfigSettings -Property "CheckboxConsoleLog"
+                $false | Invoke-ConfigSetting -Property "CheckboxConsoleLog"
 
             })
 

@@ -1,7 +1,7 @@
 // Place your settings in this file to overwrite the default settings
 {
     "csv-preview.separator": ";",
-    "diffEditor.ignoreTrimWhitespace": false,
+    "diffEditor.ignoreTrimWhitespace": true,
     "editor.autoClosingBrackets": "never",
     "editor.formatOnType": true,
     "editor.renderControlCharacters": true,

@@ -2,7 +2,7 @@ $Script:MainWindowForm.Elements.TextBoxUserName.Add_LostFocus({
     $_ | Show-EventInfo
     if (![string]::IsNullOrWhiteSpace($Script:MainWindowForm.Elements.TextBoxUserName.Text)) {
 
-        $Script:MainWindowForm.Elements.TextBoxUserName.Text | Invoke-ProcessConfigSettings -Property "UserName"
+        $Script:MainWindowForm.Elements.TextBoxUserName.Text | Invoke-ConfigSetting -Property "UserName"
         "Username set to: {0}" -f $Script:AppConfig.UserName | Write-LogOutput -LogType DEBUG
         if ($InvokeOmadaRestMethodParam.ContainsKey("Credential")) {
             if (![string]::IsNullOrWhiteSpace($Script:MainWindowForm.Elements.TextBoxUserName.Text) -and ![string]::IsNullOrWhiteSpace($Script:MainWindowForm.Elements.TextBoxPassword.Password)) {

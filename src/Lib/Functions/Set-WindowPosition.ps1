@@ -10,8 +10,8 @@ function Set-WindowPosition {
         $Form.Left | Write-Host -ForegroundColor DarkYellow
         $Form.Top | Write-Host -ForegroundColor DarkYellow
 
-        $Form.Left = [int32]::Abs($Setting.Split("x")[0])
-        $Form.Top = [int32]::Abs($Setting.Split("x")[1])
+        $Form.Left = [Int]::Abs($Setting.Split("x")[0])
+        $Form.Top = [Int]::Abs($Setting.Split("x")[1])
         $Form.Left | Write-Host -ForegroundColor Yellow
         $Form.Top | Write-Host -ForegroundColor Yellow
 
