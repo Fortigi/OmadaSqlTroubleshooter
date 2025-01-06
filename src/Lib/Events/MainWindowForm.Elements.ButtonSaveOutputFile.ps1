@@ -26,28 +26,28 @@ $Script:MainWindowForm.Elements.ButtonSaveOutputFile.Add_Click({
     }
     $SaveFileDialog.FileName = "SqlQuery_{0}_{1}_{2}_{3}_Output{4}" -f $Script:AppConfig.CurrentSqlQuery.DoId, $SaveFileDisplayName, $Script:AppConfig.CurrentDataConnection.DisplayName, [system.uri]::New($Script:AppConfig.BaseUrl).Host, $Script:AppConfig.LastExtension
     if ($SaveFileDialog.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
-        $Script:OutputFileName = $SaveFileDialog.FileName
-        "Save outputfile: {0}" -f $Script:OutputFileName | Write-LogOutput
+        $Script:RunTimeConfig.OutputFileName = $SaveFileDialog.FileName
+        "Save outputfile: {0}" -f $Script:RunTimeConfig.OutputFileName | Write-LogOutput
 
-        if ($Null -eq $Script:OutputFileName) {
+        if ($Null -eq $Script:RunTimeConfig.OutputFileName) {
             return
         }
-        elseif ($Script:OutputFileName -like "*.json") {
-            $Script:QueryResult | ConvertTo-Json -Depth 15 | Set-Content $Script:OutputFileName -Encoding UTF8
+        elseif ($Script:RunTimeConfig.OutputFileName -like "*.json") {
+            $Script:RunTimeData.QueryResult | ConvertTo-Json -Depth 15 | Set-Content $Script:RunTimeConfig.OutputFileName -Encoding UTF8
         }
-        elseif ($Script:OutputFileName -like "*.csv") {
-            $Script:QueryResult.d.rows | Export-Csv -Path $Script:OutputFileName -Delimiter ";" -NoTypeInformation -Encoding UTF8
+        elseif ($Script:RunTimeConfig.OutputFileName -like "*.csv") {
+            $Script:RunTimeData.QueryResult.d.rows | Export-Csv -Path $Script:RunTimeConfig.OutputFileName -Delimiter ";" -NoTypeInformation -Encoding UTF8
         }
-        elseif ($Script:OutputFileName -like "*.xml") {
-            $Script:QueryResult | Export-Clixml -Path $Script:OutputFileName -Depth 15
+        elseif ($Script:RunTimeConfig.OutputFileName -like "*.xml") {
+            $Script:RunTimeData.QueryResult | Export-Clixml -Path $Script:RunTimeConfig.OutputFileName -Depth 15
         }
         else {
-        ($Script:QueryResult.d.rows | Format-Table -AutoSize | Out-String -Width 10000000).Trim() | Set-Content $Script:OutputFileName -Encoding UTF8
+        ($Script:RunTimeData.QueryResult.d.rows | Format-Table -AutoSize | Out-String -Width 10000000).Trim() | Set-Content $Script:RunTimeConfig.OutputFileName -Encoding UTF8
         }
 
         "Output file saved!" | Write-LogOutput -LogType DEBUG
-        Split-Path $Script:OutputFileName | Invoke-ConfigSetting -Property "LastOutputFolder"
-        [System.IO.Path]::GetExtension($Script:OutputFileName) | Invoke-ConfigSetting -Property "LastExtension"
+        Split-Path $Script:RunTimeConfig.OutputFileName | Invoke-ConfigSetting -Property "LastOutputFolder"
+        [System.IO.Path]::GetExtension($Script:RunTimeConfig.OutputFileName) | Invoke-ConfigSetting -Property "LastExtension"
         $Script:MainWindowForm.Elements.ButtonOpenOutputFile.IsEnabled = $True
     }
     else {

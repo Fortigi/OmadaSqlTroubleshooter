@@ -22,7 +22,7 @@ $Script:MainWindowForm.Elements.ComboBoxSelectQuery.Add_DropDownOpened({
 $Script:MainWindowForm.Elements.ComboBoxSelectQuery.Add_SelectionChanged({
     $_ | Show-EventInfo
     try {
-        $Script:CurrentSqlQuery.FullName = $Script:MainWindowForm.Elements.ComboBoxSelectQuery.SelectedItem.Content
+        $Script:RunTimeData.CurrentSqlQuery.FullName = $Script:MainWindowForm.Elements.ComboBoxSelectQuery.SelectedItem.Content
         if (($Script:MainWindowForm.Elements.ComboBoxSelectQuery.Items | Measure-Object).Count -ge 0 -and ![string]::IsNullOrWhiteSpace($Script:MainWindowForm.Elements.ComboBoxSelectQuery.SelectedItem.Content)) {
             #Update-QueryList
             #Update-DataConnectionList

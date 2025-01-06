@@ -32,5 +32,8 @@
         "debug.saveBeforeStart": "nonUntitledEditorsInActiveGroup",
         "editor.semanticHighlighting.enabled": false,
         "editor.wordSeparators": "`~!@#$%^&*()=+[{]}\\|;:'\",.<>/?"
-    }
+    },
+    "cSpell.words": [
+        "Omada"
+    ]
 }

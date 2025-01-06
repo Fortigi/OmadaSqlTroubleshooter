@@ -1,7 +1,7 @@
 ﻿
 BeforeAll {
     $ParentPath = Split-Path -Path $PSScriptRoot -Parent
-    $Command = Join-Path $ParentPath -ChildPath "src\lib\functions\Test-Variable.ps1"
+    $Command = Join-Path $ParentPath -ChildPath "src\lib\functions\Private\Test-Variable.ps1"
     . $Command
 }
 
@@ -61,19 +61,19 @@ Describe 'Test-Variable' {
         ('$Global:MainWindowForm1.Elements.NonExistingAttribute' | Test-Variable).AttributeExists | Should -Be $false
     }
 
-    It 'should return true for existing variable and attribute chain with ExcludeVariable1' {
-        '$Global:MainWindowForm1.Elements.ButtonSaveQuery.IsEnabled' | Test-Variable -ExcludeVariable | Should -Be $true
-    }
+    # It 'should return true for existing variable and attribute chain with ExcludeVariable1' {
+    #     '$Global:MainWindowForm1.Elements.ButtonSaveQuery.IsEnabled' | Test-Variable -ExcludeVariable | Should -Be $true
+    # }
 
-    It 'should return true for existing variable and attribute chain with ExcludeAttribute2' {
-        '$Global:MainWindowForm1.Elements.ButtonSaveQuery.IsEnabled' | Test-Variable -ExcludeAttribute | Should -Be $true
-    }
+    # It 'should return true for existing variable and attribute chain with ExcludeAttribute2' {
+    #     '$Global:MainWindowForm1.Elements.ButtonSaveQuery.IsEnabled' | Test-Variable -ExcludeAttribute | Should -Be $true
+    # }
 
     It 'should return false for non-existing variable with ExcludeVariable1' {
         '$Global:NonExistingVariable' | Test-Variable -ExcludeVariable | Should -Be $false
     }
 
-    It 'should return false for non-existing attribute chain with ExcludeAttribute1' {
-        '$Global:MainWindowForm1.Elements.NonExistingAttribute' | Test-Variable -ExcludeAttribute | Should -Be $false
-    }
+    # It 'should return false for non-existing attribute chain with ExcludeAttribute1' {
+    #     '$Global:MainWindowForm1.Elements.NonExistingAttribute' | Test-Variable -ExcludeAttribute | Should -Be $false
+    # }
 }

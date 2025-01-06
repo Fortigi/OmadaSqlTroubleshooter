@@ -1,0 +1,13 @@
+<?xml version="1.0"?>
+<package>
+    <metadata>
+        <id>OmadaSqlTroubleshooter</id>
+        <version>$VERSION$</version>
+        <authors>Fortigi</authors>
+        <description>This module contains the Omada Sql Troubleshooter application.</description>
+        <copyright>Copyright $YEAR$ - present Fortigi</copyright>
+    </metadata>
+    <files>
+        <file src="buildoutput\OmadaSqlTroubleShooter\**" target="" />
+    </files>
+</package>

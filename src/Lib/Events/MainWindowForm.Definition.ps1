@@ -38,36 +38,36 @@ $Script:MainWindowForm.Definition.Add_Loaded({
                 $Script:MainWindowForm.Definition.Height = [Int]::Abs($Size.Split("x")[1])
             }
 
-            if ($Null -eq $Script:WebView) {
+            if ($Null -eq $Script:Webview.Object) {
                 [System.Windows.MessageBox]::Show("Failed to find WebView2 control.", "Error", [System.Windows.MessageBoxButton]::OK, [System.Windows.MessageBoxImage]::Error)
                 return
             }
 
-            $Script:WebviewUserDataFolder = Join-Path $Env:TEMP -ChildPath "OmadaSqlTroubleshooter"
-            if (-not (Test-Path -Path $Script:WebviewUserDataFolder)) {
-                New-Item -Path $Script:WebviewUserDataFolder -ItemType Directory | Out-Null
+            $Script:Webview.UserDataFolder = Join-Path $Env:TEMP -ChildPath "OmadaSqlTroubleshooter"
+            if (-not (Test-Path -Path $Script:Webview.UserDataFolder)) {
+                New-Item -Path $Script:Webview.UserDataFolder -ItemType Directory | Out-Null
             }
 
-            $EdgeWebview2RuntimePath = Join-Path $ScriptRootFolder -ChildPath "bin\Webview2Runtime"
-            if ((Test-Path -Path $EdgeWebview2RuntimePath -PathType Container) -and (Test-Path -Path (Join-Path $EdgeWebview2RuntimePath -ChildPath "msedgewebview2.exe") -PathType Leaf)) {
-                $Environment = [Microsoft.Web.WebView2.Core.CoreWebView2Environment]::CreateAsync($EdgeWebview2RuntimePath, $Script:WebviewUserDataFolder).GetAwaiter().GetResult()
+            $Script:Webview.EdgeWebview2RuntimePath = Join-Path $Script:RunTimeConfig.ModuleFolder -ChildPath "bin\Webview2Runtime"
+            if ((Test-Path -Path $Script:Webview.EdgeWebview2RuntimePath -PathType Container) -and (Test-Path -Path (Join-Path $Script:Webview.EdgeWebview2RuntimePath -ChildPath "msedgewebview2.exe") -PathType Leaf)) {
+                $Script:Webview.Environment = [Microsoft.Web.WebView2.Core.CoreWebView2Environment]::CreateAsync($Script:Webview.EdgeWebview2RuntimePath, $Script:Webview.UserDataFolder).GetAwaiter().GetResult()
             }
             else {
-                $Environment = [Microsoft.Web.WebView2.Core.CoreWebView2Environment]::CreateAsync($null, $Script:WebviewUserDataFolder).GetAwaiter().GetResult()
+                $Script:Webview.Environment = [Microsoft.Web.WebView2.Core.CoreWebView2Environment]::CreateAsync($null, $Script:Webview.UserDataFolder).GetAwaiter().GetResult()
             }
 
-            $Script:WebView.EnsureCoreWebView2Async($Environment).GetAwaiter().OnCompleted({
-                    if ($Null -eq $Script:WebView.CoreWebView2) {
+            $Script:Webview.Object.EnsureCoreWebView2Async($Script:Webview.Environment).GetAwaiter().OnCompleted({
+                    if ($Null -eq $Script:Webview.Object.CoreWebView2) {
                         $Script:MainWindowForm.Definition.Dispatcher.Invoke([System.Action] {
-                                $Message = "WebView2 environment initialization failed. If this system does not have the Webview2 Runtime installed, please download the fixed version from https://developer.microsoft.com/en-us/microsoft-edge/webview2/ and extract the cab file to folder '{0}'" -f $EdgeWebview2RuntimePath
+                                $Message = "WebView2 environment initialization failed. If this system does not have the Webview2 Runtime installed, please download the fixed version from https://developer.microsoft.com/en-us/microsoft-edge/webview2/ and extract the cab file to folder '{0}'" -f $Script:Webview.EdgeWebview2RuntimePath
                                 [System.Windows.MessageBox]::Show($Message, "Error", [System.Windows.MessageBoxButton]::OK, [System.Windows.MessageBoxImage]::Error)
                             })
                         return
                     }
-                    $HtmlFile = Join-Path  $ScriptRootFolder -ChildPath "Monaco\index.html"
+                    $HtmlFile = Join-Path  $Script:RunTimeConfig.ModuleFolder -ChildPath "Monaco\index.html"
                     if ([System.IO.File]::Exists($HtmlFile)) {
-                        $Script:WebView.Dispatcher.Invoke([System.Action] {
-                                $Script:WebView.Source = New-Object System.Uri($HtmlFile)
+                        $Script:Webview.Object.Dispatcher.Invoke([System.Action] {
+                                $Script:Webview.Object.Source = New-Object System.Uri($HtmlFile)
                                 "Webiew source set to: {0}" -f $HtmlFile | Write-LogOutput -LogType DEBUG
                             })
                     }
@@ -101,33 +101,33 @@ $Script:MainWindowForm.Definition.Add_LocationChanged({
         }
 
         "MainWindow Position: {0}x{1}, Dimensions: {2}x{3} (Id:{4})" -f $Script:MainWindowForm.Definition.Left, $Script:MainWindowForm.Definition.Top, $Script:MainWindowForm.Definition.Width , $Script:MainWindowForm.Definition.Height, $ActionId | Write-LogOutput -LogType VERBOSE2
-        if (Test-LogWindowOpen -and -not $Script:PositionManagerLogWindow.Synchronizing) {
+        if (Test-LogWindowOpen -and -not $Script:LogWindowForm.PositionManager.Synchronizing) {
             if ($Script:LogWindowForm.Definition.Left -lt 0 -or $Script:LogWindowForm.Definition.Top -lt 0) {
                 "LogWindowForm is not suitable for processing. Position: {0}x{1}, Dimensions: {2}x{3} (Id:{4})" -f $Script:MainWindowForm.Definition.Left, $Script:MainWindowForm.Definition.Top, $Script:MainWindowForm.Definition.Width , $Script:MainWindowForm.Definition.Height, $ActionId | Write-LogOutput -LogType VERBOSE2
                 return
             }
             "LogWindow Position: {0}x{1}, Dimensions: {2}x{3} (Id:{4})" -f $Script:LogWindowForm.Definition.Left, $Script:LogWindowForm.Definition.Top, $Script:LogWindowForm.Definition.Width , $Script:LogWindowForm.Definition.Height, $ActionId | Write-LogOutput -LogType VERBOSE2
-            $Script:PositionManagerLogWindow.Synchronizing = $true
+            $Script:LogWindowForm.PositionManager.Synchronizing = $true
             $Script:MainWindowForm.Definition.Dispatcher.Invoke({
-                    $Script:LogWindowForm.Definition.Left = [Int]::Abs($Script:MainWindowForm.Definition.Left) + [Int]::Abs($Script:PositionManagerLogWindow.PositionOffSetLeft)
-                    $Script:LogWindowForm.Definition.Top = [Int]::Abs($Script:MainWindowForm.Definition.Top) + [Int]::Abs($Script:PositionManagerLogWindow.PositionOffSetTop)
-                    "LogWindow Position: {0}x{1}, Dimensions: {2}x{3}, PositionManagerOffSet: {4}x{5} (Id:{6})" -f $Script:LogWindowForm.Definition.Left, $Script:LogWindowForm.Definition.Top, $Script:LogWindowForm.Definition.Width , $Script:LogWindowForm.Definition.Height, $Script:PositionManagerLogWindow.PositionOffSetLeft, $Script:PositionManagerLogWindow.PositionOffSetTop, $ActionId | Write-LogOutput -LogType VERBOSE2
-                    $Script:PositionManagerLogWindow.Synchronizing = $false
+                    $Script:LogWindowForm.Definition.Left = [Int]::Abs($Script:MainWindowForm.Definition.Left) + [Int]::Abs($Script:LogWindowForm.PositionManager.PositionOffSetLeft)
+                    $Script:LogWindowForm.Definition.Top = [Int]::Abs($Script:MainWindowForm.Definition.Top) + [Int]::Abs($Script:LogWindowForm.PositionManager.PositionOffSetTop)
+                    "LogWindow Position: {0}x{1}, Dimensions: {2}x{3}, PositionManagerOffSet: {4}x{5} (Id:{6})" -f $Script:LogWindowForm.Definition.Left, $Script:LogWindowForm.Definition.Top, $Script:LogWindowForm.Definition.Width , $Script:LogWindowForm.Definition.Height, $Script:LogWindowForm.PositionManager.PositionOffSetLeft, $Script:LogWindowForm.PositionManager.PositionOffSetTop, $ActionId | Write-LogOutput -LogType VERBOSE2
+                    $Script:LogWindowForm.PositionManager.Synchronizing = $false
                 }, [System.Windows.Threading.DispatcherPriority]::Render)
         }
-        if (Test-SqlSchemaWindowOpen -and -not $Script:PositionManagerSqlSchemaWindow.Synchronizing) {
+        if (Test-SqlSchemaWindowOpen -and -not $Script:SqlSchemaWindowForm.PositionManager.Synchronizing) {
             $_ | Show-EventInfo -LogType VERBOSE2
             if ($Script:SqlSchemaWindowForm.Definition.Left -lt 0 -or $Script:SqlSchemaWindowForm.Definition.Top -lt 0) {
                 "SqlSchemaWindowForm is not suitable for processing. Position: {0}x{1}, Dimensions: {2}x{3} (Id:{4})" -f $Script:SqlSchemaWindowForm.Definition.Left, $Script:SqlSchemaWindowForm.Definition.Top, $Script:SqlSchemaWindowForm.Definition.Width , $Script:SqlSchemaWindowForm.Definition.Height, $ActionId | Write-LogOutput -LogType VERBOSE2
                 return
             }
             "SqlSchemaWindow Position: {0}x{1}, Dimensions: {2}x{3} (Id:{4})" -f $Script:SqlSchemaWindow.Definition.Left, $Script:SqlSchemaWindow.Definition.Top, $Script:SqlSchemaWindow.Definition.Width , $Script:SqlSchemaWindow.Definition.Height, $ActionId | Write-LogOutput -LogType VERBOSE2
-            $Script:PositionManagerSqlSchemaWindow.Synchronizing = $true
+            $Script:SqlSchemaWindowForm.PositionManager.Synchronizing = $true
             $Script:MainWindowForm.Definition.Dispatcher.Invoke({
-                    $Script:SqlSchemaWindowForm.Definition.Left = [Int]::Abs($Script:MainWindowForm.Definition.Left) - [Int]::Abs($Script:PositionManagerSqlSchemaWindow.PositionOffSetLeft)
-                    $Script:SqlSchemaWindowForm.Definition.Top = [Int]::Abs($Script:MainWindowForm.Definition.Top) - [Int]::Abs($Script:PositionManagerSqlSchemaWindow.PositionOffSetTop)
-                    "SqlSchemaWindow Position: {0}x{1}, Dimensions: {2}x{3}, PositionManagerOffSet: {4}x{5} (Id:{6})" -f $Script:SqlSchemaWindowForm.Definition.Left, $Script:SqlSchemaWindowForm.Definition.Top, $Script:SqlSchemaWindowForm.Definition.Width, $Script:SqlSchemaWindowForm.Definition.Height, $Script:PositionManagerSqlSchemaWindow.PositionOffSetLeft, $Script:PositionManagerSqlSchemaWindow.PositionOffSetTop, $ActionId | Write-LogOutput -LogType VERBOSE2
-                    $Script:PositionManagerSqlSchemaWindow.Synchronizing = $false
+                    $Script:SqlSchemaWindowForm.Definition.Left = [Int]::Abs($Script:MainWindowForm.Definition.Left) - [Int]::Abs($Script:SqlSchemaWindowForm.PositionManager.PositionOffSetLeft)
+                    $Script:SqlSchemaWindowForm.Definition.Top = [Int]::Abs($Script:MainWindowForm.Definition.Top) - [Int]::Abs($Script:SqlSchemaWindowForm.PositionManager.PositionOffSetTop)
+                    "SqlSchemaWindow Position: {0}x{1}, Dimensions: {2}x{3}, PositionManagerOffSet: {4}x{5} (Id:{6})" -f $Script:SqlSchemaWindowForm.Definition.Left, $Script:SqlSchemaWindowForm.Definition.Top, $Script:SqlSchemaWindowForm.Definition.Width, $Script:SqlSchemaWindowForm.Definition.Height, $Script:SqlSchemaWindowForm.PositionManager.PositionOffSetLeft, $Script:SqlSchemaWindowForm.PositionManager.PositionOffSetTop, $ActionId | Write-LogOutput -LogType VERBOSE2
+                    $Script:SqlSchemaWindowForm.PositionManager.Synchronizing = $false
                 }, [System.Windows.Threading.DispatcherPriority]::Render)
         }
     })
@@ -135,8 +135,8 @@ $Script:MainWindowForm.Definition.Add_LocationChanged({
 #Find out if still needed
 #$Script:MainWindowForm.Definition.Add_SizeChanged({
 #        $_ | Show-EventInfo -LogType VERBOSE2
-#        if (Test-LogWindowOpen -and -not $Script:PositionManagerLogWindow.Synchronizing) {
-#            $Script:PositionManagerLogWindow.Synchronizing = $true
+#        if (Test-LogWindowOpen -and -not $Script:LogWindowForm.PositionManager.Synchronizing) {
+#            $Script:LogWindowForm.PositionManager.Synchronizing = $true
 #            $Script:MainWindowForm.Definition.Dispatcher.Invoke({
 #                    Update-LogWindowPosition
 #                }, [System.Windows.Threading.DispatcherPriority]::Render)

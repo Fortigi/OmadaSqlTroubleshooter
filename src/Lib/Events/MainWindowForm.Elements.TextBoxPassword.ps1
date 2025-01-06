@@ -3,20 +3,20 @@ $Script:MainWindowForm.Elements.TextBoxPassword.Add_LostFocus({
     if (![string]::IsNullOrWhiteSpace($Script:MainWindowForm.Elements.TextBoxUserName.Text)) {
 
         "Password set to: {0}" -f "***********" | Write-LogOutput -LogType DEBUG
-        if ($InvokeOmadaRestMethodParam.ContainsKey("Credential")) {
+        if ($Script:RunTimeData.RestMethodParam.ContainsKey("Credential")) {
             if (![string]::IsNullOrWhiteSpace($Script:MainWindowForm.Elements.TextBoxUserName.Text) -and ![string]::IsNullOrWhiteSpace($Script:MainWindowForm.Elements.TextBoxPassword.Password)) {
                 "Create/Update credential with username {0}" -f $Script:MainWindowForm.Elements.TextBoxUserName.Text | Write-LogOutput -LogType DEBUG
                 $Script:MainWindowForm.Elements.TextBoxUserName.Text | Invoke-ConfigSetting -Property "UserName"
-                $InvokeOmadaRestMethodParam.Credential = [System.Management.Automation.PSCredential]::new($Script:AppConfig.UserName, ($Script:MainWindowForm.Elements.TextBoxPassword.Password | ConvertTo-SecureString -AsPlainText -Force))
+                $Script:RunTimeData.RestMethodParam.Credential = [System.Management.Automation.PSCredential]::new($Script:AppConfig.UserName, ($Script:MainWindowForm.Elements.TextBoxPassword.Password | ConvertTo-SecureString -AsPlainText -Force))
             }
         }
         "Password set" | Write-LogOutput
         Test-ConnectionSettings
     }
     if ([string]::IsNullOrWhiteSpace($Script:MainWindowForm.Elements.TextBoxPassword.Password)) {
-        if ($InvokeOmadaRestMethodParam.ContainsKey("Credential")) {
+        if ($Script:RunTimeData.RestMethodParam.ContainsKey("Credential")) {
             "Clear credential because password is empty" | Write-LogOutput -LogType DEBUG
-            $InvokeOmadaRestMethodParam.Credential = $Null
+            $Script:RunTimeData.RestMethodParam.Credential = $Null
         }
         "Password cannot be empty!" | Write-LogOutput
     }

@@ -1,10 +1,10 @@
 $Script:MainWindowForm.Elements.ComboBoxSelectAuthenticationOption.Add_GotFocus({
         $_ | Show-EventInfo
         if ($null -eq $Script:MainWindowForm.Elements.ComboBoxSelectAuthenticationOption.SelectedItem) {
-            $Script:AuthenticationSet = $false
+            $Script:RunTimeConfig.AuthenticationSet = $false
         }
         else {
-            $Script:AuthenticationSet = $true
+            $Script:RunTimeConfig.AuthenticationSet = $true
         }
     })
 
@@ -14,7 +14,7 @@ $Script:MainWindowForm.Elements.ComboBoxSelectAuthenticationOption.Add_Selection
         Set-AuthenticationOption
         "Changed authentication option to: {0}" -f $Script:AppConfig.LastAuthentication | Write-LogOutput -LogType DEBUG
 
-        if ($Script:AuthenticationSet -and ![string]::IsNullOrWhiteSpace($Script:MainWindowForm.Elements.TextBoxURL.Text)) {
+        if ($Script:RunTimeConfig.AuthenticationSet -and ![string]::IsNullOrWhiteSpace($Script:MainWindowForm.Elements.TextBoxURL.Text)) {
             Set-OmadaUrl
         }
         Test-ConnectionSettings
@@ -29,7 +29,7 @@ $Script:MainWindowForm.Elements.ComboBoxSelectAuthenticationOption.Add_LostFocus
             Set-AuthenticationOption
             "Changed authentication option to: {0}" -f $Script:AppConfig.LastAuthentication | Write-LogOutput -LogType DEBUG
 
-            if ($Script:AuthenticationSet -and ![string]::IsNullOrWhiteSpace($Script:MainWindowForm.Elements.TextBoxURL.Text)) {
+            if ($Script:RunTimeConfig.AuthenticationSet -and ![string]::IsNullOrWhiteSpace($Script:MainWindowForm.Elements.TextBoxURL.Text)) {
                 Set-OmadaUrl
             }
             Test-ConnectionSettings

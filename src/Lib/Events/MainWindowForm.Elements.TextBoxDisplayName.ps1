@@ -2,20 +2,20 @@
 #         $_ | Show-EventInfo
 #         try {
 #
-#             if ($Script:CurrentSqlQuery.DisplayName.Split(" - ")[1] -eq $Script:MainWindowForm.Elements.TextBoxDisplayName.Text) {
+#             if ($Script:RunTimeData.CurrentSqlQuery.DisplayName.Split(" - ")[1] -eq $Script:MainWindowForm.Elements.TextBoxDisplayName.Text) {
 #                 "DisplayName not changed" | Write-LogOutput -LogType DEBUG
 #                 return
 #             }
 #             $QueryExists = $true
-#             if ($Script:MainWindowForm.Elements.TextBoxDisplayName.Text -notin $Script:QueryListCache.QueryList.Values) {
+#             if ($Script:MainWindowForm.Elements.TextBoxDisplayName.Text -notin $Script:RunTimeData.QueryListCache.QueryList.Values) {
 #                 "DisplayName not in cache" | Write-LogOutput -LogType DEBUG
 #                 $QueryExists = $false
 #             }
 #             if (!$QueryExists) {
-#                 $QueryUrl = '{0}/odata/dataobjects/C_P_SQLTROUBLESHOOTING?$filter=Deleted ne true and NAME eq ''{1}''' -f $Script:AppConfig.BaseUrl, $Script:MainWindowForm.Elements.TextBoxDisplayName.Text
-#                 "Validate if query with this name exists in Omada using queryUrl: {0}" -f $QueryUrl | Write-LogOutput -LogType DEBUG
-#                 $Body = $Null
-#                 $Method = "GET"
+#                 $Script:RunTimeData.RestMethodParam.Uri = '{0}/odata/dataobjects/C_P_SQLTROUBLESHOOTING?$filter=Deleted ne true and NAME eq ''{1}''' -f $Script:AppConfig.BaseUrl, $Script:MainWindowForm.Elements.TextBoxDisplayName.Text
+#                 "Validate if query with this name exists in Omada using queryUrl: {0}" -f $Script:RunTimeData.RestMethodParam.Uri | Write-LogOutput -LogType DEBUG
+#                 $Script:RunTimeData.RestMethodParam.Body = $Null
+#                 $Script:RunTimeData.RestMethodParam.Method = "GET"
 #                 $Result = Invoke-OmadaPSWebRequestWrapper
 #                 if (($Result.Value | Measure-Object).Count -le 0) {
 #                     $QueryExists = $false
@@ -40,7 +40,7 @@
 #         $_ | Show-EventInfo -LogType VERBOSE2
 #         try {
 
-#             if ($Script:CurrentSqlQuery.DisplayName.Split(" - ")[1] -eq $Script:MainWindowForm.Elements.TextBoxDisplayName.Text) {
+#             if ($Script:RunTimeData.CurrentSqlQuery.DisplayName.Split(" - ")[1] -eq $Script:MainWindowForm.Elements.TextBoxDisplayName.Text) {
 #                 $Script:TextboxDisplayNameChanged = $true
 #             }
 #             else {

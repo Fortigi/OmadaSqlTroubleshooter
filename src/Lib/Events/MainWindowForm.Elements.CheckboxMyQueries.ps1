@@ -8,9 +8,9 @@ $Script:MainWindowForm.Elements.CheckboxMyQueries.Add_Checked({
 
         $True | Invoke-ConfigSetting -Property "MyQueriesOnly"
 
-        $QueryUrl = "{0}/actusersettingsdlg.aspx?HIDEBACKARRICON=1" -f $Script:AppConfig.BaseUrl
-        $Body = $null
-        $Method = "GET"
+        $Script:RunTimeData.RestMethodParam.Uri = "{0}/actusersettingsdlg.aspx?HIDEBACKARRICON=1" -f $Script:AppConfig.BaseUrl
+        $Script:RunTimeData.RestMethodParam.Body = $null
+        $Script:RunTimeData.RestMethodParam.Method = "GET"
         $Result = Invoke-OmadaPSWebRequestWrapper
 
         if ($Result -match [regex]("identityUserName:.\S+")) {
