@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Monaco Editor</title>
+    <script src="./min/vs/loader.js"></script>
+    <style>
+        html,
+        body,
+        #editor {
+            height: 100%;
+            width: 100%;
+            margin: 0;
+            padding: 0;
+            overflow: hidden;
+        }
+    </style>
+</head>
+
+<body>
+    <div id="editor"></div>
+    <script>
+        require.config({ paths: { 'vs': './min/vs' } });
+        require(['vs/editor/editor.main', 'vs/basic-languages/sql/sql'], function (monaco, sql) {
+            editor = monaco.editor.create(document.getElementById('editor'), {
+                value: [].join('\n'),
+                language: 'sql',
+                automaticLayout: true,
+                wordWrap: 'on',
+                minimap: {
+                    enabled: false
+                }
+            });
+
+            const sqlKeywords = sql.language.keywords.map(keyword => ({
+                label: keyword.toUpperCase(),
+                kind: monaco.languages.CompletionItemKind.Keyword,
+                insertText: keyword,
+                sortText: `0_${keyword}`
+            }));
+            allSuggestions = [...sqlKeywords];
+
+            schemaItems = [];
+            tableItems = [];
+            columnItems = [];
+            window.setSchema = function (schema) {
+                console.log("Schema loaded:", schema);
+                for (const objectSchemaName in schema) {
+                    console.log("objectSchemaName:", objectSchemaName);
+                    schemaItems.push({
+                        label: objectSchemaName,
+                        kind: monaco.languages.CompletionItemKind.Struct,
+                        insertText: objectSchemaName
+                    });
+                    for (const tableName in schema[objectSchemaName]) {
+                        console.log("tableName:", tableName);
+                        const table = schema[objectSchemaName][tableName];
+                        tableItems.push({
+                            label: `${objectSchemaName}.${tableName}`,
+                            kind: monaco.languages.CompletionItemKind.Class,
+                            insertText: tableName
+                        });
+
+                        const columns = schema[objectSchemaName][tableName];
+                        if (Array.isArray(columns)) {
+                            columns.forEach(column => {
+                                console.log("column:", column);
+                                columnItems.push({
+                                    label: `${objectSchemaName}.${tableName}.${column}`,
+                                    kind: monaco.languages.CompletionItemKind.Field,
+                                    insertText: `${column}`
+                                });
+                            });
+                        } else {
+                            console.warn(`Table '${tableName}' has invalid columns:`, columns);
+                        }
+                    }
+                }
+                allSuggestions = [...allSuggestions, ...schemaItems, ...tableItems, ...columnItems];
+            };
+
+            //TODO: Implement a better way to handle the completion items
+            lastWord = null;
+            lastType = null;
+            monaco.languages.registerCompletionItemProvider('sql', {
+                triggerCharacters: [' ', '.', ',', '(', ')'],
+                provideCompletionItems: (model, position) => {
+                    const textUntilPosition = model.getValueInRange({
+                        startLineNumber: position.lineNumber,
+                        startColumn: 1,
+                        endLineNumber: position.lineNumber,
+                        endColumn: position.column
+                    });
+                    console.log("textUntilPosition", textUntilPosition);
+                    const word = model.getWordUntilPosition(position)
+                    console.log("word", word);
+                    console.log("lastWord", lastWord);
+
+                    const range = {
+                        startLineNumber: position.lineNumber,
+                        endLineNumber: position.lineNumber,
+                        startColumn: word.startColumn,
+                        endColumn: word.endColumn
+                    }
+                    console.log("range", range);
+                    if (null == lastType && null != lastWord && null != tableItems && null != schemaItems && schemaItems.map(s => s.name).includes(lastWord)) {
+                        lastType = "schema";
+                        console.log("lastType", lastType);
+                        console.log("lastWord", lastWord);
+                        lastWord = word.word;
+                        return {
+                            suggestions: tableItems.map(s => ({
+                                label: s.label,
+                                kind: s.kind,
+                                insertText: s.insertText,
+                                range: range
+                            }))
+                        };
+                    }
+                    else if (null != lastType && null != lastWord && null != columnItems && null != tableItems && tableItems.map(s => s.name).includes(lastWord)) {
+                        lastType = "table";
+                        console.log("lastType", lastType);
+                        console.log("lastWord", lastWord);
+                        lastWord = word.word;
+                        return {
+                            suggestions: columnItems.map(s => ({
+                                label: s.label,
+                                kind: s.kind,
+                                insertText: s.insertText,
+                                range: range
+                            }))
+                        };
+                    }
+                    else {
+                        lastWord = word.word;
+                        return {
+                            suggestions: allSuggestions.map(s => ({
+                                label: s.label,
+                                kind: s.kind,
+                                insertText: s.insertText,
+                                range: range
+                            }))
+                        };
+                    }
+                }
+            });
+        });
+    </script>
+</body>
+
+</html>

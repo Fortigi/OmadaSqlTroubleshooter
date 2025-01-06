@@ -1,0 +1,39 @@
+// Place your settings in this file to overwrite the default settings
+{
+    "csv-preview.separator": ";",
+    "diffEditor.ignoreTrimWhitespace": true,
+    "editor.autoClosingBrackets": "never",
+    "editor.formatOnType": true,
+    "editor.renderControlCharacters": true,
+    "editor.renderWhitespace": "all",
+    "editor.suggestSelection": "first",
+    "files.autoGuessEncoding": true,
+    "files.trimTrailingWhitespace": true,
+    "formatFiles.extensionsToInclude": "ps1,psm1,psd1,cs,vb,json",
+    "git.autofetch": true,
+    "git.enableSmartCommit": true,
+    "git.ignoreMissingGitWarning": true,
+    "git.ignoreRebaseWarning": true,
+    "git.untrackedChanges": "separate",
+    "powershell.buttons.showPanelMovementButtons": true,
+    "powershell.codeFormatting.alignPropertyValuePairs": true,
+    "powershell.codeFormatting.autoCorrectAliases": true,
+    "powershell.codeFormatting.newLineAfterCloseBrace": true,
+    "powershell.codeFormatting.preset": "Stroustrup",
+    "powershell.codeFormatting.trimWhitespaceAroundPipe": true,
+    "powershell.codeFormatting.useCorrectCasing": true,
+    "powershell.codeFormatting.whitespaceAroundOperator": true,
+    "powershell.enableProfileLoading": false,
+    "powershell.integratedConsole.focusConsoleOnExecute": false,
+    "powershell.powerShellDefaultVersion": "PowerShell (x64)",
+    "powershell.scriptAnalysis.enable": true,
+    "powershell.startAutomatically": true,
+    "[powershell]": {
+        "debug.saveBeforeStart": "nonUntitledEditorsInActiveGroup",
+        "editor.semanticHighlighting.enabled": false,
+        "editor.wordSeparators": "`~!@#$%^&*()=+[{]}\\|;:'\",.<>/?"
+    },
+    "cSpell.words": [
+        "Omada"
+    ]
+}

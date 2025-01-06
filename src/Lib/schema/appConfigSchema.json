@@ -1,0 +1,112 @@
+[
+  {
+    "Name": "BaseUrl",
+    "Type": "String"
+  },
+  {
+    "Name": "CurrentSqlQuery",
+    "Type": "PSObject",
+    "Attributes": [
+      {
+        "Name": "DoId",
+        "Type": "Int"
+      },
+      {
+        "Name": "DisplayName",
+        "Type": "String"
+      },
+      {
+        "Name": "FullName",
+        "Type": "String"
+      }
+    ]
+  },
+  {
+    "Name": "LastOutputFolder",
+    "Type": "String"
+  },
+  {
+    "Name": "LastExtension",
+    "Type": "String"
+  },
+  {
+    "Name": "LastAuthentication",
+    "Type": "String",
+    "DefaultValue": "Browser"
+  },
+  {
+    "Name": "UserName",
+    "Type": "String"
+  },
+  {
+    "Name": "LogLevel",
+    "Type": "String",
+    "DefaultValue": "INFO"
+  },
+  {
+    "Name": "MyQueriesOnly",
+    "Type": "Bool"
+  },
+  {
+    "Name": "IdentityUserName",
+    "Type": "String"
+  },
+  {
+    "Name": "CurrentDataConnection",
+    "Type": "PSObject",
+    "Attributes": [
+      {
+        "Name": "DoId",
+        "Type": "Int"
+      },
+      {
+        "Name": "DisplayName",
+        "Type": "String"
+      },
+      {
+        "Name": "FullName",
+        "Type": "String"
+      }
+    ]
+  },
+  {
+    "Name": "LogWindowFormOpen",
+    "Type": "String"
+  },
+  {
+    "Name": "SqlSchemaWindowFormOpen",
+    "Type": "Bool"
+  },
+  {
+    "Name": "MainWindowPosition",
+    "Type": "String"
+  },
+  {
+    "Name": "LogWindowPosition",
+    "Type": "String"
+  },
+  {
+    "Name": "SqlSchemaWindowPosition",
+    "Type": "String"
+  },
+  {
+    "Name": "MainWindowSize",
+    "Type": "String"
+  },
+  {
+    "Name": "LogWindowSize",
+    "Type": "String"
+  },
+  {
+    "Name": "SqlSchemaWindowSize",
+    "Type": "String"
+  },
+  {
+    "Name": "LogWindowWordWrap",
+    "Type": "Bool"
+  },
+  {
+    "Name": "CheckboxConsoleLog",
+    "Type": "Bool"
+  }
+]

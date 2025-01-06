@@ -1,0 +1,162 @@
+parameters:
+  - name: buildVersion
+    type: string
+    default: '0.0.0.0'
+
+trigger:
+- None
+
+pool:
+  name: PH
+
+variables:
+  buildConfiguration: 'Pipeline'
+  buildVersion: 'Will be set dynamically'
+  year: 'Will be set dynamically'
+  revision: $[counter(format('{0:dd}', pipeline.startTime), 1)]
+
+stages:
+- stage: BuildStage
+  jobs:
+  - job: BuildJob
+    steps:
+    - task: PowerShell@2
+      displayName: 'Install Modules'
+      name: "InstallModules"
+      inputs:
+        targetType: 'inline'
+        script: |
+          "Validate Modules" | Write-Host
+          $Modules = Get-Module -ListAvailable
+          if ("Pester" -notin $Modules.Name) {
+            "Install Pester" | Write-Host
+            Install-Module -Name Pester -Scope CurrentUser -Force
+          }
+          if ("psake" -notin $Modules.Name) {
+            "Install psake" | Write-Host
+            Install-Module -Name psake -Scope CurrentUser -Force
+          }
+          if ("PSDeploy" -notin $Modules.Name) {
+            "Install PSDeploy" | Write-Host
+            Install-Module -Name PSDeploy -Scope CurrentUser -Force
+          }
+          if ("PSScriptAnalyzer" -notin $Modules.Name) {
+            "Install PSScriptAnalyzer" | Write-Host
+            Install-Module -Name PSScriptAnalyzer -Scope CurrentUser -Force
+          }
+        pwsh: true
+        failOnStderr: true
+      condition: succeeded()
+
+    - task: PowerShell@2
+      displayName: 'Preparing Build Number'
+      name: BuildVersioning
+      inputs:
+        targetType: 'inline'
+        script: |
+          $currentDate = $(Get-Date)
+          $year = $currentDate.Year
+          $month = $currentDate.Month
+          $day = $currentDate.Day
+          "Current date: {0}" -f $currentDate | Write-Host
+          "Current year: {0}" -f $year | Write-Host
+          "Current month: {0}" -f $month | Write-Host
+          "Current day: {0}" -f $day | Write-Host
+          "Revision: {0}" -f $env:revision | Write-Host
+          $versionString = "{0:d4}.{1:d2}.{2:d2}.{3}" -f $year,$month,$day,($env:revision -eq $null ? 0 : $env:revision)
+          "Version: {0}" -f $versionString | Write-Host
+          Write-Host "##vso[task.setvariable variable=buildVersion;isOutput=true]$versionString"
+          Write-Host "##vso[task.setvariable variable=year;isOutput=true]$year"
+        pwsh: true
+        failOnStderr: true
+      condition: succeeded()
+
+    - task: PowerShell@2
+      displayName: 'Build Module'
+      name: "BuildTask"
+      inputs:
+        filePath: '$(System.DefaultWorkingDirectory)/Build/build.ps1'
+        arguments: ' -Task Build -BuildVersion $(BuildVersioning.buildVersion)'
+        pwsh: true
+        failOnStderr: true
+      condition: succeeded()
+
+    - task: PublishPipelineArtifact@1
+      displayName: 'Publish Build Output'
+      inputs:
+        targetPath: '$(System.DefaultWorkingDirectory)/buildoutput'
+        artifactName: 'BuildOutput'
+      condition: succeeded()
+
+- stage: PackageStage
+  dependsOn: [BuildStage]
+  jobs:
+  - job: 'Create_Artifacts'
+    variables:
+      buildVersion: $[ stageDependencies.BuildStage.BuildJob.outputs['BuildVersioning.buildVersion'] ]
+      year: $[ stageDependencies.BuildStage.BuildJob.outputs['BuildVersioning.year'] ]
+    steps:
+    - checkout: self
+      path: 'OmadaSqlTroubleshooter'
+      persistCredentials: true
+      clean: true
+
+    - task: DownloadPipelineArtifact@2
+      displayName: 'Download Build Output'
+      inputs:
+        artifactName: 'BuildOutput'
+        targetPath: '$(System.DefaultWorkingDirectory)/buildoutput'
+
+    - task: NuGetCommand@2
+      displayName: 'Pack project'
+      inputs:
+        command: pack
+        packagesToPack: '$(System.DefaultWorkingDirectory)/OmadaSqlTroubleshooter.nuspec'
+        packDestination: '$(Build.ArtifactStagingDirectory)'
+        versioningScheme: byEnvVar
+        versionEnvVar: buildVersion
+        buildProperties: 'VERSION=$(buildVersion);YEAR=$(year)'
+      condition: succeededOrFailed()
+
+    - task: NuGetCommand@2
+      displayName: 'NuGet push'
+      inputs:
+        command: push
+        nuGetFeedType: internal
+        publishVstsFeed: 'Fortigi-Generic/OmadaSqlTroubleshooter'
+        allowPackageConflicts: true
+        packagesToPush: '$(Build.ArtifactStagingDirectory)/**/*.nupkg;!$(Build.ArtifactStagingDirectory)/**/*.symbols.nupkg'
+      condition: succeeded()
+      continueOnError: false
+
+    # - task: CmdLine@2
+    #   inputs:
+    #     script: |
+    #       echo "Create tag: $(buildVersion)"
+    #       git config --global user.email "mark@fortigi.nl"
+    #       git config --global user.name "Mark van Eijken"
+    #       git tag -a v$(buildVersion) -m "Release version $(buildVersion)"
+    #       git push https://user:$(System.AccessToken)@dev.azure.com/fortigi/Fortigi-Generic/_git/$(Build.Repository.Name) refs/tags/v$(buildVersion)
+    #     failOnStderr: true
+    #   displayName: 'Create Tag'
+    #   condition: succeeded()
+    #   enabled: true
+    #   env:
+    #     SYSTEM_ACCESSTOKEN: $(System.AccessToken)
+    - task: CmdLine@2
+      inputs:
+        script: |
+          echo "Create tag: $(buildVersion)"
+          git config --global user.email "mark@fortigi.nl"
+          git config --global user.name "Mark van Eijken"
+          git tag -a v$(buildVersion) -m "Release version $(buildVersion)"
+          git push origin refs/tags/v$(buildVersion) 2>stderr.log
+          type stderr.log
+        failOnStderr: false
+        workingDirectory: $(Build.SourcesDirectory)
+      displayName: 'Create Tag'
+      condition: succeeded()
+      enabled: true
+
+
+

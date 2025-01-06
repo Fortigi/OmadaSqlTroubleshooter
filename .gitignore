@@ -1,0 +1,29 @@
+.vscode/*
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+!.vscode/extensions.json
+!.vscode/*.code-snippets
+
+# Local History for Visual Studio Code
+.history/
+
+# Built Visual Studio Code Extensions
+*.vsix
+.vs
+
+# C# Exclusions
+src/bin/Debug/**
+src/obj/**
+src/lib/ui/Debug/**
+src/lib/ui/obj/**
+
+# OmadaSqlTroubleshooter exclusions
+!.src/bin/Microsoft.Web.WebView2.Core.dll
+!.src/bin/Microsoft.Web.WebView2.WinForms.dll
+!.src/bin/Microsoft.Web.WebView2.Wpf.dll
+!.src/bin/WebView2Loader.dll
+!.src/Monaco/**
+OmadaSqlTroubleshooter.json
+**/test.ps1
+buildoutput/**
