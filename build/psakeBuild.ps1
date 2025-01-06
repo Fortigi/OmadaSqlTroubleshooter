@@ -222,7 +222,7 @@ Task Build -depends Test {
         "Get WebView2 from NuGet (this might take a minute or two to complete)" | Write-Host
         $PackageTempFolder = New-Item (Join-Path $env:TEMP -ChildPath "OmadaSqlTroubleShooter") -ItemType Directory -Force
         $WebView2DllsDownloaded = $false
-        Wait-Debugger
+
         try {
             $Package = Save-Package Microsoft.Web.WebView2 -minimumVersion 1.0.2903.40 -Path $PackageTempFolder.FullName -Force -Source NuGet
             $WebView2DllsDownloaded = $true
