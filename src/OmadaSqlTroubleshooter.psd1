@@ -101,7 +101,7 @@
         PSData = @{
 
             # Tags applied to this module. These help with module discovery in online galleries.
-            Tags       = 'Omada'
+            Tags       = 'Windows' ,'Omada', 'Sql'
 
             # A URL to the license for this module.
             LicenseUri = 'https://github.com/Fortigi/OmadaSqlTroubleshooter/blob/main/LICENSE'
