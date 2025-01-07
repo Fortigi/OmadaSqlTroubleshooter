@@ -173,7 +173,7 @@ This cmdlet supports the common parameters: -Debug, -ErrorAction, -ErrorVariable
 
 [`OmadaWeb.PS`](https://github.com/Fortigi/OmadaWeb.PS)
 
-[Omada Documentation](https://documentation.omadaidentity.com/)
+['Omada Documentation'](https://documentation.omadaidentity.com/)
 ## LICENSE
 
 This project is licensed under the MIT License. See the [LICENSE](LICENSE) file for details.
