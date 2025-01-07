@@ -1,3 +1,5 @@
+#requires -Module OmadaWeb.PS
+#requires -Version 7.0
 [System.Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSUseDeclaredVarsMoreThanAssignments', 'WebViewInstalled', Justification = 'The variable is used, but script analyzer does not recognize it')]
 PARAM()
 
@@ -41,4 +43,4 @@ if (!$WebViewInstalled) {
 Test-Shortcut
 
 # Export all the functions
-Export-ModuleMember -Function @("Invoke-OmadaSqlTroubleshooter" , "Set-OmadaSqlTroubleshooterShortcut")
+#Export-ModuleMember -Function @("Invoke-OmadaSqlTroubleshooter" , "Set-OmadaSqlTroubleshooterShortcut")

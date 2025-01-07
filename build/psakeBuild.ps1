@@ -93,7 +93,9 @@ Task Build -depends Test {
 
     }
     $ModulePsd1 = Import-PowerShellDataFile (Join-Path $ModuleSource -ChildPath ("{0}.psd1" -f $ModuleName))
-    $ModulePsd1.FunctionsToExport = $PublicModules
+    $ModulePsd1.CmdletsToExport = @()
+    $ModulePsd1.AliasesToExport = @()
+
 
 
     try {
@@ -151,11 +153,18 @@ Task Build -depends Test {
     $HeaderContent += New-HeaderRow -Text  ("Version: {0}" -f $NewVersion.ToString()) -Length $Length -FillChar " "
     $HeaderContent += New-HeaderRow -Text  ("Copyright Fortigi (C) {0}" -f $Date.ToString("yyyy")) -Length $Length -FillChar " "
     $HeaderContent += New-HeaderRow -Text  "" -Length $Length -FillChar "#"
-    $HeaderContent += "`n`n"
+    $HeaderContent += "`n"
+    $HeaderContent += '#requires -Module OmadaWeb.PS'
+    $HeaderContent += "`n"
+    $HeaderContent += '#requires -Version 7.0'
+    $HeaderContent += "`n"
 
     $OutputDirFile = Join-Path -Path $OutputDir -ChildPath ("{0}.psm1" -f $ModuleName)
 
-    $ModuleFileContent = Get-Content -Path "$ModuleSource\OmadaSqlTroubleShooter.psm1" -Encoding UTF8 -ErrorAction Stop -Raw
+    $ModuleFileContent = Get-Content -Path "$ModuleSource\OmadaSqlTroubleShooter.psm1" -Encoding UTF8 -ErrorAction Stop
+    $ModuleFileContent = $ModuleFileContent | Where-Object { $_ -notmatch '^\s*#requires' -and $_ -notmatch '^\s*#' }
+    $ModuleFileContent = ($ModuleFileContent|Out-String).Trim()
+
     #$ModuleFileContent = $ModuleFileContent -replace "\`$Private.*-Recurse\)", "`$Private = @()"
     #$ModuleFileContent = $ModuleFileContent -replace "^\`$Public.*", "`$Public = `@(Get-ChildItem -Path `"`$PSScriptRoot\Lib\Functions\Functions.ps1`" -Recurse)"
 

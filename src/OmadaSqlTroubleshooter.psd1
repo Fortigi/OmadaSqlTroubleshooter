@@ -12,31 +12,30 @@
     # RootModule = ''
 
     # Supported PSEditions
-    CompatiblePSEditions = @(
-        'Desktop',
+    CompatiblePSEditions  = @(
         'Core'
     )
 
     # Version number of this module.
-    ModuleVersion        = '1.0'
+    ModuleVersion         = '1.0'
 
     # ID used to uniquely identify this module
-    GUID                 = '7a64612a-e175-429f-be88-d9e525d865e2'
+    GUID                  = '7a64612a-e175-429f-be88-d9e525d865e2'
 
     # Author of this module
-    Author               = 'Mark van Eijken'
+    Author                = 'Mark van Eijken'
 
     # Company or vendor of this module
-    CompanyName          = 'Fortigi'
+    CompanyName           = 'Fortigi'
 
     # Copyright statement for this module
-    Copyright            = '(C) 2025 Fortigi All rights reserved.'
+    Copyright             = '(C) 2025 Fortigi All rights reserved.'
 
     # Description of the functionality provided by this module
-    Description          = 'This module contains the Omada Sql Troubleshooter application.'
+    Description           = 'This module contains the Omada Sql Troubleshooter application.'
 
     # Minimum version of the Windows PowerShell engine required by this module
-    PowerShellVersion    = '5.1'
+    PowerShellVersion     = '7.0'
 
     # Name of the Windows PowerShell host required by this module
     # PowerShellHostName = ''
@@ -51,10 +50,12 @@
     # CLRVersion = ''
 
     # Processor architecture (None, X86, Amd64) required by this module
-    # ProcessorArchitecture = ''
+    ProcessorArchitecture = 'Amd64'
 
     # Modules that must be imported into the global environment prior to importing this module
-    # RequiredModules = @()
+    RequiredModules       = @(
+        'OmadaWeb.PS'
+    )
 
     # Assemblies that must be loaded prior to importing this module
     # RequiredAssemblies = @()
@@ -69,23 +70,24 @@
     # FormatsToProcess = @()
 
     # Modules to import as nested modules of the module specified in RootModule/ModuleToProcess
-    NestedModules        = @(
+    NestedModules         = @(
         'OmadaSqlTroubleShooter.psm1'
     )
 
     # Functions to export from this module
-    FunctionsToExport    = @(
-        'Invoke-OmadaSqlTroubleshooter'
+    FunctionsToExport     = @(
+        'Invoke-OmadaSqlTroubleshooter',
+        'Set-OmadaSqlTroubleshooterShortcut'
     )
 
     # Cmdlets to export from this module
-    CmdletsToExport      = '*'
+    CmdletsToExport       = @()
 
     # Variables to export from this module
-    VariablesToExport    = '*'
+    # VariablesToExport    = '*'
 
     # Aliases to export from this module
-    AliasesToExport      = '*'
+    AliasesToExport       = @()
 
     # List of all modules packaged with this module
     # ModuleList = @()
@@ -94,12 +96,12 @@
     # FileList = @()
 
     # Private data to pass to the module specified in RootModule/ModuleToProcess
-    PrivateData          = @{
+    PrivateData           = @{
 
         PSData = @{
 
             # Tags applied to this module. These help with module discovery in online galleries.
-            Tags       = 'Omada'
+            Tags       = 'Windows' ,'Omada', 'Sql'
 
             # A URL to the license for this module.
             LicenseUri = 'https://github.com/Fortigi/OmadaSqlTroubleshooter/blob/main/LICENSE'
