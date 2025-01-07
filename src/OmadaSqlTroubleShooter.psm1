@@ -43,4 +43,4 @@ if (!$WebViewInstalled) {
 Test-Shortcut
 
 # Export all the functions
-Export-ModuleMember -Function @("Invoke-OmadaSqlTroubleshooter" , "Set-OmadaSqlTroubleshooterShortcut")
+#Export-ModuleMember -Function @("Invoke-OmadaSqlTroubleshooter" , "Set-OmadaSqlTroubleshooterShortcut")
