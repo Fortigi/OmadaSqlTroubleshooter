@@ -50,7 +50,11 @@ This module requires:
 - Windows operating system;
 - PowerShell 7;
 - [OmadaWeb.PS PowerShell Module](https://www.powershellgallery.com/packages/omadaweb.ps);
+- [Microsoft Edge WebView2](https://developer.microsoft.com/en-us/microsoft-edge/webview2);
 - Omada Identity Cloud with OData enabled for the C_P_SQLTROUBLESHOOTING data object type.
+
+> [!NOTE] If you are not able to install Microsoft Edge Webview2 you can download the Fixed Version x64 bit from [here](https://developer.microsoft.com/en-us/microsoft-edge/webview2). Extract the Cab file using e.g. 7-Zip, copy the contents from folder ```'Microsoft.WebView2.FixedVersionRuntime.xxxx.x64'``` to ```%LOCALAPPDATA%\OmadaSqlTroubleshooter\bin\Webview2Runtime```. The contents of the target folder should now like as shown in the image below.
+> <br><img src="./images/webview2.png" width="300" height="300" alt="Webview2Runtime folder"><br>
 
 ### Importing the Module
 

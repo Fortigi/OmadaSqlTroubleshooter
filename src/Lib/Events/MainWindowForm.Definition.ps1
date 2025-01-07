@@ -49,6 +49,9 @@ $Script:MainWindowForm.Definition.Add_Loaded({
             }
 
             $Script:Webview.EdgeWebview2RuntimePath = Join-Path $Script:RunTimeConfig.ModuleFolder -ChildPath "bin\Webview2Runtime"
+            if(!(Test-Path ($Script:WebView.EdgeWebview2RuntimePath ) -PathType Container)) {
+                $Script:Webview.EdgeWebview2RuntimePath = Join-Path ([System.Environment]::GetFolderPath([System.Environment+SpecialFolder]::LocalApplicationData)) -ChildPath "OmadaSqlTroubleShooter\bin\Webview2Runtime"
+            }
             if ((Test-Path -Path $Script:Webview.EdgeWebview2RuntimePath -PathType Container) -and (Test-Path -Path (Join-Path $Script:Webview.EdgeWebview2RuntimePath -ChildPath "msedgewebview2.exe") -PathType Leaf)) {
                 $Script:Webview.Environment = [Microsoft.Web.WebView2.Core.CoreWebView2Environment]::CreateAsync($Script:Webview.EdgeWebview2RuntimePath, $Script:Webview.UserDataFolder).GetAwaiter().GetResult()
             }

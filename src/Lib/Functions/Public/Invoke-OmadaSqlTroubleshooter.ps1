@@ -16,7 +16,7 @@ function Invoke-OmadaSqlTroubleshooter {
     $ApplicationName = "OmadaSqlTroubleshooter"
 
     $Script:RunTimeConfig = @{
-        ScriptName         = "OmadaSqlTroubleshooter.ps1"
+        ScriptName         = "OmadaSqlTroubleshooter"
         ApplicationTitle   = ""
         ModuleFolder       = Split-Path (Get-Module OmadaSqlTroubleShooter).Path
         AppDataFolder      = Join-Path ([System.Environment]::GetFolderPath([System.Environment+SpecialFolder]::ApplicationData)) -ChildPath $ApplicationName

@@ -6,7 +6,7 @@ function Initialize-OmadaSqlTroubleShooter {
         Push-Location $Script:RunTimeConfig.ModuleFolder
 
         $Script:RunTimeConfig.Logging.AppLogObject.Add("Application log initialized`r`n")
-        $Script:RunTimeConfig.ConfigFile.Name = $Script:RunTimeConfig.ScriptName -replace ".ps1", ".json"
+        $Script:RunTimeConfig.ConfigFile.Name = $($Script:RunTimeConfig.ScriptName -replace ".ps1", ""), ".json" -join ""
         If (Test-Path $Script:RunTimeConfig.AppDataFolder -PathType Container) {
             New-Item (Join-Path $Script:RunTimeConfig.AppDataFolder -ChildPath "config") -ItemType Directory -Force | Out-Null
             $Script:RunTimeConfig.ConfigFile.Path = (Join-Path $($Script:RunTimeConfig.AppDataFolder) -ChildPath "config\$($Script:RunTimeConfig.ConfigFile.Name)")
