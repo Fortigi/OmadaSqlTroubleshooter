@@ -36,7 +36,7 @@
     Description          = 'This module contains the Omada Sql Troubleshooter application.'
 
     # Minimum version of the Windows PowerShell engine required by this module
-    PowerShellVersion    = '5.1'
+    PowerShellVersion    = '7.0'
 
     # Name of the Windows PowerShell host required by this module
     # PowerShellHostName = ''
@@ -54,7 +54,9 @@
     # ProcessorArchitecture = ''
 
     # Modules that must be imported into the global environment prior to importing this module
-    # RequiredModules = @()
+    RequiredModules = @(
+        'OmadaWeb.PS'
+    )
 
     # Assemblies that must be loaded prior to importing this module
     # RequiredAssemblies = @()
