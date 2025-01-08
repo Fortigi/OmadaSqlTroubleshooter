@@ -53,9 +53,7 @@
     ProcessorArchitecture = 'Amd64'
 
     # Modules that must be imported into the global environment prior to importing this module
-    RequiredModules       = @(
-        'OmadaWeb.PS'
-    )
+    # RequiredModules       = @()
 
     # Assemblies that must be loaded prior to importing this module
     # RequiredAssemblies = @()
@@ -101,7 +99,7 @@
         PSData = @{
 
             # Tags applied to this module. These help with module discovery in online galleries.
-            Tags       = 'Windows' ,'Omada', 'Sql'
+            Tags       = 'Windows' , 'Omada', 'Sql'
 
             # A URL to the license for this module.
             LicenseUri = 'https://github.com/Fortigi/OmadaSqlTroubleshooter/blob/main/LICENSE'
