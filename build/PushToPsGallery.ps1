@@ -1,12 +1,13 @@
 ﻿PARAM(
     [string]$SystemDefaultWorkingDirectory,
-    [string]$PsGalleryKey
+    [string]$PsGalleryKey,
+    [string]$BuildPath
 )
 
 [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12, [Net.SecurityProtocolType]::Tls11, [Net.SecurityProtocolType]::Tls13
 
 try {
-    "Folder tree for SystemDefaultWorkingDirectory:"
+    "Folder tree for SystemDefaultWorkingDirectory:" | Write-Host
     Get-ChildItem "$SystemDefaultWorkingDirectory" -Recurse | ForEach-Object { Write-Host $_.FullName }
 }
 catch {
@@ -14,19 +15,15 @@ catch {
 }
 
 try {
-    "Install OmadaWeb.PS"
-    if (!(Get-Module -Name "OmadaWeb.PS" -ListAvailable)) { Install-Module -Name "OmadaWeb.PS" -Scope CurrentUser -Force }
-}
-catch {
-    Write-Error "Failed to install OmadaWeb.PS: $_"
-    exit 1
-}
-
-try {
-    "Publish-Module to PSGallery"
-    Publish-Module -Path "$SystemDefaultWorkingDirectory/_OmadaSqlTroubleshooter Build/BuildOutput/OmadaSqlTroubleshooter" -NuGetApiKey "$PsGalleryKey" -Verbose
+    "Publish-Module to PSGallery" | Write-Host
+    $SourcePath = "{0}/_Artifact/{1}" -f $SystemDefaultWorkingDirectory,$BuildPath.TrimStart('/')
+    Publish-Module -Path $SourcePath -NuGetApiKey "$PsGalleryKey" -Verbose
 }
 catch {
     Write-Error "Failed to deploy to PowerShell Gallery: $_"
     exit 1
 }
+
+
+
+
