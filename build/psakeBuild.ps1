@@ -261,6 +261,8 @@ Task Build -Depends Test {
 
 Task ImportModule -Depends Build {
 
+    Test-ModuleManifest -Path "$OutputDir\$ModuleName.psd1"
+
     $Test = Import-Module "$OutputDir\$ModuleName.psd1" -Force -PassThru
     if ($Test) {
         "Module loaded successfully" | Write-Verbose
