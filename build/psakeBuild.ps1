@@ -10,8 +10,8 @@ Properties {
 }
 
 
-Task default -depends Analyze, Test, Build, ImportModule
-Task DeployOnly -depends Build, Deploy
+Task default -Depends Analyze, Test, Build, ImportModule
+Task DeployOnly -Depends Build, Deploy
 
 Task Analyze {
 
@@ -27,10 +27,10 @@ Task Analyze {
     }
 }
 
-Task Test -depends Analyze {
+Task Test -Depends Analyze {
 }
 
-Task Build -depends Test {
+Task Build -Depends Test {
 
     $FormattingSettings = @{
         IncludeRules = @("PSPlaceOpenBrace", "PSUseConsistentIndentation", "PsAvoidUsingCmdletAliases", "PSUseConsistentWhitespace", "PSAlignAssignmentStatement", "PSPlaceCloseBrace")
@@ -127,15 +127,23 @@ Task Build -depends Test {
 
     $SerializedContent = $PrivateData.GetEnumerator() | ForEach-Object {
         if ($_ -is [System.Collections.DictionaryEntry]) {
+            $String = "$($_.Key) = @{"
             if ($_.Value -is [System.Collections.Hashtable]) {
                 # Serialize nested hashtables into a string
-                "$($_.Key) = @{`n$($_.Value.GetEnumerator() | ForEach-Object {`"$($_.Key) = `'$($_.Value)`'`n"})"
-            }
-            else {
-                "$($_.Key) = `'$($_.Value)`'"
+                $_.Value.GetEnumerator() | ForEach-Object {
+                    $String += "`n"
+                    if (($_.Value | Measure-Object).Count -gt 1) {
+                        $String += "{0} = @({1})" -f $_.Key, (($_.Value | ForEach-Object { "`"{0}`"" -f $_ }) -join ",")
+                    }
+                    else {
+                        $String += "{0} = `"{1}`"" -f $($_.Key) , $($_.Value)
+                    }
+                }
+                return $String
             }
         }
     }
+
     $ModulePsd1Path = (Join-Path $OutputDir -ChildPath ("{0}.psd1" -f $ModuleName))
     New-ModuleManifest -Path $ModulePsd1Path @ModulePsd1
     (Get-Content -Path $ModulePsd1Path) -replace 'PSData = @{', $SerializedContent | Set-Content -Path $ModulePsd1Path -Encoding UTF8 -Force
@@ -163,7 +171,7 @@ Task Build -depends Test {
 
     $ModuleFileContent = Get-Content -Path "$ModuleSource\OmadaSqlTroubleShooter.psm1" -Encoding UTF8 -ErrorAction Stop
     $ModuleFileContent = $ModuleFileContent | Where-Object { $_ -notmatch '^\s*#requires' -and $_ -notmatch '^\s*#' }
-    $ModuleFileContent = ($ModuleFileContent|Out-String).Trim()
+    $ModuleFileContent = ($ModuleFileContent | Out-String).Trim()
 
     #$ModuleFileContent = $ModuleFileContent -replace "\`$Private.*-Recurse\)", "`$Private = @()"
     #$ModuleFileContent = $ModuleFileContent -replace "^\`$Public.*", "`$Public = `@(Get-ChildItem -Path `"`$PSScriptRoot\Lib\Functions\Functions.ps1`" -Recurse)"
@@ -233,7 +241,7 @@ Task Build -depends Test {
         $WebView2DllsDownloaded = $false
 
         try {
-            $Package = Save-Package Microsoft.Web.WebView2 -minimumVersion 1.0.2903.40 -Path $PackageTempFolder.FullName -Force -Source NuGet
+            $Package = Save-Package Microsoft.Web.WebView2 -MinimumVersion 1.0.2903.40 -Path $PackageTempFolder.FullName -Force -Source NuGet
             $WebView2DllsDownloaded = $true
         }
         catch {
@@ -251,12 +259,12 @@ Task Build -depends Test {
     }
 }
 
-Task ImportModule -depends Build {
+Task ImportModule -Depends Build {
 
     $Test = Import-Module "$OutputDir\$ModuleName.psd1" -Force -PassThru
     if ($Test) {
         "Module loaded successfully" | Write-Verbose
-        Remove-Module -name $Test.Name -Force
+        Remove-Module -Name $Test.Name -Force
     }
     else {
         "Module failed to load" | Write-Error -ErrorAction Stop
