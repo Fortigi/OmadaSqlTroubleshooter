@@ -1,9 +1,10 @@
 ﻿PARAM(
     [string]$SystemDefaultWorkingDirectory,
-    [string]$PAT
+    [string]$PAT,
+    [string]$ReleaseDescription
 )
 
-[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12,[Net.SecurityProtocolType]::Tls11,[Net.SecurityProtocolType]::Tls13
+[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12, [Net.SecurityProtocolType]::Tls11, [Net.SecurityProtocolType]::Tls13
 
 try {
     "Current path {0}" -f (Get-Location).Path | Write-Host
@@ -68,7 +69,6 @@ catch {
     exit 1
 }
 
-
 try {
     "Copy contents to _Fortigi_OmadaSqlTroubleshooter" | Write-Host
     Copy-Item -Path "$SystemDefaultWorkingDirectory\_OmadaSqlTroubleshooter\*" -Destination "$SystemDefaultWorkingDirectory\_Fortigi_OmadaSqlTroubleshooter" -Recurse -Force -PassThru -Exclude ".git"
@@ -80,7 +80,8 @@ catch {
 
 try {
     git add .
-    git commit -m "Release version $latestTag"
+    $commitMessage = if (![string]::IsNullOrWhiteSpace($ReleaseDescription)) { $ReleaseDescription } else { "Release version $latestTag" }
+    git commit -m $commitMessage
     git push -f origin main
 }
 catch {
@@ -89,7 +90,12 @@ catch {
 }
 
 try {
-    gh release create $latestTag --title "Release $latestTag" --notes "Release $latestTag"
+    $existingTag = gh release view $latestTag --json tagName 2>$null
+    if ($existingTag) {
+        gh release delete $latestTag --yes
+    }
+    $releaseNotes = if (![string]::IsNullOrWhiteSpace($ReleaseDescription)) { $ReleaseDescription } else { "Release $latestTag" }
+    gh release create $latestTag --title "Release $latestTag" --notes $releaseNotes
 }
 catch {
     Write-Error "Git or release operations failed: $_"
