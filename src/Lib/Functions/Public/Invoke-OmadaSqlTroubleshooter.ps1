@@ -1,8 +1,46 @@
 #requires -Module OmadaWeb.PS
 #requires -Version 7.0
+
+<#
+.SYNOPSIS
+Starts the Omada SQL Troubleshooter application.
+
+.DESCRIPTION
+The `Invoke-OmadaSqlTroubleshooter` function initializes and starts the Omada SQL Troubleshooter application.
+This application is used to manage and execute SQL queries stored in the SQL Troubleshooting section in Omada Identity Suite.
+
+.PARAMETER LogLevel
+Specifies the log level for the application. Acceptable values are INFO, DEBUG, VERBOSE, WARNING, ERROR, FATAL and VERBOSE2.
+
+.PARAMETER Reset
+Resets the stored configuration to default.
+
+.PARAMETER LogToConsole
+Outputs logging to the console.
+
+.EXAMPLE
+Invoke-OmadaSqlTroubleshooter
+
+Starts the Omada SQL Troubleshooter application with default settings.
+
+.EXAMPLE
+Invoke-OmadaSqlTroubleshooter -LogLevel DEBUG -LogToConsole
+
+Starts the Omada SQL Troubleshooter application with log level set to DEBUG and logs output to the console.
+
+.EXAMPLE
+Invoke-OmadaSqlTroubleshooter -Reset
+
+Resets the stored configuration to default and starts the Omada SQL Troubleshooter application.
+
+.NOTES
+Requires PowerShell 7.0 or higher and the OmadaWeb.PS module.
+
+#>
+
 function Invoke-OmadaSqlTroubleshooter {
     [System.Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSUseDeclaredVarsMoreThanAssignments', 'StartVariables', Justification = 'The CurrentPoperties variable is used in a function called from here')]
-    [cmdletbinding()]
+    [CmdletBinding()]
     PARAM(
         [ValidateSet("INFO", "DEBUG", "VERBOSE", "WARNING", "ERROR", "FATAL", "VERBOSE2")]
         [string]$LogLevel,

@@ -1,4 +1,30 @@
+<#
+.SYNOPSIS
+Creates a shortcut for the Omada SQL Troubleshooter application.
+
+.DESCRIPTION
+The `Set-OmadaSqlTroubleShooterShortcut` function creates a shortcut for the Omada SQL Troubleshooter application in the Start Menu and optionally on the Desktop.
+
+.PARAMETER NotCreateDesktopShortcut
+If specified, the function will not create a desktop shortcut.
+
+.EXAMPLE
+Set-OmadaSqlTroubleShooterShortcut
+
+Creates a shortcut for the Omada SQL Troubleshooter application in the Start Menu and on the Desktop.
+
+.EXAMPLE
+Set-OmadaSqlTroubleShooterShortcut -NotCreateDesktopShortcut
+
+Creates a shortcut for the Omada SQL Troubleshooter application in the Start Menu only.
+
+.NOTES
+Requires PowerShell 7.0 or higher.
+
+#>
+
 function Set-OmadaSqlTroubleShooterShortcut {
+    [CmdletBinding()]
     PARAM(
         [switch]$NotCreateDesktopShortcut
     )
