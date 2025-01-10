@@ -18,6 +18,7 @@
             $null | Invoke-ConfigSetting -Property "BaseUrl"
             $Script:MainWindowForm.Elements.ComboBoxSelectDataConnection.SelectedItem = $Null
             $Script:MainWindowForm.Elements.ComboBoxSelectDataConnection.Clear()
+            $Script:MainWindowForm.Elements.ComboBoxSelectDataConnection.IsEnabled = $false
             $null, $null | Invoke-ConfigSetting -Property "CurrentDataConnection"
             $Script:MainWindowForm.Elements.ComboBoxSelectQuery.SelectedItem = $Null
             $Script:MainWindowForm.Elements.ComboBoxSelectQuery.Items.Clear()

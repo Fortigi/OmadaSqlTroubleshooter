@@ -22,7 +22,7 @@ function Invoke-ConfigSetting {
 
             if ($null -eq $Script:ConfigProperties) {
                 "Read schema!" | Write-LogOutput -LogType DEBUG
-                $Script:ConfigProperties = Get-Content (Join-Path (Split-Path (Get-Item $PSScriptRoot).Parent.FullName) -ChildPath "lib\schema\appConfigSchema.json") | ConvertFrom-Json
+                $Script:ConfigProperties = Get-Content (Join-Path (Get-ModuleBaseFolder) -ChildPath "lib\schema\appConfigSchema.json") | ConvertFrom-Json
             }
 
             if ($Null -ne $Script:AppConfig) {
