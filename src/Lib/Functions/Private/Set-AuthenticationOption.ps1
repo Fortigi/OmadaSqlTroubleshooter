@@ -7,12 +7,12 @@ function Set-AuthenticationOption {
                 { $_ -in @("Basic", "Windows", "OAuth" ) } {
 
                     if ($_ -eq "OAuth") {
-                        $Script:MainWindowForm.Elements.LabelUserName | Set-LabelContent-Content "Client ID:"
-                        $Script:MainWindowForm.Elements.LabelPassword | Set-LabelContent-Content "Client Secret:"
+                        $Script:MainWindowForm.Elements.LabelUserName | Set-LabelContent -Content "Client ID:"
+                        $Script:MainWindowForm.Elements.LabelPassword | Set-LabelContent -Content "Client Secret:"
                     }
                     else {
-                        $Script:MainWindowForm.Elements.LabelUserName | Set-LabelContent-Content "Username:"
-                        $Script:MainWindowForm.Elements.LabelPassword | Set-LabelContent-Content "Password:"
+                        $Script:MainWindowForm.Elements.LabelUserName | Set-LabelContent -Content "Username:"
+                        $Script:MainWindowForm.Elements.LabelPassword | Set-LabelContent -Content "Password:"
                     }
                     $Script:MainWindowForm.Elements.LabelUserName.Visibility = "Visible"
                     $Script:MainWindowForm.Elements.LabelPassword.Visibility = "Visible"

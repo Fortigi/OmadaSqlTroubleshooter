@@ -94,25 +94,25 @@
                             <Separator Style="{StaticResource LeftBorderWidthSeparatorStyle}" />
                             <Label x:Name="LabelUrl" Content="Tenant:" ToolTip="Omada Tenant url. Enter full URL or tenant name only. Example: Enter 'comp' for 'https://comp.omada.cloud'"  HorizontalAlignment="Left"/>
                             <Separator Style="{StaticResource DefaultWidthSeparatorStyle}" />
-                            <TextBox x:Name="TextBoxURL" TabIndex="1" ToolTip="Enter full URL or tenant name only. Example: Enter 'comp' for 'https://comp.omada.cloud'" />
+                            <TextBox x:Name="TextBoxURL" ToolTip="Enter full URL or tenant name only. Example: Enter 'comp' for 'https://comp.omada.cloud'" />
                             <Separator Style="{StaticResource DefaultWidthSeparatorStyle}" />
-                            <Label x:Name="LabelUserName" TabIndex="3" Content="Username:" ToolTip="Username:" Width="120" Height="30" Visibility="Hidden" />
+                            <Label x:Name="LabelUserName" Content="Username:" ToolTip="Username:" Visibility="Hidden" />
                             <Separator Style="{StaticResource DefaultWidthSeparatorStyle}" />
                             <TextBox x:Name="TextBoxUserName" Visibility="Hidden" IsEnabled="False"  />
                         </StackPanel>
                         <Separator Style="{StaticResource DefaultHeightSeparator}" />
                         <StackPanel Orientation="Horizontal">
                             <Separator Style="{StaticResource LeftBorderWidthSeparatorStyle}" />
-                            <Label x:Name="LabelAuthenticationOption" Content="Authentication:"   ToolTip="Authentication type. This is mandatory."   />
+                            <Label x:Name="LabelAuthenticationOption" Content="Authentication:" ToolTip="Authentication type. This is mandatory."   />
                             <Separator Style="{StaticResource DefaultWidthSeparatorStyle}" />
-                            <ComboBox x:Name="ComboBoxSelectAuthenticationOption" TabIndex="2" SelectedIndex="0" >
+                            <ComboBox x:Name="ComboBoxSelectAuthenticationOption" SelectedIndex="0" >
                                 <ComboBoxItem Content="Browser"/>
                                 <ComboBoxItem Content="OAuth"/>
                             </ComboBox>
                             <Separator Style="{StaticResource DefaultWidthSeparatorStyle}" />
                             <Label x:Name="LabelPassword" Content="Password:" Visibility="Hidden" ToolTip="Enter a password" />
                             <Separator Style="{StaticResource DefaultWidthSeparatorStyle}" />
-                            <PasswordBox x:Name="TextBoxPassword" TabIndex="4" Visibility="Hidden"  ToolTip="Enter a password" />
+                            <PasswordBox x:Name="TextBoxPassword" Visibility="Hidden"  ToolTip="Enter a password" />
                         </StackPanel>
                         <Separator Style="{StaticResource DefaultHeightSeparator}" />
                         <StackPanel Orientation="Horizontal">
