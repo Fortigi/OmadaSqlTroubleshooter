@@ -42,14 +42,14 @@ function Initialize-OmadaSqlTroubleShooter {
                 [System.Reflection.Assembly]::LoadFrom($WebViewDllPath) | Out-Null
             }
             else {
-                Throw ("The WebView2 Dll '{0}' is cannot be found at the '{1}' bin folder!" -f $_, $DllSource)
+                Throw ("The WebView2 Dll '{0}' cannot be found at the '{1}' bin folder!" -f $_, $($Script:RunTimeConfig.ModuleFolder))
                 Break
             }
         }
         $WebViewLoaderPath = Join-Path $Script:RunTimeConfig.ModuleFolder -ChildPath "Bin\WebView2Dlls\WebView2Loader.dll"
         "Get 'WebView2Loader.Dll'" | Write-LogOutput -LogType DEBUG
         if (!(Test-Path $WebViewLoaderPath -PathType Leaf)) {
-            Throw ("The WebView2Loader Dll '{0}' is cannot be found at the '{1}' bin folder!" -f "WebView2Loader.dll", $DllSource)
+            Throw ("The WebView2Loader Dll '{0}' cannot be found at the '{1}' bin folder!" -f "WebView2Loader.dll", $($Script:RunTimeConfig.ModuleFolder))
             Break
         }
 

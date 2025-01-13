@@ -62,7 +62,7 @@ function Invoke-OmadaSqlTroubleshooter {
             LogToConsole        = $LogToConsole.IsPresent -or $false
             LogLevel            = $null
             VerboseParameterSet = $PSCmdlet.MyInvocation.BoundParameters.Keys.Contains("Verbose")
-            LogLevelSetting     = [string]::IsNullOrWhiteSpace($LogLevel) ? $null : $LogLevel
+            LogLevelSetting     = $(if ([string]::IsNullOrWhiteSpace($LogLevel)) { $null }else { $LogLevel })
             AppLogObject        = [System.Collections.ObjectModel.ObservableCollection[string]]::new()
         }
         StopWatch          = $null
