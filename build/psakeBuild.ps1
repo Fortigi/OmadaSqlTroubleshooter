@@ -247,15 +247,23 @@ Task TestAssemblies -depends Build {
             $WebViewDllPath = Join-Path $OutputDir -ChildPath "Bin\WebView2Dlls\$_"
             if (!(Test-Path $WebViewDllPath -PathType Leaf)) {
                 Throw ("The WebView2 Dll '{0}' is cannot be found at the '{1}' bin folder!" -f $_, $OutputDir)
-                Break
             }
         }
         $WebViewLoaderPath = Join-Path $OutputDir -ChildPath "Bin\WebView2Dlls\WebView2Loader.dll"
         "Get 'WebView2Loader.Dll'" | Write-Host
         if (!(Test-Path $WebViewLoaderPath -PathType Leaf)) {
             Throw ("The WebView2Loader Dll '{0}' is cannot be found at the '{1}' bin folder!" -f "WebView2Loader.dll", $OutputDir)
-            Break
         }
+
+        $WebViewRunTimePath = Join-Path $OutputDir -ChildPath "Bin\WebView2Runtime"
+        "Check WebViewRunTime" | Write-Host
+        if (!(Test-Path $WebViewRunTimePath -PathType Container)) {
+            Throw ("The WebViewRunTime was not found at the '{0}' bin folder!" -f $OutputDir)
+        }
+        elseif (!(Test-Path (Join-Path $WebViewRunTimePath -ChildPath "msedgewebview2.exe") -PathType Leaf)) {
+            Throw ("Msedgewebview2.exe is not found at the '{0}' bin folder!" -f $OutputDir)
+        }
+
     }
     catch {
         Throw $_
