@@ -10,7 +10,7 @@ function RetrieveFromNuGet {
         $FilesToCopy,
         [switch]$Force
     )
-
+    "RetrieveFromNuGet -PackageId: {0} -Version: {1} -DestinationFolder: {2} -FilesToCopy: {3}" -f $PackageId, $Version, $DestinationFolder, ($FilesToCopy -join ", ") | Write-Host
     New-Item $DestinationFolder -ItemType Directory -Force | Out-Null
 
     $DownLoadFiles = $false
@@ -32,7 +32,7 @@ function RetrieveFromNuGet {
         try {
             #$Package = Save-Package $PackageId -MinimumVersion $MinimumVersion -Path $PackageTempFolder.FullName -ProviderName NuGet -Force
 
-            $PackageFilename = ("{0}.nupkg" -f $PackageId)
+            $PackageFilename = ("{0}.zip" -f $PackageId)
             $PackageOutputFilePath = Join-Path $PackageTempFolder.FullName -ChildPath $PackageFilename
             $Parameters = @{
                 Uri     = ("https://www.nuget.org/api/v2/package/{0}/{1}" -f $PackageId, $Version)

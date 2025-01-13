@@ -17,10 +17,10 @@ function Get-OmadaGetPagingDataObject {
             nd           = 1732546553116
             rows         = $Rows
             page         = 1
-            sidx         = [string]::IsNullOrWhiteSpace($SearchString) ? $null : "name"
+            sidx         = $(if ([string]::IsNullOrWhiteSpace($SearchString)) { $null }else { "name" })
             sord         = "asc"
             searchField  = $null
-            searchString = [string]::IsNullOrWhiteSpace($SearchString) ? $null : $SearchString
+            searchString = $(if ([string]::IsNullOrWhiteSpace($SearchString)) { $null }else { $SearchString })
             searchOper   = $null
             filters      = $null
             dataType     = $DataType

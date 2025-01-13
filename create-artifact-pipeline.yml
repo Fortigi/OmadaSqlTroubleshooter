@@ -49,7 +49,7 @@ stages:
       name: "BuildTask"
       inputs:
         filePath: '$(System.DefaultWorkingDirectory)/Build/build.ps1'
-        arguments: ' -Task Build -BuildVersion $(BuildVersioning.buildVersion)'
+        arguments: ' -Task Pipeline -BuildVersion $(BuildVersioning.buildVersion)'
         pwsh: true
         failOnStderr: true
       condition: succeeded()
