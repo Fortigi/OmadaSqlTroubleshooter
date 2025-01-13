@@ -10,8 +10,13 @@ Properties {
 }
 
 
-Task default -Depends Analyze, Test, Build, ImportModule
-Task DeployOnly -Depends Build, Deploy
+Task default -Depends Dependencies, Analyze, Test, Build, ImportModule
+Task DeployOnly -Depends Dependencies, Build, Deploy
+
+Task Dependencies {
+    $DestinationFolder = Join-Path $OutputDir -ChildPath "bin"
+    & "$PSScriptRoot\RetrieveDependencies.ps1" -DestinationFolder $DestinationFolder
+}
 
 Task Analyze {
 
@@ -96,8 +101,6 @@ Task Build -Depends Test {
     $ModulePsd1.CmdletsToExport = @()
     $ModulePsd1.AliasesToExport = @()
 
-
-
     try {
         $CurrentModulePsd1 = Import-PowerShellDataFile (Join-Path -Path $OutputDir -ChildPath ("{0}.psd1" -f $ModuleName))
     }
@@ -170,7 +173,7 @@ Task Build -Depends Test {
     $OutputDirFile = Join-Path -Path $OutputDir -ChildPath ("{0}.psm1" -f $ModuleName)
 
     $ModuleFileContent = Get-Content -Path "$ModuleSource\OmadaSqlTroubleShooter.psm1" -Encoding UTF8 -ErrorAction Stop
-    $ModuleFileContent = $ModuleFileContent | Where-Object { $_ -notmatch '^\s*#requires' -and $_ -notmatch '^\s*#' }
+    $ModuleFileContent = $ModuleFileContent | Where-Object { $_ -notmatch '^\s*#requires' -and $_ -notmatch '^\s*#'  }
     $ModuleFileContent = ($ModuleFileContent | Out-String).Trim()
 
     #$ModuleFileContent = $ModuleFileContent -replace "\`$Private.*-Recurse\)", "`$Private = @()"
@@ -207,56 +210,13 @@ Task Build -Depends Test {
         }
         $HeaderContent | Out-File -Path (Join-Path $OutputDir -ChildPath $TargetFilePath) -Force -Append -Encoding utf8
         Get-ChildItem -Path (Join-Path $ModuleSource -ChildPath $SourceChildPath) -Recurse -File | ForEach-Object {
-            $Content = Get-Content $_ -Encoding UTF8 | Where-Object { $_ -notmatch '^\s*#requires' -and $_ -notmatch '^\s*#' }
+            $Content = Get-Content $_ -Encoding UTF8 | Where-Object { $_ -notmatch '^\s*#requires' -and $_ -notmatch '^\s*#(?!>)' }
             $Content.Trim() | Out-File -Path (Join-Path $OutputDir -ChildPath $TargetFilePath) -Force -Append -Encoding utf8
         }
         (Get-Content (Join-Path $OutputDir -ChildPath $TargetFilePath) -Raw) -replace "`r?`n", "`r`n" | Invoke-Formatter -Settings $FormattingSettings | Set-Content -Path (Join-Path $OutputDir -ChildPath $TargetFilePath) -Encoding UTF8 -Force
     }
 
-    New-Item (Join-Path $OutputDir -ChildPath "Bin\Webview2Dlls") -ItemType Directory -Force | Out-Null
-    $FilesToCopy = @(
-        "runtimes\win-x64\native\WebView2Loader.dll",
-        "lib_manual\netcoreapp3.0\Microsoft.Web.WebView2.Core.dll",
-        "lib_manual\netcoreapp3.0\Microsoft.Web.WebView2.WinForms.dll",
-        "lib_manual\net5.0-windows10.0.17763.0\Microsoft.Web.WebView2.Wpf.dll"
-    )
-    $DownLoadFiles = $false
-    foreach ($File in $FilesToCopy) {
-        $File = "bin\Webview2Dlls\{0}" -f $File.Split("\")[-1]
-        if (!(Test-Path (Join-Path $OutputDir -ChildPath $File) -PathType Leaf)) {
-            $DownLoadFiles = $true
-        }
-    }
 
-    New-Item (Join-Path $OutputDir -ChildPath "bin\Webview2Runtime") -ItemType Directory -Force | Out-Null
-
-    if ($DownLoadFiles -or $Force) {
-        if ($null -eq (Get-PackageSource | Where-Object { $_.Name -eq "NuGet" })) {
-            "Package source 'NuGet' not found. You can retry after registering it using this command: 'Register-PackageSource -Name NuGet -Location `"https://api.NuGet.org/v3/index.json`" -ProviderName NuGet'" | Write-Host
-            break
-        }
-
-        "Get WebView2 from NuGet (this might take a minute or two to complete)" | Write-Host
-        $PackageTempFolder = New-Item (Join-Path $env:TEMP -ChildPath "OmadaSqlTroubleShooter") -ItemType Directory -Force
-        $WebView2DllsDownloaded = $false
-
-        try {
-            $Package = Save-Package Microsoft.Web.WebView2 -MinimumVersion 1.0.2903.40 -Path $PackageTempFolder.FullName -Force -Source NuGet
-            $WebView2DllsDownloaded = $true
-        }
-        catch {
-            "Failed to download WebView2 Dll files from NuGet. Please get the latest release from https://www.nuget.org/packages/microsoft.web.webview2. The following files need to be copied to '{0}': {1}. Error: {2}" -f (Join-Path $OutputDir -ChildPath "Bin\Webview2Dlls"), $FilesToCopy, $_.Exception.Message | Write-Warning
-            $WebView2DllsDownloaded
-        }
-        if ($WebView2DllsDownloaded) {
-            Get-Item (Join-Path $PackageTempFolder.FullName -ChildPath $Package.PackageFilename) | Expand-Archive -DestinationPath $PackageTempFolder.FullName -Force
-
-            foreach ($File in $FilesToCopy) {
-                Get-Item (Join-Path $PackageTempFolder.FullName -ChildPath $File) | Copy-Item -Destination (Join-Path $OutputDir -ChildPath "Bin\Webview2Dlls")  -Force
-            }
-            Get-Item $PackageTempFolder.FullName | Remove-Item -Recurse -Force
-        }
-    }
 }
 
 Task ImportModule -Depends Build {
