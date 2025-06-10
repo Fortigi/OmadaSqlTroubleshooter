@@ -8,14 +8,20 @@ function RetrieveFromNuGet {
         $Version,
         $DestinationFolder,
         $FilesToCopy,
+        $FoldersToCopy,
         [switch]$Force
     )
-    "RetrieveFromNuGet -PackageId: {0} -Version: {1} -DestinationFolder: {2} -FilesToCopy: {3}" -f $PackageId, $Version, $DestinationFolder, ($FilesToCopy -join ", ") | Write-Host
+    "RetrieveFromNuGet -PackageId: {0} -Version: {1} -DestinationFolder: {2} -FilesToCopy: {3} -FoldersToCopy: {4}" -f $PackageId, $Version, $DestinationFolder, ($FilesToCopy -join ", "), ($FoldersToCopy -join ", ") | Write-Host
     New-Item $DestinationFolder -ItemType Directory -Force | Out-Null
 
     $DownLoadFiles = $false
     foreach ($File in $FilesToCopy) {
         if (!(Test-Path (Join-Path $DestinationFolder -ChildPath ( $File.Split("\")[-1])) -PathType Leaf)) {
+            $DownLoadFiles = $true
+        }
+    }
+    foreach ($Folder in $FoldersToCopy) {
+        if (!(Test-Path (Join-Path $DestinationFolder -ChildPath ( $Folder.Split("\")[-1])) -PathType Container)) {
             $DownLoadFiles = $true
         }
     }
@@ -52,6 +58,9 @@ function RetrieveFromNuGet {
             foreach ($File in $FilesToCopy) {
                 Get-Item (Join-Path $PackageTempFolder.FullName -ChildPath $File) | Copy-Item -Destination $DestinationFolder  -Force
             }
+            foreach ($Folder in $FoldersToCopy) {
+                Get-ChildItem (Join-Path $PackageTempFolder.FullName -ChildPath $Folder) | Copy-Item -Destination $DestinationFolder  -Force -Recurse
+            }
             Get-Item $PackageTempFolder.FullName | Remove-Item -Recurse -Force
         }
     }
@@ -61,3 +70,5 @@ function RetrieveFromNuGet {
 }
 
 RetrieveFromNuGet -PackageId "Microsoft.Web.WebView2" -MinimumVersion "1.0.2903.40" -DestinationFolder (Join-Path $DestinationFolder -ChildPath "Webview2Dlls") -FilesToCopy @("runtimes\win-x64\native\WebView2Loader.dll", "lib_manual\netcoreapp3.0\Microsoft.Web.WebView2.Core.dll", "lib_manual\netcoreapp3.0\Microsoft.Web.WebView2.WinForms.dll", "lib_manual\net5.0-windows10.0.17763.0\Microsoft.Web.WebView2.Wpf.dll") -Force:$Force.IsPresent
+
+RetrieveFromNuGet -PackageId "WebView2.Runtime.X64" -MinimumVersion "131.0.2903.112" -DestinationFolder (Join-Path $DestinationFolder -ChildPath "Webview2Runtime") -FoldersToCopy @("contentFiles\any\any\WebView2") -Force:$Force.IsPresent
