@@ -1,6 +1,8 @@
 function Initialize-OmadaSqlTroubleShooter {
-
+    [CmdLetBinding()]
+    PARAM()
     try {
+        $Script:Tracer::WriteLine(("{0}: Function: {1} - Caller: {2}({3}) - Command: {4}" -f $($Script:RunTimeConfig.ApplicationName), $($MyInvocation.MyCommand.Name), $($MyInvocation.ScriptName), $($MyInvocation.ScriptLineNumber), $MyInvocation.Statement))
         "Initializing application..." | Write-LogOutput -LogType DEBUG
 
         Push-Location $Script:RunTimeConfig.ModuleFolder
@@ -17,9 +19,9 @@ function Initialize-OmadaSqlTroubleShooter {
 
 
         try {
-            Remove-Variable "Task" -ErrorAction SilentlyContinue
+            Get-Variable | Where-Object { $_.Name -eq "Task" } | Remove-Variable -Force -ErrorAction SilentlyContinue
         }
-        catch { $Error.Clear() }
+        catch { }
 
         "Load module OmadaWeb.PS" | Write-LogOutput -LogType DEBUG
         Import-Module OmadaWeb.PS

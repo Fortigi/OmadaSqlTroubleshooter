@@ -1,11 +1,12 @@
 function Update-DataConnectionList {
+    [CmdLetBinding()]
     [System.Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSUseDeclaredVarsMoreThanAssignments', 'SetInitialConnection', Justification = 'The variable is used, but script analyzer does not recognize it')]
     PARAM(
         [switch]$NotShowPopupWindow
     )
 
     try {
-
+        $Script:Tracer::WriteLine(("{0}: Function: {1} - Caller: {2}({3}) - Command: {4}" -f $($Script:RunTimeConfig.ApplicationName), $($MyInvocation.MyCommand.Name), $($MyInvocation.ScriptName), $($MyInvocation.ScriptLineNumber), $MyInvocation.Statement))
         if (!(Test-ConnectionRequirements)) {
             "Connection not ready" | Write-LogOutput -LogType DEBUG
             return
@@ -66,10 +67,23 @@ function Update-DataConnectionList {
                             }
                         }
                     }
+
+
                     if ($SetInitialConnection) {
                         "Set initial data connection to OISES" | Write-LogOutput -LogType DEBUG
-                        $Script:MainWindowForm.Elements.ComboBoxSelectDataConnection.SelectedItem = $Script:MainWindowForm.Elements.ComboBoxSelectDataConnection.Items | Where-Object {$_.Content -like "OISES -*"}
+                        $Script:MainWindowForm.Elements.ComboBoxSelectDataConnection.SelectedItem = $Script:MainWindowForm.Elements.ComboBoxSelectDataConnection.Items | Where-Object { $_.Content -like "OISES -*" }
                     }
+
+                    $ComboBoxDataConnectionSelectedItem = $Script:MainWindowForm.Elements.ComboBoxSelectDataConnection.SelectedItem
+                    $ComboBoxDataConnectionItems = $Script:MainWindowForm.Elements.ComboBoxSelectDataConnection.Items | Sort-Object
+                    $Script:MainWindowForm.Elements.ComboBoxSelectDataConnection.Items?.Clear()
+                    foreach ($Item in $ComboBoxDataConnectionItems) {
+                        $Script:MainWindowForm.Elements.ComboBoxSelectDataConnection.Items.Add($Item) | Out-Null
+                    }
+                    if ($null -ne $ComboBoxDataConnectionSelectedItem) {
+                        $Script:MainWindowForm.Elements.ComboBoxSelectDataConnection.SelectedItem = $Script:MainWindowForm.Elements.ComboBoxSelectDataConnection.Items | Where-Object { $_.Content -eq $ComboBoxDataConnectionSelectedItem.Content }
+                    }
+
                     $Script:MainWindowForm.Elements.TextBoxDisplayName.IsEnabled = $true
                     $Script:MainWindowForm.Elements.ComboBoxSelectDataConnection.IsEnabled = $True
                     $Script:MainWindowForm.Elements.ButtonShowSqlSchema.IsEnabled = $true

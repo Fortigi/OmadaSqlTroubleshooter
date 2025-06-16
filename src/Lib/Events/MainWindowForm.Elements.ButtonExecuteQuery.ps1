@@ -1,6 +1,7 @@
 $Script:MainWindowForm.Elements.ButtonExecuteQuery.Add_Click({
-        $_ | Show-EventInfo
         try {
+            $_ | Show-EventInfo
+
             $Script:RunTimeData.StopWatch = [System.Diagnostics.Stopwatch]::StartNew()
 
             $Script:PopupWindowExecuteQuery = Show-PopupWindow -Message "Executing Query..."
@@ -17,7 +18,7 @@ $Script:MainWindowForm.Elements.ButtonExecuteQuery.Add_Click({
             }
             else {
                 "Execute query" | Write-LogOutput
-                Invoke-SaveAndExecuteQuery
+                Invoke-ExecuteQuery
             }
         }
         catch {

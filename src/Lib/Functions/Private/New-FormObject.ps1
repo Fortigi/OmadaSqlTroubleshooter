@@ -1,5 +1,6 @@
 function New-FormObject {
-PARAM (
+    [CmdLetBinding()]
+    PARAM (
         [parameter(Mandatory = $False)]
         [validateScript({ Test-Path $_ -PathType Leaf })]
         $FormPath,
@@ -9,6 +10,7 @@ PARAM (
         $ParentForm
     )
     try {
+        $Script:Tracer::WriteLine(("{0}: Function: {1} - Caller: {2}({3}) - Command: {4}" -f $($Script:RunTimeConfig.ApplicationName), $($MyInvocation.MyCommand.Name), $($MyInvocation.ScriptName), $($MyInvocation.ScriptLineNumber), $MyInvocation.Statement))
         if ($null -eq $FormPath -and $null -eq $Xaml) {
             "Either FormPath or Xaml must be provided!" | Write-LogOutput -LogType ERROR
             break
@@ -50,35 +52,35 @@ PARAM (
             $Form.Owner = $ParentForm
             "Form Height: {0}" -f $Form.Height | Write-LogOutput -LogType DEBUG
             "Parent form Height: {0}" -f $ParentForm.Height | Write-LogOutput -LogType DEBUG
-            if([double]::IsNaN($Form.Height)){
+            if ([double]::IsNaN($Form.Height)) {
                 $Form.Height = $ParentForm.Height
             }
-            else{
+            else {
                 $Form.Height = [math]::Max($Form.Height, $ParentForm.Height)
             }
-            if($Form.Width -eq "NaN"){
+            if ($Form.Width -eq "NaN") {
                 $Form.Width = $Form.MinWidth
             }
         }
 
-        "Form Dimensions: {0}x{1}" -f  $Form.Width,$Form.Height | Write-LogOutput -LogType DEBUG
+        "Form Dimensions: {0}x{1}" -f $Form.Width, $Form.Height | Write-LogOutput -LogType DEBUG
         "Form Location: {0}x{1}" -f $Form.Left, $Form.Top | Write-LogOutput -LogType DEBUG
 
         "Return form object for: {0}" -f $Form.Name | Write-LogOutput -LogType DEBUG
 
         return [PSCustomObject]@{
-            Definition = $Form
-            Elements   = $Elements
-            Xaml       = $Xaml
-            Position   = [PSCustomObject]@{
+            Definition      = $Form
+            Elements        = $Elements
+            Xaml            = $Xaml
+            Position        = [PSCustomObject]@{
                 Left = $null
                 Top  = $null
             }
-            Size       = [PSCustomObject]@{
+            Size            = [PSCustomObject]@{
                 Width  = $Form.MinWidth
                 Height = $Form.MinHeight
             }
-            State      = "NotOpenend"
+            State           = "NotOpenend"
             PositionManager = @{
                 Synchronizing       = $false
                 PositionOffSetLeft  = 0

@@ -1,5 +1,7 @@
 function Invoke-ConfigSetting {
-    [System.Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSUseDeclaredVarsMoreThanAssignments', 'CurrentPoperties', Justification = 'The CurrentPoperties variable is used in a function called from here')]
+    [CmdLetBinding()]
+
+    [System.Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSUseDeclaredVarsMoreThanAssignments', 'CurrentProperties', Justification = 'The CurrentProperties variable is used in a function called from here')]
     PARAM(
         [parameter(Mandatory = $false, Position = 0, ValueFromPipeline = $true)]
         $Value,
@@ -11,6 +13,7 @@ function Invoke-ConfigSetting {
 
     begin {
         try {
+            $Script:Tracer::WriteLine(("{0}: Function: {1} - Caller: {2}({3}) - Command: {4}" -f $($Script:RunTimeConfig.ApplicationName), $($MyInvocation.MyCommand.Name), $($MyInvocation.ScriptName), $($MyInvocation.ScriptLineNumber), $MyInvocation.Statement))
             $InputObject = @()
             if ($Reset) {
                 "Reset configuration!" | Write-LogOutput -LogType DEBUG
@@ -35,9 +38,9 @@ function Invoke-ConfigSetting {
                     }
                 }
 
-                $CurrentPoperties = $Config | Get-Member -MemberType NoteProperty
+                $CurrentProperties = $Config | Get-Member -MemberType NoteProperty
                 $Script:ConfigProperties | ForEach-Object {
-                    Set-ConfigProperty
+                    Set-ConfigProperty -Property $_
                 }
                 "Update config object!" | Write-LogOutput -LogType VERBOSE
             }
@@ -45,16 +48,16 @@ function Invoke-ConfigSetting {
                 if (Test-Path ($Script:RunTimeConfig.ConfigFile.Path) -PathType Leaf) {
                     "Read config settings {0}!" -f ($Script:RunTimeConfig.ConfigFile.Path) | Write-LogOutput -LogType VERBOSE
                     $Config = Get-Content ($Script:RunTimeConfig.ConfigFile.Path) | ConvertFrom-Json
-                    $CurrentPoperties = $Config | Get-Member -MemberType NoteProperty
+                    $CurrentProperties = $Config | Get-Member -MemberType NoteProperty
                     $Script:ConfigProperties | ForEach-Object {
-                        Set-ConfigProperty
+                        Set-ConfigProperty -Property $_
                     }
                 }
                 else {
                     "Create new config object!" | Write-LogOutput -LogType DEBUG
                     $Config = [pscustomobject]@{}
                     $Script:ConfigProperties | ForEach-Object {
-                        Set-ConfigProperty
+                        Set-ConfigProperty -Property $_
                     }
                 }
             }
@@ -116,7 +119,7 @@ function Invoke-ConfigSetting {
                     }
                 }
             }
-            "Store config object to {0}. Contents`r`n{1}`r`n" -f ($Script:RunTimeConfig.ConfigFile.Path), ($Config | ConvertTo-Json) | Write-LogOutput -LogType VERBOSE
+            "Store config object to {0}. Contents`r`n{1}`r`n" -f ($Script:RunTimeConfig.ConfigFile.Path), ($Config | ConvertTo-Json) | Write-LogOutput -LogType VERBOSE2
             $Success = $false
             do {
                 try {

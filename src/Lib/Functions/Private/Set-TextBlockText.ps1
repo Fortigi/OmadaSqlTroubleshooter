@@ -1,4 +1,5 @@
 function Set-TextBlockText {
+    [CmdLetBinding()]
     PARAM(
         [Parameter(Mandatory = $true, ValueFromPipeline = $true)]
         $TextBlockObject,
@@ -7,20 +8,19 @@ function Set-TextBlockText {
     )
 
     try {
+        $Script:Tracer::WriteLine(("{0}: Function: {1} - Caller: {2}({3}) - Command: {4}" -f $($Script:RunTimeConfig.ApplicationName), $($MyInvocation.MyCommand.Name), $($MyInvocation.ScriptName), $($MyInvocation.ScriptLineNumber), $MyInvocation.Statement))
         $CurrentButtonContent = $TextBlockObject.Text
         if ([string]::IsNullOrEmpty($Text)) {
-                $TextBlockObject.Text = $null
-            }
-            else {
-                $TextBlockObject.Text = $Text
-            }
+            $TextBlockObject.Text = $null
+        }
+        else {
             $TextBlockObject.Text = $Text
-            "{0} set from '{1}' to '{2}'" -f $TextBlockObject.Name, $CurrentButtonContent, $TextBlockObject.Text | Write-LogOutput -LogType DEBUG
-
         }
-        catch {
-            $_.Exception.Message | Write-LogOutput -LogType ERROR
-        }
-
+        $TextBlockObject.Text = $Text
+        "{0} set from '{1}' to '{2}'" -f $TextBlockObject.Name, $CurrentButtonContent, $TextBlockObject.Text | Write-LogOutput -LogType DEBUG
 
     }
+    catch {
+        $_.Exception.Message | Write-LogOutput -LogType ERROR
+    }
+}

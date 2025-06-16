@@ -1,10 +1,11 @@
 function Invoke-ExecuteScriptAsync {
+    [CmdLetBinding()]
     PARAM(
         $ScriptToExecute,
         $OnCompletedScriptBlock
     )
     try {
-
+        $Script:Tracer::WriteLine(("{0}: Function: {1} - Caller: {2}({3}) - Command: {4}" -f $($Script:RunTimeConfig.ApplicationName), $($MyInvocation.MyCommand.Name), $($MyInvocation.ScriptName), $($MyInvocation.ScriptLineNumber), $MyInvocation.Statement))
         if ($null -ne $Script:Webview.Object) {
             if ($Script:Webview.Object.IsLoaded) {
                 $Script:Task = $Script:Webview.Object.CoreWebView2.ExecuteScriptAsync($ScriptToExecute)

@@ -1,4 +1,5 @@
 ﻿function Reset-Application {
+    [CmdLetBinding()]
     PARAM(
         [switch]$SkipTextBoxURL,
         [switch]$SkipAuthentication,
@@ -6,6 +7,7 @@
     )
 
     try {
+        $Script:Tracer::WriteLine(("{0}: Function: {1} - Caller: {2}({3}) - Command: {4}" -f $($Script:RunTimeConfig.ApplicationName), $($MyInvocation.MyCommand.Name), $($MyInvocation.ScriptName), $($MyInvocation.ScriptLineNumber), $MyInvocation.Statement))
         if ($null -ne $Script:SqlSchemaWindow -and $null -ne $Script:SqlSchemaWindow.Definitions -and $Script:SqlSchemaWindow.Definitions.IsVisible) {
             $Script:SqlSchemaWindow.Definitions.Close()
         }
@@ -22,8 +24,10 @@
             $null, $null | Invoke-ConfigSetting -Property "CurrentDataConnection"
             $Script:MainWindowForm.Elements.ComboBoxSelectQuery.SelectedItem = $Null
             $Script:MainWindowForm.Elements.ComboBoxSelectQuery.Items.Clear()
-            $Script:MainWindowForm.Elements.CheckboxMyQueries.IsChecked = $False
-            $Script:MainWindowForm.Elements.CheckboxMyQueries.IsEnabled = $False
+            $Script:MainWindowForm.Elements.CheckboxMyCreatedQueries.IsChecked = $False
+            $Script:MainWindowForm.Elements.CheckboxMyCreatedQueries.IsEnabled = $False
+            $Script:MainWindowForm.Elements.CheckboxMyUpdatedQueries.IsChecked = $False
+            $Script:MainWindowForm.Elements.CheckboxMyUpdatedQueries.IsEnabled = $False
             $null, $null | Invoke-ConfigSetting -Property "CurrentSqlQuery"
         }
         $Script:MainWindowForm.Elements.TextBoxURL.IsEnabled = $True

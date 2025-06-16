@@ -1,5 +1,9 @@
 function Open-LogWindow {
+    [CmdLetBinding()]
+    PARAM()
+
     try {
+        $Script:Tracer::WriteLine(("{0}: Function: {1} - Caller: {2}({3}) - Command: {4}" -f $($Script:RunTimeConfig.ApplicationName), $($MyInvocation.MyCommand.Name), $($MyInvocation.ScriptName), $($MyInvocation.ScriptLineNumber), $MyInvocation.Statement))
         #Log window creation
         "Opening Log window" | Write-LogOutput -LogType DEBUG
         $Script:LogWindowForm = New-FormObject -FormPath (Join-Path $Script:RunTimeConfig.ModuleFolder -ChildPath "lib\ui\LogWindow.xaml") -ParentForm $Script:MainWindowForm.Definition
@@ -20,7 +24,7 @@ function Open-LogWindow {
             $Script:LogWindowForm.Elements.CheckboxWordWrap.IsChecked = $false
             $false | Invoke-ConfigSetting -Property "LogWindowWordWrap"
         }
-        if ($Script:RunTimeConfig.LogToConsole) {
+        if ($Script:RunTimeConfig.Logging.LogToConsole) {
             $Script:LogWindowForm.Elements.CheckboxConsoleLog.IsChecked = $true
             "Console logging is enabled" | Write-LogOutput -LogType LOG
             $true | Invoke-ConfigSetting -Property "CheckboxConsoleLog"
@@ -31,15 +35,15 @@ function Open-LogWindow {
         }
 
         #Set log level to show
-        if (![string]::IsNullOrWhiteSpace($Script:AppConfig.LogLevel)) {
-            "Set window log level to: {0}" -f $Script:AppConfig.LogLevel | Write-LogOutput -LogType DEBUG
-            if (($LogWindowForm.Elements.ComboBoxSelectLogLevel.Items | Measure-Object).count -le 0 -and !$LogWindowForm.Elements.ComboBoxSelectLogLevel.Items.Content.Contains($Script:AppConfig.LogLevel)) {
+        if (![string]::IsNullOrWhiteSpace($Script:RunTimeConfig.Logging.LogLevel)) {
+            "Set window log level to: {0}" -f $Script:RunTimeConfig.Logging.LogLevel | Write-LogOutput -LogType DEBUG
+            if (($LogWindowForm.Elements.ComboBoxSelectLogLevel.Items | Measure-Object).count -le 0 -and !$LogWindowForm.Elements.ComboBoxSelectLogLevel.Items.Content.Contains($Script:RunTimeConfig.Logging.LogLevel)) {
                 $ComboBoxSelectLogLevelItem = New-Object System.Windows.Controls.ComboBoxItem
-                $ComboBoxSelectLogLevelItem.Content = $Script:AppConfig.LogLevel
+                $ComboBoxSelectLogLevelItem.Content = $Script:RunTimeConfig.Logging.LogLevel
                 $LogWindowForm.Elements.ComboBoxSelectLogLevel.Items.Add($ComboBoxSelectLogLevelItem) | Out-Null
             }
-            $LogWindowForm.Elements.ComboBoxSelectLogLevel.SelectedValue = $LogWindowForm.Elements.ComboBoxSelectLogLevel.Items | Where-Object { $_.Content -eq $Script:AppConfig.LogLevel }
-            $Script:RunTimeConfig.Logging.LogLevelSetting = $Script:AppConfig.LogLevel
+            $LogWindowForm.Elements.ComboBoxSelectLogLevel.SelectedValue = $LogWindowForm.Elements.ComboBoxSelectLogLevel.Items | Where-Object { $_.Content -eq $Script:RunTimeConfig.Logging.LogLevel }
+            $Script:RunTimeConfig.Logging.LogLevelSetting = $Script:RunTimeConfig.Logging.LogLevel
         }
         else {
             "Set window log level to default because it was not set: INFO" | Write-LogOutput -LogType DEBUG
@@ -196,14 +200,14 @@ function Open-LogWindow {
 
         $Script:LogWindowForm.Elements.CheckboxConsoleLog.Add_Checked({
                 $_ | Show-EventInfo
-                $Script:RunTimeConfig.LogToConsole = $true
+                $Script:RunTimeConfig.Logging.LogToConsole = $true
                 "Console logging is enabled" | Write-LogOutput -LogType LOG
                 $true | Invoke-ConfigSetting -Property "CheckboxConsoleLog"
             })
 
         $Script:LogWindowForm.Elements.CheckboxConsoleLog.Add_UnChecked({
                 $_ | Show-EventInfo
-                $Script:RunTimeConfig.LogToConsole = $false
+                $Script:RunTimeConfig.Logging.LogToConsole = $false
                 "Console logging is disabled" | Write-LogOutput -LogType LOG
                 $false | Invoke-ConfigSetting -Property "CheckboxConsoleLog"
 

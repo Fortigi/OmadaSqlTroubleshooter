@@ -1,10 +1,26 @@
 function Initialize-ConfigSettings {
+    [CmdLetBinding()]
+    PARAM()
     try {
-
+        $Script:Tracer::WriteLine(("{0}: Function: {1} - Caller: {2}({3}) - Command: {4}" -f $($Script:RunTimeConfig.ApplicationName), $($MyInvocation.MyCommand.Name), $($MyInvocation.ScriptName), $($MyInvocation.ScriptLineNumber), $MyInvocation.Statement))
         Invoke-ConfigSetting -Reset:$Reset.IsPresent
 
-        if ($Script:RunTimeConfig.LogToConsole -or $Script:AppConfig.CheckboxConsoleLog) {
-            $Script:RunTimeConfig.LogToConsole = $true
+        if ($Reset.IsPresent -or $NoReconnect.IsPresent) {
+            $Script:ReconnectStatus = 1
+        }
+        else {
+            # 0 = Not set
+            # 1 = Skip reconnect
+            # 2 = Reconnect
+            # 3 = Always connect
+            $Script:ReconnectStatus = Show-ChoiceWindow -Title "Reconnect?" -Message ("Reconnect to '{0}' using existing connection settings?" -f $Script:AppConfig.BaseUrl) -LeftButtonReturnValue 2 -RightButtonReturnValue 1
+        }
+        if ($Script:ReconnectStatus -eq 1) {
+            "Skip reconnect" | Write-LogOutput -LogType DEBUG
+        }
+
+        if ($Script:RunTimeConfig.Logging.LogToConsole -or $Script:AppConfig.CheckboxConsoleLog) {
+            $Script:RunTimeConfig.Logging.LogToConsole = $true
             "Console logging is enabled" | Write-LogOutput -LogType LOG
         }
 
@@ -21,9 +37,13 @@ function Initialize-ConfigSettings {
             "Config: Current Url: {0}" -f $Script:CurrentUrl | Write-LogOutput -LogType DEBUG
         }
 
-        if ($Script:AppConfig.MyQueriesOnly) {
-            "Config: MyQueriesOnly: True" | Write-LogOutput -LogType DEBUG
-            $Script:MainWindowForm.Elements.CheckboxMyQueries.IsChecked = $True
+        if ($Script:AppConfig.MyCreatedQueriesOnly) {
+            "Config: MyCreatedQueriesOnly: True" | Write-LogOutput -LogType DEBUG
+            $Script:MainWindowForm.Elements.CheckboxMyCreatedQueries.IsChecked = $True
+        }
+        if ($Script:AppConfig.MyUpdatedQueriesOnly) {
+            "Config: MyUpdatedQueriesOnly: True" | Write-LogOutput -LogType DEBUG
+            $Script:MainWindowForm.Elements.CheckboxMyUpdatedQueries.IsChecked = $True
         }
 
         if ($null -ne $Script:RunTimeConfig.Logging.LogLevelSetting) {
@@ -35,7 +55,7 @@ function Initialize-ConfigSettings {
             "Config: CurrentSqlQuery.DoId: {0}" -f $Script:AppConfig.CurrentSqlQuery.DoId | Write-LogOutput -LogType DEBUG
 
             $ComboBoxSelectQueryItem = $null
-            $ComboBoxSelectQueryItem = $Script:MainWindowForm.Elements.ComboBoxSelectQuery.Items | Where-Object { $_.Content -eq $Script:AppConfig.CurrentSqlQuery.FullName }
+            $ComboBoxSelectQueryItem = $Script:MainWindowForm.Elements.ComboBoxSelectQuery.Items | Where-Object { $_.Content -like "*$($Script:AppConfig.CurrentSqlQuery.DoId)" }
             if ($null -eq $ComboBoxSelectQueryItem) {
                 "Config: Set CurrentSqlQuery.DoId: {0}" -f $Script:AppConfig.CurrentSqlQuery.DoId | Write-LogOutput -LogType DEBUG
                 $ComboBoxSelectQueryItem = New-Object System.Windows.Controls.ComboBoxItem
@@ -64,6 +84,7 @@ function Initialize-ConfigSettings {
         Set-OmadaUrl
         Set-AuthenticationOption
         Test-ConnectionSettings
+        Test-ConnectionButton
 
     }
     catch {

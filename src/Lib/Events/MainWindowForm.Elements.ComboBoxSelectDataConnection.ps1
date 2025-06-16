@@ -1,6 +1,7 @@
 $Script:MainWindowForm.Elements.ComboBoxSelectDataConnection.Add_DropDownOpened({
-        $_ | Show-EventInfo
         try {
+            $_ | Show-EventInfo
+
             if (($Script:MainWindowForm.Elements.ComboBoxSelectDataConnection.Items | Measure-Object).Count -le 0) {
                 Update-DataConnectionList
             }
@@ -12,22 +13,21 @@ $Script:MainWindowForm.Elements.ComboBoxSelectDataConnection.Add_DropDownOpened(
 
 
 $Script:MainWindowForm.Elements.ComboBoxSelectDataConnection.Add_SelectionChanged({
-        $_ | Show-EventInfo
-
         try {
-            if (($Script:MainWindowForm.Elements.ComboBoxSelectDataConnection.Items | Measure-Object).Count -le 0) {
+            $_ | Show-EventInfo
+
+            $PsCallStack = Get-PSCallStack
+
+            if (-not $Pscallstack[1].Command -eq "Update-DataConnectionList" -and ($Script:MainWindowForm.Elements.ComboBoxSelectDataConnection.Items | Measure-Object).Count -le 0) {
                 Update-DataConnectionList
             }
-            if (![string]::IsNullOrWhiteSpace($Script:MainWindowForm.Elements.ComboBoxSelectDataConnection.SelectedItem.Content)) {
+
+            if (![string]::IsNullOrWhiteSpace($Script:MainWindowForm.Elements.ComboBoxSelectDataConnection.SelectedItem.Content) -and $Script:MainWindowForm.Elements.ComboBoxSelectDataConnection.SelectedItem.Content -ne " - " -and $Script:MainWindowForm.Elements.ComboBoxSelectDataConnection.SelectedItem.Content -ne " - 0") {
                 $Script:MainWindowForm.Elements.ComboBoxSelectDataConnection.SelectedItem.Content | Invoke-ConfigSetting -Property "CurrentDataConnection"
+                $Script:MainWindowForm.Elements.TextBlockDatabaseName.Text = $Script:AppConfig.CurrentDataConnection.DisplayName
 
-                if (![string]::IsNullOrWhiteSpace($Script:MainWindowForm.Elements.ComboBoxSelectDataConnection.SelectedItem.Content) -and $Script:MainWindowForm.Elements.ComboBoxSelectDataConnection.SelectedItem.Content -ne " - ") {
-                    $Script:MainWindowForm.Elements.ComboBoxSelectDataConnection.SelectedItem.Content | Invoke-ConfigSetting -Property "CurrentDataConnection"
-                    $Script:MainWindowForm.Elements.TextBlockDatabaseName.Text = $Script:AppConfig.CurrentDataConnection.DisplayName
-
-                    if (Test-SqlSchemaWindowOpen) {
-                        Get-SqlSchemaObject
-                    }
+                if (Test-SqlSchemaWindowOpen) {
+                    Get-SqlSchemaObject
                 }
             }
         }

@@ -102,11 +102,11 @@ process {
             $EventsProcessed++
         }
     }
-    if($EventsProcessed -gt 0){
+    if ($EventsProcessed -gt 0) {
         $Output | Out-File -Path $FullPath -Encoding utf8 -Append:$Append -Force
         "Events for control '{0}' written to '{1}'" -f $Name, $FullPath | Write-Host -ForegroundColor Green
     }
-    else{
+    else {
         "No events added for control '{0}'" -f $Name | Write-Host -ForegroundColor Yellow
     }
 }

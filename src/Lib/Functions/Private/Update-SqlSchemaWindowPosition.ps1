@@ -1,6 +1,8 @@
 function Update-SqlSchemaWindowPosition {
-
+    [CmdLetBinding()]
+    PARAM()
     try {
+        $Script:Tracer::WriteLine(("{0}: Function: {1} - Caller: {2}({3}) - Command: {4}" -f $($Script:RunTimeConfig.ApplicationName), $($MyInvocation.MyCommand.Name), $($MyInvocation.ScriptName), $($MyInvocation.ScriptLineNumber), $MyInvocation.Statement))
         $Script:SqlSchemaWindowForm.PositionManager.MainWindowRight = [Int]::Abs($Script:MainWindowForm.Definition.Left) + [Int]::Abs($Script:MainWindowForm.Definition.Width)
         "PositionManagerSqlSchemaWindow MainWindowRight: {0}" -f $Script:SqlSchemaWindowForm.PositionManager.MainWindowRight | Write-LogOutput -LogType DEBUG
         $Script:SqlSchemaWindowForm.PositionManager.MainWindowBottom = [Int]::Abs($Script:MainWindowForm.Definition.Top) - [Int]::Abs($Script:MainWindowForm.Definition.Height)

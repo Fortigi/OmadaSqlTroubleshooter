@@ -1,5 +1,6 @@
 ﻿
 function Test-Variable {
+    [CmdLetBinding()]
     [System.Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSReviewUnusedParameter', 'ExcludeVariable', Justification = 'The variable is used, but script analyzer does not recognize it')]
     [System.Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSReviewUnusedParameter', 'ExcludeAttribute', Justification = 'The variable is used, but script analyzer does not recognize it')]
     param (
@@ -8,67 +9,73 @@ function Test-Variable {
         [switch]$ExcludeVariable,
         [switch]$ExcludeAttribute
     )
+    try {
+        $Script:Tracer::WriteLine(("{0}: Function: {1} - Caller: {2}({3}) - Command: {4}" -f $($Script:RunTimeConfig.ApplicationName), $($MyInvocation.MyCommand.Name), $($MyInvocation.ScriptName), $($MyInvocation.ScriptLineNumber), $MyInvocation.Statement))
 
-    function ReturnObject {
-        if ($ExcludeVariable -and $ExcludeAttribute) {
-            $Return = $false
+        function ReturnObject {
+            if ($ExcludeVariable -and $ExcludeAttribute) {
+                $Return = $false
+            }
+            elseif ($ExcludeAttribute -and !$ExcludeVariable) {
+                $Return.Remove("AttributeExists")
+                $Return = $Return.VariableExists
+            }
+            elseif ($ExcludeVariable -and !$ExcludeAttribute) {
+                $Return.Remove("VariableExists")
+                $Return = $Return.AttributeExists
+            }
+            return $Return
         }
-        elseif ($ExcludeAttribute -and !$ExcludeVariable) {
-            $Return.Remove("AttributeExists")
-            $Return = $Return.VariableExists
+
+        $Parts = $Expression.TrimStart('$').Trim() -split '\.'
+
+        $Root = $Parts[0]
+
+        $ScopePrefix = ''
+        if ($Root -match '^(\w+:)') {
+            $ScopePrefix = $Matches[1]
+            $Root = $Root.Substring($ScopePrefix.Length)
         }
-        elseif ($ExcludeVariable -and !$ExcludeAttribute) {
-            $Return.Remove("VariableExists")
-            $Return = $Return.AttributeExists
+
+        $SessionState = $ExecutionContext.SessionState
+        $Variable = $SessionState.PSVariable.Get($Root)
+
+        $Return = @{
+            VariableExists  = $false
+            AttributeExists = $false
         }
-        return $Return
-    }
 
-    $Parts = $Expression.TrimStart('$').Trim() -split '\.'
-
-    $Root = $Parts[0]
-
-    $ScopePrefix = ''
-    if ($Root -match '^(\w+:)') {
-        $ScopePrefix = $Matches[1]
-        $Root = $Root.Substring($ScopePrefix.Length)
-    }
-
-    $SessionState = $ExecutionContext.SessionState
-    $Variable = $SessionState.PSVariable.Get($Root)
-
-    $Return = @{
-        VariableExists  = $false
-        AttributeExists = $false
-    }
-
-    if ($null -eq $Variable) {
-        $Return.VariableExists = $false
-        return ReturnObject
-    }
-
-    $CurrentObject = $Variable.Value
-    if (($Parts | Measure-Object).Count -eq 1) {
-        return ReturnObject
-    }
-    foreach ($Part in $Parts[1..($Parts.Count - 1)]) {
-        if ($null -eq $CurrentObject) {
-            $Return.VariableExists = $true
+        if ($null -eq $Variable) {
+            $Return.VariableExists = $false
             return ReturnObject
         }
 
-        if ($CurrentObject -is [hashtable]) {
-            $Member = $CurrentObject.keys | Where-Object {$_ -eq $Part}
-        }
-        else {
-            $Member = $CurrentObject | Get-Member  -Name $Part -Force -ErrorAction SilentlyContinue | Where-Object {$_.MemberType -in @("Property", "Field", "Method")}
-        }
-
-        if ($null -eq $Member) {
-            $Return.VariableExists = $true
+        $CurrentObject = $Variable.Value
+        if (($Parts | Measure-Object).Count -eq 1) {
             return ReturnObject
         }
-        $CurrentObject = $CurrentObject.$Part
+        foreach ($Part in $Parts[1..($Parts.Count - 1)]) {
+            if ($null -eq $CurrentObject) {
+                $Return.VariableExists = $true
+                return ReturnObject
+            }
+
+            if ($CurrentObject -is [hashtable]) {
+                $Member = $CurrentObject.keys | Where-Object { $_ -eq $Part }
+            }
+            else {
+                $Member = $CurrentObject | Get-Member  -Name $Part -Force -ErrorAction SilentlyContinue | Where-Object { $_.MemberType -in @("Property", "Field", "Method") }
+            }
+
+            if ($null -eq $Member) {
+                $Return.VariableExists = $true
+                return ReturnObject
+            }
+            $CurrentObject = $CurrentObject.$Part
+        }
+        return ReturnObject
     }
-    return ReturnObject
+    catch {
+        $_.Exception.Message | Write-LogOutput -LogType ERROR
+    }
 }

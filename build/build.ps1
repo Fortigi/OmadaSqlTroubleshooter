@@ -15,4 +15,4 @@ Import-Module -Name psake -Force
 Import-Module -Name PSDeploy -Force
 Import-Module -Name PSScriptAnalyzer -Force
 
-Invoke-psake -buildFile "$PSScriptRoot\psakeBuild.ps1" -taskList $Task -Verbose:$VerbosePreference -parameters @{"BuildVersion"=$BuildVersion}
+Invoke-psake -buildFile "$PSScriptRoot\psakeBuild.ps1" -taskList $Task -Verbose:$VerbosePreference -parameters @{"BuildVersion" = $BuildVersion }

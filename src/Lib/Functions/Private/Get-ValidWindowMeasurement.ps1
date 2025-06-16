@@ -1,4 +1,5 @@
 function Get-ValidWindowMeasurement {
+    [CmdLetBinding()]
     PARAM(
         [parameter(Mandatory = $true, ValueFromPipeline = $true)]
         $Form,
@@ -7,6 +8,7 @@ function Get-ValidWindowMeasurement {
     )
 
     try {
+
         if ($Setting -in "Width", "Height") {
 
             $SettingString = "Min{0}" -f $Setting

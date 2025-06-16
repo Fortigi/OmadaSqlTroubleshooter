@@ -18,6 +18,9 @@ Resets the stored configuration to default.
 .PARAMETER LogToConsole
 Outputs logging to the console.
 
+.PARAMETER NoReconnect
+Prevents the application from attempting to reconnect to the Omada Identity Suite using the stored connection information.
+
 .EXAMPLE
 Invoke-OmadaSqlTroubleshooter
 
@@ -39,21 +42,22 @@ Requires PowerShell 7.0 or higher and the OmadaWeb.PS module.
 #>
 
 function Invoke-OmadaSqlTroubleshooter {
-    [System.Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSUseDeclaredVarsMoreThanAssignments', 'StartVariables', Justification = 'The CurrentPoperties variable is used in a function called from here')]
-    [CmdletBinding()]
+    [CmdLetBinding()]
+    [System.Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSUseDeclaredVarsMoreThanAssignments', 'StartVariables', Justification = 'The CurrentProperties variable is used in a function called from here')]
     PARAM(
         [ValidateSet("INFO", "DEBUG", "VERBOSE", "WARNING", "ERROR", "FATAL", "VERBOSE2")]
         [string]$LogLevel,
         [switch]$Reset,
-        [switch]$LogToConsole
+        [switch]$LogToConsole,
+        [switch]$NoReconnect
     )
     $Error.Clear()
 
     #region Initialize
     $StartVariables = Get-Variable
     $ApplicationName = "OmadaSqlTroubleshooter"
-
     $Script:RunTimeConfig = @{
+        ApplicationName    = $ApplicationName
         ScriptName         = "OmadaSqlTroubleshooter"
         ApplicationTitle   = ""
         ModuleFolder       = Split-Path (Get-Module OmadaSqlTroubleShooter).Path
@@ -62,7 +66,7 @@ function Invoke-OmadaSqlTroubleshooter {
             LogToConsole        = $LogToConsole.IsPresent -or $false
             LogLevel            = $null
             VerboseParameterSet = $PSCmdlet.MyInvocation.BoundParameters.Keys.Contains("Verbose")
-            LogLevelSetting     = $(if ([string]::IsNullOrWhiteSpace($LogLevel)) { $null }else { $LogLevel })
+            LogLevelSetting     = $(if ([string]::IsNullOrWhiteSpace($LogLevel)) { "WARNING" } else { $LogLevel })
             AppLogObject        = [System.Collections.ObjectModel.ObservableCollection[string]]::new()
         }
         StopWatch          = $null
@@ -77,6 +81,7 @@ function Invoke-OmadaSqlTroubleshooter {
     Get-ChildItem -Path (Join-Path $Script:RunTimeConfig.ModuleFolder -ChildPath "Lib\Functions") -Filter *.ps1 | ForEach-Object {
         . $_.FullName
     }
+
     Initialize-OmadaSqlTroubleShooter
     #endregion
 
@@ -116,6 +121,8 @@ function Invoke-OmadaSqlTroubleshooter {
         [System.Windows.Forms.Application]::DoEvents()
 
         "Application '{0}': Start initialization..." -f $Script:RunTimeConfig.ApplicationTitle | Write-Host -ForegroundColor Green
+        $Script:ConnectionStatus = $false
+        $Script:ReconnectStatus = 0
         Initialize-ConfigSettings
 
         Close-SplashScreenForm
@@ -123,7 +130,7 @@ function Invoke-OmadaSqlTroubleshooter {
     catch {
         $_.Exception.Message | Write-LogOutput -LogType ERROR -SkipDialog
         Close-SplashScreenForm
-        Clear-Variables
+        #Clear-Variables
     }
 
     try {
@@ -145,11 +152,11 @@ function Invoke-OmadaSqlTroubleshooter {
     catch {
         $_.Exception.Message | Write-LogOutput -LogType ERROR -SkipDialog
         Close-SplashScreenForm
-        Clear-Variables
+        #Clear-Variables
     }
 
     Pop-Location
-    Clear-Variables
+    #Clear-Variables
     "Application '{0}': Clean-up complete!" -f $Script:RunTimeConfig.ApplicationTitle | Write-Host -ForegroundColor Green
     #endregion
 }

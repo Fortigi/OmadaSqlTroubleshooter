@@ -1,7 +1,8 @@
 function Set-OmadaUrl {
-
+    [CmdLetBinding()]
+    PARAM()
     try {
-
+        $Script:Tracer::WriteLine(("{0}: Function: {1} - Caller: {2}({3}) - Command: {4}" -f $($Script:RunTimeConfig.ApplicationName), $($MyInvocation.MyCommand.Name), $($MyInvocation.ScriptName), $($MyInvocation.ScriptLineNumber), $MyInvocation.Statement))
         if (![string]::IsNullOrWhiteSpace($Script:MainWindowForm.Elements.TextBoxURL.Text)) {
 
             if ($Script:MainWindowForm.Elements.TextBoxURL.Text -notlike "http*") {
@@ -44,15 +45,15 @@ function Set-OmadaUrl {
             if ($Script:CurrentUrl -ne $Script:AppConfig.BaseUrl) {
                 "Omada Url set to: {0}" -f $Script:AppConfig.BaseUrl | Write-LogOutput -LogType DEBUG
                 $Script:CurrentUrl = $Script:AppConfig.BaseUrl
-                if ($Script:RunTimeConfig.AuthenticationSet) {
-                    "Authentication is set, force update query list!" | Write-LogOutput -LogType DEBUG
-                    Update-QueryList -ForceRefresh
-                }
+                # if ($Script:RunTimeConfig.AuthenticationSet) {
+                #     "Authentication is set, force update query list!" | Write-LogOutput -LogType DEBUG
+                #     #Update-QueryList -ForceRefresh
+                # }
             }
-            elseif([string]::IsNullOrEmpty($Script:AppConfig.BaseUrl)) {
+            elseif ([string]::IsNullOrEmpty($Script:AppConfig.BaseUrl)) {
                 "Omada Url is empty!" | Write-LogOutput -LogType DEBUG
             }
-            else{
+            else {
                 "Omada Url maintained: {0}" -f $Script:AppConfig.BaseUrl | Write-LogOutput -LogType DEBUG
             }
         }

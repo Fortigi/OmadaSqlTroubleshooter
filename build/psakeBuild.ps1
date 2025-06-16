@@ -11,6 +11,7 @@ Properties {
 
 
 Task default -depends Dependencies, Analyze, Test, Build, ImportModule
+Task TestBuildOnly -depends Analyze, Test, Build
 Task Pipeline -depends Dependencies, Analyze, Test, Build, TestAssemblies
 Task DeployOnly -depends Dependencies, Build, Deploy
 
@@ -29,14 +30,21 @@ Task Dependencies {
 Task Analyze {
 
     try {
-        $Profile = @{
+        $SaProfile = @{
             Severity     = @('Error', 'Warning')
             IncludeRules = '*'
             ExcludeRules = '*WriteHost', '*AvoidUsingEmptyCatchBlock*', '*UseShouldProcessForStateChangingFunctions*', '*AvoidOverwritingBuiltInCmdlets*', '*UseToExportFieldsInManifest*', '*UseProcessBlockForPipelineCommand*', '*ConvertToSecureStringWithPlainText*', '*UseSingularNouns*'
         }
-        $saResults = Invoke-ScriptAnalyzer -Path $ModuleSource -Severity @('Error', 'Warning') -Recurse -Profile $Profile -Verbose:$false
-        if ($saResults) {
-            $saResults | Format-Table
+        $SaResults = @()
+        @("functions", "events") | ForEach-Object {
+            $LibSource = $_
+            $SourceChildPath = "lib\{0}" -f $LibSource
+            Get-ChildItem -Path (Join-Path $ModuleSource -ChildPath $SourceChildPath) -Recurse -File | Where-Object { $_.Name -notlike "_*.ps1" } | ForEach-Object {
+                $SaResults += Invoke-ScriptAnalyzer -Path $_.FullName -Severity @('Error', 'Warning') -Recurse -Profile $SaProfile -Verbose:$false
+            }
+        }
+        if ($SaResults) {
+            $SaResults | Format-Table
             Write-Error -Message 'One or more Script Analyzer errors/warnings where found. Build cannot continue!' -ErrorAction "Stop"
         }
     }
@@ -223,8 +231,11 @@ Task Build -depends Test {
                 Get-Item $_ | Remove-Item -Force
             }
             $HeaderContent | Out-File -Path (Join-Path $OutputDir -ChildPath $TargetFilePath) -Force -Append -Encoding utf8
-            Get-ChildItem -Path (Join-Path $ModuleSource -ChildPath $SourceChildPath) -Recurse -File | ForEach-Object {
+            Get-ChildItem -Path (Join-Path $ModuleSource -ChildPath $SourceChildPath) -Recurse -File | Where-Object { $_.Name -notlike "_*.ps1" } | ForEach-Object {
                 $Content = Get-Content $_ -Encoding UTF8 | Where-Object { $_ -notmatch '^\s*#requires' -and $_ -notmatch '^\s*#(?!>)' }
+                if (($content | Select-String -SimpleMatch "Wait-Debugger" -AllMatches | Measure-Object).Count -gt 0) {
+                    "Use of 'Wait-Debugger' command found in script:{0}. This must be removed before building the module" -f $_.Name | Write-Error -ErrorAction Stop
+                }
                 $Content.Trim() | Out-File -Path (Join-Path $OutputDir -ChildPath $TargetFilePath) -Force -Append -Encoding utf8
             }
         (Get-Content (Join-Path $OutputDir -ChildPath $TargetFilePath) -Raw) -replace "`r?`n", "`r`n" | Invoke-Formatter -Settings $FormattingSettings | Set-Content -Path (Join-Path $OutputDir -ChildPath $TargetFilePath) -Encoding UTF8 -Force
@@ -282,7 +293,7 @@ Task ImportModule -depends TestAssemblies {
         $Test = Import-Module "$OutputDir\$ModuleName.psd1" -Force -PassThru
         if ($Test) {
             "Module loaded successfully" | Write-Verbose
-            Remove-Module -name $Test.Name -Force
+            Remove-Module -Name $Test.Name -Force
         }
         else {
             "Module failed to load" | Write-Error -ErrorAction Stop

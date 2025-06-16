@@ -12,22 +12,18 @@ using Microsoft.Web.WebView2.Wpf;
 using Microsoft.Web.WebView2.Core;
 
 
-namespace OmadaSqlTroubleshooter
-{
+namespace OmadaSqlTroubleshooter {
     /// <summary>
     /// Interaction logic for MainWindow.xaml
     /// </summary>
-    public partial class MainWindow : Window
-    {
-        public MainWindow()
-        {
+    public partial class MainWindow : Window {
+        public MainWindow() {
             InitializeComponent();
             this.Loaded += Window_Loaded;
         }
 
 
-        public async void Window_Loaded(object sender, RoutedEventArgs e)
-        {
+        public async void Window_Loaded(object sender, RoutedEventArgs e) {
             this.webView21.Source =
             new Uri(System.IO.Path.Combine(
             System.AppDomain.CurrentDomain.BaseDirectory,

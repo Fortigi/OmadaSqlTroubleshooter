@@ -3,7 +3,7 @@ $ErrorActionPreference = "Stop"
 
 Deploy 'Deploy dummy' {
 
-      By Filesystem Config {
+    By Filesystem Config {
         FromSource ""
         To ""
         WithPostScript {

@@ -1,7 +1,8 @@
 function Test-ConnectionRequirements {
-
+    [CmdLetBinding()]
+    PARAM()
     try {
-
+        $Script:Tracer::WriteLine(("{0}: Function: {1} - Caller: {2}({3}) - Command: {4}" -f $($Script:RunTimeConfig.ApplicationName), $($MyInvocation.MyCommand.Name), $($MyInvocation.ScriptName), $($MyInvocation.ScriptLineNumber), $MyInvocation.Statement))
         if ([string]::IsNullOrEmpty($Script:MainWindowForm.Elements.TextBoxURL.Text)) {
             "URL is empty" | Write-LogOutput -LogType DEBUG
             return $false
