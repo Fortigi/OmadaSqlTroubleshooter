@@ -1,10 +1,11 @@
 function Show-PopupWindow {
+    [CmdLetBinding()]
     PARAM(
         $Message
     )
     try {
-
-        if($null -eq $Script:MainWindowForm -or $null -eq $Script:MainWindowForm.Definition -or !$Script:MainWindowForm.Definition.IsVisible) {
+        $Script:Tracer::WriteLine(("{0}: Function: {1} - Caller: {2}({3}) - Command: {4}" -f $($Script:RunTimeConfig.ApplicationName), $($MyInvocation.MyCommand.Name), $($MyInvocation.ScriptName), $($MyInvocation.ScriptLineNumber), $MyInvocation.Statement))
+        if ($null -eq $Script:MainWindowForm -or $null -eq $Script:MainWindowForm.Definition -or !$Script:MainWindowForm.Definition.IsVisible) {
             return
         }
 

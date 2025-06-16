@@ -1,5 +1,9 @@
 function Set-EditorValue {
+    [CmdLetBinding()]
+    PARAM()
     try {
+        $Script:Tracer::WriteLine(("{0}: Function: {1} - Caller: {2}({3}) - Command: {4}" -f $($Script:RunTimeConfig.ApplicationName), $($MyInvocation.MyCommand.Name), $($MyInvocation.ScriptName), $($MyInvocation.ScriptLineNumber), $MyInvocation.Statement))
+
         if ($null -ne $Script:MainWindowForm.Elements.ComboBoxSelectQuery.SelectedItem) {
             "Selected SQL Query object: {0}" -f $Script:MainWindowForm.Elements.ComboBoxSelectQuery.SelectedItem.Content | Write-LogOutput -LogType DEBUG
             $Script:MainWindowForm.Elements.ComboBoxSelectQuery.SelectedItem.Content | Invoke-ConfigSetting -Property "CurrentSqlQuery"
@@ -8,6 +12,12 @@ function Set-EditorValue {
                 "Omada Url not set or Query not selected. Set correct values to execute queries!" | Write-LogOutput -LogType WARNING
                 return
             }
+
+            if ($Script:ReconnectStatus -eq 1) {
+                "Skip reconnect" | Write-LogOutput -LogType DEBUG
+                return
+            }
+
             if (!(Test-ConnectionRequirements)) {
                 "Connection requirements are not met" | Write-LogOutput -LogType DEBUG
                 return

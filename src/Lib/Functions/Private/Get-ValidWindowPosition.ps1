@@ -1,4 +1,5 @@
 ﻿function Get-ValidWindowPosition {
+    [CmdLetBinding()]
     PARAM(
         [parameter(Mandatory = $true, ValueFromPipeline = $true)]
         $Form,
@@ -6,6 +7,7 @@
         [string]$Setting
     )
     try {
+
         $ActionId = [guid]::NewGuid().ToString()
         if ($Setting -in "Left", "Top") {
             "{0} setting {1}: {2} (Id:{3})" -f $Form.Name, $Setting, $Form.$Setting, $ActionId | Write-LogOutput -LogType VERBOSE2

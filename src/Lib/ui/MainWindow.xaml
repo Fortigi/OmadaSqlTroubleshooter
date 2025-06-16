@@ -76,12 +76,11 @@
                 <Grid.RowDefinitions>
                     <RowDefinition Height="Auto"/>
                     <RowDefinition Height="*"/>
-                    <RowDefinition Height="6"/>
-                    <RowDefinition Height="*"/>
                     <RowDefinition Height="30"/>
                 </Grid.RowDefinitions>
                 <Grid Margin="0" Grid.Row="0" >
                     <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
                         <RowDefinition Height="Auto"/>
                         <RowDefinition Height="Auto"/>
                         <RowDefinition Height="6"/>
@@ -90,54 +89,92 @@
                         <StackPanel Orientation="Horizontal" >
                             <Separator Style="{StaticResource DefaultSeparatorStyle}" Height="6"/>
                         </StackPanel>
-                        <StackPanel Orientation="Horizontal" >
-                            <Separator Style="{StaticResource LeftBorderWidthSeparatorStyle}" />
-                            <Label x:Name="LabelUrl" Content="Tenant:" ToolTip="Omada Tenant url. Enter full URL or tenant name only. Example: Enter 'comp' for 'https://comp.omada.cloud'"  HorizontalAlignment="Left"/>
-                            <Separator Style="{StaticResource DefaultWidthSeparatorStyle}" />
-                            <TextBox x:Name="TextBoxURL" ToolTip="Enter full URL or tenant name only. Example: Enter 'comp' for 'https://comp.omada.cloud'" />
-                            <Separator Style="{StaticResource DefaultWidthSeparatorStyle}" />
-                            <Label x:Name="LabelUserName" Content="Username:" ToolTip="Username:" Visibility="Hidden" />
-                            <Separator Style="{StaticResource DefaultWidthSeparatorStyle}" />
-                            <TextBox x:Name="TextBoxUserName" Visibility="Hidden" IsEnabled="False"  />
-                        </StackPanel>
-                        <Separator Style="{StaticResource DefaultHeightSeparator}" />
-                        <StackPanel Orientation="Horizontal">
-                            <Separator Style="{StaticResource LeftBorderWidthSeparatorStyle}" />
-                            <Label x:Name="LabelAuthenticationOption" Content="Authentication:" ToolTip="Authentication type. This is mandatory."   />
-                            <Separator Style="{StaticResource DefaultWidthSeparatorStyle}" />
-                            <ComboBox x:Name="ComboBoxSelectAuthenticationOption" SelectedIndex="0" >
-                                <ComboBoxItem Content="Browser"/>
-                                <ComboBoxItem Content="OAuth"/>
-                            </ComboBox>
-                            <Separator Style="{StaticResource DefaultWidthSeparatorStyle}" />
-                            <Label x:Name="LabelPassword" Content="Password:" Visibility="Hidden" ToolTip="Enter a password" />
-                            <Separator Style="{StaticResource DefaultWidthSeparatorStyle}" />
-                            <PasswordBox x:Name="TextBoxPassword" Visibility="Hidden"  ToolTip="Enter a password" />
-                        </StackPanel>
-                        <Separator Style="{StaticResource DefaultHeightSeparator}" />
-                        <StackPanel Orientation="Horizontal">
-                            <Separator Style="{StaticResource LeftBorderWidthSeparatorStyle}" />
-                            <Label x:Name="LabelComboBoxSelectQuery" Content="Queries:" ToolTip="Query list" />
-                            <Separator Style="{StaticResource DefaultWidthSeparatorStyle}" />
-                            <ComboBox x:Name="ComboBoxSelectQuery" TabIndex="5" />
-                            <Separator Style="{StaticResource DefaultWidthSeparatorStyle}" />
-                            <CheckBox x:Name="CheckboxMyQueries" Content="My Queries" TabIndex="6" VerticalAlignment="Center" ToolTip="Check this box to show only SQL queries that are created or last updated by you." />
-                        </StackPanel>
-                        <Separator Style="{StaticResource DefaultHeightSeparator}" />
-                        <StackPanel Orientation="Horizontal">
-                            <Separator Style="{StaticResource LeftBorderWidthSeparatorStyle}" />
-                            <Label x:Name="LabelDisplayName" Content="Display name:" ToolTip="The Display Name of a a query, the display name can be changed if needed." />
-                            <Separator Style="{StaticResource DefaultWidthSeparatorStyle}" />
-                            <TextBox x:Name="TextBoxDisplayName" IsEnabled="False" TabIndex="6" />
-                            <Separator Style="{StaticResource DefaultWidthSeparatorStyle}" />
-                            <Label x:Name="LabelDataConnection" Content="Connection:"  ToolTip="Data Connection"/>
-                            <Separator Style="{StaticResource DefaultWidthSeparatorStyle}" />
-                            <!-- <TextBox x:Name="TextBoxDataConnection"  IsEnabled="False" /> -->
-                            <ComboBox x:Name="ComboBoxSelectDataConnection" TabIndex="7"/>
-                        </StackPanel>
-                        <Separator Style="{StaticResource DefaultHeightSeparator}" />
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+                            <StackPanel Orientation="Vertical" HorizontalAlignment="Left" Grid.Column="0">
+                                <StackPanel Orientation="Horizontal" >
+                                    <Separator Style="{StaticResource LeftBorderWidthSeparatorStyle}" />
+                                    <Label x:Name="LabelUrl" Content="Tenant:" ToolTip="Omada Tenant url. Enter full URL or tenant name only. Example: Enter 'comp' for 'https://comp.omada.cloud'"  HorizontalAlignment="Left"/>
+                                    <Separator Style="{StaticResource DefaultWidthSeparatorStyle}" />
+                                    <TextBox x:Name="TextBoxURL" ToolTip="Enter full URL or tenant name only. Example: Enter 'comp' for 'https://comp.omada.cloud'" />
+                                    <Separator Style="{StaticResource DefaultWidthSeparatorStyle}" />
+                                    <Label x:Name="LabelUserName" Content="Username:" ToolTip="Username:" Visibility="Hidden" />
+                                    <Separator Style="{StaticResource DefaultWidthSeparatorStyle}" />
+                                    <TextBox x:Name="TextBoxUserName" Visibility="Hidden" IsEnabled="False"  />
+                                </StackPanel>
+                                <Separator Style="{StaticResource DefaultHeightSeparator}" />
+                                <StackPanel Orientation="Horizontal">
+                                    <Separator Style="{StaticResource LeftBorderWidthSeparatorStyle}" />
+                                    <Label x:Name="LabelAuthenticationOption" Content="Authentication:" ToolTip="Authentication type. This is mandatory." />
+                                    <Separator Style="{StaticResource DefaultWidthSeparatorStyle}" />
+                                    <ComboBox x:Name="ComboBoxSelectAuthenticationOption" SelectedIndex="0" >
+                                        <ComboBoxItem Content="Browser"/>
+                                        <ComboBoxItem Content="OAuth"/>
+                                    </ComboBox>
+                                    <Separator Style="{StaticResource DefaultWidthSeparatorStyle}" />
+                                    <Label x:Name="LabelPassword" Content="Password:" Visibility="Hidden" ToolTip="Enter a password" />
+                                    <Separator Style="{StaticResource DefaultWidthSeparatorStyle}" />
+                                    <PasswordBox x:Name="TextBoxPassword" Visibility="Hidden"  ToolTip="Enter a password" />
+                                </StackPanel>
+                                <Separator Style="{StaticResource DefaultHeightSeparator}" />
+                                <StackPanel Orientation="Horizontal">
+                                    <Separator Style="{StaticResource LeftBorderWidthSeparatorStyle}" />
+                                    <Label x:Name="LabelComboBoxSelectQuery" Content="Queries:" ToolTip="Query list" />
+                                    <Separator Style="{StaticResource DefaultWidthSeparatorStyle}" />
+                                    <ComboBox x:Name="ComboBoxSelectQuery" TabIndex="5" />
+                                    <Separator Style="{StaticResource DefaultWidthSeparatorStyle}" />
+                                    <Label x:Name="LabelFilter" Content="Filter my queries:" ToolTip="Filter" />
+                                    <Separator Style="{StaticResource DefaultWidthSeparatorStyle}" />
+                                    <CheckBox x:Name="CheckboxMyCreatedQueries" Content="Created" TabIndex="6" VerticalAlignment="Center" ToolTip="Check this box to show only SQL queries that are created by you." />
+                                    <Separator Style="{StaticResource DefaultWidthSeparatorStyle}" />
+                                    <CheckBox x:Name="CheckboxMyUpdatedQueries" Content="Last updated" TabIndex="7" VerticalAlignment="Center" ToolTip="Check this box to show only SQL queries that are last updated by you." />
+                                </StackPanel>
+                                <Separator Style="{StaticResource DefaultHeightSeparator}" />
+                                <StackPanel Orientation="Horizontal">
+                                    <Separator Style="{StaticResource LeftBorderWidthSeparatorStyle}" />
+                                    <Label x:Name="LabelDisplayName" Content="Display name:" ToolTip="The Display Name of a a query, the display name can be changed if needed." />
+                                    <Separator Style="{StaticResource DefaultWidthSeparatorStyle}" />
+                                    <TextBox x:Name="TextBoxDisplayName" IsEnabled="False" TabIndex="8" />
+                                    <Separator Style="{StaticResource DefaultWidthSeparatorStyle}" />
+                                    <Label x:Name="LabelDataConnection" Content="Connection:"  ToolTip="Data Connection"/>
+                                    <Separator Style="{StaticResource DefaultWidthSeparatorStyle}" />
+                                    <!-- <TextBox x:Name="TextBoxDataConnection"  IsEnabled="False" /> -->
+                                    <ComboBox x:Name="ComboBoxSelectDataConnection" TabIndex="9"/>
+                                </StackPanel>
+                            </StackPanel>
+                            <Separator Style="{StaticResource DefaultWidthSeparatorStyle}" Grid.Column="1"/>
+                            <StackPanel Orientation="Vertical" HorizontalAlignment="Left" Grid.Column="2">
+                                <Grid >
+                                    <Grid.RowDefinitions>
+                                        <RowDefinition Height="25" />
+                                        <RowDefinition Height="8"/>
+                                        <RowDefinition Height="27"/>
+                                        <RowDefinition Height="Auto"/>
+                                        <RowDefinition Height="27"/>
+                                        <RowDefinition Height="Auto"/>
+                                        <RowDefinition Height="27"/>
+                                    </Grid.RowDefinitions>
+                                    <StackPanel Orientation="Horizontal"  Grid.Row="0"/>
+                                    <Separator Style="{StaticResource DefaultHeightSeparator}"  Grid.Row="1" Margin="0,0,0,0"/>
+                                    <StackPanel Orientation="Horizontal" Grid.Row="2">
+                                        <Button x:Name="ButtonConnect" Content="_Connect" ToolTip="Connect to Omada" VerticalAlignment="Center"/>
+                                    </StackPanel>
+                                    <Separator Style="{StaticResource DefaultHeightSeparator}" Grid.Row="3" Margin="0,0,0,0"/>
+                                    <StackPanel Orientation="Horizontal" Grid.Row="4"/>
+                                    <Separator Style="{StaticResource DefaultHeightSeparator}" Grid.Row="5" Margin="0,0,0,0"/>
+                                    <StackPanel Orientation="Horizontal" Grid.Row="6"/>
+                                    <Separator Style="{StaticResource DefaultHeightSeparator}" Grid.Row="6" Margin="0,0,0,0"/>
+                                </Grid>
+                            </StackPanel>
+                        </Grid>
                     </StackPanel>
-                    <StackPanel Orientation="Horizontal" Grid.Row="1">
+                    <Separator Style="{StaticResource DefaultHeightSeparator}" Grid.Row="1"/>
+                    <StackPanel Orientation="Horizontal" Grid.Row="2">
                         <Separator Style="{StaticResource ButtontBorderWidthSeparatorStyle}"  />
                         <Button x:Name="ButtonNewQuery" Content="_New" ToolTip="Creates a new query object in Omada" />
                         <Separator Style="{StaticResource DefaultWidthSeparatorStyle}" />
@@ -164,30 +201,36 @@
                 </Grid>
                 <Grid Grid.Row="1">
                     <Grid.RowDefinitions>
-                        <RowDefinition Height="25"/>
+                        <RowDefinition Height="*"/>
+                        <RowDefinition Height="6"/>
                         <RowDefinition Height="*"/>
                     </Grid.RowDefinitions>
-                    <StackPanel Orientation="Vertical" Grid.Row="0">
-                        <Label x:Name="LabelSqlEditor" Content="Editor" HorizontalAlignment="Left" VerticalAlignment="Center" />
-                    </StackPanel>
-                    <Border Grid.Row="1" BorderThickness="0" Background="White">
-                        <Wpf:WebView2 x:Name="webView21"
+                    <Grid Grid.Row="0">
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="25"/>
+                            <RowDefinition Height="*"/>
+                        </Grid.RowDefinitions>
+                        <StackPanel Orientation="Vertical" Grid.Row="0">
+                            <Label x:Name="LabelSqlEditor" Content="Editor" HorizontalAlignment="Left" VerticalAlignment="Center" />
+                        </StackPanel>
+                        <Border Grid.Row="1" BorderThickness="0" Background="White">
+                            <Wpf:WebView2 x:Name="webView21"
                                       VerticalAlignment="Stretch"
                                       HorizontalAlignment="Stretch"
                                       MinHeight="200"
                                       />
-                    </Border>
-                </Grid>
-                <GridSplitter Grid.Row="2" HorizontalAlignment="Stretch" Background="#FF293955" />
-                <Grid Grid.Row="3" >
-                    <Grid.RowDefinitions>
-                        <RowDefinition Height="25"/>
-                        <RowDefinition Height="*"/>
-                    </Grid.RowDefinitions>
-                    <StackPanel Orientation="Vertical" Grid.Row="0">
-                        <Label x:Name="LabelOutputBox" Content="Results" HorizontalAlignment="Left" VerticalAlignment="Center" />
-                    </StackPanel>
-                    <DataGrid x:Name="DataGridQueryResult"
+                        </Border>
+                    </Grid>
+                    <GridSplitter Grid.Row="1" HorizontalAlignment="Stretch" Background="#FF293955" />
+                    <Grid Grid.Row="2" >
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="25"/>
+                            <RowDefinition Height="*"/>
+                        </Grid.RowDefinitions>
+                        <StackPanel Orientation="Vertical" Grid.Row="0">
+                            <Label x:Name="LabelOutputBox" Content="Results" HorizontalAlignment="Left" VerticalAlignment="Center" />
+                        </StackPanel>
+                        <DataGrid x:Name="DataGridQueryResult"
                           Grid.Row="1"
                                               VerticalScrollBarVisibility="Auto"
                                               HorizontalScrollBarVisibility="Auto"
@@ -200,8 +243,9 @@
                                               MinHeight="200"
                                               Width="Auto"
                               />
+                    </Grid>
                 </Grid>
-                <StatusBar Height="30"  Grid.Row="4" VerticalAlignment="Bottom" HorizontalAlignment="Stretch" Background="Khaki">
+                <StatusBar Height="30"  Grid.Row="2" VerticalAlignment="Bottom" HorizontalAlignment="Stretch" Background="Khaki">
                     <StatusBar.ItemsPanel>
                         <ItemsPanelTemplate>
                             <Grid>
@@ -239,6 +283,7 @@
                         <TextBlock Name="TextBlockRows" Text="0 rows"  MinWidth="50"  />
                     </StatusBarItem>
                 </StatusBar>
+
             </Grid>
         </Border>
     </Grid>

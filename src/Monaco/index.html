@@ -85,7 +85,7 @@
             lastWord = null;
             lastType = null;
             monaco.languages.registerCompletionItemProvider('sql', {
-                triggerCharacters: [' ', '.', ',', '(', ')'],
+                triggerCharacters: ['.', ' '],
                 provideCompletionItems: (model, position) => {
                     const textUntilPosition = model.getValueInRange({
                         startLineNumber: position.lineNumber,
@@ -93,59 +93,66 @@
                         endLineNumber: position.lineNumber,
                         endColumn: position.column
                     });
-                    console.log("textUntilPosition", textUntilPosition);
-                    const word = model.getWordUntilPosition(position)
-                    console.log("word", word);
-                    console.log("lastWord", lastWord);
 
+                    const word = model.getWordUntilPosition(position);
                     const range = {
                         startLineNumber: position.lineNumber,
                         endLineNumber: position.lineNumber,
                         startColumn: word.startColumn,
                         endColumn: word.endColumn
-                    }
-                    console.log("range", range);
-                    if (null == lastType && null != lastWord && null != tableItems && null != schemaItems && schemaItems.map(s => s.name).includes(lastWord)) {
-                        lastType = "schema";
-                        console.log("lastType", lastType);
-                        console.log("lastWord", lastWord);
-                        lastWord = word.word;
+                    };
+
+                    // Extract tokens before cursor
+                    const tokens = textUntilPosition.trim().split(/\s+/);
+                    const lastToken = tokens[tokens.length - 1] || '';
+
+                    // Handle schema.table.column
+                    const dotParts = lastToken.split('.');
+                    if (dotParts.length === 1) {
+                        // Suggest keywords + schemas
                         return {
-                            suggestions: tableItems.map(s => ({
+                            suggestions: [...sqlKeywords, ...schemaItems].map(s => ({
                                 label: s.label,
                                 kind: s.kind,
                                 insertText: s.insertText,
                                 range: range
                             }))
                         };
-                    }
-                    else if (null != lastType && null != lastWord && null != columnItems && null != tableItems && tableItems.map(s => s.name).includes(lastWord)) {
-                        lastType = "table";
-                        console.log("lastType", lastType);
-                        console.log("lastWord", lastWord);
-                        lastWord = word.word;
+                    } else if (dotParts.length === 2) {
+                        const schemaName = dotParts[0];
+                        const tables = tableItems.filter(t => t.label.startsWith(`${schemaName}.`));
                         return {
-                            suggestions: columnItems.map(s => ({
-                                label: s.label,
+                            suggestions: tables.map(s => ({
+                                label: s.label.split('.')[1], // Show only table name
+                                kind: s.kind,
+                                insertText: s.insertText,
+                                range: range
+                            }))
+                        };
+                    } else if (dotParts.length === 3) {
+                        const [schemaName, tableName] = dotParts;
+                        const columns = columnItems.filter(c => c.label.startsWith(`${schemaName}.${tableName}.`));
+                        return {
+                            suggestions: columns.map(s => ({
+                                label: s.label.split('.')[2], // Show only column name
                                 kind: s.kind,
                                 insertText: s.insertText,
                                 range: range
                             }))
                         };
                     }
-                    else {
-                        lastWord = word.word;
-                        return {
-                            suggestions: allSuggestions.map(s => ({
-                                label: s.label,
-                                kind: s.kind,
-                                insertText: s.insertText,
-                                range: range
-                            }))
-                        };
-                    }
+
+                    return {
+                        suggestions: allSuggestions.map(s => ({
+                            label: s.label,
+                            kind: s.kind,
+                            insertText: s.insertText,
+                            range: range
+                        }))
+                    };
                 }
             });
+
         });
     </script>
 </body>

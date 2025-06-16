@@ -1,25 +1,26 @@
 $Script:MainWindowForm.Elements.ButtonNewQuery.Add_Click({
-    $_ | Show-EventInfo
-    $Script:MainWindowForm.Elements.ButtonSaveQuery.IsEnabled = $False
-    $Script:MainWindowForm.Elements.ButtonExecuteQuery.IsEnabled = $False
-    try {
-        if (!(Test-ConnectionRequirements)) {
-            "Omada Url not set or Query not selected, cannot retrieve data!" | Write-LogOutput -LogType WARNING
-        }
-        else {
+        try {
+            $_ | Show-EventInfo
+            $Script:MainWindowForm.Elements.ButtonSaveQuery.IsEnabled = $False
+            $Script:MainWindowForm.Elements.ButtonExecuteQuery.IsEnabled = $False
 
-            if ($Script:MainWindowForm.Elements.ButtonNewQuery.Text -eq "Delete") {
-                "Delete query query" | Write-LogOutput
+            if (!(Test-ConnectionRequirements)) {
+                "Omada Url not set or Query not selected, cannot retrieve data!" | Write-LogOutput -LogType WARNING
             }
             else {
 
-                "Save query new query" | Write-LogOutput
+                if ($Script:MainWindowForm.Elements.ButtonNewQuery.Text -eq "Delete") {
+                    "Delete query query" | Write-LogOutput
+                }
+                else {
 
-                Invoke-SaveQuery -NewQuery
+                    "Save query new query" | Write-LogOutput
+
+                    Invoke-SaveEditorValue -NewQuery
+                }
             }
         }
-    }
-    catch {
-        $_.Exception.Message | Write-LogOutput -LogType ERROR
-    }
-})
+        catch {
+            $_.Exception.Message | Write-LogOutput -LogType ERROR
+        }
+    })

@@ -1,6 +1,8 @@
 function Open-SplashScreenForm {
+    [CmdLetBinding()]
+    PARAM()
     try {
-
+        $Script:Tracer::WriteLine(("{0}: Function: {1} - Caller: {2}({3}) - Command: {4}" -f $($Script:RunTimeConfig.ApplicationName), $($MyInvocation.MyCommand.Name), $($MyInvocation.ScriptName), $($MyInvocation.ScriptLineNumber), $MyInvocation.Statement))
         "Loading Splash Screen" | Write-LogOutput -LogType DEBUG
         $SplashScreenForm = New-Object System.Windows.Forms.Form
         $SplashScreenForm.Text = "Loading..."

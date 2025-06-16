@@ -50,7 +50,7 @@ Invoke-OmadaSqlTroubleshooter;
 Pop-Location;
 'Window will automatically close in 5 seconds!' | Write-Host -ForegroundColor Green;
 Start-Sleep -Seconds 5" -f $LocalAppDataPath | Set-Content $RunPath -Force -Encoding utf8
-    $Arguments = ' -File "{0}"' -f $RunPath
+    $Arguments = ' -File "{0}" -NoReconnect' -f $RunPath
 
     $WshShell = New-Object -ComObject WScript.Shell
     $Shortcut = $WshShell.CreateShortcut($ShortcutFullPath)

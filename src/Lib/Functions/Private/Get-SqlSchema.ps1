@@ -1,7 +1,15 @@
 function Get-SqlSchemaObject {
+    [CmdLetBinding()]
+    PARAM()
     try {
+        $Script:Tracer::WriteLine(("{0}: Function: {1} - Caller: {2}({3}) - Command: {4}" -f $($Script:RunTimeConfig.ApplicationName), $($MyInvocation.MyCommand.Name), $($MyInvocation.ScriptName), $($MyInvocation.ScriptLineNumber), $MyInvocation.Statement))
 
-        if(!(Test-ConnectionRequirements)){
+        if ($Script:ReconnectStatus -eq 1) {
+            "Skip reconnect" | Write-LogOutput -LogType DEBUG
+            return
+        }
+
+        if (!(Test-ConnectionRequirements)) {
             "Connection not ready" | Write-LogOutput -LogType DEBUG
             return
         }
@@ -25,7 +33,7 @@ function Get-SqlSchemaObject {
 
             $SchemaObjects = @{}
             $Script:TreeViewSqlSchema.Items.Clear()
-            $Schemas = (($ReturnValue.d | Get-Member -MemberType NoteProperty).Name) | ForEach-Object { $_.Split(".")[0] } | Select-Object -Unique
+            $Schemas = (($ReturnValue.d | Get-Member -MemberType NoteProperty).Name) | ForEach-Object { $_.Split(".", 2)[0] } | Select-Object -Unique
             foreach ($Schema in $Schemas) {
                 $Tables = $ReturnValue.d | Get-Member -MemberType NoteProperty | Where-Object { $_.Name -like ("{0}.*" -f $Schema) }
 
@@ -41,14 +49,14 @@ function Get-SqlSchemaObject {
                 foreach ($Table in $Tables) {
 
                     $TableFullName = $Table.Name
-                    $TableName = $TableFullName.Split(".")[1]
+                    $TableName = $TableFullName.Split(".", 2)[1]
 
                     $TreeViewTableItem = New-Object System.Windows.Controls.TreeViewItem
                     $TreeViewTableItem.Header = $TableName
                     $TreeViewTableItem.FontSize = 14
                     $TreeViewSchemaItem.Items.Add($TreeViewTableItem) | Out-Null
 
-                    $TableObjects.Add($TableName,($ReturnValue.d.$TableFullName | ForEach-Object { $_.Split(" ")[0] }))
+                    $TableObjects.Add($TableName, ($ReturnValue.d.$TableFullName | ForEach-Object { $_.Split(" ")[0] }))
 
                     #$SchemaObject.$Schema | Add-Member -Name $TableName -MemberType NoteProperty -Value $TableColumns
 
@@ -60,7 +68,7 @@ function Get-SqlSchemaObject {
                         $TreeViewTableItem.Items.Add($TreeViewColumnItem) | Out-Null
                     }
                 }
-                $SchemaObjects.Add($Schema,$TableObjects)
+                $SchemaObjects.Add($Schema, $TableObjects)
             }
 
             $SchemaObjectsJson = $SchemaObjects | ConvertTo-Json -Depth 5
@@ -71,7 +79,7 @@ function Get-SqlSchemaObject {
                     if (!$Script:Task.Status -eq "RanToCompletion") {
                         "Monaco Editor Task failed: {0}" -f $Script:Task.Status | Write-LogOutput -LogType ERROR
                     }
-                    else{
+                    else {
                         "Monaco Editor Task completed successfully." | Write-LogOutput -LogType DEBUG
                     }
                 }

@@ -1,4 +1,5 @@
 function Invoke-OnTreeViewItemShiftClick {
+    [CmdLetBinding()]
     [System.Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSAvoidAssignmentToAutomaticVariable', 'Sender', Justification = 'The use of the variable is on purpose')]
     [System.Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSAvoidAssignmentToAutomaticVariable', 'Args', Justification = 'The use of the variable is on purpose')]
     [System.Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSReviewUnusedParameter', 'Args', Justification = 'The variable is declared because the call contains the parameter')]
@@ -8,6 +9,7 @@ function Invoke-OnTreeViewItemShiftClick {
     )
 
     try {
+        $Script:Tracer::WriteLine(("{0}: Function: {1} - Caller: {2}({3}) - Command: {4}" -f $($Script:RunTimeConfig.ApplicationName), $($MyInvocation.MyCommand.Name), $($MyInvocation.ScriptName), $($MyInvocation.ScriptLineNumber), $MyInvocation.Statement))
         "Left shift {0}, Right shift {1}" -f [System.Windows.Input.Keyboard]::IsKeyDown([System.Windows.Input.Key]::LeftShift), [System.Windows.Input.Keyboard]::IsKeyDown([System.Windows.Input.Key]::RightShift) | Write-LogOutput -LogType VERBOSE
 
         if ([System.Windows.Input.Keyboard]::IsKeyDown([System.Windows.Input.Key]::LeftShift) -or

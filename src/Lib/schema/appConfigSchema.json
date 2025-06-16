@@ -44,7 +44,11 @@
     "DefaultValue": "INFO"
   },
   {
-    "Name": "MyQueriesOnly",
+    "Name": "MyCreatedQueriesOnly",
+    "Type": "Bool"
+  },
+  {
+    "Name": "MyUpdatedQueriesOnly",
     "Type": "Bool"
   },
   {

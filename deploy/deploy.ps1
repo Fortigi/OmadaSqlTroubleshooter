@@ -44,7 +44,7 @@ try {
                     Uri     = ("https://www.nuget.org/api/v2/package/{0}/{1}" -f $PackageId, $Version)
                     OutFile = $PackageOutputFilePath
                 }
-                ("Download {0} from NuGet to {1}" -f $PackageId,$PackageOutputFilePath) | Write-Verbose
+                ("Download {0} from NuGet to {1}" -f $PackageId, $PackageOutputFilePath) | Write-Verbose
                 Invoke-WebRequest @Parameters
                 $FilesDownloaded = $true
             }
@@ -127,8 +127,6 @@ try {
         }
     }
 
-    RetrieveFromNuGet -PackageId "Microsoft.Data.Sqlite.Core" -MinimumVersion "9.0.0" -DestinationFolder (Join-Path $LocalAppDataPath -ChildPath "Bin\Sqlite") -FilesToCopy @("lib\net8.0\Microsoft.Data.Sqlite.dll") -Force:$Force.IsPresent
-    RetrieveFromNuGet -PackageId "SQLitePCLRaw.core" -MinimumVersion "2.1.10" -DestinationFolder (Join-Path $LocalAppDataPath -ChildPath "Bin\Sqlite") -FilesToCopy @("lib\netstandard2.0\SQLitePCLRaw.core.dll") -Force:$Force.IsPresent
     RetrieveFromNuGet -PackageId "Microsoft.Web.WebView2" -MinimumVersion "1.0.2903.40" -DestinationFolder (Join-Path $LocalAppDataPath -ChildPath "Bin\Webview2Dlls") -FilesToCopy @("runtimes\win-x64\native\WebView2Loader.dll", "lib_manual\netcoreapp3.0\Microsoft.Web.WebView2.Core.dll", "lib_manual\netcoreapp3.0\Microsoft.Web.WebView2.WinForms.dll", "lib_manual\net5.0-windows10.0.17763.0\Microsoft.Web.WebView2.Wpf.dll") -Force:$Force.IsPresent
 
     if ((Get-Module -Name OmadaWeb.PS -ListAvailable | Measure-Object).Count -le 0) {

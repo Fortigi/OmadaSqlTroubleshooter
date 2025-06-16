@@ -1,5 +1,6 @@
 function Invoke-LogWindowScrollToEnd {
-
+    [CmdLetBinding()]
+    PARAM()
     try {
 
         #TODO: Implement disable scroll when not at the end

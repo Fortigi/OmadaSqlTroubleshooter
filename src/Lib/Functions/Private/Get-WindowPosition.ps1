@@ -1,4 +1,5 @@
 function Get-WindowPosition {
+    [CmdLetBinding()]
     PARAM(
         [parameter(Mandatory = $true, ValueFromPipeline = $true)]
         $Form,
@@ -6,6 +7,7 @@ function Get-WindowPosition {
     )
 
     try {
+
         if ($AsString) {
             return "{0}x{1}" -f $Form.Left, $Form.Top
         }

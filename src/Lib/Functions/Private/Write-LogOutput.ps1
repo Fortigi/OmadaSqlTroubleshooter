@@ -1,4 +1,5 @@
 function Write-LogOutput {
+    [CmdLetBinding()]
     PARAM(
         [parameter(Mandatory = $false, Position = 0, ValueFromPipeline = $True)]
         [string]$Message,
@@ -35,7 +36,8 @@ function Write-LogOutput {
             $CalledFrom = $null
         }
         $LogMessage = @{
-            Text        = "{0} - {1} - {2}: {3}" -f $DateTime, $LogType, $CalledFrom, $Message
+            #VERBOSE2 length = 8 
+            Text        = "{0} - {1}{2}- {3}: {4}" -f $DateTime, $LogType, ((0..(8 - $LogType.Length) | ForEach-Object { ' ' }) -join ''), $CalledFrom, $Message
             Show        = $false
             ShowWarning = $false
             ShowError   = $false
@@ -53,27 +55,21 @@ function Write-LogOutput {
         switch ($Script:RunTimeConfig.Logging.LogLevelSetting) {
             { $_ -eq "VERBOSE2" -and $LogType -in @( "DEBUG", "INFO", "ERROR", "VERBOSE", "WARNING", "FATAL", "LOG", "VERBOSE2") } {
                 $LogMessage.Show = $true
-                $LogMessage.Color = "Gray"
             }
             { $_ -eq "VERBOSE" -and $LogType -in @( "DEBUG", "INFO", "ERROR", "VERBOSE", "WARNING", "FATAL", "LOG") } {
                 $LogMessage.Show = $true
-                $LogMessage.Color = "Magenta"
             }
             { $_ -eq "DEBUG" -and $LogType -in @( "DEBUG", "INFO", "ERROR", "WARNING", "FATAL", "LOG") } {
                 $LogMessage.Show = $true
-                $LogMessage.Color = "Cyan"
             }
             { $_ -eq "INFO" -and $LogType -in @( "INFO", "ERROR", "WARNING", "FATAL", "LOG") } {
                 $LogMessage.Show = $true
-                $LogMessage.Color = "White"
             }
             { $_ -eq "WARNING" -and $LogType -in @(  "ERROR", "WARNING", "FATAL", "LOG") } {
                 $LogMessage.Show = $true
-                $LogMessage.Color = "Yellow"
             }
             { $_ -in @("ERROR", "FATAL") -and $LogType -in @(  "ERROR", "FATAL", "LOG") } {
                 $LogMessage.Show = $true
-                $LogMessage.Color = "Red"
             }
             Default {
                 $LogMessage.Show = $false
@@ -82,23 +78,33 @@ function Write-LogOutput {
 
         switch ($LogType) {
             { $_ -eq "VERBOSE2" -and $LogMessage.Show } {
-                if (!$Script:RunTimeConfig.VerboseParameterSet -and $Script:RunTimeConfig.LogToConsole) {
+                if (!$Script:RunTimeConfig.VerboseParameterSet -and $Script:RunTimeConfig.Logging.LogToConsole) {
                     $LogMessage.ShowVerbose = $true
                 }
+                $LogMessage.Color = "Gray"
             }
             { $_ -eq "VERBOSE" -and $LogMessage.Show } {
-                if (!$Script:RunTimeConfig.VerboseParameterSet -and $Script:RunTimeConfig.LogToConsole) {
+                if (!$Script:RunTimeConfig.VerboseParameterSet -and $Script:RunTimeConfig.Logging.LogToConsole) {
                     $LogMessage.ShowVerbose = $true
                 }
+                $LogMessage.Color = "Magenta"
             }
-            { $_ -eq "DEBUG" -and $LogMessage.Show } {}
-            { $_ -eq "INFO" -and $LogMessage.Show } {}
+            { $_ -eq "DEBUG" -and $LogMessage.Show } {
+                $LogMessage.Color = "Cyan"
+            }
+            { $_ -eq "INFO" -and $LogMessage.Show } {
+                $LogMessage.Color = "White"
+            }
             { $_ -eq "WARNING" -and $LogMessage.Show } {
                 $LogMessage.ShowWarning = $true
                 $LogMessageDialog.Show = $true
                 $LogMessageDialog.Text = "Warning:`r`n`r`n{0}" -f $LogMessageDialog.Text
                 $LogMessageDialog.Title = "Warning"
                 $LogMessageDialog.Icon = [System.Windows.Forms.MessageBoxIcon]::Warning
+                $LogMessage.Color = "Yellow"
+                if ($null -ne $Script:PopUpWindowQueryRefresh) {
+                    $Script:PopUpWindowQueryRefresh.Close()
+                }
             }
             { $_ -in @("ERROR", "FATAL") -and $LogMessage.Show } {
                 try {
@@ -111,6 +117,10 @@ function Write-LogOutput {
                 $LogMessageDialog.Text = "Failure occurred:`r`n`r`n{0}" -f $LogMessageDialog.Text
                 $LogMessageDialog.Title = "Error"
                 $LogMessageDialog.Icon = [System.Windows.Forms.MessageBoxIcon]::Error
+                $LogMessage.Color = "Red"
+                if ($null -ne $Script:PopUpWindowQueryRefresh) {
+                    $Script:PopUpWindowQueryRefresh.Close()
+                }
             }
             { $_ -eq "LOG" -and $LogMessage.Show } {}
             Default {}
@@ -118,7 +128,7 @@ function Write-LogOutput {
 
         if ($LogMessage.Show) {
             $Script:RunTimeConfig.Logging.AppLogObject.Add(($LogMessage.Text) -join "`r`n")
-            if ($Script:RunTimeConfig.LogToConsole) {
+            if ($Script:RunTimeConfig.Logging.LogToConsole) {
                 $LogMessage.Text | Write-Host -ForegroundColor $LogMessage.Color
             }
         }
