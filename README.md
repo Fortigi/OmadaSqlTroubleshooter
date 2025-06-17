@@ -127,6 +127,21 @@ Accept pipeline input: False
 Accept wildcard characters: False
 ```
 
+### -NoReconnect
+Prevents the application from attempting to reconnect to the Omada Identity Suite using the stored connection information.
+
+```yaml
+Type: SwitchParameter
+Parameter Sets: (All)
+Aliases:
+
+Required: False
+Position: Named
+Default value: None
+Accept pipeline input: False
+Accept wildcard characters: False
+```
+
 ### -Reset
 Resets the stored configuration to default.
 
