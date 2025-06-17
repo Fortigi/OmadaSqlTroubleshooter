@@ -46,7 +46,7 @@ function Set-OmadaSqlTroubleShooterShortcut {
     $RunPath = Join-Path $LocalAppDataPath -ChildPath "Run.ps1"
     "Push-Location '{0}';
 Import-Module -Name 'OmadaSqlTroubleShooter';
-Invoke-OmadaSqlTroubleshooter;
+Invoke-OmadaSqlTroubleshooter -NoReconnect;
 Pop-Location;
 'Window will automatically close in 5 seconds!' | Write-Host -ForegroundColor Green;
 Start-Sleep -Seconds 5" -f $LocalAppDataPath | Set-Content $RunPath -Force -Encoding utf8
