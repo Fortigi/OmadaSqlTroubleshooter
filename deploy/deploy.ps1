@@ -157,8 +157,8 @@ try {
     $RunPath = Join-Path $LocalAppDataPath -ChildPath "Run.ps1"
     "Push-Location '{0}';
     try{{
-        Import-Module .\OmadaSqlTroubleshooter.psd1 -Force;
-        Invoke-OmadaSqlTroubleshooter;
+        Import-Module .\OmadaSqlTroubleshooter.psd1;
+        Invoke-OmadaSqlTroubleshooter -NoReconnect;
         Pop-Location;
         'Window will automatically close in 5 seconds!' | Write-Host -ForegroundColor Green;
     }}
