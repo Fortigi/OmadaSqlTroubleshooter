@@ -9,7 +9,7 @@ function Initialize-OmadaSqlTroubleShooter {
 
         $Script:RunTimeConfig.Logging.AppLogObject.Add("Application log initialized`r`n")
         $Script:RunTimeConfig.ConfigFile.Name = $($Script:RunTimeConfig.ScriptName -replace ".ps1", ""), ".json" -join ""
-        If (Test-Path $Script:RunTimeConfig.AppDataFolder -PathType Container) {
+        if (Test-Path $Script:RunTimeConfig.AppDataFolder -PathType Container) {
             New-Item (Join-Path $Script:RunTimeConfig.AppDataFolder -ChildPath "config") -ItemType Directory -Force | Out-Null
             $Script:RunTimeConfig.ConfigFile.Path = (Join-Path $($Script:RunTimeConfig.AppDataFolder) -ChildPath "config\$($Script:RunTimeConfig.ConfigFile.Name)")
         }
@@ -34,14 +34,27 @@ function Initialize-OmadaSqlTroubleShooter {
 
         ("System.Windows.Forms", "System.Drawing", "PresentationFramework", "WindowsBase", "PresentationCore", "PresentationFramework") | ForEach-Object {
             "Load assembly: '{0}'" -f $_ | Write-LogOutput -LogType DEBUG
-            Add-Type -AssemblyName $_
+            try{
+                Add-Type -AssemblyName $_
+            }
+            catch {
+                if ($_.Exception.Message -like '*Assembly with same name is already loaded*') {}
+                else { throw $_.Exception.Message }
+            }
         }
 
+        $WebView2AlreadyLoaded = $false
         "Microsoft.Web.WebView2.Core.dll", "Microsoft.Web.WebView2.Wpf.dll" | ForEach-Object {
             "Load assembly: '{0}'" -f $_ | Write-LogOutput -LogType DEBUG
             $WebViewDllPath = Join-Path $Script:RunTimeConfig.ModuleFolder -ChildPath "Bin\WebView2Dlls\$_"
             if ((Test-Path $WebViewDllPath -PathType Leaf)) {
-                [System.Reflection.Assembly]::LoadFrom($WebViewDllPath) | Out-Null
+                try{
+                    [System.Reflection.Assembly]::LoadFrom($WebViewDllPath) | Out-Null
+                }
+                catch{
+                    if ($_.Exception.Message -like '*Assembly with same name is already loaded*') {$WebView2AlreadyLoaded = $true}
+                    else { throw $_.Exception.Message }
+                }
             }
             else {
                 Throw ("The WebView2 Dll '{0}' cannot be found at the '{1}' bin folder!" -f $_, $($Script:RunTimeConfig.ModuleFolder))
@@ -50,7 +63,7 @@ function Initialize-OmadaSqlTroubleShooter {
         }
         $WebViewLoaderPath = Join-Path $Script:RunTimeConfig.ModuleFolder -ChildPath "Bin\WebView2Dlls\WebView2Loader.dll"
         "Get 'WebView2Loader.Dll'" | Write-LogOutput -LogType DEBUG
-        if (!(Test-Path $WebViewLoaderPath -PathType Leaf)) {
+        if (!$WebView2AlreadyLoaded -and !(Test-Path $WebViewLoaderPath -PathType Leaf)) {
             Throw ("The WebView2Loader Dll '{0}' cannot be found at the '{1}' bin folder!" -f "WebView2Loader.dll", $($Script:RunTimeConfig.ModuleFolder))
             Break
         }
