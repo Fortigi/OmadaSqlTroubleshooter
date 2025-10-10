@@ -1,4 +1,4 @@
-#requires -Module OmadaWeb.PS
+#requires -Modules @{ ModuleName="OmadaWeb.PS"; ModuleVersion="2025.10.9.1" }
 #requires -Version 7.0
 
 <#
@@ -17,6 +17,9 @@ Resets the stored configuration to default.
 
 .PARAMETER LogToConsole
 Outputs logging to the console.
+
+.PARAMETER UseWebView2Auth
+Uses the WebView2 for browser-based authentication.
 
 .PARAMETER NoReconnect
 Prevents the application from attempting to reconnect to the Omada Identity Suite using the stored connection information.
@@ -44,15 +47,15 @@ Requires PowerShell 7.0 or higher and the OmadaWeb.PS module.
 function Invoke-OmadaSqlTroubleshooter {
     [CmdLetBinding()]
     [System.Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSUseDeclaredVarsMoreThanAssignments', 'StartVariables', Justification = 'The CurrentProperties variable is used in a function called from here')]
-    PARAM(
+    param(
         [ValidateSet("INFO", "DEBUG", "VERBOSE", "WARNING", "ERROR", "FATAL", "VERBOSE2")]
         [string]$LogLevel,
         [switch]$Reset,
         [switch]$LogToConsole,
+        [switch]$UseWebView2Auth,
         [switch]$NoReconnect
     )
     $Error.Clear()
-
     #region Initialize
     $StartVariables = Get-Variable
     $ApplicationName = "OmadaSqlTroubleshooter"
@@ -77,6 +80,7 @@ function Invoke-OmadaSqlTroubleshooter {
         }
         AuthenticationSet  = $false
         OutputFileName     = $null
+        UseWebView2Auth    = $UseWebView2Auth.IsPresent -or $false
     }
     Get-ChildItem -Path (Join-Path $Script:RunTimeConfig.ModuleFolder -ChildPath "Lib\Functions") -Filter *.ps1 | ForEach-Object {
         . $_.FullName

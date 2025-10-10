@@ -10,10 +10,10 @@ Properties {
 }
 
 
-Task default -depends Dependencies, Analyze, Test, Build, ImportModule
+Task default -depends Analyze, Test, Build, ImportModule
 Task TestBuildOnly -depends Analyze, Test, Build
-Task Pipeline -depends Dependencies, Analyze, Test, Build, TestAssemblies
-Task DeployOnly -depends Dependencies, Build, Deploy
+Task Pipeline -depends Analyze, Test, Build
+Task DeployOnly -depends Build, Deploy
 
 Task Dependencies {
     try {
@@ -283,7 +283,7 @@ Task TestAssemblies -depends Build {
 }
 
 
-Task ImportModule -depends TestAssemblies {
+Task ImportModule -depends Build {
 
     try {
 

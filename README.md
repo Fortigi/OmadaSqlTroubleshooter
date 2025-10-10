@@ -51,7 +51,7 @@ Install-Module -Name OmadaSqlTroubleshooter
 This module requires:
 - Windows operating system;
 - PowerShell 7;
-- [OmadaWeb.PS PowerShell Module](https://www.powershellgallery.com/packages/omadaweb.ps);
+- [OmadaWeb.PS PowerShell Module](https://www.powershellgallery.com/packages/omadaweb.ps) (Version 2025.10.9.1 or higher);
 - [Microsoft Edge WebView2](https://developer.microsoft.com/en-us/microsoft-edge/webview2);
 - Omada Identity Cloud with OData enabled for the C_P_SQLTROUBLESHOOTING data object type.
 
@@ -114,6 +114,24 @@ Accept wildcard characters: False
 
 ### -LogToConsole
 Outputs logging to the console.
+
+```yaml
+Type: SwitchParameter
+Parameter Sets: (All)
+Aliases:
+
+Required: False
+Position: Named
+Default value: None
+Accept pipeline input: False
+Accept wildcard characters: False
+```
+
+### -UseWebView2Auth
+Uses the WebView2 for browser-based authentication instead of Selenium.
+
+> [!NOTE]
+> Currently Edge WebDriver is default for browser based authentication in depending module OmadaWeb.PS. It is planned to be replaced by WebView2 as default in future releases.
 
 ```yaml
 Type: SwitchParameter

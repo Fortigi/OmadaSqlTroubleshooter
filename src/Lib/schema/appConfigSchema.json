@@ -112,5 +112,9 @@
   {
     "Name": "CheckboxConsoleLog",
     "Type": "Bool"
+  },
+  {
+    "Name": "UseWebView2Auth",
+    "Type": "Bool"
   }
 ]

@@ -68,6 +68,8 @@ $Script:MainWindowForm.Definition.Add_Loaded({
                 $Script:Webview.Environment = [Microsoft.Web.WebView2.Core.CoreWebView2Environment]::CreateAsync($null, $Script:Webview.UserDataFolder).GetAwaiter().GetResult()
             }
 
+        if (-not (Test-Path $Script:WebView2UserProfilePath -PathType Container)) { New-Item -ItemType Directory -Force -Path $Script:WebView2UserProfilePath | Out-Null }
+
             $Script:Webview.Object.EnsureCoreWebView2Async($Script:Webview.Environment).GetAwaiter().OnCompleted({
                     if ($Null -eq $Script:Webview.Object.CoreWebView2) {
                         $Script:MainWindowForm.Definition.Dispatcher.Invoke([System.Action] {
