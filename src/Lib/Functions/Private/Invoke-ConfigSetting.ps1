@@ -2,7 +2,7 @@ function Invoke-ConfigSetting {
     [CmdLetBinding()]
 
     [System.Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSUseDeclaredVarsMoreThanAssignments', 'CurrentProperties', Justification = 'The CurrentProperties variable is used in a function called from here')]
-    PARAM(
+    param(
         [parameter(Mandatory = $false, Position = 0, ValueFromPipeline = $true)]
         $Value,
         [parameter(Mandatory = $false)]
@@ -47,10 +47,20 @@ function Invoke-ConfigSetting {
             else {
                 if (Test-Path ($Script:RunTimeConfig.ConfigFile.Path) -PathType Leaf) {
                     "Read config settings {0}!" -f ($Script:RunTimeConfig.ConfigFile.Path) | Write-LogOutput -LogType VERBOSE
-                    $Config = Get-Content ($Script:RunTimeConfig.ConfigFile.Path) | ConvertFrom-Json
-                    $CurrentProperties = $Config | Get-Member -MemberType NoteProperty
-                    $Script:ConfigProperties | ForEach-Object {
-                        Set-ConfigProperty -Property $_
+                    try {
+                        $Config = Get-Content ($Script:RunTimeConfig.ConfigFile.Path) | ConvertFrom-Json
+                        $CurrentProperties = $Config | Get-Member -MemberType NoteProperty
+                        $CurrentProperties | ForEach-Object {
+                            Set-ConfigProperty -Property $_
+                        }
+                    }
+                    catch {
+                        $_.Exception.Message | Write-LogOutput -LogType WARNING
+                        "Config file corrupt, create a new config object!" | Write-LogOutput -LogType INFO
+                        $Config = [pscustomobject]@{}
+                        $Script:ConfigProperties | ForEach-Object {
+                            Set-ConfigProperty -Property $_
+                        }
                     }
                 }
                 else {
@@ -85,7 +95,6 @@ function Invoke-ConfigSetting {
                         $Config.$Property = [int]$Value
                     }
                     "Bool" {
-
                         $Config.$Property = [bool]$Value
                     }
                     "PSObject" {
@@ -141,7 +150,6 @@ function Invoke-ConfigSetting {
             if (!$Success) {
                 $ErrorObject.Exception.Message | Write-LogOutput -LogType ERROR -SkipDialog
             }
-
             $Script:AppConfig = $Config
         }
         catch {

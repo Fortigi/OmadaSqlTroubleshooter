@@ -1,12 +1,13 @@
 function Invoke-OmadaPSWebRequestWrapper {
     [CmdLetBinding()]
-    PARAM()
+    param()
 
     try {
         $Script:Tracer::WriteLine(("{0}: Function: {1} - Caller: {2}({3}) - Command: {4}" -f $($Script:RunTimeConfig.ApplicationName), $($MyInvocation.MyCommand.Name), $($MyInvocation.ScriptName), $($MyInvocation.ScriptLineNumber), $MyInvocation.Statement))
         try {
             $Private:Parameters = $Script:RunTimeData.RestMethodParam
             $Private:Parameters.AuthenticationType = $($Script:MainWindowForm.Elements.ComboBoxSelectAuthenticationOption.SelectedItem.Content)
+            $Private:Parameters.UseWebView2Auth = $Private:Parameters.AuthenticationType -eq "Browser" ? $($Script:RunTimeConfig.UseWebView2Auth) : $false
             if ($Null -eq $Private:Parameters.Body) {
                 if ($Private:Parameters.ContainsKey("Body")) {
                     $Private:Parameters.Remove("Body")
@@ -20,7 +21,6 @@ function Invoke-OmadaPSWebRequestWrapper {
                 $Private:Parameters.Body = $Private:Parameters.Body | ConvertTo-Json
             }
             "Parameters: {0}" -f ($Private:Parameters | ConvertTo-Json -Depth 15) | Write-LogOutput -LogType VERBOSE
-
             $Private:Result = Invoke-OmadaRestMethod @Parameters
             if ($null -ne $Script:MainWindowForm -and $null -ne $Script:MainWindowForm.Definitions -and $Script:MainWindowForm.Definitions.IsVisible) {
                 $Script:MainWindowForm.Definitions.TextBlockConnectionStatus | Set-TextBlockText -Text "Connected"
@@ -36,15 +36,15 @@ function Invoke-OmadaPSWebRequestWrapper {
                     $Script:MainWindowForm.Definitions.TextBlockConnectionStatus | Set-TextBlockText -Text "Disconnected"
                 }
                 else {
-                    Throw $_
+                    throw $_
                 }
             }
             else {
-                Throw $_
+                throw $_
             }
         }
     }
     catch {
-        Throw $_
+        throw $_
     }
 }

@@ -1,7 +1,7 @@
 function Initialize-OmadaSqlTroubleShooter {
     [CmdLetBinding()]
     [System.Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSUseDeclaredVarsMoreThanAssignments', 'WebView2AlreadyLoaded', Justification = 'The variable is used, but script analyzer does not recognize it')]
-    PARAM()
+    param()
     try {
         $Script:Tracer::WriteLine(("{0}: Function: {1} - Caller: {2}({3}) - Command: {4}" -f $($Script:RunTimeConfig.ApplicationName), $($MyInvocation.MyCommand.Name), $($MyInvocation.ScriptName), $($MyInvocation.ScriptLineNumber), $MyInvocation.Statement))
         "Initializing application..." | Write-LogOutput -LogType DEBUG
@@ -28,14 +28,10 @@ function Initialize-OmadaSqlTroubleShooter {
         Import-Module OmadaWeb.PS
 
         "Load Assemblies" | Write-LogOutput -LogType DEBUG
-        #Set path to the bin folder to be sure that WebView2Loader.dll is found there.
-        $Env:Path += ";$($Script:RunTimeConfig.ModuleFolder)\Bin"
-        $Env:Path += ";$($Script:RunTimeConfig.ModuleFolder)\Bin\Webview2Dlls"
-        $Env:Path += ";$($Script:RunTimeConfig.ModuleFolder)"
 
         ("System.Windows.Forms", "System.Drawing", "PresentationFramework", "WindowsBase", "PresentationCore", "PresentationFramework") | ForEach-Object {
             "Load assembly: '{0}'" -f $_ | Write-LogOutput -LogType DEBUG
-            try{
+            try {
                 Add-Type -AssemblyName $_
             }
             catch {
@@ -43,31 +39,9 @@ function Initialize-OmadaSqlTroubleShooter {
                 else { throw $_.Exception.Message }
             }
         }
-
-        $WebView2AlreadyLoaded = $false
-        "Microsoft.Web.WebView2.Core.dll", "Microsoft.Web.WebView2.Wpf.dll" | ForEach-Object {
-            "Load assembly: '{0}'" -f $_ | Write-LogOutput -LogType DEBUG
-            $WebViewDllPath = Join-Path $Script:RunTimeConfig.ModuleFolder -ChildPath "Bin\WebView2Dlls\$_"
-            if ((Test-Path $WebViewDllPath -PathType Leaf)) {
-                try{
-                    [System.Reflection.Assembly]::LoadFrom($WebViewDllPath) | Out-Null
-                }
-                catch{
-                    if ($_.Exception.Message -like '*Assembly with same name is already loaded*') {$WebView2AlreadyLoaded = $true}
-                    else { throw $_.Exception.Message }
-                }
-            }
-            else {
-                Throw ("The WebView2 Dll '{0}' cannot be found at the '{1}' bin folder!" -f $_, $($Script:RunTimeConfig.ModuleFolder))
-                Break
-            }
-        }
-        $WebViewLoaderPath = Join-Path $Script:RunTimeConfig.ModuleFolder -ChildPath "Bin\WebView2Dlls\WebView2Loader.dll"
-        "Get 'WebView2Loader.Dll'" | Write-LogOutput -LogType DEBUG
-        if (!$WebView2AlreadyLoaded -and !(Test-Path $WebViewLoaderPath -PathType Leaf)) {
-            Throw ("The WebView2Loader Dll '{0}' cannot be found at the '{1}' bin folder!" -f "WebView2Loader.dll", $($Script:RunTimeConfig.ModuleFolder))
-            Break
-        }
+        Add-ReflectionAssembly -Object $Script:WebView2CorePath
+        Add-ReflectionAssembly -Object $Script:WebView2WinFormsPath
+        Add-ReflectionAssembly -Object $Script:WebView2WpfPath
 
         $Script:AppConfig = $null
         $Script:RunTimeData = [PSCustomObject]@{
@@ -75,6 +49,7 @@ function Initialize-OmadaSqlTroubleShooter {
                 Uri                = $Null
                 Method             = "GET"
                 AuthenticationType = $($Script:AppConfig.LastAuthentication)
+                UseWebView2Auth        = $($Script:AppConfig.LastAuthentication -eq "Browser" -or [string]::IsNullOrWhiteSpace($Script:AppConfig.LastAuthentication) ? $($Script:RunTimeConfig.UseWebView2Auth) : $false)
             }
             QuerySaved                     = $false
             Password                       = $Null
@@ -110,6 +85,6 @@ function Initialize-OmadaSqlTroubleShooter {
 
     }
     catch {
-        Throw $_
+        throw $_
     }
 }
