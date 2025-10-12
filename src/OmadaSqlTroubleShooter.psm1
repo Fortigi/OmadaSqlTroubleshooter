@@ -37,8 +37,6 @@ try {
         }
     }
 
-    # Export all the functions
-    Export-ModuleMember -Function $Public.Basename -Alias *
     #endregion
 
     try {
