@@ -49,7 +49,7 @@ function Initialize-OmadaSqlTroubleShooter {
                 Uri                = $Null
                 Method             = "GET"
                 AuthenticationType = $($Script:AppConfig.LastAuthentication)
-                UseWebView2Auth        = $($Script:AppConfig.LastAuthentication -eq "Browser" -or [string]::IsNullOrWhiteSpace($Script:AppConfig.LastAuthentication) ? $($Script:RunTimeConfig.UseWebView2Auth) : $false)
+                UseWebView2        = $($Script:AppConfig.LastAuthentication -eq "Browser" -or [string]::IsNullOrWhiteSpace($Script:AppConfig.LastAuthentication) ? $($Script:RunTimeConfig.UseWebView2Auth) : $false)
             }
             QuerySaved                     = $false
             Password                       = $Null
