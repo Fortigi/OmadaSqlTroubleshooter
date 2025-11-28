@@ -14,7 +14,7 @@
 #             if (!$QueryExists) {
 #                 $Script:RunTimeData.RestMethodParam.Uri = '{0}/odata/dataobjects/C_P_SQLTROUBLESHOOTING?$filter=Deleted ne true and NAME eq ''{1}''' -f $Script:AppConfig.BaseUrl, $Script:MainWindowForm.Elements.TextBoxDisplayName.Text
 #                 "Validate if query with this name exists in Omada using queryUrl: {0}" -f $Script:RunTimeData.RestMethodParam.Uri | Write-LogOutput -LogType DEBUG
-#                 $Script:RunTimeData.RestMethodParam.Body = $Null
+#                 $Script:RunTimeData.RestMethodParam.Body = $null
 #                 $Script:RunTimeData.RestMethodParam.Method = "GET"
 #                 $Result = Invoke-OmadaPSWebRequestWrapper
 #                 if (($Result.Value | Measure-Object).Count -le 0) {

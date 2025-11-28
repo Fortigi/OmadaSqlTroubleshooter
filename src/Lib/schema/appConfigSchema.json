@@ -39,6 +39,18 @@
     "Type": "String"
   },
   {
+    "Name": "Password",
+    "Type": "SecureString"
+  },
+  {
+    "Name": "EntraApplicationIdUri",
+    "Type": "String"
+  },
+  {
+    "Name": "EntraIdTenantId",
+    "Type": "String"
+  },
+  {
     "Name": "LogLevel",
     "Type": "String",
     "DefaultValue": "INFO"
@@ -49,6 +61,10 @@
   },
   {
     "Name": "MyUpdatedQueriesOnly",
+    "Type": "Bool"
+  },
+  {
+    "Name": "SavePassword",
     "Type": "Bool"
   },
   {

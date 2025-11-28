@@ -23,8 +23,8 @@ $Script:MainWindowForm.Elements.ComboBoxSelectDataConnection.Add_SelectionChange
             }
 
             if (![string]::IsNullOrWhiteSpace($Script:MainWindowForm.Elements.ComboBoxSelectDataConnection.SelectedItem.Content) -and $Script:MainWindowForm.Elements.ComboBoxSelectDataConnection.SelectedItem.Content -ne " - " -and $Script:MainWindowForm.Elements.ComboBoxSelectDataConnection.SelectedItem.Content -ne " - 0") {
-                $Script:MainWindowForm.Elements.ComboBoxSelectDataConnection.SelectedItem.Content | Invoke-ConfigSetting -Property "CurrentDataConnection"
-                $Script:MainWindowForm.Elements.TextBlockDatabaseName.Text = $Script:AppConfig.CurrentDataConnection.DisplayName
+                $Script:MainWindowForm.Elements.ComboBoxSelectDataConnection.SelectedItem.Content | Set-ConfigProperty -Property "CurrentDataConnection"
+                $Script:MainWindowForm.Elements.TextBlockStatusBarDatabaseName | Set-TextBlockText -Text $Script:AppConfig.CurrentDataConnection.DisplayName
 
                 if (Test-SqlSchemaWindowOpen) {
                     Get-SqlSchemaObject

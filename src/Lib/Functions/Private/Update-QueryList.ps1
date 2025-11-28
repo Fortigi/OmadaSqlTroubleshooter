@@ -7,7 +7,7 @@ function Update-QueryList {
 
     try {
 
-        $Script:Tracer::WriteLine(("{0}: Function: {1} - Caller: {2}({3}) - Command: {4}" -f $($Script:RunTimeConfig.ApplicationName), $($MyInvocation.MyCommand.Name), $($MyInvocation.ScriptName), $($MyInvocation.ScriptLineNumber), $MyInvocation.Statement))
+        $Script:Tracer::WriteLine(("{0}: Function: {1} - Caller: {2}({3}) - Command: {4}" -f $($Script:RunTimeConfig.ApplicationName), $($MyInvocation.MyCommand.Name), $($MyInvocation.ScriptName).Split("\")[-1], $($MyInvocation.ScriptLineNumber), $MyInvocation.Statement))
 
         if (!(Test-ConnectionRequirements)) {
             "Connection not ready" | Write-LogOutput -LogType DEBUG
@@ -41,7 +41,7 @@ function Update-QueryList {
             $Script:RunTimeData.RestMethodParam.Uri = '{0}/odata/dataobjects/C_P_SQLTROUBLESHOOTING?$orderby=DisplayName,NAME&$filter=Deleted ne true' -f $Script:AppConfig.BaseUrl
             "QueryUrl: {0}" -f $Script:RunTimeData.RestMethodParam.Uri | Write-LogOutput -LogType DEBUG
             "Refresh queries started" | Write-LogOutput
-            $Script:RunTimeData.RestMethodParam.Body = $Null
+            $Script:RunTimeData.RestMethodParam.Body = $null
             $Script:RunTimeData.RestMethodParam.Method = "GET"
             $Script:RunTimeData.RestMethodParam.Body = $null
             $Private:Result = Invoke-OmadaPSWebRequestWrapper
@@ -51,7 +51,7 @@ function Update-QueryList {
             $SelectedQueryDisplayName = $Script:MainWindowForm.Elements.TextBoxDisplayName.Text
             "Stored current selected query display name (if not empty): {0}" -f $SelectedQueryDisplayName | Write-LogOutput -LogType DEBUG
             $Script:MainWindowForm.Elements.ComboBoxSelectQuery.Items.Clear()
-            $Script:MainWindowForm.Elements.TextBoxDisplayName.Text = $Null
+            $Script:MainWindowForm.Elements.TextBoxDisplayName.Text = $null
 
             $ClearQuery = $true
             $Private:Result.value | ForEach-Object {
@@ -106,9 +106,9 @@ function Update-QueryList {
         #     $Script:MainWindowForm.Elements.ComboBoxSelectQuery.SelectedItem = $Script:MainWindowForm.Elements.ComboBoxSelectQuery.Items | Where-Object { $_.Content -eq $ComboBoxSelectedQueryItem.Content }
         # }
 
-        $Script:MainWindowForm.Elements.ComboBoxSelectQuery.IsEnabled = $True
-        $Script:MainWindowForm.Elements.ButtonRefreshQueries.IsEnabled = $True
-        $Script:MainWindowForm.Elements.CheckboxMyCreatedQueries.IsEnabled = $True
+        $Script:MainWindowForm.Elements.ComboBoxSelectQuery.IsEnabled = $true
+        $Script:MainWindowForm.Elements.ButtonRefreshQueries.IsEnabled = $true
+        $Script:MainWindowForm.Elements.CheckboxMyCreatedQueries.IsEnabled = $true
         $Script:MainWindowForm.Elements.CheckboxMyUpdatedQueries.IsEnabled = $true
         $Script:MainWindowForm.Elements.ButtonShowSqlSchema.IsEnabled = $true
         $Script:RunTimeData.QueryListCache.LastRefresh = $CurrentTimestamp

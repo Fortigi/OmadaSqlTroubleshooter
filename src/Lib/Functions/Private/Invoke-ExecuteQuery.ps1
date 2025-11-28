@@ -2,7 +2,7 @@ function Invoke-ExecuteQuery {
     [CmdLetBinding()]
     PARAM()
     try {
-        $Script:Tracer::WriteLine(("{0}: Function: {1} - Caller: {2}({3}) - Command: {4}" -f $($Script:RunTimeConfig.ApplicationName), $($MyInvocation.MyCommand.Name), $($MyInvocation.ScriptName), $($MyInvocation.ScriptLineNumber), $MyInvocation.Statement))
+        $Script:Tracer::WriteLine(("{0}: Function: {1} - Caller: {2}({3}) - Command: {4}" -f $($Script:RunTimeConfig.ApplicationName), $($MyInvocation.MyCommand.Name), $($MyInvocation.ScriptName).Split("\")[-1], $($MyInvocation.ScriptLineNumber), $MyInvocation.Statement))
         if (!(Test-ConnectionRequirements)) {
             "Connection not ready" | Write-LogOutput -LogType DEBUG
             return
@@ -14,39 +14,15 @@ function Invoke-ExecuteQuery {
             try {
                 if ($Script:Task.Status -eq "RanToCompletion") {
                     $Script:RunTimeData.QueryText = $Script:Task.Result
+
                     if (![string]::IsNullOrWhiteSpace($Script:RunTimeData.QueryText.ResultAsJson)) {
                         $Script:RunTimeData.QueryText = $Script:RunTimeData.QueryText.ResultAsJson | ConvertFrom-Json
                     }
+                    else{
+                        $Script:RunTimeData.QueryText = $Script:RunTimeData.QueryText | ConvertFrom-Json
+                    }
 
-                    # $Private:Result = Get-SqlQueryObject
-
-                    # "Executing SQL Query: {0}" -f $Script:RunTimeData.QueryText | Write-LogOutput -LogType DEBUG
-                    # $Script:RunTimeData.RestMethodParam.Body = @{}
-                    # $Script:RunTimeData.RestMethodParam.Uri = "{0}/odata/dataobjects/C_P_SQLTROUBLESHOOTING({1})" -f $Script:AppConfig.BaseUrl, $Script:AppConfig.CurrentSqlQuery.DoId
-                    # if ($Script:RunTimeData.CurrentQueryText -ne $Script:RunTimeData.QueryText -or $Script:RunTimeData.QueryText -ne $Private:Result.C_QUERY) {
-                    #     "Update current query for DODI: {0}" -f $Script:AppConfig.CurrentSqlQuery.DoId | Write-LogOutput -LogType DEBUG
-                    #     $Script:RunTimeData.RestMethodParam.Body.Add("C_QUERY", $Script:RunTimeData.QueryText)
-                    #     if (![string]::IsNullOrWhiteSpace($Script:AppConfig.CurrentDataConnection.DoId)) {
-                    #         $Script:RunTimeData.RestMethodParam.Body.Add("C_SQLTROUBLESHOOTING_DATACONNECTION", @{Id = $Script:AppConfig.CurrentDataConnection.DoId })
-                    #     }
-                    # }
-                    # if ($Script:RunTimeData.CurrentSqlQuery.DisplayName -ne $Script:MainWindowForm.Elements.TextBoxDisplayName.Text) {
-                    #     $Script:RunTimeData.RestMethodParam.Body.Add("NAME", $Script:MainWindowForm.Elements.TextBoxDisplayName.Text)
-                    # }
-                    # if (($Script:RunTimeData.RestMethodParam.Body.Keys | Measure-Object).Count -le 0) {
-                    #     "No changes detected! Just run query" | Write-LogOutput -LogType DEBUG
-                    # }
-                    # else {
-                    #     "Body: {0}" -f ($Script:RunTimeData.RestMethodParam.Body | ConvertTo-Json) | Write-LogOutput -LogType VERBOSE
-                    #     "QueryUrl: {0}" -f $Script:RunTimeData.RestMethodParam.Uri | Write-LogOutput -LogType DEBUG
-
-                    #     "Save query" | Write-LogOutput
-                    #     $Script:RunTimeData.RestMethodParam.Method = "PUT"
-                    #     $Private:Result = Invoke-OmadaPSWebRequestWrapper
-                    #     "Query saved!" | Write-LogOutput
-                    # }
-
-                    $Private:Result = Save-Query -NewQuery:$False
+                    $Private:Result = Save-Query -NewQuery:$false
                     $Script:RunTimeData.RestMethodParam.Uri = "{0}/webservice/jQGridPopulationWebService.asmx/GetPagingData" -f $Script:AppConfig.BaseUrl
 
                     $Script:RunTimeData.RestMethodParam.Body = @{
@@ -56,13 +32,13 @@ function Invoke-ExecuteQuery {
                         }
                         "page"         = 1
                         "rows"         = 100000
-                        "sidx"         = $Null
+                        "sidx"         = $null
                         "sord"         = "asc"
-                        "_search"      = $False
-                        "searchField"  = $Null
-                        "searchString" = $Null
-                        "filters"      = $Null
-                        "searchOper"   = $Null
+                        "_search"      = $false
+                        "searchField"  = $null
+                        "searchString" = $null
+                        "filters"      = $null
+                        "searchOper"   = $null
                     }
                     "Body: {0}" -f ($Script:RunTimeData.RestMethodParam.Body | ConvertTo-Json) | Write-LogOutput -LogType VERBOSE
                     "QueryUrl: {0}" -f $Script:RunTimeData.RestMethodParam.Uri | Write-LogOutput -LogType DEBUG
@@ -75,7 +51,7 @@ function Invoke-ExecuteQuery {
 
                     if ($null -ne $Script:RunTimeData.QueryResult -and ($Script:RunTimeData.QueryResult.d.Rows | Measure-Object).Count -le 0) {
                         "Query did not return any results!" | Write-LogOutput -LogType WARNING
-                        $Script:MainWindowForm.Elements.TextBlockRows | Set-TextBlockText -Text "0 rows"
+                        $Script:MainWindowForm.Elements.TextBlockStatusBarRows | Set-TextBlockText -Text "0 rows"
                         $Script:MainWindowForm.Elements.DataGridQueryResult.ItemsSource = $null
                     }
                     else {
@@ -88,12 +64,12 @@ function Invoke-ExecuteQuery {
                             $Script:MainWindowForm.Elements.DataGridQueryResult.ItemsSource = @(($Script:RunTimeData.QueryResult | ConvertTo-Json -Depth 10 | Invoke-SanitizeJsonKeys | ConvertFrom-Json -Depth 10).d.Rows)
                         }
                         "Result:`r`n{0}" -f ($Script:RunTimeData.QueryResult.d.rows | Format-Table -AutoSize | Out-String -Width 10000000 ) | Write-LogOutput -LogType VERBOSE2
-                        $Script:MainWindowForm.Elements.ButtonShowOutput.IsEnabled = $True
-                        $Script:MainWindowForm.Elements.ButtonSaveOutputFile.IsEnabled = $True
+                        $Script:MainWindowForm.Elements.ButtonShowOutput.IsEnabled = $true
+                        $Script:MainWindowForm.Elements.ButtonSaveOutputFile.IsEnabled = $true
                         "{0} record(s) retrieved!" -f $Script:RunTimeData.QueryResult.d.Records | Write-LogOutput
 
-                        $Script:MainWindowForm.Elements.TextBlockRows | Set-TextBlockText -Text ("{0:n0} rows" -f [Int]$Script:RunTimeData.QueryResult.d.Records)
-                        $Private:Result.Id, $Private:Result.DisplayName | Invoke-ConfigSetting -Property "CurrentSqlQuery"
+                        $Script:MainWindowForm.Elements.TextBlockStatusBarRows | Set-TextBlockText -Text ("{0:n0} rows" -f [Int]$Script:RunTimeData.QueryResult.d.Records)
+                        $Private:Result.Id, $Private:Result.DisplayName | Set-ConfigProperty -Property "CurrentSqlQuery"
                         if ($Private:Result.DisplayName -ne $Script:RunTimeData.CurrentSqlQuery.DisplayName) {
                             "New display name, Current: {0}, New: {1}" -f $Script:RunTimeData.CurrentSqlQuery.DisplayName, $Private:Result.DisplayName | Write-LogOutput -LogType DEBUG
                             "Force update query list" | Write-LogOutput -LogType DEBUG
@@ -114,9 +90,9 @@ function Invoke-ExecuteQuery {
                 else {
                     "Task result: {0}" -f $Script:Task.Status | Write-LogOutput -LogType DEBUG
                 }
-                $Script:MainWindowForm.Elements.ButtonSaveQuery.IsEnabled = $True
-                $Script:MainWindowForm.Elements.ButtonExecuteQuery.IsEnabled = $True
-                $Script:MainWindowForm.Elements.ButtonExecuteQuery | Set-ButtonContent -Content "_Execute Query"
+                $Script:MainWindowForm.Elements.ButtonSaveQuery.IsEnabled = $true
+                $Script:MainWindowForm.Elements.ButtonExecuteQuery.IsEnabled = $true
+                $Script:MainWindowForm.Elements.ButtonExecuteQueryText | Set-ButtonText -Value "_Execute"
                 if ($null -ne $Script:PopupWindowExecuteQuery) {
                     $Script:PopupWindowExecuteQuery.Close()
                 }
@@ -124,13 +100,13 @@ function Invoke-ExecuteQuery {
                 if ($null -ne $Script:RunTimeData.StopWatch) {
                     $Script:RunTimeData.StopWatch.Stop()
                     "Elapsed time: {0}" -f $Script:RunTimeData.StopWatch.Elapsed.ToString() | Write-LogOutput -LogType Debug
-                    $Script:MainWindowForm.Elements.TextBlockQueryTime.Text = $Script:RunTimeData.StopWatch.Elapsed.ToString()
+                    $Script:MainWindowForm.Elements.TextBlockStatusBarQueryTime.Text = $Script:RunTimeData.StopWatch.Elapsed.ToString()
                 }
             }
             catch {
-                $Script:MainWindowForm.Elements.ButtonSaveQuery.IsEnabled = $True
-                $Script:MainWindowForm.Elements.ButtonExecuteQuery.IsEnabled = $True
-                $Script:MainWindowForm.Elements.ButtonExecuteQuery | Set-ButtonContent -Content "_Execute Query"
+                $Script:MainWindowForm.Elements.ButtonSaveQuery.IsEnabled = $true
+                $Script:MainWindowForm.Elements.ButtonExecuteQuery.IsEnabled = $true
+                $Script:MainWindowForm.Elements.ButtonExecuteQueryText | Set-ButtonText -Value "_Execute"
                 if ($null -ne $Script:PopupWindowExecuteQuery) {
                     $Script:PopupWindowExecuteQuery.Close()
                 }
@@ -142,11 +118,11 @@ function Invoke-ExecuteQuery {
     catch {
         if ($null -ne $Script:RunTimeData.StopWatch) {
             $Script:RunTimeData.StopWatch.Stop()
-            $Script:MainWindowForm.Elements.TextBlockQueryTime.Text = $Script:RunTimeData.StopWatch.Elapsed.ToString()
+            $Script:MainWindowForm.Elements.TextBlockStatusBarQueryTime.Text = $Script:RunTimeData.StopWatch.Elapsed.ToString()
         }
-        $Script:MainWindowForm.Elements.ButtonSaveQuery.IsEnabled = $True
-        $Script:MainWindowForm.Elements.ButtonExecuteQuery.IsEnabled = $True
-        $Script:MainWindowForm.Elements.ButtonExecuteQuery | Set-ButtonContent -Content "_Execute Query"
+        $Script:MainWindowForm.Elements.ButtonSaveQuery.IsEnabled = $true
+        $Script:MainWindowForm.Elements.ButtonExecuteQuery.IsEnabled = $true
+        $Script:MainWindowForm.Elements.ButtonExecuteQueryText | Set-ButtonText -Value "_Execute"
         if ($null -ne $Script:PopupWindowExecuteQuery) {
             $Script:PopupWindowExecuteQuery.Close()
         }

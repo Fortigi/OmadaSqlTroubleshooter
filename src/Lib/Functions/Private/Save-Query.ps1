@@ -4,14 +4,14 @@ function Save-Query {
         [switch]$NewQuery
     )
     try {
-        $Script:Tracer::WriteLine(("{0}: Function: {1} - Caller: {2}({3}) - Command: {4}" -f $($Script:RunTimeConfig.ApplicationName), $($MyInvocation.MyCommand.Name), $($MyInvocation.ScriptName), $($MyInvocation.ScriptLineNumber), $MyInvocation.Statement))
+        $Script:Tracer::WriteLine(("{0}: Function: {1} - Caller: {2}({3}) - Command: {4}" -f $($Script:RunTimeConfig.ApplicationName), $($MyInvocation.MyCommand.Name), $($MyInvocation.ScriptName).Split("\")[-1], $($MyInvocation.ScriptLineNumber), $MyInvocation.Statement))
         if ($NewQuery) {
             "Create new query" | Write-LogOutput -LogType DEBUG
 
             $Script:RunTimeData.RestMethodParam.Uri = '{0}/odata/dataobjects/C_P_SQLTROUBLESHOOTING?$filter=Deleted ne true and NAME eq ''{1}''' -f $Script:AppConfig.BaseUrl, $Script:MainWindowForm.Elements.TextBoxDisplayName.Text
             "QueryUrl: {0}" -f $Script:RunTimeData.RestMethodParam.Uri | Write-LogOutput -LogType DEBUG
             "Check if a query with this name already exists" | Write-LogOutput -LogType DEBUG
-            $Script:RunTimeData.RestMethodParam.Body = $Null
+            $Script:RunTimeData.RestMethodParam.Body = $null
             $Script:RunTimeData.RestMethodParam.Method = "GET"
             $Script:RunTimeData.RestMethodParam.Body = $null
             $CheckIfExistResult = Invoke-OmadaPSWebRequestWrapper
@@ -20,8 +20,8 @@ function Save-Query {
                 $Script:RunTimeData.RestMethodParam.Method = "POST"
             }
             else {
-                $Script:MainWindowForm.Elements.ButtonSaveQuery.IsEnabled = $True
-                $Script:MainWindowForm.Elements.ButtonExecuteQuery.IsEnabled = $True
+                $Script:MainWindowForm.Elements.ButtonSaveQuery.IsEnabled = $true
+                $Script:MainWindowForm.Elements.ButtonExecuteQuery.IsEnabled = $true
                 "Query with this name already exists!" | Write-LogOutput -LogType ERROR
                 return
             }
@@ -47,6 +47,7 @@ function Save-Query {
             return $private:Result
         }
         else {
+
             "Saving SQL Query: {0}" -f $Script:RunTimeData.QueryText | Write-LogOutput -LogType DEBUG
             "Body: {0}" -f ($Script:RunTimeData.RestMethodParam.Body | ConvertTo-Json) | Write-LogOutput -LogType VERBOSE
             "QueryUrl: {0}" -f $Script:RunTimeData.RestMethodParam.Uri | Write-LogOutput -LogType DEBUG
@@ -59,7 +60,7 @@ function Save-Query {
                 if ($NewQuery) {
                     $Script:RunTimeData.CurrentSqlQuery.DoId = $private:Result.Id
                     $Script:RunTimeData.CurrentSqlQuery.DisplayName = $private:Result.Name
-                    $private:Result.Id, $private:Result.Name | Invoke-ConfigSetting -Property "CurrentSqlQuery"
+                    $private:Result.Id, $private:Result.Name | Set-ConfigProperty -Property "CurrentSqlQuery"
                     $ComboBoxSelectQueryItem = New-Object System.Windows.Controls.ComboBoxItem
                     $ComboBoxSelectQueryItem.Content = $Script:AppConfig.CurrentSqlQuery.FullName
                     $Script:MainWindowForm.Elements.ComboBoxSelectQuery.Items.Add($ComboBoxSelectQueryItem) | Out-Null

@@ -12,16 +12,16 @@ $Global:MainWindowForm1 = @{
     }
 }
 
-$Global:MainWindowForm2 = [pscustomobject]@{
-    Elements = [pscustomobject]@{
-        ButtonSaveQuery = [pscustomobject]@{
+$Global:MainWindowForm2 = [PSCustomObject]@{
+    Elements = [PSCustomObject]@{
+        ButtonSaveQuery = [PSCustomObject]@{
             IsEnabled = $true
         }
     }
 }
 
 $Global:MainWindowForm3 = @{
-    Elements = [pscustomobject]@{
+    Elements = [PSCustomObject]@{
         ButtonSaveQuery = @{
             IsEnabled = "test"
         }
@@ -29,7 +29,7 @@ $Global:MainWindowForm3 = @{
 }
 
 $Global:MainWindowForm4 = @{
-    Elements = [pscustomobject]@{
+    Elements = [PSCustomObject]@{
         ButtonSaveQuery = @{
             IsEnabled = $null
         }

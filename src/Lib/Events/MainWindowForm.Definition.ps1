@@ -47,8 +47,9 @@ $Script:MainWindowForm.Definition.Add_Loaded({
                 $Script:MainWindowForm.Definition.Height = [Int]::Abs($Size.Split("x")[1])
             }
 
-            if ($Null -eq $Script:Webview.Object) {
-                [System.Windows.MessageBox]::Show("Failed to find WebView2 control.", "Error", [System.Windows.MessageBoxButton]::OK, [System.Windows.MessageBoxImage]::Error)
+            if ($null -eq $Script:Webview.Object) {
+                "Failed to find WebView2 control." | Write-LogOutput -LogType ERROR
+                # [System.Windows.MessageBox]::Show("Failed to find WebView2 control.", "Error", [System.Windows.MessageBoxButton]::OK, [System.Windows.MessageBoxImage]::Error) | Out-Null
                 return
             }
 
@@ -68,13 +69,14 @@ $Script:MainWindowForm.Definition.Add_Loaded({
                 $Script:Webview.Environment = [Microsoft.Web.WebView2.Core.CoreWebView2Environment]::CreateAsync($null, $Script:Webview.UserDataFolder).GetAwaiter().GetResult()
             }
 
-        if (-not (Test-Path $Script:WebView2UserProfilePath -PathType Container)) { New-Item -ItemType Directory -Force -Path $Script:WebView2UserProfilePath | Out-Null }
+            if (-not (Test-Path $Script:WebView2UserProfilePath -PathType Container)) { New-Item -ItemType Directory -Force -Path $Script:WebView2UserProfilePath | Out-Null }
 
             $Script:Webview.Object.EnsureCoreWebView2Async($Script:Webview.Environment).GetAwaiter().OnCompleted({
-                    if ($Null -eq $Script:Webview.Object.CoreWebView2) {
+                    if ($null -eq $Script:Webview.Object.CoreWebView2) {
                         $Script:MainWindowForm.Definition.Dispatcher.Invoke([System.Action] {
                                 $Message = "WebView2 environment initialization failed. If this system does not have the Webview2 Runtime installed, please download the fixed version from https://developer.microsoft.com/en-us/microsoft-edge/webview2/ and extract the cab file to folder '{0}'" -f $Script:Webview.EdgeWebview2RuntimePath
-                                [System.Windows.MessageBox]::Show($Message, "Error", [System.Windows.MessageBoxButton]::OK, [System.Windows.MessageBoxImage]::Error)
+                                $Message | Write-LogOutput -LogType ERROR
+                                #[System.Windows.MessageBox]::Show($Message, "Error", [System.Windows.MessageBoxButton]::OK, [System.Windows.MessageBoxImage]::Error) | Out-Null
                             })
                         return
                     }
@@ -87,7 +89,8 @@ $Script:MainWindowForm.Definition.Add_Loaded({
                     }
                     else {
                         $Script:MainWindowForm.Definition.Dispatcher.Invoke([System.Action] {
-                                [System.Windows.MessageBox]::Show("Monaco HTML file not found at: $HtmlPath", "Error", [System.Windows.MessageBoxButton]::OK, [System.Windows.MessageBoxImage]::Error)
+                                #[System.Windows.MessageBox]::Show("Monaco HTML file not found at: $HtmlPath", "Error", [System.Windows.MessageBoxButton]::OK, [System.Windows.MessageBoxImage]::Error) | Out-Null
+                                 "Monaco HTML file not found at: {0}" -f $HtmlPath | Write-LogOutput -LogType ERROR
                             })
                     }
                     Test-ConnectionButton
@@ -99,7 +102,7 @@ $Script:MainWindowForm.Definition.Add_Loaded({
                 })
         }
         catch {
-            [System.Windows.MessageBox]::Show("WebView2 initialization failed: $($_.Exception.Message)", "Error", [System.Windows.MessageBoxButton]::OK, [System.Windows.MessageBoxImage]::Error)
+            "WebView2 initialization failed: {0}" -f $_.Exception.Message | Write-LogOutput -LogType ERROR
         }
     })
 
@@ -146,7 +149,7 @@ $Script:MainWindowForm.Definition.Add_LocationChanged({
             }
         }
         catch {
-            [System.Windows.MessageBox]::Show("WebView2 initialization failed: $($_.Exception.Message)", "Error", [System.Windows.MessageBoxButton]::OK, [System.Windows.MessageBoxImage]::Error)
+            [System.Windows.MessageBox]::Show("WebView2 initialization failed: $($_.Exception.Message)", "Error", [System.Windows.MessageBoxButton]::OK, [System.Windows.MessageBoxImage]::Error) | Out-Null
         }
     })
 

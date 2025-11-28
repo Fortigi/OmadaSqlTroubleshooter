@@ -6,7 +6,7 @@ function Update-DataConnectionList {
     )
 
     try {
-        $Script:Tracer::WriteLine(("{0}: Function: {1} - Caller: {2}({3}) - Command: {4}" -f $($Script:RunTimeConfig.ApplicationName), $($MyInvocation.MyCommand.Name), $($MyInvocation.ScriptName), $($MyInvocation.ScriptLineNumber), $MyInvocation.Statement))
+        $Script:Tracer::WriteLine(("{0}: Function: {1} - Caller: {2}({3}) - Command: {4}" -f $($Script:RunTimeConfig.ApplicationName), $($MyInvocation.MyCommand.Name), $($MyInvocation.ScriptName).Split("\")[-1], $($MyInvocation.ScriptLineNumber), $MyInvocation.Statement))
         if (!(Test-ConnectionRequirements)) {
             "Connection not ready" | Write-LogOutput -LogType DEBUG
             return
@@ -22,7 +22,7 @@ function Update-DataConnectionList {
 
             if ($null -eq $Private:Result) {
                 "Failed to retrieve data connections! Data connection cannot be changed!" | Write-LogOutput -LogType WARNING
-                $Script:MainWindowForm.Elements.ComboBoxSelectDataConnection.IsEnabled = $False
+                $Script:MainWindowForm.Elements.ComboBoxSelectDataConnection.IsEnabled = $false
                 $Script:MainWindowForm.Elements.ButtonShowSqlSchema.IsEnabled = $false
             }
             else {
@@ -85,7 +85,7 @@ function Update-DataConnectionList {
                     }
 
                     $Script:MainWindowForm.Elements.TextBoxDisplayName.IsEnabled = $true
-                    $Script:MainWindowForm.Elements.ComboBoxSelectDataConnection.IsEnabled = $True
+                    $Script:MainWindowForm.Elements.ComboBoxSelectDataConnection.IsEnabled = $true
                     $Script:MainWindowForm.Elements.ButtonShowSqlSchema.IsEnabled = $true
                 }
                 "{0} data connections processed!" -f ($Script:MainWindowForm.Elements.ComboBoxSelectDataConnection.Items | Measure-Object).Count | Write-LogOutput

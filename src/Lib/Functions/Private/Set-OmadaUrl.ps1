@@ -2,7 +2,7 @@ function Set-OmadaUrl {
     [CmdLetBinding()]
     PARAM()
     try {
-        $Script:Tracer::WriteLine(("{0}: Function: {1} - Caller: {2}({3}) - Command: {4}" -f $($Script:RunTimeConfig.ApplicationName), $($MyInvocation.MyCommand.Name), $($MyInvocation.ScriptName), $($MyInvocation.ScriptLineNumber), $MyInvocation.Statement))
+        $Script:Tracer::WriteLine(("{0}: Function: {1} - Caller: {2}({3}) - Command: {4}" -f $($Script:RunTimeConfig.ApplicationName), $($MyInvocation.MyCommand.Name), $($MyInvocation.ScriptName).Split("\")[-1], $($MyInvocation.ScriptLineNumber), $MyInvocation.Statement))
         if (![string]::IsNullOrWhiteSpace($Script:MainWindowForm.Elements.TextBoxURL.Text)) {
 
             if ($Script:MainWindowForm.Elements.TextBoxURL.Text -notlike "http*") {
@@ -20,9 +20,10 @@ function Set-OmadaUrl {
         ("Input Url {0} is valid." -f $Uri.IsAbsoluteUri) | Write-LogOutput -LogType DEBUG
             }
             else {
-                $Null | Invoke-ConfigSetting -Property "BaseUrl"
-                $Script:MainWindowForm.Elements.TextBoxURL.Text = $Null
+                $null | Set-ConfigProperty -Property "BaseUrl"
+                $Script:MainWindowForm.Elements.TextBoxURL.Text = $null
                 "Input Url {0} is not valid." -f $Script:MainWindowForm.Elements.TextBoxURL.Text.Trim() | Write-LogOutput -LogType ERROR
+                Set-Disconnected
                 return
             }
 
@@ -30,17 +31,19 @@ function Set-OmadaUrl {
                 $DnsResult = Resolve-DnsName -Name $Uri.Host -QuickTimeout -ErrorAction SilentlyContinue
                 if (($DnsResult | Measure-Object).Count -le 0) {
                     "DNS resolution for {0} failed!" -f $Uri.Host | Write-LogOutput -LogType ERROR
+                    Set-Disconnected
                     return
                 }
             }
             catch {
-                $Null | Invoke-ConfigSetting -Property "BaseUrl"
-                $Script:MainWindowForm.Elements.TextBoxURL.Text = $Null
-                $Script:MainWindowForm.Elements.TextBlockUrl.Text = $Null
+                $null | Set-ConfigProperty -Property "BaseUrl"
+                $Script:MainWindowForm.Elements.TextBoxURL.Text = $null
+                $Script:MainWindowForm.Elements.TextBlockStatusBarUrl.Text = $null
                 "Endpoint {0} not found!" -f $Uri.AbsoluteUri | Write-LogOutput -LogType ERROR
+                Set-Disconnected
             }
 
-            $Uri.AbsoluteUri.TrimEnd("/") | Invoke-ConfigSetting -Property "BaseUrl"
+            $Uri.AbsoluteUri.TrimEnd("/") | Set-ConfigProperty -Property "BaseUrl"
 
             if ($Script:CurrentUrl -ne $Script:AppConfig.BaseUrl) {
                 "Omada Url set to: {0}" -f $Script:AppConfig.BaseUrl | Write-LogOutput -LogType DEBUG
@@ -49,12 +52,15 @@ function Set-OmadaUrl {
                 #     "Authentication is set, force update query list!" | Write-LogOutput -LogType DEBUG
                 #     #Update-QueryList -ForceRefresh
                 # }
+                $Script:MainWindowForm.Elements.ComboBoxSelectAuthenticationOption.IsEnabled = $true
             }
             elseif ([string]::IsNullOrEmpty($Script:AppConfig.BaseUrl)) {
                 "Omada Url is empty!" | Write-LogOutput -LogType DEBUG
+                Set-Disconnected
             }
             else {
                 "Omada Url maintained: {0}" -f $Script:AppConfig.BaseUrl | Write-LogOutput -LogType DEBUG
+                $Script:MainWindowForm.Elements.ComboBoxSelectAuthenticationOption.IsEnabled = $true
             }
         }
         else {

@@ -1,12 +1,13 @@
 $Script:MainWindowForm.Elements.ButtonConnect.Add_Click({
         try {
             $_ | Show-EventInfo
-            if($Script:MainWindowForm.Elements.ButtonConnect.Content -eq "_Connect"){
-                Test-ConnectionSettings
+
+            if ($Script:MainWindowForm.Elements.ButtonConnectText.Text -eq "_Connect") {
+                if (Test-OmadaConnection) {
+                    Test-ConnectionSettings
+                }
             }
-            else{
-                #Reload OmadaWeb.PS to delete cookies (TODO: Add disconnect function to OmadaWeb.PS)
-                Import-Module OmadaWeb.PS -Force
+            else {
                 Set-Disconnected
             }
         }

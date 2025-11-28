@@ -2,7 +2,7 @@ function Open-SplashScreenForm {
     [CmdLetBinding()]
     PARAM()
     try {
-        $Script:Tracer::WriteLine(("{0}: Function: {1} - Caller: {2}({3}) - Command: {4}" -f $($Script:RunTimeConfig.ApplicationName), $($MyInvocation.MyCommand.Name), $($MyInvocation.ScriptName), $($MyInvocation.ScriptLineNumber), $MyInvocation.Statement))
+        $Script:Tracer::WriteLine(("{0}: Function: {1} - Caller: {2}({3}) - Command: {4}" -f $($Script:RunTimeConfig.ApplicationName), $($MyInvocation.MyCommand.Name), $($MyInvocation.ScriptName).Split("\")[-1], $($MyInvocation.ScriptLineNumber), $MyInvocation.Statement))
         "Loading Splash Screen" | Write-LogOutput -LogType DEBUG
         $SplashScreenForm = New-Object System.Windows.Forms.Form
         $SplashScreenForm.Text = "Loading..."
@@ -23,7 +23,7 @@ function Open-SplashScreenForm {
         $SplashLabel = New-Object System.Windows.Forms.Label
         $SplashLabel.Text = "Initializing application..."
         $SplashLabel.Font = New-Object System.Drawing.Font("Segoe UI", 12, [System.Drawing.FontStyle]::Bold)
-        $SplashLabel.AutoSize = $True
+        $SplashLabel.AutoSize = $true
         $SplashLabel.Location = New-Object System.Drawing.Point(55, 180)
         $SplashScreenForm.Controls.Add($SplashLabel)
         return $SplashScreenForm

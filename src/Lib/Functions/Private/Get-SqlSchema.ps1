@@ -2,9 +2,9 @@ function Get-SqlSchemaObject {
     [CmdLetBinding()]
     PARAM()
     try {
-        $Script:Tracer::WriteLine(("{0}: Function: {1} - Caller: {2}({3}) - Command: {4}" -f $($Script:RunTimeConfig.ApplicationName), $($MyInvocation.MyCommand.Name), $($MyInvocation.ScriptName), $($MyInvocation.ScriptLineNumber), $MyInvocation.Statement))
+        $Script:Tracer::WriteLine(("{0}: Function: {1} - Caller: {2}({3}) - Command: {4}" -f $($Script:RunTimeConfig.ApplicationName), $($MyInvocation.MyCommand.Name), $($MyInvocation.ScriptName).Split("\")[-1], $($MyInvocation.ScriptLineNumber), $MyInvocation.Statement))
 
-        if ($Script:ReconnectStatus -eq 1) {
+        if ($Script:RunTimeConfig.ReconnectStatus -eq 1) {
             "Skip reconnect" | Write-LogOutput -LogType DEBUG
             return
         }
@@ -93,7 +93,7 @@ function Get-SqlSchemaObject {
 
         }
         else {
-            "SqlSchema DoID is not set! Cannot retrieve Sql schema!" | Write-LogOutput -LogType WARNING
+            "SqlSchema DoID is not set! Cannot retrieve Sql schema!" | Write-LogOutput -LogType WARNING -SkipDialog
             return $null
         }
     }

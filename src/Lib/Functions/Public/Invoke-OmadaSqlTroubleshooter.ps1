@@ -81,6 +81,8 @@ function Invoke-OmadaSqlTroubleshooter {
         AuthenticationSet  = $false
         OutputFileName     = $null
         UseWebView2Auth    = $UseWebView2Auth.IsPresent -or $false
+        ReconnectStatus    = 0
+        SavePassword       = $false
     }
     Get-ChildItem -Path (Join-Path $Script:RunTimeConfig.ModuleFolder -ChildPath "Lib\Functions") -Filter *.ps1 | ForEach-Object {
         . $_.FullName
@@ -93,6 +95,7 @@ function Invoke-OmadaSqlTroubleshooter {
     $SplashScreenForm = Open-SplashScreenForm
     "Loading Main Window Object" | Write-LogOutput -LogType DEBUG
     $Script:MainWindowForm = New-FormObject -FormPath (Join-Path $Script:RunTimeConfig.ModuleFolder -ChildPath "lib\ui\MainWindow.xaml")
+
     $Script:RunTimeConfig.ApplicationTitle = $Script:MainWindowForm.Definition.Title.ToString()
     "Get WebView" | Write-LogOutput -LogType DEBUG
     $Script:Webview.Object = $Script:MainWindowForm.Definition.FindName("webView21")
@@ -101,21 +104,26 @@ function Invoke-OmadaSqlTroubleshooter {
     #region events
 
     #How to lookup events for a button: ([System.Windows.Controls.Button].GetEvents()|where name -eq 'Click').AddMethod.Name
-    try {
-        # Events are moved to .\Lib\Events
-        "Read Events" | Write-LogOutput -LogType DEBUG
-        Get-ChildItem -Path (Join-Path $Script:RunTimeConfig.ModuleFolder -ChildPath "Lib\Events") -Filter *.ps1 | ForEach-Object {
+    # Events are moved to .\Lib\Events
+    "Read Events" | Write-LogOutput -LogType DEBUG
+
+    Get-ChildItem -Path (Join-Path $Script:RunTimeConfig.ModuleFolder -ChildPath "Lib\Events") -Filter *.ps1 | ForEach-Object {
+
+        "Loading event {0}" -f $_.Name | Write-LogOutput -LogType DEBUG
+        try {
+
             . $_.FullName
         }
-    }
-    catch {
-        if ($_.Exception.Response.StatusCode -eq "NotFound") {
-            "SQL Troubleshooting Object not found or OData endpoint for SQL Troubleshooting is not found. Is it enable for OData? Please check the data object type properties!" | Write-LogOutput -LogType ERROR
+        catch {
+            if ($_.Exception.Response.StatusCode -eq "NotFound") {
+                "SQL Troubleshooting Object not found or OData endpoint for SQL Troubleshooting is not found. Is it enable for OData? Please check the data object type properties!" | Write-LogOutput -LogType ERROR
+            }
+            else {
+                $_.Exception.Message | Write-LogOutput -LogType ERROR
+            }
         }
-        else {
-            $_.Exception.Message | Write-LogOutput -LogType ERROR
-        }
     }
+
     #endregion
 
     #region process
@@ -126,7 +134,7 @@ function Invoke-OmadaSqlTroubleshooter {
 
         "Application '{0}': Start initialization..." -f $Script:RunTimeConfig.ApplicationTitle | Write-Host -ForegroundColor Green
         $Script:ConnectionStatus = $false
-        $Script:ReconnectStatus = 0
+        $Script:RunTimeConfig.ReconnectStatus = 0
         Initialize-ConfigSettings
 
         Close-SplashScreenForm
@@ -145,10 +153,16 @@ function Invoke-OmadaSqlTroubleshooter {
 
         [void]$Script:MainWindowForm.Definition.ShowDialog()
         $Message = "Application '{0}': Closed, cleaning-up!" -f $Script:RunTimeConfig.ApplicationTitle
+        if (!$Script:RunTimeConfig.SavePassword) {
+            $null | Set-ConfigProperty -Property "Password"
+        }
+        elseif ($null -ne $Script:MainWindowForm.Elements.TextBoxPassword.Password) {
+            $Script:MainWindowForm.Elements.TextBoxPassword.Password | Set-ConfigProperty -Property "Password"
+        }
         $Message | Write-Host -ForegroundColor Green
         $Message | Write-LogOutput -LogType DEBUG
-        "Invoke-ConfigSetting" | Write-LogOutput -LogType DEBUG
-        Invoke-ConfigSetting
+        "Set-ConfigProperty" | Write-LogOutput -LogType DEBUG
+        Set-ConfigProperty
         "Close Main Window" | Write-LogOutput -LogType DEBUG
         $Script:MainWindowForm.Definition.Close() | Out-Null
         $Script:Webview.Object.Dispose() | Out-Null

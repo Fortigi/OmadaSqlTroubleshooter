@@ -3,13 +3,13 @@ function Open-LogWindow {
     PARAM()
 
     try {
-        $Script:Tracer::WriteLine(("{0}: Function: {1} - Caller: {2}({3}) - Command: {4}" -f $($Script:RunTimeConfig.ApplicationName), $($MyInvocation.MyCommand.Name), $($MyInvocation.ScriptName), $($MyInvocation.ScriptLineNumber), $MyInvocation.Statement))
+        $Script:Tracer::WriteLine(("{0}: Function: {1} - Caller: {2}({3}) - Command: {4}" -f $($Script:RunTimeConfig.ApplicationName), $($MyInvocation.MyCommand.Name), $($MyInvocation.ScriptName).Split("\")[-1], $($MyInvocation.ScriptLineNumber), $MyInvocation.Statement))
         #Log window creation
         "Opening Log window" | Write-LogOutput -LogType DEBUG
         $Script:LogWindowForm = New-FormObject -FormPath (Join-Path $Script:RunTimeConfig.ModuleFolder -ChildPath "lib\ui\LogWindow.xaml") -ParentForm $Script:MainWindowForm.Definition
         [Int]$Script:LogWindowForm.PositionManager.PositionOffSetLeft = 1200
 
-        $true | Invoke-ConfigSetting -Property "LogWindowFormOpen"
+        $true | Set-ConfigProperty -Property "LogWindowFormOpen"
 
         $Script:LogWindowForm.Definition.ShowInTaskbar = $false
         $Script:TextBoxLog = $Script:LogWindowForm.Definition.FindName("TextBoxLog")
@@ -17,21 +17,21 @@ function Open-LogWindow {
             $Script:TextBoxLog.TextWrapping = "WrapWithOverflow"
             $Script:LogWindowForm.Elements.CheckboxWordWrap.IsChecked = $true
             "Word wrap is enabled" | Write-LogOutput -LogType LOG
-            $true | Invoke-ConfigSetting -Property "LogWindowWordWrap"
+            $true | Set-ConfigProperty -Property "LogWindowWordWrap"
         }
         else {
             $Script:TextBoxLog.TextWrapping = "NoWrap"
             $Script:LogWindowForm.Elements.CheckboxWordWrap.IsChecked = $false
-            $false | Invoke-ConfigSetting -Property "LogWindowWordWrap"
+            $false | Set-ConfigProperty -Property "LogWindowWordWrap"
         }
         if ($Script:RunTimeConfig.Logging.LogToConsole) {
             $Script:LogWindowForm.Elements.CheckboxConsoleLog.IsChecked = $true
             "Console logging is enabled" | Write-LogOutput -LogType LOG
-            $true | Invoke-ConfigSetting -Property "CheckboxConsoleLog"
+            $true | Set-ConfigProperty -Property "CheckboxConsoleLog"
         }
         else {
             $Script:LogWindowForm.Elements.CheckboxConsoleLog.IsChecked = $false
-            $false | Invoke-ConfigSetting -Property "CheckboxConsoleLog"
+            $false | Set-ConfigProperty -Property "CheckboxConsoleLog"
         }
 
         #Set log level to show
@@ -113,7 +113,7 @@ function Open-LogWindow {
                         }
                         $Script:LogWindowForm.PositionManager.Synchronizing = $false
                     }, [System.Windows.Threading.DispatcherPriority]::Render)
-                $Script:MainWindowForm.Elements.ButtonShowLog | Set-ButtonContent -Content "_Hide Log"
+                #$Script:MainWindowForm.Elements.ButtonShowLogText | Set-ButtonText -Value "_Hide Log"
                 $Script:TextBoxLog.Text = $Script:RunTimeConfig.Logging.AppLogObject
                 $Script:LogWindowForm.PositionManager.PositionOffSetLeft = [Int]::Abs($Script:LogWindowForm.Definition.Left) - [Int]::Abs($Script:MainWindowForm.Definition.Left)
                 "PositionManagerLogWindow PositionOffSetLeft: {0}" -f $Script:LogWindowForm.PositionManager.PositionOffSetLeft | Write-LogOutput -LogType DEBUG
@@ -128,14 +128,14 @@ function Open-LogWindow {
                 $Script:LogWindowForm.State = "Closing"
                 Save-WindowMeasurements
                 if ($Script:MainWindowForm.State -eq "Open") {
-                    $false | Invoke-ConfigSetting -Property "LogWindowFormOpen"
+                    $false | Set-ConfigProperty -Property "LogWindowFormOpen"
                 }
             })
 
         $Script:LogWindowForm.Definition.Add_Closed({
                 $_ | Show-EventInfo
                 $Script:LogWindowForm.State = "Closed"
-                $Script:MainWindowForm.Elements.ButtonShowLog | Set-ButtonContent -Content "Log"
+                $Script:MainWindowForm.Elements.ButtonShowLogText | Set-ButtonText -Value "Log"
             })
 
         $Script:LogWindowForm.Elements.ButtonClearLog.Add_Click({
@@ -161,7 +161,7 @@ function Open-LogWindow {
                 $SaveFileDialog.FileName = "OmadaSqlTroubleShooter.log"
                 "Dialog Initial FileName: {0}" -f $SaveFileDialog.FileName | Write-LogOutput -LogType DEBUG
                 if ($SaveFileDialog.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
-                    if ($Null -eq $SaveFileDialog.FileName) {
+                    if ($null -eq $SaveFileDialog.FileName) {
                         return
                     }
                     else {
@@ -177,7 +177,7 @@ function Open-LogWindow {
 
         $Script:LogWindowForm.Elements.ComboBoxSelectLogLevel.Add_SelectionChanged({
                 $_ | Show-EventInfo
-                $Script:LogWindowForm.Elements.ComboBoxSelectLogLevel.SelectedItem.Content | Invoke-ConfigSetting -Property "LogLevel"
+                $Script:LogWindowForm.Elements.ComboBoxSelectLogLevel.SelectedItem.Content | Set-ConfigProperty -Property "LogLevel"
                 $Script:RunTimeConfig.Logging.LogLevelSetting = $Script:LogWindowForm.Elements.ComboBoxSelectLogLevel.SelectedItem.Content
                 "Logging set to {0}!" -f $Script:RunTimeConfig.Logging.LogLevelSetting | Write-LogOutput -LogType LOG
             })
@@ -187,14 +187,14 @@ function Open-LogWindow {
                 $_ | Show-EventInfo
                 $Script:TextBoxLog.TextWrapping = "WrapWithOverflow"
                 "Word wrap is enabled" | Write-LogOutput -LogType LOG
-                $true | Invoke-ConfigSetting -Property "LogWindowWordWrap"
+                $true | Set-ConfigProperty -Property "LogWindowWordWrap"
             })
 
         $Script:LogWindowForm.Elements.CheckboxWordWrap.Add_UnChecked({
                 $_ | Show-EventInfo
                 $Script:TextBoxLog.TextWrapping = "NoWrap"
                 "Word wrap is disabled" | Write-LogOutput -LogType LOG
-                $false | Invoke-ConfigSetting -Property "LogWindowWordWrap"
+                $false | Set-ConfigProperty -Property "LogWindowWordWrap"
 
             })
 
@@ -202,14 +202,14 @@ function Open-LogWindow {
                 $_ | Show-EventInfo
                 $Script:RunTimeConfig.Logging.LogToConsole = $true
                 "Console logging is enabled" | Write-LogOutput -LogType LOG
-                $true | Invoke-ConfigSetting -Property "CheckboxConsoleLog"
+                $true | Set-ConfigProperty -Property "CheckboxConsoleLog"
             })
 
         $Script:LogWindowForm.Elements.CheckboxConsoleLog.Add_UnChecked({
                 $_ | Show-EventInfo
                 $Script:RunTimeConfig.Logging.LogToConsole = $false
                 "Console logging is disabled" | Write-LogOutput -LogType LOG
-                $false | Invoke-ConfigSetting -Property "CheckboxConsoleLog"
+                $false | Set-ConfigProperty -Property "CheckboxConsoleLog"
 
             })
 
