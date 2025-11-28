@@ -9,7 +9,7 @@ $Script:MainWindowForm.Elements.ButtonSaveOutputFile.Add_Click({
                 $SaveFileDialog.InitialDirectory = $Script:AppConfig.LastOutputFolder
             }
             if ([string]::IsNullOrWhiteSpace($Script:AppConfig.LastOutputFolder)) {
-                ".json" | Invoke-ConfigSetting -Property "LastExtension"
+                ".json" | Set-ConfigProperty -Property "LastExtension"
             }
             $SaveFileDialog.DefaultExt = $Script:AppConfig.LastExtension
             $InvalidFileNameChars = [System.IO.Path]::GetInvalidFileNameChars()
@@ -30,7 +30,7 @@ $Script:MainWindowForm.Elements.ButtonSaveOutputFile.Add_Click({
                 $Script:RunTimeConfig.OutputFileName = $SaveFileDialog.FileName
                 "Save outputfile: {0}" -f $Script:RunTimeConfig.OutputFileName | Write-LogOutput
 
-                if ($Null -eq $Script:RunTimeConfig.OutputFileName) {
+                if ($null -eq $Script:RunTimeConfig.OutputFileName) {
                     return
                 }
                 elseif ($Script:RunTimeConfig.OutputFileName -like "*.json") {
@@ -47,9 +47,9 @@ $Script:MainWindowForm.Elements.ButtonSaveOutputFile.Add_Click({
                 }
 
                 "Output file saved!" | Write-LogOutput -LogType DEBUG
-                Split-Path $Script:RunTimeConfig.OutputFileName | Invoke-ConfigSetting -Property "LastOutputFolder"
-                [System.IO.Path]::GetExtension($Script:RunTimeConfig.OutputFileName) | Invoke-ConfigSetting -Property "LastExtension"
-                $Script:MainWindowForm.Elements.ButtonOpenOutputFile.IsEnabled = $True
+                Split-Path $Script:RunTimeConfig.OutputFileName | Set-ConfigProperty -Property "LastOutputFolder"
+                [System.IO.Path]::GetExtension($Script:RunTimeConfig.OutputFileName) | Set-ConfigProperty -Property "LastExtension"
+                $Script:MainWindowForm.Elements.ButtonOpenOutputFile.IsEnabled = $true
             }
             else {
                 "File was not saved!" | Write-LogOutput -LogType DEBUG

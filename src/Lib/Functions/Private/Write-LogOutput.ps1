@@ -1,7 +1,7 @@
 function Write-LogOutput {
     [CmdLetBinding()]
-    PARAM(
-        [parameter(Mandatory = $false, Position = 0, ValueFromPipeline = $True)]
+    param(
+        [parameter(Mandatory = $false, Position = 0, ValueFromPipeline = $true)]
         [string]$Message,
         [ValidateSet("DEBUG", "INFO", "ERROR", "VERBOSE", "WARNING", "FATAL", "LOG", "VERBOSE2")]
         [string]$LogType = "INFO",
@@ -24,7 +24,7 @@ function Write-LogOutput {
             $Command = $null
             $Command = $PSCallStack[1]
             if ([string]::IsNullOrWhiteSpace($Command.Command)) {
-            (Get-PSCallStack) | ForEach-Object {
+                (Get-PSCallStack) | ForEach-Object {
                     if ([string]::IsNullOrWhiteSpace($Command.Command) -and $_.Command -ne $MyInvocation.MyCommand -and ![string]::IsNullOrWhiteSpace($_.Command)) {
                         $Command = $_
                     }
@@ -36,7 +36,7 @@ function Write-LogOutput {
             $CalledFrom = $null
         }
         $LogMessage = @{
-            #VERBOSE2 length = 8 
+            #VERBOSE2 length = 8
             Text        = "{0} - {1}{2}- {3}: {4}" -f $DateTime, $LogType, ((0..(8 - $LogType.Length) | ForEach-Object { ' ' }) -join ''), $CalledFrom, $Message
             Show        = $false
             ShowWarning = $false
@@ -71,7 +71,7 @@ function Write-LogOutput {
             { $_ -in @("ERROR", "FATAL") -and $LogType -in @(  "ERROR", "FATAL", "LOG") } {
                 $LogMessage.Show = $true
             }
-            Default {
+            default {
                 $LogMessage.Show = $false
             }
         }
@@ -123,7 +123,7 @@ function Write-LogOutput {
                 }
             }
             { $_ -eq "LOG" -and $LogMessage.Show } {}
-            Default {}
+            default {}
         }
 
         if ($LogMessage.Show) {
@@ -140,15 +140,19 @@ function Write-LogOutput {
                 [System.Windows.Forms.MessageBox]::Show($LogMessageDialog.Text, $LogMessageDialog.Title, [System.Windows.Forms.MessageBoxButtons]::OK, $LogMessageDialog.Icon)
             }
             else {
+                $MessageBoxImage = [System.Windows.MessageBoxImage]::Information
                 if ($LogMessage.ShowWarning) {
                     $LogMessage.Text | Write-Warning
+                    $MessageBoxImage = [System.Windows.MessageBoxImage]::Warning
                 }
                 elseif ($LogMessage.ShowError) {
                     $LogMessage.Text | Write-Error
+                    $MessageBoxImage = [System.Windows.MessageBoxImage]::Error
                 }
                 else {
                     $LogMessage.Text | Write-Host -ForegroundColor $LogMessage.Color
                 }
+                [System.Windows.MessageBox]::Show($LogMessageDialog.Text, $LogMessageDialog.Title, [System.Windows.Forms.MessageBoxButtons]::OK, $MessageBoxImage) | Out-Null
             }
         }
         if ($LogMessage.ShowError) {

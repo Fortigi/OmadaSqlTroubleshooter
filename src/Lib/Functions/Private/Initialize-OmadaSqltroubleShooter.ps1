@@ -3,9 +3,8 @@ function Initialize-OmadaSqlTroubleShooter {
     [System.Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSUseDeclaredVarsMoreThanAssignments', 'WebView2AlreadyLoaded', Justification = 'The variable is used, but script analyzer does not recognize it')]
     param()
     try {
-        $Script:Tracer::WriteLine(("{0}: Function: {1} - Caller: {2}({3}) - Command: {4}" -f $($Script:RunTimeConfig.ApplicationName), $($MyInvocation.MyCommand.Name), $($MyInvocation.ScriptName), $($MyInvocation.ScriptLineNumber), $MyInvocation.Statement))
+        $Script:Tracer::WriteLine(("{0}: Function: {1} - Caller: {2}({3}) - Command: {4}" -f $($Script:RunTimeConfig.ApplicationName), $($MyInvocation.MyCommand.Name), $($MyInvocation.ScriptName).Split("\")[-1], $($MyInvocation.ScriptLineNumber), $MyInvocation.Statement))
         "Initializing application..." | Write-LogOutput -LogType DEBUG
-
         Push-Location $Script:RunTimeConfig.ModuleFolder
 
         $Script:RunTimeConfig.Logging.AppLogObject.Add("Application log initialized`r`n")
@@ -26,7 +25,6 @@ function Initialize-OmadaSqlTroubleShooter {
 
         "Load module OmadaWeb.PS" | Write-LogOutput -LogType DEBUG
         Import-Module OmadaWeb.PS
-
         "Load Assemblies" | Write-LogOutput -LogType DEBUG
 
         ("System.Windows.Forms", "System.Drawing", "PresentationFramework", "WindowsBase", "PresentationCore", "PresentationFramework") | ForEach-Object {
@@ -46,13 +44,16 @@ function Initialize-OmadaSqlTroubleShooter {
         $Script:AppConfig = $null
         $Script:RunTimeData = [PSCustomObject]@{
             RestMethodParam                = @{
-                Uri                = $Null
-                Method             = "GET"
-                AuthenticationType = $($Script:AppConfig.LastAuthentication)
-                UseWebView2        = $($Script:AppConfig.LastAuthentication -eq "Browser" -or [string]::IsNullOrWhiteSpace($Script:AppConfig.LastAuthentication) ? $($Script:RunTimeConfig.UseWebView2Auth) : $false)
+                Uri                   = $null
+                Method                = "GET"
+                AuthenticationType    = $null
+                UseWebView2           = $null
+                EntraApplicationIdUri = $null
+                EntraIdTenantId       = $null
+                ForceAuthentication   = $false
             }
             QuerySaved                     = $false
-            Password                       = $Null
+            Password                       = $null
             QueryText                      = $null
             SqlQueryObject                 = $null
             QueryResult                    = $null
@@ -73,6 +74,7 @@ function Initialize-OmadaSqlTroubleShooter {
                 SqlQueryCreatedBy = "c-2"
                 SqlQueryChangedBy = "c-4"
             }
+            SkipRetryRequest = $false
         }
         $Script:WebView = @{
             Object                  = $null

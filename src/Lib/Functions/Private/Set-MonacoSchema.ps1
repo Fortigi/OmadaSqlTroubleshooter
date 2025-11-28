@@ -4,12 +4,12 @@ function Set-MonacoSchema {
         $ReturnValue
     )
     try {
-        $Script:Tracer::WriteLine(("{0}: Function: {1} - Caller: {2}({3}) - Command: {4}" -f $($Script:RunTimeConfig.ApplicationName), $($MyInvocation.MyCommand.Name), $($MyInvocation.ScriptName), $($MyInvocation.ScriptLineNumber), $MyInvocation.Statement))
+        $Script:Tracer::WriteLine(("{0}: Function: {1} - Caller: {2}({3}) - Command: {4}" -f $($Script:RunTimeConfig.ApplicationName), $($MyInvocation.MyCommand.Name), $($MyInvocation.ScriptName).Split("\")[-1], $($MyInvocation.ScriptLineNumber), $MyInvocation.Statement))
         "Add schema to Monaco editor." | Write-LogOutput -LogType DEBUG
         $TableObjects = @()
         foreach ($Table in ($ReturnValue.d | Get-Member -MemberType NoteProperty)) {
             $TableName = $($Table.Name).Split(".",2)[1]
-            $TableObject = [pscustomobject]@{
+            $TableObject = [PSCustomObject]@{
                 $TableName = @()
             }
             foreach ($Column in $ReturnValue.d.$($Table.Name)) {

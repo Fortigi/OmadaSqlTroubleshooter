@@ -2,7 +2,7 @@ function Save-WindowMeasurements {
     [CmdLetBinding()]
     PARAM()
     try {
-        $Script:Tracer::WriteLine(("{0}: Function: {1} - Caller: {2}({3}) - Command: {4}" -f $($Script:RunTimeConfig.ApplicationName), $($MyInvocation.MyCommand.Name), $($MyInvocation.ScriptName), $($MyInvocation.ScriptLineNumber), $MyInvocation.Statement))
+        $Script:Tracer::WriteLine(("{0}: Function: {1} - Caller: {2}({3}) - Command: {4}" -f $($Script:RunTimeConfig.ApplicationName), $($MyInvocation.MyCommand.Name), $($MyInvocation.ScriptName).Split("\")[-1], $($MyInvocation.ScriptLineNumber), $MyInvocation.Statement))
         "Save-WindowMeasurements" | Write-LogOutput -LogType VERBOSE2
         $MinDelta = 500
         $Timestamp = Get-Date
@@ -15,15 +15,15 @@ function Save-WindowMeasurements {
 
         if ($Script:MainWindowForm.Definition.IsVisible) {
             $ValueSize = "{0}x{1}" -f [Int]::Abs(($Script:MainWindowForm.Definition | Get-ValidWindowMeasurement -Setting "Width")), [Int]::Abs(($Script:MainWindowForm.Definition | Get-ValidWindowMeasurement -Setting "Height"))
-            $ValueSize | Invoke-ConfigSetting -Property "MainWindowSize"
+            $ValueSize | Set-ConfigProperty -Property "MainWindowSize"
             $ValuePosition = "{0}x{1}" -f [Int]::Abs(($Script:MainWindowForm.Definition | Get-ValidWindowPosition -Setting "Left")), [Int]::Abs(($Script:MainWindowForm.Definition | Get-ValidWindowPosition -Setting "Top"))
-            $ValuePosition | Invoke-ConfigSetting -Property "MainWindowPosition"
+            $ValuePosition | Set-ConfigProperty -Property "MainWindowPosition"
             "MainWindowForm Size:'{0}', Position: '{1}'" -f $ValueSize, $ValuePosition | Write-LogOutput -LogType VERBOSE2
             if ($null -ne $Script:LogWindowForm -and $null -ne $Script:LogWindowForm.Definition -and $Script:LogWindowForm.Definition.IsVisible) {
                 $ValueSize = "{0}x{1}" -f [Int]::Abs(($Script:LogWindowForm.Definition | Get-ValidWindowMeasurement -Setting "Width")), [Int]::Abs(($Script:LogWindowForm.Definition | Get-ValidWindowMeasurement -Setting "Height"))
-                $ValueSize | Invoke-ConfigSetting -Property "LogWindowSize"
+                $ValueSize | Set-ConfigProperty -Property "LogWindowSize"
                 $ValuePosition = "{0}x{1}" -f [Int]::Abs(($Script:LogWindowForm.Definition | Get-ValidWindowPosition -Setting "Left")), [Int]::Abs(($Script:LogWindowForm.Definition | Get-ValidWindowPosition -Setting "Top"))
-                $ValuePosition | Invoke-ConfigSetting -Property "LogWindowPosition"
+                $ValuePosition | Set-ConfigProperty -Property "LogWindowPosition"
                 "LogWindowForm Size:'{0}', Position: '{1}'" -f $ValueSize, $ValuePosition | Write-LogOutput -LogType VERBOSE2
             }
             else {
@@ -31,9 +31,9 @@ function Save-WindowMeasurements {
             }
             if ($null -ne $Script:SqlSchemaWindowForm -and $null -ne $Script:SqlSchemaWindowForm.Definition -and $Script:SqlSchemaWindowForm.Definition.IsVisible) {
                 $ValueSize = "{0}x{1}" -f [Int]::Abs(($Script:SqlSchemaWindowForm.Definition | Get-ValidWindowMeasurement -Setting "Width")), [Int]::Abs(($Script:SqlSchemaWindowForm.Definition | Get-ValidWindowMeasurement -Setting "Height"))
-                $ValueSize | Invoke-ConfigSetting -Property "SqlSchemaWindowSize"
+                $ValueSize | Set-ConfigProperty -Property "SqlSchemaWindowSize"
                 $ValuePosition = "{0}x{1}" -f [Int]::Abs(($Script:SqlSchemaWindowForm.Definition | Get-ValidWindowPosition -Setting "Left")), [Int]::Abs(($Script:SqlSchemaWindowForm.Definition | Get-ValidWindowPosition -Setting "Top"))
-                $ValuePosition | Invoke-ConfigSetting -Property "SqlSchemaWindowPosition"
+                $ValuePosition | Set-ConfigProperty -Property "SqlSchemaWindowPosition"
                 "SqlSchemaWindowForm Size:'{0}', Position: '{1}'" -f $ValueSize, $ValuePosition | Write-LogOutput -LogType VERBOSE2
             }
             else {

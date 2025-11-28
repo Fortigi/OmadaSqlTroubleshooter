@@ -1,8 +1,8 @@
 $Script:MainWindowForm.Elements.ButtonNewQuery.Add_Click({
         try {
             $_ | Show-EventInfo
-            $Script:MainWindowForm.Elements.ButtonSaveQuery.IsEnabled = $False
-            $Script:MainWindowForm.Elements.ButtonExecuteQuery.IsEnabled = $False
+            $Script:MainWindowForm.Elements.ButtonSaveQuery.IsEnabled = $false
+            $Script:MainWindowForm.Elements.ButtonExecuteQuery.IsEnabled = $false
 
             if (!(Test-ConnectionRequirements)) {
                 "Omada Url not set or Query not selected, cannot retrieve data!" | Write-LogOutput -LogType WARNING

@@ -1,16 +1,16 @@
 function New-FormObject {
     [CmdLetBinding()]
-    PARAM (
-        [parameter(Mandatory = $False)]
+    param (
+        [parameter(Mandatory = $false)]
         [validateScript({ Test-Path $_ -PathType Leaf })]
         $FormPath,
-        [parameter(Mandatory = $False)]
+        [parameter(Mandatory = $false)]
         $Xaml,
-        [parameter(Mandatory = $False)]
+        [parameter(Mandatory = $false)]
         $ParentForm
     )
     try {
-        $Script:Tracer::WriteLine(("{0}: Function: {1} - Caller: {2}({3}) - Command: {4}" -f $($Script:RunTimeConfig.ApplicationName), $($MyInvocation.MyCommand.Name), $($MyInvocation.ScriptName), $($MyInvocation.ScriptLineNumber), $MyInvocation.Statement))
+        $Script:Tracer::WriteLine(("{0}: Function: {1} - Caller: {2}({3}) - Command: {4}" -f $($Script:RunTimeConfig.ApplicationName), $($MyInvocation.MyCommand.Name), $($MyInvocation.ScriptName).Split("\")[-1], $($MyInvocation.ScriptLineNumber), $MyInvocation.Statement))
         if ($null -eq $FormPath -and $null -eq $Xaml) {
             "Either FormPath or Xaml must be provided!" | Write-LogOutput -LogType ERROR
             break
@@ -32,7 +32,7 @@ function New-FormObject {
 
         # Access controls
         $Elements = @()
-        $ElementNames = @("ComboBox", "Label", "TextBox", "Button", "CheckBox", "RadioButton", "PasswordBox", "ComboBoxItem", "WebView2", "DataGrid", "TextBlock", "TreeViewSqlSchema")
+        $ElementNames = @( "AccessText", "Button", "CheckBox", "ComboBox", "ComboBoxItem", "DataGrid", "Image", "PasswordBox", "RadioButton", "TextBlock", "TextBox", "TreeViewSqlSchema", "WebView2")
         foreach ($ElementName in $ElementNames) {
             "Find element type: {0}" -f $ElementName | Write-LogOutput -LogType DEBUG
             $Xaml.DocumentElement.SelectNodes("//default:$ElementName", $NamespaceManager) | ForEach-Object {
@@ -67,6 +67,13 @@ function New-FormObject {
         "Form Location: {0}x{1}" -f $Form.Left, $Form.Top | Write-LogOutput -LogType DEBUG
 
         "Return form object for: {0}" -f $Form.Name | Write-LogOutput -LogType DEBUG
+
+        "Set Image Paths" | Write-LogOutput -LogType DEBUG
+        foreach ($Element in ($Elements.Keys | ForEach-Object { $Elements.$_ | Where-Object { $_ -is [System.Windows.Controls.Image] } })) {
+            $ImagePath = Join-Path $Script:RunTimeConfig.ModuleFolder -ChildPath (Join-Path "lib\ui"  -ChildPath $Elements.($Element.Name).Tag)
+            "Set path for image '{0}' to: {1}" -f $Element.Name, $ImagePath | Write-LogOutput -LogType DEBUG
+            $Elements.($Element.Name).Source = $ImagePath
+        }
 
         return [PSCustomObject]@{
             Definition      = $Form

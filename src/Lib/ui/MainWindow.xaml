@@ -9,15 +9,15 @@
         BorderBrush="#FFC8C8C8"
         SizeToContent="Manual"
          Height="800"
-         Width="1192"
-         MinWidth="1192"
          MinHeight="800"
+         Width="1340"
+         MinWidth="1340"
 >
 
     <Window.Style>
         <Style TargetType="Window">
-            <Setter Property="MinWidth" Value="1192"/>
-            <Setter Property="Width" Value="1192"/>
+            <Setter Property="MinWidth" Value="1340"/>
+            <Setter Property="Width" Value="1340"/>
             <Setter Property="MinHeight" Value="800"/>
         </Style>
     </Window.Style>
@@ -30,43 +30,81 @@
             <Setter Property="Width" Value="300"/>
             <Setter Property="Background" Value="{DynamicResource {x:Static SystemColors.WindowBrushKey}}"/>
         </Style>
+        <Style TargetType="Image">
+            <Setter Property="Height" Value="15"/>
+            <Setter Property="VerticalAlignment" Value="Center"/>
+        </Style>
         <Style TargetType="PasswordBox">
             <Setter Property="VerticalContentAlignment" Value="Center"/>
             <Setter Property="Height" Value="25"/>
             <Setter Property="Width" Value="300"/>
             <Setter Property="Background" Value="{DynamicResource {x:Static SystemColors.WindowBrushKey}}"/>
         </Style>
-        <Style TargetType="Label">
+        <Style TargetType="TextBlock">
+            <Setter Property="HorizontalAlignment" Value="Left"/>
+            <Setter Property="VerticalAlignment" Value="Top"/>
+            <Setter Property="Height" Value="25"/>
+            <Setter Property="MinHeight" Value="25"/>
+            <Setter Property="Width" Value="100"/>
+            <Setter Property="MinWidth" Value="100"/>
+        </Style>
+        <Style TargetType="CheckBox">
+            <Setter Property="HorizontalAlignment" Value="Center"/>
+            <Setter Property="VerticalAlignment" Value="Top"/>
+            <Setter Property="Height" Value="25"/>
+            <Setter Property="MinHeight" Value="25"/>
+            <Setter Property="Width" Value="100"/>
+            <Setter Property="MinWidth" Value="100"/>
+        </Style>
+        <Style TargetType="ComboBox">
             <Setter Property="VerticalContentAlignment" Value="Center"/>
+            <Setter Property="VerticalAlignment" Value="Center"/>
+            <Setter Property="HorizontalContentAlignment" Value="Left"/>
+            <Setter Property="MinHeight" Value="25"/>
+            <Setter Property="MinWidth" Value="300"/>
+        </Style>
+        <Style TargetType="Button">
+            <Setter Property="Height" Value="25"/>
+            <Setter Property="MinHeight" Value="25"/>
+            <Setter Property="Width" Value="98"/>
+            <Setter Property="MinWidth" Value="98"/>
+            <Setter Property="IsEnabled" Value="False"/>
+            <Setter Property="Padding" Value="2,3"/>
+        </Style>
+        <Style x:Key="ButtonAccessTextStyle" TargetType="AccessText">
+            <Setter Property="HorizontalAlignment" Value="Center"/>
+            <Setter Property="TextAlignment" Value="Center"/>
             <Setter Property="Height" Value="25"/>
             <Setter Property="Width" Value="100"/>
+            <Setter Property="MinWidth" Value="100"/>
+            <Setter Property="FontSize" Value="12"/>
+        </Style>
+        <Style x:Key="CheckboxAccessTextStyle" TargetType="AccessText">
+            <Setter Property="HorizontalAlignment" Value="Center"/>
+            <Setter Property="VerticalAlignment" Value="Center"/>
+            <Setter Property="TextAlignment" Value="Left"/>
+            <Setter Property="Height" Value="25"/>
+            <Setter Property="MinHeight" Value="25"/>
+            <Setter Property="Width" Value="100"/>
+            <Setter Property="MinWidth" Value="100"/>
         </Style>
         <Style x:Key="DefaultSeparatorStyle" TargetType="Separator">
             <Setter Property="Background" Value="Transparent"/>
         </Style>
         <Style x:Key="DefaultWidthSeparatorStyle" TargetType="Separator" BasedOn="{StaticResource DefaultSeparatorStyle}">
-            <Setter Property="Width" Value="20"/>
+            <Setter Property="MinWidth" Value="15"/>
+        </Style>
+        <Style x:Key="DefaultButtonWidthSeparatorStyle" TargetType="Separator" BasedOn="{StaticResource DefaultSeparatorStyle}">
+            <Setter Property="MinWidth" Value="20"/>
         </Style>
         <Style x:Key="DefaultHeightSeparator" TargetType="Separator" BasedOn="{StaticResource DefaultSeparatorStyle}">
-            <Setter Property="Height" Value="5"/>
+            <Setter Property="MinWidth" Value="5"/>
         </Style>
         <Style x:Key="LeftBorderWidthSeparatorStyle" TargetType="Separator" BasedOn="{StaticResource DefaultSeparatorStyle}">
-            <Setter Property="Width" Value="15"/>
+            <Setter Property="MinWidth" Value="10"/>
         </Style>
         <Style x:Key="ButtontBorderWidthSeparatorStyle" TargetType="Separator" BasedOn="{StaticResource DefaultSeparatorStyle}">
-            <Setter Property="Width" Value="19"/>
-        </Style>
-
-        <Style TargetType="Button">
-            <Setter Property="Height" Value="25"/>
-            <Setter Property="Width" Value="95"/>
-            <Setter Property="IsEnabled" Value="False"/>
-        </Style>
-        <Style TargetType="ComboBox">
-            <Setter Property="VerticalContentAlignment" Value="Center"/>
-            <Setter Property="HorizontalContentAlignment" Value="Left"/>
-            <Setter Property="Height" Value="25"/>
-            <Setter Property="Width" Value="300"/>
+            <Setter Property="MinWidth" Value="19"/>
         </Style>
     </Window.Resources>
 
@@ -97,78 +135,103 @@
                                 <ColumnDefinition Width="Auto"/>
                             </Grid.ColumnDefinitions>
                             <StackPanel Orientation="Vertical" HorizontalAlignment="Left" Grid.Column="0">
-                                <StackPanel Orientation="Horizontal" >
-                                    <Separator Style="{StaticResource LeftBorderWidthSeparatorStyle}" />
-                                    <Label x:Name="LabelUrl" Content="Tenant:" ToolTip="Omada Tenant url. Enter full URL or tenant name only. Example: Enter 'comp' for 'https://comp.omada.cloud'"  HorizontalAlignment="Left"/>
-                                    <Separator Style="{StaticResource DefaultWidthSeparatorStyle}" />
-                                    <TextBox x:Name="TextBoxURL" ToolTip="Enter full URL or tenant name only. Example: Enter 'comp' for 'https://comp.omada.cloud'" />
-                                    <Separator Style="{StaticResource DefaultWidthSeparatorStyle}" />
-                                    <Label x:Name="LabelUserName" Content="Username:" ToolTip="Username:" Visibility="Hidden" />
-                                    <Separator Style="{StaticResource DefaultWidthSeparatorStyle}" />
-                                    <TextBox x:Name="TextBoxUserName" Visibility="Hidden" IsEnabled="False"  />
-                                </StackPanel>
-                                <Separator Style="{StaticResource DefaultHeightSeparator}" />
-                                <StackPanel Orientation="Horizontal">
-                                    <Separator Style="{StaticResource LeftBorderWidthSeparatorStyle}" />
-                                    <Label x:Name="LabelAuthenticationOption" Content="Authentication:" ToolTip="Authentication type. This is mandatory." />
-                                    <Separator Style="{StaticResource DefaultWidthSeparatorStyle}" />
-                                    <ComboBox x:Name="ComboBoxSelectAuthenticationOption" SelectedIndex="0" >
+                                <Grid Margin="5" >
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="10"/>
+                                        <ColumnDefinition Width="Auto"/>
+                                        <ColumnDefinition Width="15"/>
+                                        <ColumnDefinition Width="Auto"/>
+                                        <ColumnDefinition Width="15"/>
+                                        <ColumnDefinition Width="Auto"/>
+                                        <ColumnDefinition Width="15"/>
+                                        <ColumnDefinition Width="Auto"/>
+                                        <ColumnDefinition Width="15"/>
+                                        <ColumnDefinition Width="Auto"/>
+                                        <ColumnDefinition Width="15"/>
+                                        <ColumnDefinition Width="Auto"/>
+                                    </Grid.ColumnDefinitions>
+                                    <TextBlock Grid.Column="1"  x:Name="TextBlockUrl" Text="Tenant:" ToolTip="Omada Tenant url. Enter full URL or tenant name only. Example: Enter 'comp' for 'https://comp.omada.cloud'" />
+                                    <TextBox Grid.Column="3" x:Name="TextBoxURL" TabIndex="1" ToolTip="Enter full URL or tenant name only. Example: Enter 'comp' for 'https://comp.omada.cloud'" />
+                                    <TextBlock Grid.Column="5" x:Name="TextBlockUserName"  Text="Username:" ToolTip="Username:" Visibility="Hidden"  />
+                                    <TextBox Grid.Column="7" x:Name="TextBoxUserName" TabIndex="3" Visibility="Hidden" IsEnabled="False"  />
+                                    <TextBlock Grid.Column="9" x:Name="TextBlockAppIdUri" Text="App Uri:" Visibility="Hidden" ToolTip="Application ID Uri:" />
+                                    <TextBox Grid.Column="11" x:Name="TextBoxAppIdUri"  IsEnabled="False"  Visibility="Hidden" />
+                                </Grid>
+                                <Grid Margin="5">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="10"/>
+                                        <ColumnDefinition Width="Auto"/>
+                                        <ColumnDefinition Width="15"/>
+                                        <ColumnDefinition Width="Auto"/>
+                                        <ColumnDefinition Width="15"/>
+                                        <ColumnDefinition Width="Auto"/>
+                                        <ColumnDefinition Width="15"/>
+                                        <ColumnDefinition Width="Auto"/>
+                                        <ColumnDefinition Width="15"/>
+                                        <ColumnDefinition Width="Auto"/>
+                                        <ColumnDefinition Width="15"/>
+                                        <ColumnDefinition Width="Auto"/>
+                                    </Grid.ColumnDefinitions>
+                                    <TextBlock Grid.Column="1" Text="Authentication:" VerticalAlignment="Center"/>
+                                    <ComboBox Grid.Column="3" x:Name="ComboBoxSelectAuthenticationOption" SelectedIndex="0" VerticalAlignment="Center">
                                         <ComboBoxItem Content="Browser"/>
+                                        <ComboBoxItem Content="WebView2"/>
                                         <ComboBoxItem Content="OAuth"/>
                                     </ComboBox>
-                                    <Separator Style="{StaticResource DefaultWidthSeparatorStyle}" />
-                                    <Label x:Name="LabelPassword" Content="Password:" Visibility="Hidden" ToolTip="Enter a password" />
-                                    <Separator Style="{StaticResource DefaultWidthSeparatorStyle}" />
-                                    <PasswordBox x:Name="TextBoxPassword" Visibility="Hidden"  ToolTip="Enter a password" />
-                                </StackPanel>
-                                <Separator Style="{StaticResource DefaultHeightSeparator}" />
-                                <StackPanel Orientation="Horizontal">
-                                    <Separator Style="{StaticResource LeftBorderWidthSeparatorStyle}" />
-                                    <Label x:Name="LabelComboBoxSelectQuery" Content="Queries:" ToolTip="Query list" />
-                                    <Separator Style="{StaticResource DefaultWidthSeparatorStyle}" />
-                                    <ComboBox x:Name="ComboBoxSelectQuery" TabIndex="5" />
-                                    <Separator Style="{StaticResource DefaultWidthSeparatorStyle}" />
-                                    <Label x:Name="LabelFilter" Content="Filter my queries:" ToolTip="Filter" />
-                                    <Separator Style="{StaticResource DefaultWidthSeparatorStyle}" />
-                                    <CheckBox x:Name="CheckboxMyCreatedQueries" Content="Created" TabIndex="6" VerticalAlignment="Center" ToolTip="Check this box to show only SQL queries that are created by you." />
-                                    <Separator Style="{StaticResource DefaultWidthSeparatorStyle}" />
-                                    <CheckBox x:Name="CheckboxMyUpdatedQueries" Content="Last updated" TabIndex="7" VerticalAlignment="Center" ToolTip="Check this box to show only SQL queries that are last updated by you." />
-                                </StackPanel>
-                                <Separator Style="{StaticResource DefaultHeightSeparator}" />
-                                <StackPanel Orientation="Horizontal">
-                                    <Separator Style="{StaticResource LeftBorderWidthSeparatorStyle}" />
-                                    <Label x:Name="LabelDisplayName" Content="Display name:" ToolTip="The Display Name of a a query, the display name can be changed if needed." />
-                                    <Separator Style="{StaticResource DefaultWidthSeparatorStyle}" />
-                                    <TextBox x:Name="TextBoxDisplayName" IsEnabled="False" TabIndex="8" />
-                                    <Separator Style="{StaticResource DefaultWidthSeparatorStyle}" />
-                                    <Label x:Name="LabelDataConnection" Content="Connection:"  ToolTip="Data Connection"/>
-                                    <Separator Style="{StaticResource DefaultWidthSeparatorStyle}" />
-                                    <!-- <TextBox x:Name="TextBoxDataConnection"  IsEnabled="False" /> -->
-                                    <ComboBox x:Name="ComboBoxSelectDataConnection" TabIndex="9"/>
-                                </StackPanel>
-                            </StackPanel>
-                            <Separator Style="{StaticResource DefaultWidthSeparatorStyle}" Grid.Column="1"/>
-                            <StackPanel Orientation="Vertical" HorizontalAlignment="Left" Grid.Column="2">
-                                <Grid >
-                                    <Grid.RowDefinitions>
-                                        <RowDefinition Height="25" />
-                                        <RowDefinition Height="8"/>
-                                        <RowDefinition Height="27"/>
-                                        <RowDefinition Height="Auto"/>
-                                        <RowDefinition Height="27"/>
-                                        <RowDefinition Height="Auto"/>
-                                        <RowDefinition Height="27"/>
-                                    </Grid.RowDefinitions>
-                                    <StackPanel Orientation="Horizontal"  Grid.Row="0"/>
-                                    <Separator Style="{StaticResource DefaultHeightSeparator}"  Grid.Row="1" Margin="0,0,0,0"/>
-                                    <StackPanel Orientation="Horizontal" Grid.Row="2">
-                                        <Button x:Name="ButtonConnect" Content="_Connect" ToolTip="Connect to Omada" VerticalAlignment="Center"/>
+                                    <TextBlock Grid.Column="5" x:Name="TextBlockPassword" Text="Password:" Visibility="Hidden" VerticalAlignment="Center"/>
+                                    <PasswordBox Grid.Column="7" x:Name="TextBoxPassword" Visibility="Hidden" VerticalAlignment="Center"/>
+                                    <TextBlock Grid.Column="9" x:Name="TextBlockEntraIdTenantId" Text="Entra Tenant ID:" Visibility="Hidden" VerticalAlignment="Center"/>
+                                    <TextBox Grid.Column="11" x:Name="TextBoxEntraIdTenantId" Visibility="Hidden" VerticalAlignment="Center"/>
+                                </Grid>
+                                <Grid Margin="5">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="10"/>
+                                        <ColumnDefinition Width="Auto"/>
+                                        <ColumnDefinition Width="15"/>
+                                        <ColumnDefinition Width="Auto"/>
+                                        <ColumnDefinition Width="15"/>
+                                        <ColumnDefinition Width="Auto"/>
+                                        <ColumnDefinition Width="15"/>
+                                        <ColumnDefinition Width="Auto"/>
+                                        <ColumnDefinition Width="15"/>
+                                        <ColumnDefinition Width="Auto"/>
+                                        <ColumnDefinition Width="15"/>
+                                        <ColumnDefinition Width="Auto"/>
+                                    </Grid.ColumnDefinitions>
+                                    <TextBlock  Grid.Column="1" x:Name="TextBlockComboBoxSelectQuery" Text="Query:" ToolTip="Query list" />
+                                    <ComboBox Grid.Column="3" x:Name="ComboBoxSelectQuery" TabIndex="6" />
+                                    <TextBlock Grid.Column="5" Text="Save Password:"/>
+                                    <StackPanel Grid.Column="7" Orientation="Horizontal" VerticalAlignment="Center">
+                                        <CheckBox x:Name="CheckBoxSavePassword" TabIndex="7"/>
                                     </StackPanel>
-                                    <Separator Style="{StaticResource DefaultHeightSeparator}" Grid.Row="3" Margin="0,0,0,0"/>
-                                    <StackPanel Orientation="Horizontal" Grid.Row="4"/>
-                                    <Separator Style="{StaticResource DefaultHeightSeparator}" Grid.Row="5" Margin="0,0,0,0"/>
-                                    <StackPanel Orientation="Horizontal" Grid.Row="6"/>
-                                    <Separator Style="{StaticResource DefaultHeightSeparator}" Grid.Row="6" Margin="0,0,0,0"/>
+                                </Grid>
+                                <Grid Margin="5" VerticalAlignment="Center">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="10"/>
+                                        <ColumnDefinition Width="Auto"/>
+                                        <ColumnDefinition Width="15"/>
+                                        <ColumnDefinition Width="Auto"/>
+                                        <ColumnDefinition Width="15"/>
+                                        <ColumnDefinition Width="Auto"/>
+                                        <ColumnDefinition Width="15"/>
+                                        <ColumnDefinition Width="Auto"/>
+                                        <ColumnDefinition Width="15"/>
+                                        <ColumnDefinition Width="Auto"/>
+                                        <ColumnDefinition Width="15"/>
+                                        <ColumnDefinition Width="Auto"/>
+                                        <ColumnDefinition Width="15"/>
+                                        <ColumnDefinition Width="Auto"/>
+                                    </Grid.ColumnDefinitions>
+                                    <TextBlock  Grid.Column="1" x:Name="TextBlockDisplayName" Text="Display name:" ToolTip="The Display Name of a a query, the display name can be changed if needed." />
+                                    <TextBox Grid.Column="3" x:Name="TextBoxDisplayName" IsEnabled="False" TabIndex="8" />
+                                    <TextBlock Grid.Column="5" Text="Filter my queries:" Grid.RowSpan="5" />
+                                    <StackPanel Grid.Column="7" Orientation="Horizontal" VerticalAlignment="Center">
+                                        <CheckBox x:Name="CheckboxMyCreatedQueries" TabIndex="9" Content="Crea_ted"/>
+                                        <CheckBox x:Name="CheckboxMyUpdatedQueries" TabIndex="10" Content="Last _Updated"/>
+                                    </StackPanel>
+                                    <TextBlock Grid.Column="9" Width="85" MinWidth="85" />
+                                    <TextBlock Grid.Column="11" x:Name="TextBlockDataConnection" Text="Connection:"  ToolTip="Data Connection"/>
+                                    <ComboBox Grid.Column="13" x:Name="ComboBoxSelectDataConnection" TabIndex="11"/>
                                 </Grid>
                             </StackPanel>
                         </Grid>
@@ -176,44 +239,175 @@
                     <Separator Style="{StaticResource DefaultHeightSeparator}" Grid.Row="1"/>
                     <StackPanel Orientation="Horizontal" Grid.Row="2">
                         <Separator Style="{StaticResource ButtontBorderWidthSeparatorStyle}"  />
-                        <Button x:Name="ButtonNewQuery" Content="_New" ToolTip="Creates a new query object in Omada" />
-                        <Separator Style="{StaticResource DefaultWidthSeparatorStyle}" />
-                        <Button x:Name="ButtonRefreshQueries" Content="_Refresh" IsEnabled="True" ToolTip="Refresh query list" />
-                        <Separator Style="{StaticResource DefaultWidthSeparatorStyle}" />
-                        <Button x:Name="ButtonShowSqlSchema" Content="S_chema" ToolTip="Show Sql Schema" />
-                        <Separator Style="{StaticResource DefaultWidthSeparatorStyle}" />
-                        <Button x:Name="ButtonSaveQuery" Content="_Save" ToolTip="Save query in Omada" />
-                        <Separator Style="{StaticResource DefaultWidthSeparatorStyle}" />
-                        <Button x:Name="ButtonExecuteQuery" Content="_Execute" ToolTip="Execute Query" />
-                        <Separator Style="{StaticResource DefaultWidthSeparatorStyle}" />
-                        <Button x:Name="ButtonShowOutput" Content="_View" ToolTip="View result in a new window" />
-                        <Separator Style="{StaticResource DefaultWidthSeparatorStyle}" />
-                        <Button x:Name="ButtonSaveOutputFile" Content="E_xport" ToolTip="Export result to a file" />
-                        <Separator Style="{StaticResource DefaultWidthSeparatorStyle}" />
-                        <Button x:Name="ButtonOpenOutputFile" Content="_Open Export" ToolTip="Open export file" />
-                        <Separator Style="{StaticResource DefaultWidthSeparatorStyle}" />
-                        <Button x:Name="ButtonReset" Content="_Reset" IsEnabled="True" ToolTip="Reset window" />
-                        <Separator Style="{StaticResource DefaultWidthSeparatorStyle}" />
-                        <Button x:Name="ButtonShowLog" Content="_Log" IsEnabled="True" ToolTip="Show log window" />
+                        <Button x:Name="ButtonNewQuery" TabIndex="12"  ToolTip="Creates a new query object in Omada" >
+                            <Grid HorizontalAlignment="Center" VerticalAlignment="Center">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="4"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                    <ColumnDefinition Width="4"/>
+                                    <ColumnDefinition Width="40"/>
+                                </Grid.ColumnDefinitions>
+                                <Image Grid.Column="1"  x:Name="ButtonNewQueryImage" Source="/images/folder-open-outline_25x25.png" Tag="/images/folder-open-outline_25x25.png" />
+                                <AccessText Grid.Column="3"  x:Name="ButtonNewQueryText" Text="_New" Style="{StaticResource ButtonAccessTextStyle}"/>
+                            </Grid>
+                        </Button>
+
+                        <Separator Style="{StaticResource DefaultButtonWidthSeparatorStyle}" />
+                        <Button x:Name="ButtonRefreshQueries" TabIndex="13"  IsEnabled="True" ToolTip="Refresh query list" >
+                            <Grid HorizontalAlignment="Center" VerticalAlignment="Center">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="4"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                    <ColumnDefinition Width="4"/>
+                                    <ColumnDefinition Width="40"/>
+                                </Grid.ColumnDefinitions>
+                                <Image Grid.Column="1"  x:Name="ButtonRefreshQueriesImage" Source="/images/refresh_25x25.png" Tag="/images/refresh_25x25.png" />
+                                <AccessText Grid.Column="3"  x:Name="ButtonRefreshQueriesText" Text="_Refresh" Style="{StaticResource ButtonAccessTextStyle}"/>
+                            </Grid>
+                        </Button>
+
+                        <Separator Style="{StaticResource DefaultButtonWidthSeparatorStyle}" />
+                        <Button x:Name="ButtonShowSqlSchema" TabIndex="14"  ToolTip="Show Sql Schema" >
+                            <Grid HorizontalAlignment="Center" VerticalAlignment="Center">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="4"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                    <ColumnDefinition Width="4"/>
+                                    <ColumnDefinition Width="40"/>
+                                </Grid.ColumnDefinitions>
+                                <Image Grid.Column="1"  x:Name="ButtonShowSqlSchemaImage" Source="/images/file-tree-outline_25x25.png" Tag="/images/file-tree-outline_25x25.png" />
+                                <AccessText Grid.Column="3"  x:Name="ButtonShowSqlSchemaText" Text="S_chema" Style="{StaticResource ButtonAccessTextStyle}"/>
+                            </Grid>
+                        </Button>
+
+                        <Separator Style="{StaticResource DefaultButtonWidthSeparatorStyle}" />
+                        <Button x:Name="ButtonSaveQuery" TabIndex="15"  ToolTip="Save query in Omada" >
+                            <Grid HorizontalAlignment="Center" VerticalAlignment="Center">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="4"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                    <ColumnDefinition Width="4"/>
+                                    <ColumnDefinition Width="40"/>
+                                </Grid.ColumnDefinitions>
+                                <Image Grid.Column="1"  x:Name="ButtonSaveQueryImage" Source="/images/content-save_25x25.png" Tag="/images/content-save_25x25.png" />
+                                <AccessText Grid.Column="3"  x:Name="ButtonSaveQueryText" Text="_Save" Style="{StaticResource ButtonAccessTextStyle}"/>
+                            </Grid>
+                        </Button>
+
+                        <Separator Style="{StaticResource DefaultButtonWidthSeparatorStyle}" />
+                        <Button x:Name="ButtonExecuteQuery" TabIndex="16"  ToolTip="Execute" >
+                            <Grid HorizontalAlignment="Center" VerticalAlignment="Center">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="4"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                    <ColumnDefinition Width="4"/>
+                                    <ColumnDefinition Width="40"/>
+                                </Grid.ColumnDefinitions>
+                                <Image Grid.Column="1"  x:Name="ButtonExecuteQueryImage" Source="/images/play_25x25.png" Tag="/images/play_25x25.png" />
+                                <AccessText Grid.Column="3"  x:Name="ButtonExecuteQueryText" Text="_Execute" Style="{StaticResource ButtonAccessTextStyle}"/>
+                            </Grid>
+                        </Button>
+
+                        <Separator Style="{StaticResource DefaultButtonWidthSeparatorStyle}" />
+                        <Button x:Name="ButtonShowOutput" TabIndex="17"  ToolTip="View result in a new window" >
+                            <Grid HorizontalAlignment="Center" VerticalAlignment="Center">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="4"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                    <ColumnDefinition Width="4"/>
+                                    <ColumnDefinition Width="40"/>
+                                </Grid.ColumnDefinitions>
+                                <Image Grid.Column="1"  x:Name="ButtonShowOutputImage" Source="/images/database-search_25x25.png" Tag="/images/database-search_25x25.png" />
+                                <AccessText Grid.Column="3"  x:Name="ButtonShowOutputText" Text="_View" Style="{StaticResource ButtonAccessTextStyle}"/>
+                            </Grid>
+                        </Button>
+
+                        <Separator Style="{StaticResource DefaultButtonWidthSeparatorStyle}" />
+                        <Button x:Name="ButtonSaveOutputFile" TabIndex="18"  ToolTip="Export result to a file" >
+                            <Grid HorizontalAlignment="Center" VerticalAlignment="Center">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="4"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                    <ColumnDefinition Width="4"/>
+                                    <ColumnDefinition Width="40"/>
+                                </Grid.ColumnDefinitions>
+                                <Image Grid.Column="1"  x:Name="ButtonSaveOutputFileImage" Source="/images/database-export-outline_25x25.png" Tag="/images/database-export-outline_25x25.png" />
+                                <AccessText Grid.Column="3"  x:Name="ButtonSaveOutputFileText" Text="E_xport" Style="{StaticResource ButtonAccessTextStyle}"/>
+                            </Grid>
+                        </Button>
+
+                        <Separator Style="{StaticResource DefaultButtonWidthSeparatorStyle}" />
+                        <Button x:Name="ButtonOpenOutputFile" TabIndex="19"  ToolTip="Open export file" >
+                            <Grid HorizontalAlignment="Center" VerticalAlignment="Center">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="4"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                    <ColumnDefinition Width="4"/>
+                                    <ColumnDefinition Width="70"/>
+                                </Grid.ColumnDefinitions>
+                                <Image Grid.Column="1"  x:Name="ButtonOpenOutputFileImage" Source="/images/table-eye_25x25.png" Tag="/images/table-eye_25x25.png" />
+                                <AccessText Grid.Column="3"  x:Name="ButtonOpenOutputFileText" Text="_Open Export" Style="{StaticResource ButtonAccessTextStyle}"/>
+                            </Grid>
+                        </Button>
+
+                        <Separator Style="{StaticResource DefaultButtonWidthSeparatorStyle}" />
+                        <Button x:Name="ButtonConnect" TabIndex="20"  ToolTip="Connect to Omada" >
+                            <Grid HorizontalAlignment="Center" VerticalAlignment="Center">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="4"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                    <ColumnDefinition Width="4"/>
+                                    <ColumnDefinition Width="70"/>
+                                </Grid.ColumnDefinitions>
+                                <Image Grid.Column="1" x:Name="ButtonConnectImage" Source="/images/connection_25x25.png" Tag="/images/connection_25x25.png" />
+                                <AccessText Grid.Column="3" x:Name="ButtonConnectText"  Text="_Connect" Style="{StaticResource ButtonAccessTextStyle}"/>
+                            </Grid>
+                        </Button>
+
+                        <Separator Style="{StaticResource DefaultButtonWidthSeparatorStyle}" />
+                        <Button x:Name="ButtonReset" TabIndex="21"  IsEnabled="True" ToolTip="Reset window" >
+                            <Grid HorizontalAlignment="Center" VerticalAlignment="Center">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="4"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                    <ColumnDefinition Width="4"/>
+                                    <ColumnDefinition Width="40"/>
+                                </Grid.ColumnDefinitions>
+                                <Image Grid.Column="1"  x:Name="ButtonResetImage" Source="/images/restart-alert_25x25.png" Tag="/images/restart-alert_25x25.png" />
+                                <AccessText Grid.Column="3"  x:Name="ButtonResetText" Text="_Reset" Style="{StaticResource ButtonAccessTextStyle}"/>
+                            </Grid>
+                        </Button>
+
+                        <Separator Style="{StaticResource DefaultButtonWidthSeparatorStyle}" />
+                        <Button x:Name="ButtonShowLog" TabIndex="22"  IsEnabled="True" ToolTip="Show log window" >
+                            <Grid HorizontalAlignment="Center" VerticalAlignment="Center">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="4"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                    <ColumnDefinition Width="4"/>
+                                    <ColumnDefinition Width="40"/>
+                                </Grid.ColumnDefinitions>
+                                <Image Grid.Column="1"  x:Name="ButtonShowLogImage" Source="/images/account-file-text-outline_25x25.png" Tag="/images/account-file-text-outline_25x25.png" />
+                                <AccessText Grid.Column="3"  x:Name="ButtonShowLogText" Text="_Log" Style="{StaticResource ButtonAccessTextStyle}"/>
+                            </Grid>
+                        </Button>
                         <Separator Style="{StaticResource ButtontBorderWidthSeparatorStyle}"  />
                     </StackPanel>
                     <Separator Style="{StaticResource DefaultHeightSeparator}" Grid.Row="2"/>
                 </Grid>
                 <Grid Grid.Row="1">
                     <Grid.RowDefinitions>
-                        <RowDefinition Height="*"/>
-                        <RowDefinition Height="6"/>
-                        <RowDefinition Height="*"/>
+                        <RowDefinition Height="3"/>
+                        <RowDefinition Height="*" MinHeight="225"/>
+                        <RowDefinition Height="3"/>
+                        <RowDefinition Height="*" MinHeight="60"/>
                     </Grid.RowDefinitions>
-                    <Grid Grid.Row="0">
+                    <GridSplitter Grid.Row="0" HorizontalAlignment="Stretch" Background="#FF293955" />
+                    <Grid Grid.Row="1">
                         <Grid.RowDefinitions>
-                            <RowDefinition Height="25"/>
                             <RowDefinition Height="*"/>
                         </Grid.RowDefinitions>
-                        <StackPanel Orientation="Vertical" Grid.Row="0">
-                            <Label x:Name="LabelSqlEditor" Content="Editor" HorizontalAlignment="Left" VerticalAlignment="Center" />
-                        </StackPanel>
-                        <Border Grid.Row="1" BorderThickness="0" Background="White">
+                        <Border Grid.Row="2" BorderThickness="0" Background="White">
                             <Wpf:WebView2 x:Name="webView21"
                                       VerticalAlignment="Stretch"
                                       HorizontalAlignment="Stretch"
@@ -221,15 +415,30 @@
                                       />
                         </Border>
                     </Grid>
-                    <GridSplitter Grid.Row="1" HorizontalAlignment="Stretch" Background="#FF293955" />
-                    <Grid Grid.Row="2" >
+                    <GridSplitter Grid.Row="2" HorizontalAlignment="Stretch" Background="#FF293955" />
+                    <Grid Grid.Row="3" >
                         <Grid.RowDefinitions>
                             <RowDefinition Height="25"/>
                             <RowDefinition Height="*"/>
                         </Grid.RowDefinitions>
-                        <StackPanel Orientation="Vertical" Grid.Row="0">
-                            <Label x:Name="LabelOutputBox" Content="Results" HorizontalAlignment="Left" VerticalAlignment="Center" />
-                        </StackPanel>
+                        <Grid Margin="5">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="0"/>
+                                <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="5"/>
+                                <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="15"/>
+                                <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="15"/>
+                                <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="15"/>
+                                <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="15"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+                            <Image Grid.Column="1" x:Name="ImageOutputStatus" Tag="/images/table_25x25.png" Source="/images/table_25x25.png"/>
+                            <TextBlock Grid.Column="3" x:Name="TextBlockOutputBox" Text="Results:" />
+                        </Grid>
                         <DataGrid x:Name="DataGridQueryResult"
                           Grid.Row="1"
                                               VerticalScrollBarVisibility="Auto"
@@ -264,23 +473,23 @@
                         </ItemsPanelTemplate>
                     </StatusBar.ItemsPanel>
                     <StatusBarItem Grid.Column="0">
-                        <TextBlock Name="TextBlockConnectionStatus" Text="Disconnected" />
+                        <TextBlock Name="TextBlockStatusBarConnectionStatus" Text="Disconnected" />
                     </StatusBarItem>
                     <Separator Grid.Column="1" Background="Gray"  Opacity="0.50" Margin="2,5,2,5" />
                     <StatusBarItem Grid.Column="2">
-                        <TextBlock Name="TextBlockUrl" Text="-"  MinWidth="135"  />
+                        <TextBlock Name="TextBlockStatusBarUrl" Text="-"  MinWidth="135"  />
                     </StatusBarItem>
                     <Separator Grid.Column="3" Background="Gray"  Opacity="0.50" Margin="2,5,2,5" />
                     <StatusBarItem Grid.Column="4">
-                        <TextBlock Name="TextBlockDatabaseName" Text="-" MinWidth="135"  />
+                        <TextBlock Name="TextBlockStatusBarDatabaseName" Text="-" MinWidth="135"  />
                     </StatusBarItem>
                     <Separator Grid.Column="5" Background="Gray"  Opacity="0.50" Margin="2,5,2,5" />
                     <StatusBarItem Grid.Column="6">
-                        <TextBlock Name="TextBlockQueryTime" Text="00:00:00.0000000"  MinWidth="100"  />
+                        <TextBlock Name="TextBlockStatusBarQueryTime" Text="00:00:00.0000000"  MinWidth="100"  />
                     </StatusBarItem>
                     <Separator Grid.Column="7" Background="Gray" Opacity="0.50" Margin="2,5,2,5" />
                     <StatusBarItem Grid.Column="8">
-                        <TextBlock Name="TextBlockRows" Text="0 rows"  MinWidth="50"  />
+                        <TextBlock Name="TextBlockStatusBarRows" Text="0 rows"  MinWidth="50"  />
                     </StatusBarItem>
                 </StatusBar>
 

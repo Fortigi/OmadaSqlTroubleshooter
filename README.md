@@ -20,8 +20,9 @@ OmadaSqlTroubleshooter is a PowerShell Module that contains an interactive deskt
 - Schema view with the ability to enter the selected item in the editor (SHIFT + Select Table/Column).
 - Detailed logging to log window and console;
 - Authentication options:
-    - Browser based;
-    - OAuth.
+    - Browser: Browser based on Selenium;
+    - WebView2: Browser based on WebView2;
+    - OAuth: OAuth2 based authentication (Only Entra ID is currently supported).
 - Auto complete connection url. Eg. Tenant name completes to https://tenantname.omada.cloud.
 - Automatic storing of the current application state, e.g. current connection, current query, application layout, etc.
 
@@ -130,8 +131,8 @@ Accept wildcard characters: False
 ### -UseWebView2Auth
 Uses the WebView2 for browser-based authentication instead of Selenium.
 
-> [!NOTE]
-> Currently Edge WebDriver is default for browser based authentication in depending module OmadaWeb.PS. It is planned to be replaced by WebView2 as default in future releases.
+> [!IMPORTANT]
+> This parameter is deprecated, select the WebView2 authentication option from the UI instead.
 
 ```yaml
 Type: SwitchParameter

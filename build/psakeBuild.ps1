@@ -22,8 +22,8 @@ Task Dependencies {
         & "$PSScriptRoot\RetrieveDependencies.ps1" -DestinationFolder $DestinationFolder -Force
     }
     catch {
-        Throw $_
-        Exit 1
+        throw $_
+        exit 1
     }
 }
 
@@ -49,8 +49,8 @@ Task Analyze {
         }
     }
     catch {
-        Throw $_
-        Exit 1
+        throw $_
+        exit 1
     }
 }
 
@@ -100,7 +100,7 @@ Task Build -depends Test {
         }
 
         function New-HeaderRow {
-            PARAM(
+            param(
                 [string]$Text,
                 [int]$Length = 100,
                 [char]$BeginChar = "#",
@@ -171,11 +171,11 @@ Task Build -depends Test {
 
         $ModulePsd1Path = (Join-Path $OutputDir -ChildPath ("{0}.psd1" -f $ModuleName))
         New-ModuleManifest -Path $ModulePsd1Path @ModulePsd1
-    (Get-Content -Path $ModulePsd1Path) -replace 'PSData = @{', $SerializedContent | Set-Content -Path $ModulePsd1Path -Encoding UTF8 -Force
+        (Get-Content -Path $ModulePsd1Path) -replace 'PSData = @{', $SerializedContent | Set-Content -Path $ModulePsd1Path -Encoding UTF8 -Force
 
         #    New-ModuleManifest @Modulepsd1
         "Module psd1 output file: {0}" -f $($ModulePsd1Path) | Write-Host
-    (Get-Content $($ModulePsd1Path) -Raw) -replace "`r?`n", "`r`n" | Invoke-Formatter -Settings $FormattingSettings | Set-Content -Path $($ModulePsd1Path) -Encoding UTF8 -Force
+        (Get-Content $($ModulePsd1Path) -Raw) -replace "`r?`n", "`r`n" | Invoke-Formatter -Settings $FormattingSettings | Set-Content -Path $($ModulePsd1Path) -Encoding UTF8 -Force
 
         $Length = 150
         $HeaderContent = $null
@@ -215,11 +215,14 @@ Task Build -depends Test {
 
         Get-Item -Path (Join-Path $ModuleSource -ChildPath "Monaco") | Copy-Item -Destination $OutputDir -Force -Recurse
         New-Item (Join-Path $OutputDir -ChildPath  "lib\ui") -ItemType Directory -Force | Out-Null
-        Get-ChildItem -Path (Join-Path $ModuleSource -ChildPath "lib\ui") -Filter *.xaml | Copy-Item -Destination (Join-Path $OutputDir -ChildPath "lib\ui") -Force -Recurse
-        Get-ChildItem -Path (Join-Path $ModuleSource -ChildPath "lib\ui") -Filter *.ico | Copy-Item -Destination (Join-Path $OutputDir -ChildPath "lib\ui") -Force -Recurse
+        Get-ChildItem -Path (Join-Path $ModuleSource -ChildPath "lib\ui") -Filter *.xaml | Where-Object { $_.BaseName -notlike "_*" } | Copy-Item -Destination (Join-Path $OutputDir -ChildPath "lib\ui") -Force -Recurse
+        New-Item (Join-Path $OutputDir -ChildPath  "lib\ui\icons") -ItemType Directory -Force | Out-Null
+        Get-ChildItem -Path (Join-Path $ModuleSource -ChildPath "lib\ui\icons") -Filter *.ico | Where-Object { $_.BaseName -notlike "_*" } | Copy-Item -Destination (Join-Path $OutputDir -ChildPath "lib\ui\icons") -Force -Recurse
+        New-Item (Join-Path $OutputDir -ChildPath  "lib\ui\images") -ItemType Directory -Force | Out-Null
+        Get-ChildItem -Path (Join-Path $ModuleSource -ChildPath "lib\ui\images") -Filter *.png | Where-Object { $_.BaseName -notlike "_*" } | Copy-Item -Destination (Join-Path $OutputDir -ChildPath "lib\ui\images") -Force -Recurse
 
         New-Item (Join-Path $OutputDir -ChildPath  "lib\schema") -ItemType Directory -Force | Out-Null
-        Get-ChildItem -Path (Join-Path $ModuleSource -ChildPath "lib\schema") -Filter *.json | Copy-Item -Destination (Join-Path $OutputDir -ChildPath "lib\schema") -Force -Recurse
+        Get-ChildItem -Path (Join-Path $ModuleSource -ChildPath "lib\schema") -Filter *.json | Where-Object { $_.BaseName -notlike "_*" } | Copy-Item -Destination (Join-Path $OutputDir -ChildPath "lib\schema") -Force -Recurse
 
         @("functions", "events") | ForEach-Object {
             $LibSource = $_
@@ -238,12 +241,12 @@ Task Build -depends Test {
                 }
                 $Content.Trim() | Out-File -Path (Join-Path $OutputDir -ChildPath $TargetFilePath) -Force -Append -Encoding utf8
             }
-        (Get-Content (Join-Path $OutputDir -ChildPath $TargetFilePath) -Raw) -replace "`r?`n", "`r`n" | Invoke-Formatter -Settings $FormattingSettings | Set-Content -Path (Join-Path $OutputDir -ChildPath $TargetFilePath) -Encoding UTF8 -Force
+            (Get-Content (Join-Path $OutputDir -ChildPath $TargetFilePath) -Raw) -replace "`r?`n", "`r`n" | Invoke-Formatter -Settings $FormattingSettings | Set-Content -Path (Join-Path $OutputDir -ChildPath $TargetFilePath) -Encoding UTF8 -Force
         }
     }
     catch {
-        Throw $_
-        Exit 1
+        throw $_
+        exit 1
     }
 }
 
@@ -257,28 +260,28 @@ Task TestAssemblies -depends Build {
             "Test assembly: '{0}'" -f $_ | Write-Host
             $WebViewDllPath = Join-Path $OutputDir -ChildPath "Bin\WebView2Dlls\$_"
             if (!(Test-Path $WebViewDllPath -PathType Leaf)) {
-                Throw ("The WebView2 Dll '{0}' is cannot be found at the '{1}' bin folder!" -f $_, $OutputDir)
+                throw ("The WebView2 Dll '{0}' is cannot be found at the '{1}' bin folder!" -f $_, $OutputDir)
             }
         }
         $WebViewLoaderPath = Join-Path $OutputDir -ChildPath "Bin\WebView2Dlls\WebView2Loader.dll"
         "Get 'WebView2Loader.Dll'" | Write-Host
         if (!(Test-Path $WebViewLoaderPath -PathType Leaf)) {
-            Throw ("The WebView2Loader Dll '{0}' is cannot be found at the '{1}' bin folder!" -f "WebView2Loader.dll", $OutputDir)
+            throw ("The WebView2Loader Dll '{0}' is cannot be found at the '{1}' bin folder!" -f "WebView2Loader.dll", $OutputDir)
         }
 
         $WebViewRunTimePath = Join-Path $OutputDir -ChildPath "Bin\WebView2Runtime"
         "Check WebViewRunTime" | Write-Host
         if (!(Test-Path $WebViewRunTimePath -PathType Container)) {
-            Throw ("The WebViewRunTime was not found at the '{0}' bin folder!" -f $OutputDir)
+            throw ("The WebViewRunTime was not found at the '{0}' bin folder!" -f $OutputDir)
         }
         elseif (!(Test-Path (Join-Path $WebViewRunTimePath -ChildPath "msedgewebview2.exe") -PathType Leaf)) {
-            Throw ("Msedgewebview2.exe is not found at the '{0}' bin folder!" -f $OutputDir)
+            throw ("Msedgewebview2.exe is not found at the '{0}' bin folder!" -f $OutputDir)
         }
 
     }
     catch {
-        Throw $_
-        Exit 1
+        throw $_
+        exit 1
     }
 }
 
@@ -300,8 +303,8 @@ Task ImportModule -depends Build {
         }
     }
     catch {
-        Throw $_
-        Exit 1
+        throw $_
+        exit 1
     }
 }
 

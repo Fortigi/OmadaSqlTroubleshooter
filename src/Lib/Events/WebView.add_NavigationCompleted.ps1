@@ -6,7 +6,7 @@ $Script:Webview.Object.add_NavigationCompleted({
 
             #Not working, needs to be investigated
             #Set-EditorBackground
-            $Script:ReconnectStatus = 3
+            $Script:RunTimeConfig.ReconnectStatus = 3
         }
         catch {
             $_.Exception.Message | Write-LogOutput -LogType ERROR

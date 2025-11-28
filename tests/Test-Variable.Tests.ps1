@@ -16,16 +16,16 @@ Describe 'Test-Variable' {
             }
         }
 
-        $Global:MainWindowForm2 = [pscustomobject]@{
-            Elements = [pscustomobject]@{
-                ButtonSaveQuery = [pscustomobject]@{
+        $Global:MainWindowForm2 = [PSCustomObject]@{
+            Elements = [PSCustomObject]@{
+                ButtonSaveQuery = [PSCustomObject]@{
                     IsEnabled = $true
                 }
             }
         }
 
         $Global:MainWindowForm3 = @{
-            Elements = [pscustomobject]@{
+            Elements = [PSCustomObject]@{
                 ButtonSaveQuery = @{
                     IsEnabled = "test"
                 }
@@ -33,7 +33,7 @@ Describe 'Test-Variable' {
         }
 
         $Global:MainWindowForm4 = @{
-            Elements = [pscustomobject]@{
+            Elements = [PSCustomObject]@{
                 ButtonSaveQuery = @{
                     IsEnabled = $null
                 }

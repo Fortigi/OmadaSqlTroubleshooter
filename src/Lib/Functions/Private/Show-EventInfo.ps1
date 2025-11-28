@@ -1,6 +1,6 @@
 function Show-EventInfo {
     PARAM(
-        [parameter(Mandatory = $True, Position = 0, ValueFromPipeline = $True)]
+        [parameter(Mandatory = $true, Position = 0, ValueFromPipeline = $true)]
         $Item,
         [validateSet("DEBUG", "VERBOSE", "VERBOSE2")]
         $LogType = "DEBUG"

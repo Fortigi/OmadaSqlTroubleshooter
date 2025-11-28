@@ -23,15 +23,31 @@
         <Style TargetType="Separator">
             <Setter Property="Background" Value="Transparent"/>
         </Style>
-        <Style TargetType="Button">
+        <!--<Style TargetType="Button">
             <Setter Property="Height" Value="25"/>
             <Setter Property="Width" Value="95"/>
-        </Style>
+        </Style>-->
         <Style TargetType="ComboBox">
             <Setter Property="VerticalContentAlignment" Value="Center"/>
             <Setter Property="HorizontalContentAlignment" Value="Left"/>
             <Setter Property="Height" Value="25"/>
             <Setter Property="Width" Value="300"/>
+        </Style>
+        <Style TargetType="Button">
+            <Setter Property="Height" Value="25"/>
+            <Setter Property="MinHeight" Value="25"/>
+            <Setter Property="Width" Value="98"/>
+            <Setter Property="MinWidth" Value="98"/>
+            <Setter Property="IsEnabled" Value="False"/>
+            <Setter Property="Padding" Value="2,3"/>
+        </Style>
+        <Style x:Key="ButtonAccessTextStyle" TargetType="AccessText">
+            <Setter Property="HorizontalAlignment" Value="Center"/>
+            <Setter Property="TextAlignment" Value="Center"/>
+            <Setter Property="Height" Value="25"/>
+            <Setter Property="Width" Value="100"/>
+            <Setter Property="MinWidth" Value="100"/>
+            <Setter Property="FontSize" Value="11"/>
         </Style>
     </Window.Resources>
 
@@ -70,8 +86,30 @@
                     <ColumnDefinition Width="Auto"/>
                     <ColumnDefinition Width="*"/>
                 </Grid.ColumnDefinitions>
-                <Button x:Name="ButtonExportLogFile" Content="_Export" ToolTip="Export log to file" Grid.Column="1" />
-                <Button x:Name="ButtonClearLog" Content="_Clear" ToolTip="Clear log window"  Grid.Column="3" />
+                <Button Grid.Column="1" x:Name="ButtonExportLogFile" TabIndex="15"  ToolTip="Export log file" IsEnabled="True"  >
+                    <Grid HorizontalAlignment="Center" VerticalAlignment="Center">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="6"/>
+                            <ColumnDefinition Width="Auto"/>
+                            <ColumnDefinition Width="4"/>
+                            <ColumnDefinition Width="40"/>
+                        </Grid.ColumnDefinitions>
+                        <Image Grid.Column="1"  x:Name="ButtonExportLogFileImage" Source="/images/content-save_25x25.png" Tag="/images/content-save_25x25.png" />
+                        <AccessText Grid.Column="3"  x:Name="ButtonExportLogFileText" Text="_Save" Style="{StaticResource ButtonAccessTextStyle}"/>
+                    </Grid>
+                </Button>
+                <Button Grid.Column="3" x:Name="ButtonClearLog" TabIndex="15"  ToolTip="Clear log" IsEnabled="True" >
+                    <Grid HorizontalAlignment="Center" VerticalAlignment="Center">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="6"/>
+                            <ColumnDefinition Width="Auto"/>
+                            <ColumnDefinition Width="4"/>
+                            <ColumnDefinition Width="40"/>
+                        </Grid.ColumnDefinitions>
+                        <Image Grid.Column="1"  x:Name="ButtonClearLogImage" Source="/images/delete-alert_25x25.png" Tag="/images/delete-alert_25x25.png" />
+                        <AccessText Grid.Column="3"  x:Name="ButtonClearLogText" Text="_Clear" Style="{StaticResource ButtonAccessTextStyle}"/>
+                    </Grid>
+                </Button>
             </Grid>
         </StackPanel>
         <StackPanel Orientation="Vertical" Grid.Row="3" Grid.Column="1" VerticalAlignment="Center">
@@ -88,7 +126,7 @@
                 <Separator Width="20" />
                 <CheckBox x:Name="CheckboxWordWrap" Content="Word wrap" VerticalAlignment="Center" ToolTip="Word wrap" />
                 <Separator Width="20" />
-                <CheckBox x:Name="CheckboxConsoleLog" Content="Console Log" VerticalAlignment="Center" ToolTip="Log output in console" />                
+                <CheckBox x:Name="CheckboxConsoleLog" Content="Console Log" VerticalAlignment="Center" ToolTip="Log output in console" />
             </StackPanel>
         </StackPanel>
     </Grid>

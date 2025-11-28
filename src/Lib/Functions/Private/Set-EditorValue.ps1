@@ -2,18 +2,18 @@ function Set-EditorValue {
     [CmdLetBinding()]
     PARAM()
     try {
-        $Script:Tracer::WriteLine(("{0}: Function: {1} - Caller: {2}({3}) - Command: {4}" -f $($Script:RunTimeConfig.ApplicationName), $($MyInvocation.MyCommand.Name), $($MyInvocation.ScriptName), $($MyInvocation.ScriptLineNumber), $MyInvocation.Statement))
+        $Script:Tracer::WriteLine(("{0}: Function: {1} - Caller: {2}({3}) - Command: {4}" -f $($Script:RunTimeConfig.ApplicationName), $($MyInvocation.MyCommand.Name), $($MyInvocation.ScriptName).Split("\")[-1], $($MyInvocation.ScriptLineNumber), $MyInvocation.Statement))
 
         if ($null -ne $Script:MainWindowForm.Elements.ComboBoxSelectQuery.SelectedItem) {
             "Selected SQL Query object: {0}" -f $Script:MainWindowForm.Elements.ComboBoxSelectQuery.SelectedItem.Content | Write-LogOutput -LogType DEBUG
-            $Script:MainWindowForm.Elements.ComboBoxSelectQuery.SelectedItem.Content | Invoke-ConfigSetting -Property "CurrentSqlQuery"
+            $Script:MainWindowForm.Elements.ComboBoxSelectQuery.SelectedItem.Content | Set-ConfigProperty -Property "CurrentSqlQuery"
 
             if ([string]::IsNullOrWhiteSpace($Script:AppConfig.CurrentSqlQuery.DoId)) {
                 "Omada Url not set or Query not selected. Set correct values to execute queries!" | Write-LogOutput -LogType WARNING
                 return
             }
 
-            if ($Script:ReconnectStatus -eq 1) {
+            if ($Script:RunTimeConfig.ReconnectStatus -eq 1) {
                 "Skip reconnect" | Write-LogOutput -LogType DEBUG
                 return
             }
@@ -29,14 +29,14 @@ function Set-EditorValue {
                 $Script:RunTimeData.CurrentSqlQuery.DoId = $Private:Result.Id
                 $Script:RunTimeData.CurrentSqlQuery.DisplayName = $Private:Result.DisplayName
                 $Script:MainWindowForm.Elements.TextBoxDisplayName.Text = $Private:Result.DisplayName
-                $Private:Result.C_SQLTROUBLESHOOTING_DATACONNECTION.Id, $Private:Result.C_SQLTROUBLESHOOTING_DATACONNECTION.DisplayName | Invoke-ConfigSetting -Property "CurrentDataConnection"
+                $Private:Result.C_SQLTROUBLESHOOTING_DATACONNECTION.Id, $Private:Result.C_SQLTROUBLESHOOTING_DATACONNECTION.DisplayName | Set-ConfigProperty -Property "CurrentDataConnection"
 
                 Set-DataConnection
 
-                $Script:MainWindowForm.Elements.ButtonExecuteQuery.IsEnabled = $True
-                $Script:MainWindowForm.Elements.ButtonSaveQuery.IsEnabled = $True
-                $Script:MainWindowForm.Elements.ButtonReset.IsEnabled = $True
-                $Script:MainWindowForm.Elements.TextBoxDisplayName.IsEnabled = $True
+                $Script:MainWindowForm.Elements.ButtonExecuteQuery.IsEnabled = $true
+                $Script:MainWindowForm.Elements.ButtonSaveQuery.IsEnabled = $true
+                $Script:MainWindowForm.Elements.ButtonReset.IsEnabled = $true
+                $Script:MainWindowForm.Elements.TextBoxDisplayName.IsEnabled = $true
                 $Script:MainWindowForm.Elements.ButtonShowSqlSchema.IsEnabled = $true
 
                 if ($null -ne $Script:Webview.Object.CoreWebView2) {
@@ -49,9 +49,6 @@ function Set-EditorValue {
             }
         }
         else {
-            "Clear Editor Value because no query is selected!" | Write-LogOutput -LogType DEBUG
-            $ScriptToExecute = "editor.setValue('');"
-            Push-ToEditor -ScriptToExecute $ScriptToExecute
             Reset-Application -SkipTextBoxURL -SkipAuthentication
         }
     }

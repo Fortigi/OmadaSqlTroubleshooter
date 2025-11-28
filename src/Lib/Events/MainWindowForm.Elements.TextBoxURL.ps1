@@ -16,7 +16,7 @@ $Script:MainWindowForm.Elements.TextBoxURL.Add_LostFocus({
 
             try {
                 Set-OmadaUrl
-               Test-ConnectionButton
+                Test-ConnectionButton
             }
             catch {
 

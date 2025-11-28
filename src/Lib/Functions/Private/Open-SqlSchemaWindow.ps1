@@ -4,11 +4,11 @@ function Open-SqlSchemaWindow {
     [System.Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSAvoidAssignmentToAutomaticVariable', 'Args', Justification = 'The use of the variable is on purpose')]
     PARAM()
     try {
-        $Script:Tracer::WriteLine(("{0}: Function: {1} - Caller: {2}({3}) - Command: {4}" -f $($Script:RunTimeConfig.ApplicationName), $($MyInvocation.MyCommand.Name), $($MyInvocation.ScriptName), $($MyInvocation.ScriptLineNumber), $MyInvocation.Statement))
+        $Script:Tracer::WriteLine(("{0}: Function: {1} - Caller: {2}({3}) - Command: {4}" -f $($Script:RunTimeConfig.ApplicationName), $($MyInvocation.MyCommand.Name), $($MyInvocation.ScriptName).Split("\")[-1], $($MyInvocation.ScriptLineNumber), $MyInvocation.Statement))
 
-        if ($Script:ReconnectStatus -eq 1) {
+        if ($Script:RunTimeConfig.ReconnectStatus -eq 1) {
             "Skip show schema" | Write-LogOutput -LogType DEBUG
-            $false | Invoke-ConfigSetting -Property "SqlSchemaWindowFormOpen"
+            $false | Set-ConfigProperty -Property "SqlSchemaWindowFormOpen"
             return
         }
 
@@ -17,7 +17,7 @@ function Open-SqlSchemaWindow {
         $Script:SqlSchemaWindowForm = New-FormObject -FormPath (Join-Path $Script:RunTimeConfig.ModuleFolder -ChildPath "lib\ui\SqlSchemaWindow.xaml") -ParentForm $Script:MainWindowForm.Definition
         [Int]$Script:SqlSchemaWindowForm.PositionManager.PositionOffSetRight = 405
 
-        $true | Invoke-ConfigSetting -Property "SqlSchemaWindowFormOpen"
+        $true | Set-ConfigProperty -Property "SqlSchemaWindowFormOpen"
 
         $Script:SqlSchemaWindowForm.Definition.ShowInTaskbar = $false
         $Script:TreeViewSqlSchema = $Script:SqlSchemaWindowForm.Definition.FindName("TreeViewSqlSchema")
@@ -90,7 +90,7 @@ function Open-SqlSchemaWindow {
         #                 }
         #                 $Script:SqlSchemaWindowForm.PositionManager.Synchronizing = $false
         #             }, [System.Windows.Threading.DispatcherPriority]::Render)
-        #         $Script:MainWindowForm.Elements.ButtonShowSqlSchema | Set-ButtonContent -Content "Hide S_ql Schema"
+        #         $Script:MainWindowForm.Elements.ButtonShowSqlSchemaText | Set-ButtonText -Value "Hide S_ql Schema"
         #         [Int]$Script:SqlSchemaWindowForm.PositionManager.PositionOffSetLeft = $Script:SqlSchemaWindowForm.Definition.Left + $Script:SqlSchemaWindowForm.Definition.Width + 2
         #         $Script:SqlSchemaWindowForm.PositionManager.PositionOffSetTop = $Script:SqlSchemaWindowForm.Definition.Top - [Int]$MainWindowForm.Definition.Top
         #     })
@@ -128,7 +128,7 @@ function Open-SqlSchemaWindow {
                     }, [System.Windows.Threading.DispatcherPriority]::Render)
 
                 $Script:MainWindowForm.Elements.ButtonShowSqlSchema.IsEnabled = $true
-                $Script:MainWindowForm.Elements.ButtonShowSqlSchema | Set-ButtonContent -Content "Hide Schema"
+                $Script:MainWindowForm.Elements.ButtonShowSqlSchemaText | Set-ButtonText -Value "Hide Schema"
                 $Script:SqlSchemaWindowForm.PositionManager.PositionOffSetTop = [Int]::Abs($Script:MainWindowForm.Definition.Top) - [Int]::Abs($Script:SqlSchemaWindowForm.Definition.Top)
 
                 "PositionManagerSqlSchemaWindow PositionOffSetLeft: {0}" -f $Script:SqlSchemaWindowForm.PositionManager.PositionOffSetLeft | Write-LogOutput -LogType DEBUG
@@ -145,14 +145,14 @@ function Open-SqlSchemaWindow {
                 Save-WindowMeasurements
                 $Script:SqlSchemaWindowForm.State = "Closing"
                 if ($Script:MainWindowForm.State -eq "Open") {
-                    $false | Invoke-ConfigSetting -Property "SqlSchemaWindowFormOpen"
+                    $false | Set-ConfigProperty -Property "SqlSchemaWindowFormOpen"
                 }
             })
 
         $Script:SqlSchemaWindowForm.Definition.Add_Closed({
                 $_ | Show-EventInfo
                 $Script:SqlSchemaWindowForm.State = "Closed"
-                $Script:MainWindowForm.Elements.ButtonShowSqlSchema | Set-ButtonContent -Content "Schema"
+                $Script:MainWindowForm.Elements.ButtonShowSqlSchemaText | Set-ButtonText -Value "Schema"
             })
 
         #endregion
