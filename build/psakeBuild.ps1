@@ -9,11 +9,39 @@ Properties {
     New-Item -Path $OutputDir -ItemType Directory -Force | Out-Null
 }
 
-
 Task default -depends Analyze, Test, Build, ImportModule
 Task TestBuildOnly -depends Analyze, Test, Build
 Task Pipeline -depends Analyze, Test, Build
 Task DeployOnly -depends Build, Deploy
+
+
+function Get-GalleryModuleVersion {
+    [CmdLetBinding()]
+    param (
+        [string]$ModuleName
+    )
+
+    try {
+        $Script:Tracer::WriteLine(("{0}: Function: {1} - Caller: {2}({3}) - Command: {4} - Parameters: {5}" -f $($Script:RunTimeConfig.ApplicationName), $($MyInvocation.MyCommand.Name), $($MyInvocation.ScriptName).Split("\")[-1], $($MyInvocation.ScriptLineNumber), $MyInvocation.Statement, ($PSBoundParameters | Out-String)))
+        $ApiEndpoint = "https://www.powershellgallery.com/api/v2/FindPackagesById()?id='{0}'" -f $ModuleName
+        $Response = Invoke-RestMethod -Uri $ApiEndpoint -Method Get -Headers @{
+            "Accept" = "application/xml"
+        } -ConnectionTimeoutSeconds 1
+
+        if ($null -ne $Response) {
+            $LatestVersion = $Response | Sort-Object updated -Descending | Select-Object -First 1
+            return $LatestVersion.Properties.version
+        }
+        else {
+            return $null
+        }
+    }
+    catch {
+        return $null
+    }
+}
+
+
 
 Task Dependencies {
     try {
@@ -177,6 +205,8 @@ Task Build -depends Test {
         "Module psd1 output file: {0}" -f $($ModulePsd1Path) | Write-Host
         (Get-Content $($ModulePsd1Path) -Raw) -replace "`r?`n", "`r`n" | Invoke-Formatter -Settings $FormattingSettings | Set-Content -Path $($ModulePsd1Path) -Encoding UTF8 -Force
 
+        $LatestOmadaWebPSVersion = Get-GalleryModuleVersion -ModuleName "OmadaWeb.PS"
+
         $Length = 150
         $HeaderContent = $null
         $HeaderContent = New-HeaderRow -Text "" -Length $Length -FillChar "#"
@@ -187,6 +217,14 @@ Task Build -depends Test {
         $HeaderContent += New-HeaderRow -Text  ("Copyright Fortigi (C) {0}" -f $Date.ToString("yyyy")) -Length $Length -FillChar " "
         $HeaderContent += New-HeaderRow -Text  "" -Length $Length -FillChar "#"
         $HeaderContent += "`n"
+
+        if($null -ne $LatestOmadaWebPSVersion) {
+            $HeaderContent += '#requires -Module OmadaWeb.PS -MinimumVersion {0}' -f $LatestOmadaWebPSVersion
+        }
+        else {
+            $HeaderContent += '#requires -Module OmadaWeb.PS'
+        }
+
         $HeaderContent += '#requires -Module OmadaWeb.PS'
         $HeaderContent += "`n"
         $HeaderContent += '#requires -Version 7.0'
