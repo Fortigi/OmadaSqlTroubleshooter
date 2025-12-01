@@ -3,6 +3,7 @@ function Write-LogOutput {
     param(
         [parameter(Mandatory = $false, Position = 0, ValueFromPipeline = $true)]
         [string]$Message,
+        $ErrorObject,
         [ValidateSet("DEBUG", "INFO", "ERROR", "VERBOSE", "WARNING", "FATAL", "LOG", "VERBOSE2")]
         [string]$LogType = "INFO",
         [switch]$SkipDialog
@@ -114,8 +115,19 @@ function Write-LogOutput {
                 catch {}
                 $LogMessage.ShowError = $true
                 $LogMessageDialog.Show = $true
-                $LogMessageDialog.Text = "Failure occurred:`r`n`r`n{0}" -f $LogMessageDialog.Text
                 $LogMessageDialog.Title = "Error"
+                try {
+                    if ($Null -ne $ErrorObject) {
+                        if ($null -ne $ErrorObject.Exception?.StatusCode) {
+                            $LogMessageDialog.Title += "{0} - ({1} - {2})" -f $LogMessageDialog.Title, $ErrorObject.Exception.StatusCode, $ErrorObject.Exception.Response.ReasonPhrase
+                            $LogMessageDialog.Text = "Failure {0} - {1} occurred:`r`n`r`n{2}" -f $LogMessageDialog.Text, $ErrorObject.Exception.StatusCode, $ErrorObject.Exception.Response.ReasonPhrase
+                        }
+                    }
+                    else {
+                        $LogMessageDialog.Text = "Failure occurred:`r`n`r`n{0}" -f $LogMessageDialog.Text
+                    }
+                }
+                catch {}
                 $LogMessageDialog.Icon = [System.Windows.Forms.MessageBoxIcon]::Error
                 $LogMessage.Color = "Red"
                 if ($null -ne $Script:PopUpWindowQueryRefresh) {
@@ -137,7 +149,9 @@ function Write-LogOutput {
         }
         if ($LogMessageDialog.Show -and !$SkipDialog) {
             if ($null -ne $Script:MainWindowForm -and $null -ne $Script:MainWindowForm.Definition -and $Script:MainWindowForm.Definition.IsVisible) {
-                [System.Windows.Forms.MessageBox]::Show($LogMessageDialog.Text, $LogMessageDialog.Title, [System.Windows.Forms.MessageBoxButtons]::OK, $LogMessageDialog.Icon)
+                $TrimmedText = Limit-MessageBoxText -Text $LogMessageDialog.Text
+                [System.Windows.Forms.MessageBox]::Show($TrimmedText, $LogMessageDialog.Title, [System.Windows.Forms.MessageBoxButtons]::OK, $LogMessageDialog.Icon)
+                Restore-MainWindowFocus
             }
             else {
                 $MessageBoxImage = [System.Windows.MessageBoxImage]::Information
@@ -152,7 +166,7 @@ function Write-LogOutput {
                 else {
                     $LogMessage.Text | Write-Host -ForegroundColor $LogMessage.Color
                 }
-                [System.Windows.MessageBox]::Show($LogMessageDialog.Text, $LogMessageDialog.Title, [System.Windows.Forms.MessageBoxButtons]::OK, $MessageBoxImage) | Out-Null
+                [System.Windows.MessageBox]::Show((Limit-MessageBoxText -Text $LogMessageDialog.Text), $LogMessageDialog.Title, [System.Windows.Forms.MessageBoxButtons]::OK, $MessageBoxImage) | Out-Null
             }
         }
         if ($LogMessage.ShowError) {

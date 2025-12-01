@@ -1,12 +1,12 @@
 function Update-DataConnectionList {
     [CmdLetBinding()]
     [System.Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSUseDeclaredVarsMoreThanAssignments', 'SetInitialConnection', Justification = 'The variable is used, but script analyzer does not recognize it')]
-    PARAM(
+    param(
         [switch]$NotShowPopupWindow
     )
 
     try {
-        $Script:Tracer::WriteLine(("{0}: Function: {1} - Caller: {2}({3}) - Command: {4}" -f $($Script:RunTimeConfig.ApplicationName), $($MyInvocation.MyCommand.Name), $($MyInvocation.ScriptName).Split("\")[-1], $($MyInvocation.ScriptLineNumber), $MyInvocation.Statement))
+        $Script:Tracer::WriteLine(("{0}: Function: {1} - Caller: {2}({3}) - Command: {4} - Parameters: {5}" -f $($Script:RunTimeConfig.ApplicationName), $($MyInvocation.MyCommand.Name), $($MyInvocation.ScriptName).Split("\")[-1], $($MyInvocation.ScriptLineNumber), $MyInvocation.Statement, ($PSBoundParameters | Out-String)))
         if (!(Test-ConnectionRequirements)) {
             "Connection not ready" | Write-LogOutput -LogType DEBUG
             return
@@ -35,18 +35,6 @@ function Update-DataConnectionList {
                 $Script:MainWindowForm.Elements.ComboBoxSelectDataConnection.Items.Clear()
 
                 if ($null -ne $Private:Result) {
-
-                    #                     #Option 1: Retrieve databases using the OIES UID
-                    #                     $RegexPattern = '<option(?:\s+selected="selected")?\s+value="(\d+)"\s+data-doid="(\d+)"\s+data-uid="([a-fA-F0-9\-]{36})">(OISES)<\/option>'
-                    #                     [regex]::Matches($Private:Result, $RegexPattern)|Out-Null
-                    #                     $SqlQuery = "SELECT DisplayName,ID
-                    # FROM tblDataObject
-                    # WHERE DataObjectTypeID IN (
-                    #     SELECT DataObjectTypeID
-                    #     FROM tblDataObject
-                    #     WHERE ID =  '{0}'
-                    # )
-                    # " -f $Matches[3].Value
 
                     # Get-SqlQueryObject -
                     $SetInitialConnection = $true
@@ -97,6 +85,6 @@ function Update-DataConnectionList {
         }
     }
     catch {
-        $_.Exception.Message | Write-LogOutput -LogType ERROR
+        $_.Exception.Message | Write-LogOutput -LogType ERROR -ErrorObject $_
     }
 }

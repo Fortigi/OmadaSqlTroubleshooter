@@ -4,17 +4,17 @@ function Wait-Task {
         [System.Threading.Tasks.Task[]]$Task
     )
 
-    Begin {
-        $Script:Tracer::WriteLine(("{0}: Function: {1} - Caller: {2}({3}) - Command: {4}" -f $($Script:RunTimeConfig.ApplicationName), $($MyInvocation.MyCommand.Name), $($MyInvocation.ScriptName).Split("\")[-1], $($MyInvocation.ScriptLineNumber), $MyInvocation.Statement))
+    begin {
+        $Script:Tracer::WriteLine(("{0}: Function: {1} - Caller: {2}({3}) - Command: {4} - Parameters: {5}" -f $($Script:RunTimeConfig.ApplicationName), $($MyInvocation.MyCommand.Name), $($MyInvocation.ScriptName).Split("\")[-1], $($MyInvocation.ScriptLineNumber), $MyInvocation.Statement, ($PSBoundParameters | Out-String)))
         $Tasks = @()
     }
 
-    Process {
+    process {
         $Tasks += $Task
     }
 
-    End {
-        While (-not [System.Threading.Tasks.Task]::WaitAll($Tasks, 200)) {}
+    end {
+        while (-not [System.Threading.Tasks.Task]::WaitAll($Tasks, 200)) {}
         $Tasks.ForEach( { $_.GetAwaiter().GetResult() })
     }
 }

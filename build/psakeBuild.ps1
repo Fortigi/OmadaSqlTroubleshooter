@@ -296,7 +296,7 @@ Task ImportModule -depends Build {
         $Test = Import-Module "$OutputDir\$ModuleName.psd1" -Force -PassThru
         if ($Test) {
             "Module loaded successfully" | Write-Verbose
-            Remove-Module -Name $Test.Name -Force
+            Remove-Module -name $Test.Name -Force
         }
         else {
             "Module failed to load" | Write-Error -ErrorAction Stop

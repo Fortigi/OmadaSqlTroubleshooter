@@ -3,7 +3,7 @@ function Show-ChoiceWindow {
     )]
     [System.Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSReviewUnusedParameter', 'LeftButtonReturnValue', Justification = 'The LeftButtonReturnValue variable is used in a function called from here')]
     [System.Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSReviewUnusedParameter', 'RightButtonReturnValue', Justification = 'The RightButtonReturnValue variable is used in a function called from here')]
-    PARAM(
+    param(
         $Title,
         $Message,
         $LeftButtonText = "Yes",
@@ -12,7 +12,7 @@ function Show-ChoiceWindow {
         $RightButtonReturnValue = $false
     )
     try {
-        $Script:Tracer::WriteLine(("{0}: Function: {1} - Caller: {2}({3}) - Command: {4}" -f $($Script:RunTimeConfig.ApplicationName), $($MyInvocation.MyCommand.Name), $($MyInvocation.ScriptName).Split("\")[-1], $($MyInvocation.ScriptLineNumber), $MyInvocation.Statement))
+        $Script:Tracer::WriteLine(("{0}: Function: {1} - Caller: {2}({3}) - Command: {4} - Parameters: {5}" -f $($Script:RunTimeConfig.ApplicationName), $($MyInvocation.MyCommand.Name), $($MyInvocation.ScriptName).Split("\")[-1], $($MyInvocation.ScriptLineNumber), $MyInvocation.Statement, ($PSBoundParameters | Out-String)))
 
         $PopupWindow = New-Object System.Windows.Window
         $PopupWindow.WindowStyle = [System.Windows.WindowStyle]::SingleBorderWindow
@@ -92,12 +92,17 @@ function Show-ChoiceWindow {
                 $PopupWindow.Close()
             })
 
+        $PopupWindow.Add_Loaded({
+                $LeftButton.Focus() | Out-Null
+                $PopupWindow.Focus() | Out-Null
+            })
+
         $PopupWindow.Content = $Grid
 
         $PopupWindow.ShowDialog() | Out-Null
         return $script:DialogResult
     }
     catch {
-        $_.Exception.Message | Write-LogOutput -LogType ERROR
+        $_.Exception.Message | Write-LogOutput -LogType ERROR -ErrorObject $_
     }
 }

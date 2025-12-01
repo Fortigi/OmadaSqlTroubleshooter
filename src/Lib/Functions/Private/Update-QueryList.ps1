@@ -1,13 +1,13 @@
 function Update-QueryList {
     [CmdLetBinding()]
-    PARAM(
+    param(
         [switch]$ForceRefresh,
         [switch]$NotShowPopupWindow
     )
 
     try {
 
-        $Script:Tracer::WriteLine(("{0}: Function: {1} - Caller: {2}({3}) - Command: {4}" -f $($Script:RunTimeConfig.ApplicationName), $($MyInvocation.MyCommand.Name), $($MyInvocation.ScriptName).Split("\")[-1], $($MyInvocation.ScriptLineNumber), $MyInvocation.Statement))
+        $Script:Tracer::WriteLine(("{0}: Function: {1} - Caller: {2}({3}) - Command: {4} - Parameters: {5}" -f $($Script:RunTimeConfig.ApplicationName), $($MyInvocation.MyCommand.Name), $($MyInvocation.ScriptName).Split("\")[-1], $($MyInvocation.ScriptLineNumber), $MyInvocation.Statement, ($PSBoundParameters | Out-String)))
 
         if (!(Test-ConnectionRequirements)) {
             "Connection not ready" | Write-LogOutput -LogType DEBUG
@@ -94,7 +94,7 @@ function Update-QueryList {
             }
         }
         else {
-            "Query list retrieved from cache! Click `"Refresh Queries`" to refresh queries" | Write-LogOutput -LogType INFO
+            "Query list retrieved from cache! Click `"Refresh`" to refresh queries" | Write-LogOutput -LogType INFO
         }
         # $ComboBoxSelectedQueryItem = $Script:MainWindowForm.Elements.ComboBoxSelectQuery.SelectedItem
         # $ComboBoxSelectQueryItems = $Script:MainWindowForm.Elements.ComboBoxSelectQuery.Items | Sort-Object
@@ -116,6 +116,6 @@ function Update-QueryList {
 
     }
     catch {
-        $_.Exception.Message | Write-LogOutput -LogType ERROR
+        $_.Exception.Message | Write-LogOutput -LogType ERROR -ErrorObject $_
     }
 }

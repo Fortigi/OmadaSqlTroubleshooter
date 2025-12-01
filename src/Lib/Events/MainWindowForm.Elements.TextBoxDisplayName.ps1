@@ -32,7 +32,7 @@
 #             }
 #         }
 #         catch {
-#             $_.Exception.Message | Write-LogOutput -LogType ERROR
+#             $_.Exception.Message | Write-LogOutput -LogType ERROR -ErrorObject $_
 #         }
 #     })
 
@@ -48,6 +48,6 @@
 #             }
 #         }
 #         catch {
-#             $_.Exception.Message | Write-LogOutput -LogType ERROR
+#             $_.Exception.Message | Write-LogOutput -LogType ERROR -ErrorObject $_
 #         }
 #     })

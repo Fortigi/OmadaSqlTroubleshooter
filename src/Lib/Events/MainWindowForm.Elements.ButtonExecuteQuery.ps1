@@ -8,13 +8,16 @@ $Script:MainWindowForm.Elements.ButtonExecuteQuery.Add_Click({
 
             $Script:MainWindowForm.Elements.ButtonSaveQuery.IsEnabled = $false
             $Script:MainWindowForm.Elements.ButtonExecuteQuery.IsEnabled = $false
-            # $Script:MainWindowForm.Elements.ButtonExecuteQueryText | Set-ButtonText -Value "Executing..."
             $Script:MainWindowForm.Elements.ButtonShowOutput.IsEnabled = $false
             $Script:MainWindowForm.Elements.ButtonSaveOutputFile.IsEnabled = $false
             Start-Sleep -Milliseconds 100
 
             if (!(Test-ConnectionRequirements) -or [string]::IsNullOrWhiteSpace($Script:AppConfig.CurrentSqlQuery.DoId)) {
                 "Omada Url not set or Query not selected, cannot retrieve data!" | Write-LogOutput -LogType WARNING
+                if ($null -ne $Script:PopupWindowExecuteQuery) {
+                    $Script:PopupWindowExecuteQuery.Close()
+                }
+                Restore-MainWindowFocus
             }
             else {
                 "Execute" | Write-LogOutput
@@ -22,6 +25,6 @@ $Script:MainWindowForm.Elements.ButtonExecuteQuery.Add_Click({
             }
         }
         catch {
-            $_.Exception.Message | Write-LogOutput -LogType ERROR
+            $_.Exception.Message | Write-LogOutput -LogType ERROR -ErrorObject $_
         }
     })

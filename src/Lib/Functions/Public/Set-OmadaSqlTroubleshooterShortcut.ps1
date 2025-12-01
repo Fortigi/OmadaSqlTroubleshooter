@@ -25,7 +25,7 @@ Requires PowerShell 7.0 or higher.
 
 function Set-OmadaSqlTroubleShooterShortcut {
     [CmdletBinding()]
-    PARAM(
+    param(
         [switch]$NotCreateDesktopShortcut
     )
     #$ScriptName = "OmadaSqlTroubleshooter.ps1"

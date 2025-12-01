@@ -84,7 +84,7 @@ function Invoke-OmadaSqlTroubleshooter {
         ReconnectStatus    = 0
         SavePassword       = $false
     }
-    Get-ChildItem -Path (Join-Path $Script:RunTimeConfig.ModuleFolder -ChildPath "Lib\Functions") -Filter *.ps1 | ForEach-Object {
+    Get-ChildItem -Path (Join-Path $Script:RunTimeConfig.ModuleFolder -ChildPath "Lib\Functions") -Filter *.ps1 | Where-Object { $_.Name -notlike "_*.ps1" } | ForEach-Object {
         . $_.FullName
     }
 
@@ -107,7 +107,7 @@ function Invoke-OmadaSqlTroubleshooter {
     # Events are moved to .\Lib\Events
     "Read Events" | Write-LogOutput -LogType DEBUG
 
-    Get-ChildItem -Path (Join-Path $Script:RunTimeConfig.ModuleFolder -ChildPath "Lib\Events") -Filter *.ps1 | ForEach-Object {
+    Get-ChildItem -Path (Join-Path $Script:RunTimeConfig.ModuleFolder -ChildPath "Lib\Events") -Filter *.ps1 | Where-Object { $_.Name -notlike "_*.ps1" } | ForEach-Object {
 
         "Loading event {0}" -f $_.Name | Write-LogOutput -LogType DEBUG
         try {
@@ -116,10 +116,10 @@ function Invoke-OmadaSqlTroubleshooter {
         }
         catch {
             if ($_.Exception.Response.StatusCode -eq "NotFound") {
-                "SQL Troubleshooting Object not found or OData endpoint for SQL Troubleshooting is not found. Is it enable for OData? Please check the data object type properties!" | Write-LogOutput -LogType ERROR
+                "SQL Troubleshooting Object not found or OData endpoint for SQL Troubleshooting is not found. Is it enable for OData? Please check the data object type properties!" | Write-LogOutput -LogType ERROR -ErrorObject $_
             }
             else {
-                $_.Exception.Message | Write-LogOutput -LogType ERROR
+                $_.Exception.Message | Write-LogOutput -LogType ERROR -ErrorObject $_
             }
         }
     }

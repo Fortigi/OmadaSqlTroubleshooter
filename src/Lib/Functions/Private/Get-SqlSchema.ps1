@@ -1,8 +1,8 @@
 function Get-SqlSchemaObject {
     [CmdLetBinding()]
-    PARAM()
+    param()
     try {
-        $Script:Tracer::WriteLine(("{0}: Function: {1} - Caller: {2}({3}) - Command: {4}" -f $($Script:RunTimeConfig.ApplicationName), $($MyInvocation.MyCommand.Name), $($MyInvocation.ScriptName).Split("\")[-1], $($MyInvocation.ScriptLineNumber), $MyInvocation.Statement))
+        $Script:Tracer::WriteLine(("{0}: Function: {1} - Caller: {2}({3}) - Command: {4} - Parameters: {5}" -f $($Script:RunTimeConfig.ApplicationName), $($MyInvocation.MyCommand.Name), $($MyInvocation.ScriptName).Split("\")[-1], $($MyInvocation.ScriptLineNumber), $MyInvocation.Statement, ($PSBoundParameters | Out-String)))
 
         if ($Script:RunTimeConfig.ReconnectStatus -eq 1) {
             "Skip reconnect" | Write-LogOutput -LogType DEBUG
@@ -77,14 +77,14 @@ function Get-SqlSchemaObject {
             $OnCompletedScriptBlock = {
                 try {
                     if (!$Script:Task.Status -eq "RanToCompletion") {
-                        "Monaco Editor Task failed: {0}" -f $Script:Task.Status | Write-LogOutput -LogType ERROR
+                        "Monaco Editor Task failed: {0}" -f $Script:Task.Status | Write-LogOutput -LogType ERROR -ErrorObject $_
                     }
                     else {
                         "Monaco Editor Task completed successfully." | Write-LogOutput -LogType DEBUG
                     }
                 }
                 catch {
-                    $Script:Task.Exception.Message | Write-LogOutput -LogType ERROR
+                    $Script:Task.Exception.Message | Write-LogOutput -LogType ERROR -ErrorObject $_
                 }
             }
 
@@ -98,6 +98,6 @@ function Get-SqlSchemaObject {
         }
     }
     catch {
-        $_.Exception.Message | Write-LogOutput -LogType ERROR
+        $_.Exception.Message | Write-LogOutput -LogType ERROR -ErrorObject $_
     }
 }

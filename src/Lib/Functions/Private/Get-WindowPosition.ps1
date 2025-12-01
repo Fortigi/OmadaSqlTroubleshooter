@@ -1,6 +1,6 @@
 function Get-WindowPosition {
     [CmdLetBinding()]
-    PARAM(
+    param(
         [parameter(Mandatory = $true, ValueFromPipeline = $true)]
         $Form,
         [switch]$AsString
@@ -19,6 +19,6 @@ function Get-WindowPosition {
         }
     }
     catch {
-        $_.Exception.Message | Write-LogOutput -LogType ERROR
+        $_.Exception.Message | Write-LogOutput -LogType ERROR -ErrorObject $_
     }
 }

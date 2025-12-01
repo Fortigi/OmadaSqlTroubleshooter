@@ -6,12 +6,17 @@ $Script:MainWindowForm.Elements.ButtonConnect.Add_Click({
                 if (Test-OmadaConnection) {
                     Test-ConnectionSettings
                 }
+                if ($Script:ConnectionStatus) {
+                    Update-QueryList -ForceRefresh
+                    Update-DataConnectionList
+                }
             }
             else {
-                Set-Disconnected
+                Set-SqlConnection -Status $false
             }
         }
         catch {
-            $_.Exception.Message | Write-LogOutput -LogType ERROR
+            Restore-MainWindowFocus
+            $_.Exception.Message | Write-LogOutput -LogType ERROR -ErrorObject $_
         }
     })

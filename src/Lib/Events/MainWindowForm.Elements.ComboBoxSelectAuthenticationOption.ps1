@@ -9,7 +9,7 @@ $Script:MainWindowForm.Elements.ComboBoxSelectAuthenticationOption.Add_GotFocus(
             }
         }
         catch {
-            $_.Exception.Message | Write-LogOutput -LogType ERROR
+            $_.Exception.Message | Write-LogOutput -LogType ERROR -ErrorObject $_
         }
     })
 
@@ -26,7 +26,7 @@ $Script:MainWindowForm.Elements.ComboBoxSelectAuthenticationOption.Add_Selection
             Test-ConnectionButton
         }
         catch {
-            $_.Exception.Message | Write-LogOutput -LogType ERROR
+            $_.Exception.Message | Write-LogOutput -LogType ERROR -ErrorObject $_
         }
     })
 
@@ -46,7 +46,7 @@ $Script:MainWindowForm.Elements.ComboBoxSelectAuthenticationOption.Add_LostFocus
             }
         }
         catch {
-            $_.Exception.Message | Write-LogOutput -LogType ERROR
+            $_.Exception.Message | Write-LogOutput -LogType ERROR -ErrorObject $_
         }
 
     })

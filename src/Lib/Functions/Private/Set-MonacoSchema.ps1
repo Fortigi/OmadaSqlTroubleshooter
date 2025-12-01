@@ -1,14 +1,14 @@
 function Set-MonacoSchema {
     [CmdLetBinding()]
-    PARAM(
+    param(
         $ReturnValue
     )
     try {
-        $Script:Tracer::WriteLine(("{0}: Function: {1} - Caller: {2}({3}) - Command: {4}" -f $($Script:RunTimeConfig.ApplicationName), $($MyInvocation.MyCommand.Name), $($MyInvocation.ScriptName).Split("\")[-1], $($MyInvocation.ScriptLineNumber), $MyInvocation.Statement))
+        $Script:Tracer::WriteLine(("{0}: Function: {1} - Caller: {2}({3}) - Command: {4} - Parameters: {5}" -f $($Script:RunTimeConfig.ApplicationName), $($MyInvocation.MyCommand.Name), $($MyInvocation.ScriptName).Split("\")[-1], $($MyInvocation.ScriptLineNumber), $MyInvocation.Statement, ($PSBoundParameters | Out-String)))
         "Add schema to Monaco editor." | Write-LogOutput -LogType DEBUG
         $TableObjects = @()
         foreach ($Table in ($ReturnValue.d | Get-Member -MemberType NoteProperty)) {
-            $TableName = $($Table.Name).Split(".",2)[1]
+            $TableName = $($Table.Name).Split(".", 2)[1]
             $TableObject = [PSCustomObject]@{
                 $TableName = @()
             }
@@ -30,7 +30,7 @@ function Set-MonacoSchema {
                 }
             }
             catch {
-                $Script:Task.Exception.Message | Write-LogOutput -LogType ERROR
+                $Script:Task.Exception.Message | Write-LogOutput -LogType ERROR -ErrorObject $_
             }
         }
 
@@ -39,6 +39,6 @@ function Set-MonacoSchema {
 
     }
     catch {
-        $_.Exception.Message | Write-LogOutput -LogType ERROR
+        $_.Exception.Message | Write-LogOutput -LogType ERROR -ErrorObject $_
     }
 }

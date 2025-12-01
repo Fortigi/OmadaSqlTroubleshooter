@@ -1,6 +1,6 @@
 function Invoke-LogWindowScrollToEnd {
     [CmdLetBinding()]
-    PARAM()
+    param()
     try {
 
         #TODO: Implement disable scroll when not at the end
@@ -33,6 +33,6 @@ function Invoke-LogWindowScrollToEnd {
         #         }
     }
     catch {
-        $_.Exception.Message | Write-LogOutput -LogType ERROR
+        $_.Exception.Message | Write-LogOutput -LogType ERROR -ErrorObject $_
     }
 }

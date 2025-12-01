@@ -1,5 +1,5 @@
 function Show-EventInfo {
-    PARAM(
+    param(
         [parameter(Mandatory = $true, Position = 0, ValueFromPipeline = $true)]
         $Item,
         [validateSet("DEBUG", "VERBOSE", "VERBOSE2")]
@@ -35,6 +35,6 @@ function Show-EventInfo {
         }
     }
     catch {
-        $_.Exception.Message | Write-LogOutput -LogType ERROR
+        $_.Exception.Message | Write-LogOutput -LogType ERROR -ErrorObject $_
     }
 }

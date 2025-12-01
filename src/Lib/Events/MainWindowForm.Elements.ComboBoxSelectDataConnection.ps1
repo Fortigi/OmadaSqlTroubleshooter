@@ -2,12 +2,12 @@ $Script:MainWindowForm.Elements.ComboBoxSelectDataConnection.Add_DropDownOpened(
         try {
             $_ | Show-EventInfo
 
-            if (($Script:MainWindowForm.Elements.ComboBoxSelectDataConnection.Items | Measure-Object).Count -le 0) {
-                Update-DataConnectionList
-            }
+            # if (($Script:MainWindowForm.Elements.ComboBoxSelectDataConnection.Items | Measure-Object).Count -le 0) {
+            #     Update-DataConnectionList
+            # }
         }
         catch {
-            $_.Exception.Message | Write-LogOutput -LogType ERROR
+            $_.Exception.Message | Write-LogOutput -LogType ERROR -ErrorObject $_
         }
     })
 
@@ -18,7 +18,7 @@ $Script:MainWindowForm.Elements.ComboBoxSelectDataConnection.Add_SelectionChange
 
             $PsCallStack = Get-PSCallStack
 
-            if (-not $Pscallstack[1].Command -eq "Update-DataConnectionList" -and ($Script:MainWindowForm.Elements.ComboBoxSelectDataConnection.Items | Measure-Object).Count -le 0) {
+            if (-not $PsCallStack[1].Command -eq "Update-DataConnectionList" -and ($Script:MainWindowForm.Elements.ComboBoxSelectDataConnection.Items | Measure-Object).Count -le 0) {
                 Update-DataConnectionList
             }
 
@@ -32,7 +32,7 @@ $Script:MainWindowForm.Elements.ComboBoxSelectDataConnection.Add_SelectionChange
             }
         }
         catch {
-            $_.Exception.Message | Write-LogOutput -LogType ERROR
+            $_.Exception.Message | Write-LogOutput -LogType ERROR -ErrorObject $_
         }
     })
 

@@ -32,7 +32,7 @@ $Script:MainWindowForm.Elements.CheckboxMyCreatedQueries.Add_Checked({
             }
         }
         catch {
-            $_.Exception.Message | Write-LogOutput -LogType ERROR
+            $_.Exception.Message | Write-LogOutput -LogType ERROR -ErrorObject $_
         }
     })
 
@@ -50,6 +50,6 @@ $Script:MainWindowForm.Elements.CheckboxMyCreatedQueries.Add_Unchecked({
             }
         }
         catch {
-            $_.Exception.Message | Write-LogOutput -LogType ERROR
+            $_.Exception.Message | Write-LogOutput -LogType ERROR -ErrorObject $_
         }
     })

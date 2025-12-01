@@ -2,7 +2,7 @@ function Invoke-OmadaPSWebRequestWrapper {
     [CmdLetBinding()]
     param()
 
-    $Script:Tracer::WriteLine(("{0}: Function: {1} - Caller: {2}({3}) - Command: {4}" -f $($Script:RunTimeConfig.ApplicationName), $($MyInvocation.MyCommand.Name), $($MyInvocation.ScriptName).Split("\")[-1], $($MyInvocation.ScriptLineNumber), $MyInvocation.Statement))
+    $Script:Tracer::WriteLine(("{0}: Function: {1} - Caller: {2}({3}) - Command: {4} - Parameters: {5}" -f $($Script:RunTimeConfig.ApplicationName), $($MyInvocation.MyCommand.Name), $($MyInvocation.ScriptName).Split("\")[-1], $($MyInvocation.ScriptLineNumber), $MyInvocation.Statement, ($PSBoundParameters | Out-String)))
     try {
         if (!$Script:RunTimeData.SkipRetryRequest) {
             $Private:Parameters = $Script:RunTimeData.RestMethodParam
@@ -47,13 +47,14 @@ function Invoke-OmadaPSWebRequestWrapper {
         }
         elseif ($null -ne $_.Exception?.Response?.StatusCode -and $_.Exception.Response.StatusCode -eq [System.Net.HttpStatusCode]::Unauthorized) {
             $Message = "Access denied to {0}, message:`n`r{1}" -f [system.uri]::New($Script:AppConfig.BaseUrl).Host, $_.ErrorDetails.Message
-            Set-Disconnected
+            Set-SqlConnection -Status $false
             $Message | Write-Error -ErrorAction Stop -TargetObject $_
             $Script:RunTimeData.SkipRetryRequest = $true
         }
         else {
-            $Message = "Error occurred:`n`r{1}" -f [system.uri]::New($Script:AppConfig.BaseUrl).Host, $_.ErrorDetails.Message
-            $Message | Write-Error -ErrorAction Stop -TargetObject $_
+            # $Message = "Error occurred:`n`r{1}" -f [system.uri]::New($Script:AppConfig.BaseUrl).Host, $_.ErrorDetails.Message
+            # $Message | Write-Error -ErrorAction Stop -TargetObject $_
+            $_
         }
     }
 }

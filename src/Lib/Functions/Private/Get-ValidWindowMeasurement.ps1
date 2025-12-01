@@ -1,6 +1,6 @@
 function Get-ValidWindowMeasurement {
     [CmdLetBinding()]
-    PARAM(
+    param(
         [parameter(Mandatory = $true, ValueFromPipeline = $true)]
         $Form,
         [parameter(Mandatory = $true)]
@@ -27,7 +27,7 @@ function Get-ValidWindowMeasurement {
 
     }
     catch {
-        $_.Exception.Message | Write-LogOutput -LogType ERROR
+        $_.Exception.Message | Write-LogOutput -LogType ERROR -ErrorObject $_
     }
 
 }

@@ -1,8 +1,9 @@
 function Set-OmadaUrl {
     [CmdLetBinding()]
-    PARAM()
+    param()
     try {
-        $Script:Tracer::WriteLine(("{0}: Function: {1} - Caller: {2}({3}) - Command: {4}" -f $($Script:RunTimeConfig.ApplicationName), $($MyInvocation.MyCommand.Name), $($MyInvocation.ScriptName).Split("\")[-1], $($MyInvocation.ScriptLineNumber), $MyInvocation.Statement))
+        $Script:Tracer::WriteLine(("{0}: Function: {1} - Caller: {2}({3}) - Command: {4} - Parameters: {5}" -f $($Script:RunTimeConfig.ApplicationName), $($MyInvocation.MyCommand.Name), $($MyInvocation.ScriptName).Split("\")[-1], $($MyInvocation.ScriptLineNumber), $MyInvocation.Statement, ($PSBoundParameters | Out-String)))
+
         if (![string]::IsNullOrWhiteSpace($Script:MainWindowForm.Elements.TextBoxURL.Text)) {
 
             if ($Script:MainWindowForm.Elements.TextBoxURL.Text -notlike "http*") {
@@ -17,13 +18,13 @@ function Set-OmadaUrl {
             $Uri = [System.Uri]::new($Script:MainWindowForm.Elements.TextBoxURL.Text.Trim())
 
             if ($Uri.IsAbsoluteUri -and ($Uri.Scheme -eq 'http' -or $Uri.Scheme -eq 'https')) {
-        ("Input Url {0} is valid." -f $Uri.IsAbsoluteUri) | Write-LogOutput -LogType DEBUG
+                ("Input Url {0} is valid." -f $Uri.IsAbsoluteUri) | Write-LogOutput -LogType DEBUG
             }
             else {
                 $null | Set-ConfigProperty -Property "BaseUrl"
                 $Script:MainWindowForm.Elements.TextBoxURL.Text = $null
                 "Input Url {0} is not valid." -f $Script:MainWindowForm.Elements.TextBoxURL.Text.Trim() | Write-LogOutput -LogType ERROR
-                Set-Disconnected
+                Set-SqlConnection -Status $false
                 return
             }
 
@@ -31,7 +32,7 @@ function Set-OmadaUrl {
                 $DnsResult = Resolve-DnsName -Name $Uri.Host -QuickTimeout -ErrorAction SilentlyContinue
                 if (($DnsResult | Measure-Object).Count -le 0) {
                     "DNS resolution for {0} failed!" -f $Uri.Host | Write-LogOutput -LogType ERROR
-                    Set-Disconnected
+                    Set-SqlConnection -Status $false
                     return
                 }
             }
@@ -39,8 +40,8 @@ function Set-OmadaUrl {
                 $null | Set-ConfigProperty -Property "BaseUrl"
                 $Script:MainWindowForm.Elements.TextBoxURL.Text = $null
                 $Script:MainWindowForm.Elements.TextBlockStatusBarUrl.Text = $null
-                "Endpoint {0} not found!" -f $Uri.AbsoluteUri | Write-LogOutput -LogType ERROR
-                Set-Disconnected
+                "Endpoint {0} not found!" -f $Uri.AbsoluteUri | Write-LogOutput -LogType ERROR -ErrorObject $_
+                Set-SqlConnection -Status $false
             }
 
             $Uri.AbsoluteUri.TrimEnd("/") | Set-ConfigProperty -Property "BaseUrl"
@@ -48,15 +49,13 @@ function Set-OmadaUrl {
             if ($Script:CurrentUrl -ne $Script:AppConfig.BaseUrl) {
                 "Omada Url set to: {0}" -f $Script:AppConfig.BaseUrl | Write-LogOutput -LogType DEBUG
                 $Script:CurrentUrl = $Script:AppConfig.BaseUrl
-                # if ($Script:RunTimeConfig.AuthenticationSet) {
-                #     "Authentication is set, force update query list!" | Write-LogOutput -LogType DEBUG
-                #     #Update-QueryList -ForceRefresh
-                # }
-                $Script:MainWindowForm.Elements.ComboBoxSelectAuthenticationOption.IsEnabled = $true
+                Set-SqlConnection -Status $false
+                $Script:RunTimeData.RestMethodParam.ForceAuthentication = $true
+
             }
             elseif ([string]::IsNullOrEmpty($Script:AppConfig.BaseUrl)) {
                 "Omada Url is empty!" | Write-LogOutput -LogType DEBUG
-                Set-Disconnected
+                Set-SqlConnection -Status $false
             }
             else {
                 "Omada Url maintained: {0}" -f $Script:AppConfig.BaseUrl | Write-LogOutput -LogType DEBUG
@@ -68,6 +67,6 @@ function Set-OmadaUrl {
         }
     }
     catch {
-        $_.Exception.Message | Write-LogOutput -LogType ERROR
+        $_.Exception.Message | Write-LogOutput -LogType ERROR -ErrorObject $_
     }
 }

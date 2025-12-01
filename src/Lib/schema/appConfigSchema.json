@@ -26,8 +26,8 @@
     "Type": "String"
   },
   {
-    "Name": "LastExtension",
-    "Type": "String"
+    "Name": "LastExtensionIndex",
+    "Type": "Int"
   },
   {
     "Name": "LastAuthentication",

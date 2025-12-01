@@ -1,3 +1,5 @@
+
+
 $Script:MainWindowForm.Definition.Add_Closed({
         try {
             $_ | Show-EventInfo
@@ -5,7 +7,7 @@ $Script:MainWindowForm.Definition.Add_Closed({
             $Script:MainWindowForm.Definition.Close()
         }
         catch {
-            $_.Exception.Message | Write-LogOutput -LogType ERROR
+            $_.Exception.Message | Write-LogOutput -LogType ERROR -ErrorObject $_
         }
     })
 
@@ -22,7 +24,46 @@ $Script:MainWindowForm.Definition.Add_Closing({
             }
         }
         catch {
-            $_.Exception.Message | Write-LogOutput -LogType ERROR
+            $_.Exception.Message | Write-LogOutput -LogType ERROR -ErrorObject $_
+        }
+    })
+
+$Script:MainWindowForm.Definition.Add_PreviewKeyDown({
+        [System.Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSAvoidAssignmentToAutomaticVariable', 'EventArgs', Justification = 'The use of the variable is on purpose')]
+        param(
+            $EventSender,
+            $EventArgs
+        )
+        try {
+            $_ | Show-EventInfo
+
+
+            if ($EventArgs.Key -eq [System.Windows.Input.Key]::F5) {
+                "F5 key intercepted at MainWindow level" | Write-LogOutput -LogType VERBOSE
+
+                $EventArgs.Handled = $true
+
+                "Triggering Execute Query from F5 key press (MainWindow)" | Write-LogOutput -LogType VERBOSE
+                $Script:MainWindowForm.Elements.ButtonExecuteQuery.RaiseEvent([System.Windows.RoutedEventArgs]::new([System.Windows.Controls.Primitives.ButtonBase]::ClickEvent))
+            }
+
+            elseif ($EventArgs.Key -eq [System.Windows.Input.Key]::S -and ([System.Windows.Input.Keyboard]::Modifiers -band [System.Windows.Input.ModifierKeys]::Control)) {
+                "Ctrl+S key intercepted at MainWindow level" | Write-LogOutput -LogType VERBOSE
+
+                $EventArgs.Handled = $true
+
+                "Triggering Save Query from Ctrl+S key press (MainWindow)" | Write-LogOutput -LogType VERBOSE
+                $Script:MainWindowForm.Elements.ButtonSaveQuery.RaiseEvent([System.Windows.RoutedEventArgs]::new([System.Windows.Controls.Primitives.ButtonBase]::ClickEvent))
+            }
+
+            elseif ($EventArgs.Key -eq [System.Windows.Input.Key]::C -and ([System.Windows.Input.Keyboard]::Modifiers -band [System.Windows.Input.ModifierKeys]::Control)) {
+                # Allow Ctrl+C to pass through to DataGrid - do NOT handle it here
+                "Ctrl+C detected at MainWindow level - allowing to pass through to focused control" | Write-LogOutput -LogType VERBOSE
+                # Do not set $EventArgs.Handled = $true for Ctrl+C
+            }
+        }
+        catch {
+            $_.Exception.Message | Write-LogOutput -LogType ERROR -ErrorObject $_
         }
     })
 
@@ -90,7 +131,7 @@ $Script:MainWindowForm.Definition.Add_Loaded({
                     else {
                         $Script:MainWindowForm.Definition.Dispatcher.Invoke([System.Action] {
                                 #[System.Windows.MessageBox]::Show("Monaco HTML file not found at: $HtmlPath", "Error", [System.Windows.MessageBoxButton]::OK, [System.Windows.MessageBoxImage]::Error) | Out-Null
-                                 "Monaco HTML file not found at: {0}" -f $HtmlPath | Write-LogOutput -LogType ERROR
+                                "Monaco HTML file not found at: {0}" -f $HtmlPath | Write-LogOutput -LogType ERROR
                             })
                     }
                     Test-ConnectionButton
@@ -98,11 +139,78 @@ $Script:MainWindowForm.Definition.Add_Loaded({
                     if ($Script:AppConfig.SqlSchemaWindowFormOpen) {
                         Open-SqlSchemaWindow
                     }
+
+                    $Script:Webview.Object.add_PreviewKeyDown({
+                            [System.Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSAvoidAssignmentToAutomaticVariable', 'EventArgs', Justification = 'The use of the variable is on purpose')]
+                            param(
+                                $EventSender,
+                                $EventArgs
+                            )
+                            try {
+                                if ($EventArgs.Key -eq [System.Windows.Input.Key]::F5) {
+                                    "F5 key intercepted in WebView2 (PreviewKeyDown)" | Write-LogOutput -LogType DEBUG
+
+                                    $EventArgs.Handled = $true
+
+                                    $Script:MainWindowForm.Definition.Dispatcher.Invoke([System.Action] {
+                                            "Triggering Execute Query from F5 key press" | Write-LogOutput -LogType DEBUG
+                                            $Script:MainWindowForm.Elements.ButtonExecuteQuery.RaiseEvent([System.Windows.RoutedEventArgs]::new([System.Windows.Controls.Primitives.ButtonBase]::ClickEvent))
+                                        })
+                                }
+                                elseif ($EventArgs.Key -eq [System.Windows.Input.Key]::S -and ([System.Windows.Input.Keyboard]::Modifiers -band [System.Windows.Input.ModifierKeys]::Control)) {
+                                    "Ctrl+S key intercepted in WebView2 (PreviewKeyDown)" | Write-LogOutput -LogType DEBUG
+
+                                    $EventArgs.Handled = $true
+
+                                    $Script:MainWindowForm.Definition.Dispatcher.Invoke([System.Action] {
+                                            "Triggering Save Query from Ctrl+S key press" | Write-LogOutput -LogType DEBUG
+                                            $Script:MainWindowForm.Elements.ButtonSaveQuery.RaiseEvent([System.Windows.RoutedEventArgs]::new([System.Windows.Controls.Primitives.ButtonBase]::ClickEvent))
+                                        })
+                                }
+                            }
+                            catch {
+                                $_.Exception.Message | Write-LogOutput -LogType ERROR -ErrorObject $_
+                            }
+                        })
+
+                    $Script:Webview.Object.CoreWebView2.add_WebMessageReceived({
+                            [System.Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSAvoidAssignmentToAutomaticVariable', 'EventArgs', Justification = 'The use of the variable is on purpose')]
+                            param(
+                                $EventSender,
+                                $EventArgs
+                            )
+                            try {
+                                $message = $EventArgs.TryGetWebMessageAsString()
+                                "WebView2 message received: {0}" -f $message | Write-LogOutput -LogType DEBUG
+
+                                if ($message) {
+                                    $messageObj = $message | ConvertFrom-Json -ErrorAction SilentlyContinue
+                                    if ($messageObj -and $messageObj.type -eq 'executeQuery') {
+                                        "Execute Query requested from Monaco Editor via {0}" -f $messageObj.key | Write-LogOutput -LogType DEBUG
+
+                                        $Script:MainWindowForm.Definition.Dispatcher.Invoke([System.Action] {
+                                                $Script:MainWindowForm.Elements.ButtonExecuteQuery.RaiseEvent([System.Windows.RoutedEventArgs]::new([System.Windows.Controls.Primitives.ButtonBase]::ClickEvent))
+                                            })
+                                    }
+                                    elseif ($messageObj -and $messageObj.type -eq 'saveQuery') {
+                                        "Save Query requested from Monaco Editor via {0}" -f $messageObj.key | Write-LogOutput -LogType DEBUG
+
+                                        $Script:MainWindowForm.Definition.Dispatcher.Invoke([System.Action] {
+                                                $Script:MainWindowForm.Elements.ButtonSaveQuery.RaiseEvent([System.Windows.RoutedEventArgs]::new([System.Windows.Controls.Primitives.ButtonBase]::ClickEvent))
+                                            })
+                                    }
+                                }
+                            }
+                            catch {
+                                $_.Exception.Message | Write-LogOutput -LogType ERROR -ErrorObject $_
+                            }
+                        })
+
                     $Script:MainWindowForm.State = "Open"
                 })
         }
         catch {
-            "WebView2 initialization failed: {0}" -f $_.Exception.Message | Write-LogOutput -LogType ERROR
+            "WebView2 initialization failed: {0}" -f $_.Exception.Message | Write-LogOutput -LogType ERROR -ErrorObject $_
         }
     })
 
@@ -149,7 +257,8 @@ $Script:MainWindowForm.Definition.Add_LocationChanged({
             }
         }
         catch {
-            [System.Windows.MessageBox]::Show("WebView2 initialization failed: $($_.Exception.Message)", "Error", [System.Windows.MessageBoxButton]::OK, [System.Windows.MessageBoxImage]::Error) | Out-Null
+            #[System.Windows.MessageBox]::Show("WebView2 initialization failed: $($_.Exception.Message)", "Error", [System.Windows.MessageBoxButton]::OK, [System.Windows.MessageBoxImage]::Error) | Out-Null
+            "WebView2 initialization failed: {0}" -f $_.Exception.Message | Write-LogOutput -LogType ERROR -ErrorObject $_
         }
     })
 

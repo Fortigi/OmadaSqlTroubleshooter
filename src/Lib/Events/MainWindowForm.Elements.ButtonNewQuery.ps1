@@ -6,6 +6,7 @@ $Script:MainWindowForm.Elements.ButtonNewQuery.Add_Click({
 
             if (!(Test-ConnectionRequirements)) {
                 "Omada Url not set or Query not selected, cannot retrieve data!" | Write-LogOutput -LogType WARNING
+                Set-SqlConnection -Status $false
             }
             else {
 
@@ -21,6 +22,7 @@ $Script:MainWindowForm.Elements.ButtonNewQuery.Add_Click({
             }
         }
         catch {
-            $_.Exception.Message | Write-LogOutput -LogType ERROR
+            Set-SqlConnection -Status $false
+            $_.Exception.Message | Write-LogOutput -LogType ERROR -ErrorObject $_
         }
     })

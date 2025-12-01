@@ -9,7 +9,7 @@ $Script:MainWindowForm.Elements.CheckboxSavePassword.Add_Checked({
             }
         }
         catch {
-            $_.Exception.Message | Write-LogOutput -LogType ERROR
+            $_.Exception.Message | Write-LogOutput -LogType ERROR -ErrorObject $_
         }
     })
 
@@ -21,6 +21,6 @@ $Script:MainWindowForm.Elements.CheckboxSavePassword.Add_Unchecked({
             $null | Set-ConfigProperty -Property "Password"
         }
         catch {
-            $_.Exception.Message | Write-LogOutput -LogType ERROR
+            $_.Exception.Message | Write-LogOutput -LogType ERROR -ErrorObject $_
         }
     })

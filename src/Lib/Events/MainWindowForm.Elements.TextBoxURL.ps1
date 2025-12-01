@@ -6,7 +6,7 @@ $Script:MainWindowForm.Elements.TextBoxURL.Add_GotFocus({
             }
         }
         catch {
-            $_.Exception.Message | Write-LogOutput -LogType ERROR
+            $_.Exception.Message | Write-LogOutput -LogType ERROR -ErrorObject $_
         }
     })
 
@@ -21,16 +21,16 @@ $Script:MainWindowForm.Elements.TextBoxURL.Add_LostFocus({
             catch {
 
                 if ($_.Exception.Response.StatusCode -eq "NotFound") {
-                    "SQL Troubleshooting Object not found or OData endpoint for SQL Troubleshooting is not found. Is it enable for OData? Please check the data object type properties!" | Write-LogOutput -LogType ERROR
+                    "SQL Troubleshooting Object not found or OData endpoint for SQL Troubleshooting is not found. Is it enable for OData? Please check the data object type properties!" | Write-LogOutput -LogType ERROR -ErrorObject $_
                 }
                 else {
-                    $_.Exception.Message | Write-LogOutput -LogType ERROR
+                    $_.Exception.Message | Write-LogOutput -LogType ERROR -ErrorObject $_
                 }
                 Reset-Application -SkipTextBoxURL
             }
         }
         catch {
-            $_.Exception.Message | Write-LogOutput -LogType ERROR
+            $_.Exception.Message | Write-LogOutput -LogType ERROR -ErrorObject $_
         }
     })
 

@@ -1,10 +1,10 @@
 function Show-PopupWindow {
     [CmdLetBinding()]
-    PARAM(
+    param(
         $Message
     )
     try {
-        $Script:Tracer::WriteLine(("{0}: Function: {1} - Caller: {2}({3}) - Command: {4}" -f $($Script:RunTimeConfig.ApplicationName), $($MyInvocation.MyCommand.Name), $($MyInvocation.ScriptName).Split("\")[-1], $($MyInvocation.ScriptLineNumber), $MyInvocation.Statement))
+        $Script:Tracer::WriteLine(("{0}: Function: {1} - Caller: {2}({3}) - Command: {4} - Parameters: {5}" -f $($Script:RunTimeConfig.ApplicationName), $($MyInvocation.MyCommand.Name), $($MyInvocation.ScriptName).Split("\")[-1], $($MyInvocation.ScriptLineNumber), $MyInvocation.Statement, ($PSBoundParameters | Out-String)))
         if ($null -eq $Script:MainWindowForm -or $null -eq $Script:MainWindowForm.Definition -or !$Script:MainWindowForm.Definition.IsVisible) {
             return
         }
@@ -20,6 +20,12 @@ function Show-PopupWindow {
         $PopupWindow.WindowStartupLocation = [System.Windows.WindowStartupLocation]::CenterOwner
         $PopupWindow.Owner = $Script:MainWindowForm.Definition
         $PopupWindow.ShowInTaskbar = $false
+        $PopupWindow.Focusable = $false
+        $PopupWindow.IsTabStop = $false
+
+        $PopupWindow.Add_Closed({
+                Restore-MainWindowFocus
+            })
 
         $Grid = New-Object System.Windows.Controls.Grid
         $Grid.Margin = '0'
@@ -55,6 +61,6 @@ function Show-PopupWindow {
         return $PopupWindow
     }
     catch {
-        $_.Exception.Message | Write-LogOutput -LogType ERROR
+        $_.Exception.Message | Write-LogOutput -LogType ERROR -ErrorObject $_
     }
 }

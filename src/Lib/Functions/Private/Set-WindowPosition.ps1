@@ -1,13 +1,13 @@
 function Set-WindowPosition {
     [CmdLetBinding()]
-    PARAM(
+    param(
         [parameter(Mandatory = $true, ValueFromPipeline = $true)]
         $Form,
         [parameter(Mandatory = $true)]
         [string]$Setting
     )
     try {
-        $Script:Tracer::WriteLine(("{0}: Function: {1} - Caller: {2}({3}) - Command: {4}" -f $($Script:RunTimeConfig.ApplicationName), $($MyInvocation.MyCommand.Name), $($MyInvocation.ScriptName).Split("\")[-1], $($MyInvocation.ScriptLineNumber), $MyInvocation.Statement))
+        $Script:Tracer::WriteLine(("{0}: Function: {1} - Caller: {2}({3}) - Command: {4} - Parameters: {5}" -f $($Script:RunTimeConfig.ApplicationName), $($MyInvocation.MyCommand.Name), $($MyInvocation.ScriptName).Split("\")[-1], $($MyInvocation.ScriptLineNumber), $MyInvocation.Statement, ($PSBoundParameters | Out-String)))
         $Form.Left | Write-Host -ForegroundColor DarkYellow
         $Form.Top | Write-Host -ForegroundColor DarkYellow
 
@@ -20,6 +20,6 @@ function Set-WindowPosition {
 
     }
     catch {
-        $_.Exception.Message | Write-LogOutput -LogType ERROR
+        $_.Exception.Message | Write-LogOutput -LogType ERROR -ErrorObject $_
     }
 }

@@ -1,8 +1,8 @@
 function Invoke-ExecuteQuery {
     [CmdLetBinding()]
-    PARAM()
+    param()
     try {
-        $Script:Tracer::WriteLine(("{0}: Function: {1} - Caller: {2}({3}) - Command: {4}" -f $($Script:RunTimeConfig.ApplicationName), $($MyInvocation.MyCommand.Name), $($MyInvocation.ScriptName).Split("\")[-1], $($MyInvocation.ScriptLineNumber), $MyInvocation.Statement))
+        $Script:Tracer::WriteLine(("{0}: Function: {1} - Caller: {2}({3}) - Command: {4} - Parameters: {5}" -f $($Script:RunTimeConfig.ApplicationName), $($MyInvocation.MyCommand.Name), $($MyInvocation.ScriptName).Split("\")[-1], $($MyInvocation.ScriptLineNumber), $MyInvocation.Statement, ($PSBoundParameters | Out-String)))
         if (!(Test-ConnectionRequirements)) {
             "Connection not ready" | Write-LogOutput -LogType DEBUG
             return
@@ -18,7 +18,7 @@ function Invoke-ExecuteQuery {
                     if (![string]::IsNullOrWhiteSpace($Script:RunTimeData.QueryText.ResultAsJson)) {
                         $Script:RunTimeData.QueryText = $Script:RunTimeData.QueryText.ResultAsJson | ConvertFrom-Json
                     }
-                    else{
+                    else {
                         $Script:RunTimeData.QueryText = $Script:RunTimeData.QueryText | ConvertFrom-Json
                     }
 
@@ -74,8 +74,9 @@ function Invoke-ExecuteQuery {
                             "New display name, Current: {0}, New: {1}" -f $Script:RunTimeData.CurrentSqlQuery.DisplayName, $Private:Result.DisplayName | Write-LogOutput -LogType DEBUG
                             "Force update query list" | Write-LogOutput -LogType DEBUG
                             Update-QueryList -ForceRefresh
-                            $ComboBoxSelectQueryItem = $Script:MainWindowForm.Elements.ComboBoxSelectQuery.Items | Where-Object { $_.Content -like "*$($Script:AppConfig.CurrentSqlQuery.DoId)" }
                             if ($null -ne $ComboBoxSelectQueryItem) {
+                                $ComboBoxSelectQueryItem = $Script:MainWindowForm.Elements.ComboBoxSelectQuery.Items | Where-Object { $_.Content -like "*$($Script:AppConfig.CurrentSqlQuery.DoId)" }
+
                                 $ComboBoxSelectQueryItem = New-Object System.Windows.Controls.ComboBoxItem
                                 $ComboBoxSelectQueryItem.Content = $Script:AppConfig.CurrentSqlQuery.FullName
                                 $Script:MainWindowForm.Elements.ComboBoxSelectQuery.Items.Add($ComboBoxSelectQueryItem) | Out-Null
@@ -92,7 +93,6 @@ function Invoke-ExecuteQuery {
                 }
                 $Script:MainWindowForm.Elements.ButtonSaveQuery.IsEnabled = $true
                 $Script:MainWindowForm.Elements.ButtonExecuteQuery.IsEnabled = $true
-                $Script:MainWindowForm.Elements.ButtonExecuteQueryText | Set-ButtonText -Value "_Execute"
                 if ($null -ne $Script:PopupWindowExecuteQuery) {
                     $Script:PopupWindowExecuteQuery.Close()
                 }
@@ -106,11 +106,10 @@ function Invoke-ExecuteQuery {
             catch {
                 $Script:MainWindowForm.Elements.ButtonSaveQuery.IsEnabled = $true
                 $Script:MainWindowForm.Elements.ButtonExecuteQuery.IsEnabled = $true
-                $Script:MainWindowForm.Elements.ButtonExecuteQueryText | Set-ButtonText -Value "_Execute"
                 if ($null -ne $Script:PopupWindowExecuteQuery) {
                     $Script:PopupWindowExecuteQuery.Close()
                 }
-                $_.Exception.Message | Write-LogOutput -LogType ERROR
+                $_.Exception.Message | Write-LogOutput -LogType ERROR -ErrorObject $_
             }
         }
         Invoke-ExecuteScriptWithResultAsync -ScriptToExecute $ScriptToExecute -OnCompletedScriptBlock $OnCompletedScriptBlock
@@ -122,12 +121,10 @@ function Invoke-ExecuteQuery {
         }
         $Script:MainWindowForm.Elements.ButtonSaveQuery.IsEnabled = $true
         $Script:MainWindowForm.Elements.ButtonExecuteQuery.IsEnabled = $true
-        $Script:MainWindowForm.Elements.ButtonExecuteQueryText | Set-ButtonText -Value "_Execute"
         if ($null -ne $Script:PopupWindowExecuteQuery) {
             $Script:PopupWindowExecuteQuery.Close()
         }
 
-        $_.Exception.Message | Write-LogOutput -LogType ERROR
+        $_.Exception.Message | Write-LogOutput -LogType ERROR -ErrorObject $_
     }
-
 }

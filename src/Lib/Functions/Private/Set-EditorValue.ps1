@@ -1,8 +1,8 @@
 function Set-EditorValue {
     [CmdLetBinding()]
-    PARAM()
+    param()
     try {
-        $Script:Tracer::WriteLine(("{0}: Function: {1} - Caller: {2}({3}) - Command: {4}" -f $($Script:RunTimeConfig.ApplicationName), $($MyInvocation.MyCommand.Name), $($MyInvocation.ScriptName).Split("\")[-1], $($MyInvocation.ScriptLineNumber), $MyInvocation.Statement))
+        $Script:Tracer::WriteLine(("{0}: Function: {1} - Caller: {2}({3}) - Command: {4} - Parameters: {5}" -f $($Script:RunTimeConfig.ApplicationName), $($MyInvocation.MyCommand.Name), $($MyInvocation.ScriptName).Split("\")[-1], $($MyInvocation.ScriptLineNumber), $MyInvocation.Statement, ($PSBoundParameters | Out-String)))
 
         if ($null -ne $Script:MainWindowForm.Elements.ComboBoxSelectQuery.SelectedItem) {
             "Selected SQL Query object: {0}" -f $Script:MainWindowForm.Elements.ComboBoxSelectQuery.SelectedItem.Content | Write-LogOutput -LogType DEBUG
@@ -28,17 +28,14 @@ function Set-EditorValue {
 
                 $Script:RunTimeData.CurrentSqlQuery.DoId = $Private:Result.Id
                 $Script:RunTimeData.CurrentSqlQuery.DisplayName = $Private:Result.DisplayName
+
                 $Script:MainWindowForm.Elements.TextBoxDisplayName.Text = $Private:Result.DisplayName
                 $Private:Result.C_SQLTROUBLESHOOTING_DATACONNECTION.Id, $Private:Result.C_SQLTROUBLESHOOTING_DATACONNECTION.DisplayName | Set-ConfigProperty -Property "CurrentDataConnection"
 
                 Set-DataConnection
-
-                $Script:MainWindowForm.Elements.ButtonExecuteQuery.IsEnabled = $true
+                Set-SqlQueryOptionStatus -Status $true
                 $Script:MainWindowForm.Elements.ButtonSaveQuery.IsEnabled = $true
                 $Script:MainWindowForm.Elements.ButtonReset.IsEnabled = $true
-                $Script:MainWindowForm.Elements.TextBoxDisplayName.IsEnabled = $true
-                $Script:MainWindowForm.Elements.ButtonShowSqlSchema.IsEnabled = $true
-
                 if ($null -ne $Script:Webview.Object.CoreWebView2) {
 
                     $ScriptToExecute = "editor.setValue('{0}');" -f ($Private:Result.C_QUERY -replace "`n", "\n" -replace "`r", "\r" -replace "`t", "\t" -replace "'", "\'")
@@ -49,10 +46,10 @@ function Set-EditorValue {
             }
         }
         else {
-            Reset-Application -SkipTextBoxURL -SkipAuthentication
+            #Reset-Application -SkipTextBoxURL -SkipAuthentication
         }
     }
     catch {
-        $_.Exception.Message | Write-LogOutput -LogType ERROR
+        $_.Exception.Message | Write-LogOutput -LogType ERROR -ErrorObject $_
     }
 }

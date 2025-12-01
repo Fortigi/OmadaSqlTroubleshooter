@@ -1,7 +1,7 @@
 # Function to parse SQL script for variables, CTEs, and the main query
-Function Test-SqlScript {
+function Test-SqlScript {
     [CmdLetBinding()]
-    PARAM(
+    param(
         [string]$SqlScript
     )
 

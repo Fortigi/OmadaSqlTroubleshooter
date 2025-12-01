@@ -10,12 +10,19 @@ function Test-OmadaConnection {
             $Script:RunTimeData.RestMethodParam.Method = "GET"
             $null = Invoke-OmadaPSWebRequestWrapper
             $Script:RunTimeData.RestMethodParam.ForceAuthentication = $false
+            $Script:RunTimeConfig.AuthenticationRetryCount = 0
             return $true
         }
         catch {
-            "Connection failed with error: {0}! Please check your settings." -f $_.Exception.Message | Write-LogOutput -LogType ERROR
+            $Script:RunTimeConfig.AuthenticationRetryCount++
+            if ($Script:RunTimeConfig.AuthenticationRetryCount -le 1 -and $_.Exception.Response.StatusCode -eq 401) {
+                $Script:RunTimeData.RestMethodParam.ForceAuthentication = $true
+                return Test-OmadaConnection
+            }
+
+            "Connection failed with error: {0}! Please check your settings." -f $_.Exception.Message | Write-LogOutput -LogType ERROR -ErrorObject $_
             $Script:RunTimeData.RestMethodParam.ForceAuthentication = $true
-            Set-Disconnected
+            Set-SqlConnection -Status $false
             return $false
         }
     }

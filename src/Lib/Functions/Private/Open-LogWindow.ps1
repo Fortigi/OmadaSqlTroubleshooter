@@ -1,9 +1,9 @@
 function Open-LogWindow {
     [CmdLetBinding()]
-    PARAM()
+    param()
 
     try {
-        $Script:Tracer::WriteLine(("{0}: Function: {1} - Caller: {2}({3}) - Command: {4}" -f $($Script:RunTimeConfig.ApplicationName), $($MyInvocation.MyCommand.Name), $($MyInvocation.ScriptName).Split("\")[-1], $($MyInvocation.ScriptLineNumber), $MyInvocation.Statement))
+        $Script:Tracer::WriteLine(("{0}: Function: {1} - Caller: {2}({3}) - Command: {4} - Parameters: {5}" -f $($Script:RunTimeConfig.ApplicationName), $($MyInvocation.MyCommand.Name), $($MyInvocation.ScriptName).Split("\")[-1], $($MyInvocation.ScriptLineNumber), $MyInvocation.Statement, ($PSBoundParameters | Out-String)))
         #Log window creation
         "Opening Log window" | Write-LogOutput -LogType DEBUG
         $Script:LogWindowForm = New-FormObject -FormPath (Join-Path $Script:RunTimeConfig.ModuleFolder -ChildPath "lib\ui\LogWindow.xaml") -ParentForm $Script:MainWindowForm.Definition
@@ -113,7 +113,7 @@ function Open-LogWindow {
                         }
                         $Script:LogWindowForm.PositionManager.Synchronizing = $false
                     }, [System.Windows.Threading.DispatcherPriority]::Render)
-                #$Script:MainWindowForm.Elements.ButtonShowLogText | Set-ButtonText -Value "_Hide Log"
+                $Script:MainWindowForm.Elements.ButtonShowLog.IsEnabled = $false
                 $Script:TextBoxLog.Text = $Script:RunTimeConfig.Logging.AppLogObject
                 $Script:LogWindowForm.PositionManager.PositionOffSetLeft = [Int]::Abs($Script:LogWindowForm.Definition.Left) - [Int]::Abs($Script:MainWindowForm.Definition.Left)
                 "PositionManagerLogWindow PositionOffSetLeft: {0}" -f $Script:LogWindowForm.PositionManager.PositionOffSetLeft | Write-LogOutput -LogType DEBUG
@@ -121,6 +121,7 @@ function Open-LogWindow {
                 "PositionManagerLogWindow PositionOffSetTop: {0}" -f $Script:LogWindowForm.PositionManager.PositionOffSetTop | Write-LogOutput -LogType DEBUG
                 "LogWindowForm Position: {0}x{1}, Dimensions: {2}x{3}" -f $Script:LogWindowForm.Definition.Left, $Script:LogWindowForm.Definition.Top, $Script:LogWindowForm.Definition.Width , $Script:LogWindowForm.Definition.Height | Write-LogOutput -LogType DEBUG
                 $Script:LogWindowForm.State = "Open"
+                Restore-MainWindowFocus
             })
 
         $Script:LogWindowForm.Definition.Add_Closing({
@@ -135,7 +136,8 @@ function Open-LogWindow {
         $Script:LogWindowForm.Definition.Add_Closed({
                 $_ | Show-EventInfo
                 $Script:LogWindowForm.State = "Closed"
-                $Script:MainWindowForm.Elements.ButtonShowLogText | Set-ButtonText -Value "Log"
+                $Script:MainWindowForm.Elements.ButtonShowLog.IsEnabled = $true
+                Restore-MainWindowFocus
             })
 
         $Script:LogWindowForm.Elements.ButtonClearLog.Add_Click({
@@ -220,6 +222,6 @@ function Open-LogWindow {
         }
     }
     catch {
-        $_.Exception.Message | Write-LogOutput -LogType ERROR
+        $_.Exception.Message | Write-LogOutput -LogType ERROR -ErrorObject $_
     }
 }

@@ -2,9 +2,9 @@ function Open-SqlSchemaWindow {
     [CmdLetBinding()]
     [System.Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSAvoidAssignmentToAutomaticVariable', 'Sender', Justification = 'The use of the variable is on purpose')]
     [System.Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSAvoidAssignmentToAutomaticVariable', 'Args', Justification = 'The use of the variable is on purpose')]
-    PARAM()
+    param()
     try {
-        $Script:Tracer::WriteLine(("{0}: Function: {1} - Caller: {2}({3}) - Command: {4}" -f $($Script:RunTimeConfig.ApplicationName), $($MyInvocation.MyCommand.Name), $($MyInvocation.ScriptName).Split("\")[-1], $($MyInvocation.ScriptLineNumber), $MyInvocation.Statement))
+        $Script:Tracer::WriteLine(("{0}: Function: {1} - Caller: {2}({3}) - Command: {4} - Parameters: {5}" -f $($Script:RunTimeConfig.ApplicationName), $($MyInvocation.MyCommand.Name), $($MyInvocation.ScriptName).Split("\")[-1], $($MyInvocation.ScriptLineNumber), $MyInvocation.Statement, ($PSBoundParameters | Out-String)))
 
         if ($Script:RunTimeConfig.ReconnectStatus -eq 1) {
             "Skip show schema" | Write-LogOutput -LogType DEBUG
@@ -127,8 +127,7 @@ function Open-SqlSchemaWindow {
                         $Script:SqlSchemaWindowForm.PositionManager.Synchronizing = $false
                     }, [System.Windows.Threading.DispatcherPriority]::Render)
 
-                $Script:MainWindowForm.Elements.ButtonShowSqlSchema.IsEnabled = $true
-                $Script:MainWindowForm.Elements.ButtonShowSqlSchemaText | Set-ButtonText -Value "Hide Schema"
+                $Script:MainWindowForm.Elements.ButtonShowSqlSchema.IsEnabled = $false
                 $Script:SqlSchemaWindowForm.PositionManager.PositionOffSetTop = [Int]::Abs($Script:MainWindowForm.Definition.Top) - [Int]::Abs($Script:SqlSchemaWindowForm.Definition.Top)
 
                 "PositionManagerSqlSchemaWindow PositionOffSetLeft: {0}" -f $Script:SqlSchemaWindowForm.PositionManager.PositionOffSetLeft | Write-LogOutput -LogType DEBUG
@@ -138,6 +137,7 @@ function Open-SqlSchemaWindow {
 
                 "SqlSchemaWindowForm Position: {0}x{1}, Dimensions: {2}x{3}" -f $Script:SqlSchemaWindowForm.Definition.Left, $Script:SqlSchemaWindowForm.Definition.Top, $Script:SqlSchemaWindowForm.Definition.Width , $Script:SqlSchemaWindowForm.Definition.Height | Write-LogOutput -LogType DEBUG
                 $Script:SqlSchemaWindowForm.State = "Open"
+                Restore-MainWindowFocus
             })
 
         $Script:SqlSchemaWindowForm.Definition.Add_Closing({
@@ -152,7 +152,8 @@ function Open-SqlSchemaWindow {
         $Script:SqlSchemaWindowForm.Definition.Add_Closed({
                 $_ | Show-EventInfo
                 $Script:SqlSchemaWindowForm.State = "Closed"
-                $Script:MainWindowForm.Elements.ButtonShowSqlSchemaText | Set-ButtonText -Value "Schema"
+                $Script:MainWindowForm.Elements.ButtonShowSqlSchema.IsEnabled = $true
+                Restore-MainWindowFocus
             })
 
         #endregion
@@ -160,7 +161,7 @@ function Open-SqlSchemaWindow {
 
     }
     catch {
-        $_.Exception.Message | Write-LogOutput -LogType ERROR
+        $_.Exception.Message | Write-LogOutput -LogType ERROR -ErrorObject $_
     }
 
 }

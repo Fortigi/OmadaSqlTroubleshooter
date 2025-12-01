@@ -11,7 +11,7 @@ $Script:MainWindowForm.Elements.ButtonShowLog.Add_Click({
             }
         }
         catch {
-            $_.Exception.Message | Write-LogOutput -LogType ERROR
+            $_.Exception.Message | Write-LogOutput -LogType ERROR -ErrorObject $_
         }
 
     })

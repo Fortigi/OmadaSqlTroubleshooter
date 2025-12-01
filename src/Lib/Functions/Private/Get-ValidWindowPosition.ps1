@@ -1,6 +1,6 @@
 ﻿function Get-ValidWindowPosition {
     [CmdLetBinding()]
-    PARAM(
+    param(
         [parameter(Mandatory = $true, ValueFromPipeline = $true)]
         $Form,
         [parameter(Mandatory = $true)]
@@ -12,11 +12,11 @@
         if ($Setting -in "Left", "Top") {
             "{0} setting {1}: {2} (Id:{3})" -f $Form.Name, $Setting, $Form.$Setting, $ActionId | Write-LogOutput -LogType VERBOSE2
             if ($Setting -eq "Left") {
-                $PrimaryScreenSetting = [system.windows.systemparameters]::PrimaryScreenWidth
+                $PrimaryScreenSetting = [System.Windows.SystemParameters]::PrimaryScreenWidth
                 "PrimaryScreenSetting PrimaryScreenWidth {0}: {1} (Id:{2})" -f $Setting, $PrimaryScreenSetting, $ActionId | Write-LogOutput -LogType VERBOSE2
             }
             elseif ($Setting -eq "Top") {
-                $PrimaryScreenSetting = [system.windows.systemparameters]::PrimaryScreenHeight
+                $PrimaryScreenSetting = [System.Windows.SystemParameters]::PrimaryScreenHeight
                 "PrimaryScreenSetting PrimaryScreenHeight {0}: {1} (Id:{2})" -f $Setting, $PrimaryScreenSetting, $ActionId | Write-LogOutput -LogType VERBOSE2
             }
 
@@ -35,6 +35,6 @@
         }
     }
     catch {
-        $_.Exception.Message | Write-LogOutput -LogType ERROR
+        $_.Exception.Message | Write-LogOutput -LogType ERROR -ErrorObject $_
     }
 }

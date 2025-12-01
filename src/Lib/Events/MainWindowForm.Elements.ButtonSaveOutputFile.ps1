@@ -1,17 +1,52 @@
 $Script:MainWindowForm.Elements.ButtonSaveOutputFile.Add_Click({
         try {
             $_ | Show-EventInfo
-
             $SaveFileDialog = New-Object System.Windows.Forms.SaveFileDialog
-            $SaveFileDialog.Filter = "Json files (*.json) | *.json | Csv files (*.csv) | *.csv | CliXml files (*.xml) | *.xml | Text files (*.txt) | *.txt | All files (*.*) | *.*"
+
+            $SaveFileDialogFilterList = @{
+                1 = @{
+                    Name      = "JavaScript Object Notation (JSON) file (*.json)"
+                    Extension = "*.json"
+                }
+                2 = @{
+                    Name      = "Comma-separated values (CSV) file (*.csv)"
+                    Extension = "*.csv"
+                }
+                3 = @{
+                    Name      = "Common Language Infrastructure (CLI) XML file (*.xml)"
+                    Extension = "*.xml"
+                }
+                4 = @{
+                    Name      = "Normal text file (*.txt)"
+                    Extension = "*.txt"
+                }
+                5 = @{
+                    Name      = "All types (*.*)"
+                    Extension = "*.*"
+                }
+            }
+
+            $DefaultFilterIndex = 1
+            if ($null -ne $Script:AppConfig.LastExtensionIndex -and $Script:AppConfig.LastExtensionIndex -gt 0 -and $Script:AppConfig.LastExtensionIndex -ne $DefaultFilterIndex) {
+                $DefaultFilterIndex = $Script:AppConfig.LastExtensionIndex
+            }
+            $SaveFileDialogFilterString = ("{0}|{1}" -f $SaveFileDialogFilterList.$DefaultFilterIndex.Name, $SaveFileDialogFilterList.$DefaultFilterIndex.Extension), (($SaveFileDialogFilterList.GetEnumerator() | Where-Object { $_.Name -ne $DefaultFilterIndex } | Sort-Object Name | ForEach-Object {
+                        $Item = $_.Value
+                        "{0}|{1}" -f $Item.Name, $Item.Extension
+                    }) -join "|") -join "|"
+            $SaveFileDialog.Filter = $SaveFileDialogFilterString
             $SaveFileDialog.Title = "Save Output File"
             if (![string]::IsNullOrWhiteSpace($Script:AppConfig.LastOutputFolder)) {
                 $SaveFileDialog.InitialDirectory = $Script:AppConfig.LastOutputFolder
             }
             if ([string]::IsNullOrWhiteSpace($Script:AppConfig.LastOutputFolder)) {
-                ".json" | Set-ConfigProperty -Property "LastExtension"
+                1 | Set-ConfigProperty -Property "LastExtensionIndex"
             }
-            $SaveFileDialog.DefaultExt = $Script:AppConfig.LastExtension
+            $DefaultExt = $SaveFileDialogFilterList.$DefaultFilterIndex.Extension
+            if ($DefaultFilterIndex -eq 5) {
+                $DefaultExt = ".json"
+            }
+            $SaveFileDialog.DefaultExt = $DefaultExt
             $InvalidFileNameChars = [System.IO.Path]::GetInvalidFileNameChars()
             $SaveFileDisplayName = $Script:MainWindowForm.Elements.TextBoxDisplayName.Text
             if (![string]::IsNullOrWhiteSpace($SaveFileDisplayName)) {
@@ -20,12 +55,12 @@ $Script:MainWindowForm.Elements.ButtonSaveOutputFile.Add_Click({
                             "_"
                         }
                         $_
-                    }) -Join ""
+                    }) -join ""
             }
             else {
                 $SaveFileDisplayName = "Output"
             }
-            $SaveFileDialog.FileName = "SqlQuery_{0}_{1}_{2}_{3}_Output{4}" -f $Script:AppConfig.CurrentSqlQuery.DoId, $SaveFileDisplayName, $Script:AppConfig.CurrentDataConnection.DisplayName, [system.uri]::New($Script:AppConfig.BaseUrl).Host, $Script:AppConfig.LastExtension
+            $SaveFileDialog.FileName = "SqlQuery_{0}_{1}_{2}_{3}_Output{4}" -f $Script:AppConfig.CurrentSqlQuery.DoId, $SaveFileDisplayName, $Script:AppConfig.CurrentDataConnection.DisplayName, [system.uri]::New($Script:AppConfig.BaseUrl).Host, $Script:AppConfig.LastExtensionIndex
             if ($SaveFileDialog.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
                 $Script:RunTimeConfig.OutputFileName = $SaveFileDialog.FileName
                 "Save outputfile: {0}" -f $Script:RunTimeConfig.OutputFileName | Write-LogOutput
@@ -43,12 +78,19 @@ $Script:MainWindowForm.Elements.ButtonSaveOutputFile.Add_Click({
                     $Script:RunTimeData.QueryResult | Export-Clixml -Path $Script:RunTimeConfig.OutputFileName -Depth 15
                 }
                 else {
-        ($Script:RunTimeData.QueryResult.d.rows | Format-Table -AutoSize | Out-String -Width 10000000).Trim() | Set-Content $Script:RunTimeConfig.OutputFileName -Encoding UTF8
+                    ($Script:RunTimeData.QueryResult.d.rows | Format-Table -AutoSize | Out-String -Width 10000000).Trim() | Set-Content $Script:RunTimeConfig.OutputFileName -Encoding UTF8
                 }
 
                 "Output file saved!" | Write-LogOutput -LogType DEBUG
                 Split-Path $Script:RunTimeConfig.OutputFileName | Set-ConfigProperty -Property "LastOutputFolder"
-                [System.IO.Path]::GetExtension($Script:RunTimeConfig.OutputFileName) | Set-ConfigProperty -Property "LastExtension"
+                $SavedExt = [System.IO.Path]::GetExtension($Script:RunTimeConfig.OutputFileName)
+                $SaveFileDialogFilterList.GetEnumerator() | ForEach-Object {
+                    $Item = $_.Value
+                    if ($Item.Extension -like "*$SavedExt") {
+                        $ItemIndex = $_.Name
+                        $ItemIndex | Set-ConfigProperty -Property "LastExtensionIndex"
+                    }
+                }
                 $Script:MainWindowForm.Elements.ButtonOpenOutputFile.IsEnabled = $true
             }
             else {
@@ -56,6 +98,6 @@ $Script:MainWindowForm.Elements.ButtonSaveOutputFile.Add_Click({
             }
         }
         catch {
-            $_.Exception.Message | Write-LogOutput -LogType ERROR
+            $_.Exception.Message | Write-LogOutput -LogType ERROR -ErrorObject $_
         }
     })

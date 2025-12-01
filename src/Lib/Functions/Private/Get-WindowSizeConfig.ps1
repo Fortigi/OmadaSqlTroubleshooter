@@ -1,6 +1,6 @@
 function Get-WindowSizeConfig {
     [CmdLetBinding()]
-    PARAM(
+    param(
         [parameter(Mandatory = $true, ValueFromPipeline = $true)]
         $Form
     )
@@ -15,6 +15,6 @@ function Get-WindowSizeConfig {
         }
     }
     catch {
-        $_.Exception.Message | Write-LogOutput -LogType ERROR
+        $_.Exception.Message | Write-LogOutput -LogType ERROR -ErrorObject $_
     }
 }

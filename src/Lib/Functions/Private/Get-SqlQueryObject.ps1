@@ -2,7 +2,7 @@ function Get-SqlQueryObject {
     [CmdLetBinding()]
     param()
     try {
-        $Script:Tracer::WriteLine(("{0}: Function: {1} - Caller: {2}({3}) - Command: {4}" -f $($Script:RunTimeConfig.ApplicationName), $($MyInvocation.MyCommand.Name), $($MyInvocation.ScriptName).Split("\")[-1], $($MyInvocation.ScriptLineNumber), $MyInvocation.Statement))
+        $Script:Tracer::WriteLine(("{0}: Function: {1} - Caller: {2}({3}) - Command: {4} - Parameters: {5}" -f $($Script:RunTimeConfig.ApplicationName), $($MyInvocation.MyCommand.Name), $($MyInvocation.ScriptName).Split("\")[-1], $($MyInvocation.ScriptLineNumber), $MyInvocation.Statement, ($PSBoundParameters | Out-String)))
         if (!(Test-ConnectionRequirements)) {
             "Connection not ready" | Write-LogOutput -LogType DEBUG
             return
@@ -23,13 +23,14 @@ function Get-SqlQueryObject {
             }
             catch {
                 if ($_.TargetObject?.Exception?.StatusCode -eq [System.Net.HttpStatusCode]::NotFound) {
-                    "Query {0} not found! Clearing current value." -f $Script:AppConfig.CurrentSqlQuery.FullName | Write-LogOutput -LogType WARNING
+                    "Query {0} not found! Clearing current value." -f $Script:AppConfig.CurrentSqlQuery.FullName | Write-LogOutput -LogType WARNING -SkipDialog
                     $Script:MainWindowForm.Elements.ComboBoxSelectQuery.SelectedItem = $null
+                    $null, $null | Set-ConfigProperty -Property "CurrentSqlQuery"
                     return $null
                 }
                 elseif ($_.TargetObject?.Exception?.StatusCode -eq [System.Net.HttpStatusCode]::Unauthorized) {
                     $Script:MainWindowForm.Elements.ComboBoxSelectQuery.SelectedItem = $null
-                    $_.Exception.Message | Write-LogOutput -LogType ERROR
+                    $_.Exception.Message | Write-LogOutput -LogType ERROR -ErrorObject $_
                     return $null
                 }
                 elseif ($_.TargetObject?.Exception?.StatusCode -eq [System.Net.HttpStatusCode]::NotFound) {
@@ -38,7 +39,7 @@ function Get-SqlQueryObject {
                     return $null
                 }
                 else {
-                    $_.Exception.Message | Write-LogOutput -LogType ERROR
+                    $_.Exception.Message | Write-LogOutput -LogType ERROR -ErrorObject $_
                 }
             }
 
@@ -50,6 +51,6 @@ function Get-SqlQueryObject {
 
     }
     catch {
-        $_.Exception.Message | Write-LogOutput -LogType ERROR
+        $_.Exception.Message | Write-LogOutput -LogType ERROR -ErrorObject $_
     }
 }
