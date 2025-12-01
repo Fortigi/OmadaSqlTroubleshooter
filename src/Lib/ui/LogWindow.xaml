@@ -117,8 +117,11 @@
                 <Label x:Name="LabelSelectLogLevel" Content="Log Level:" ToolTip="Select log level"  HorizontalAlignment="Left" Width="Auto"/>
                 <Separator Width="10" />
                 <ComboBox x:Name="ComboBoxSelectLogLevel" SelectedIndex="0" ToolTip="Select log level" Width="80">
+                    <ComboBoxItem Content="LOG"/>
                     <ComboBoxItem Content="INFO"/>
+                    <ComboBoxItem Content="WARNING"/>
                     <ComboBoxItem Content="ERROR"/>
+                    <ComboBoxItem Content="FATAL"/>
                     <ComboBoxItem Content="DEBUG"/>
                     <ComboBoxItem Content="VERBOSE"/>
                     <ComboBoxItem Content="VERBOSE2"/>
