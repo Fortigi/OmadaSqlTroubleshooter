@@ -1,4 +1,4 @@
-function Set-SqlConnection {
+function Set-SqlConnectionState {
     [CmdLetBinding()]
     param(
         [bool]$Status = $true
@@ -6,7 +6,7 @@ function Set-SqlConnection {
     try {
         $Script:Tracer::WriteLine(("{0}: Function: {1} - Caller: {2}({3}) - Command: {4} - Parameters: {5}" -f $($Script:RunTimeConfig.ApplicationName), $($MyInvocation.MyCommand.Name), $($MyInvocation.ScriptName).Split("\")[-1], $($MyInvocation.ScriptLineNumber), $MyInvocation.Statement, ($PSBoundParameters | Out-String)))
 
-        Set-SqlQueryOptionStatus -Status $Status
+        Set-SqlQueryFunctionState -Status $Status
         if ($Status) {
             $Script:MainWindowForm.Elements.ButtonReset.IsEnabled = $true
             $Script:MainWindowForm.Elements.TextBoxUserName.IsEnabled = $false

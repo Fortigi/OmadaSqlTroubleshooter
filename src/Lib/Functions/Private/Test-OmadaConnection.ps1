@@ -22,7 +22,7 @@ function Test-OmadaConnection {
 
             "Connection failed with error: {0}! Please check your settings." -f $_.Exception.Message | Write-LogOutput -LogType ERROR -ErrorObject $_
             $Script:RunTimeData.RestMethodParam.ForceAuthentication = $true
-            Set-SqlConnection -Status $false
+            Set-SqlConnectionState -Status $false
             return $false
         }
     }

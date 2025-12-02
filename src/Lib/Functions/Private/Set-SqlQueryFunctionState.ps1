@@ -1,4 +1,4 @@
-function Set-SqlQueryOptionStatus {
+function Set-SqlQueryFunctionState {
     [CmdLetBinding()]
     param(
         [bool]$Status = $true
@@ -67,7 +67,6 @@ function Set-SqlQueryOptionStatus {
             $ElementList.Keys | Where-Object { $ElementList.$_.AllowedStatusChange -ne "Enable" } | ForEach-Object {
                 $Item = $_
 
-                $Script:MainWindowForm.Elements.$Item.IsEnabled = $false
                 switch ($Script:MainWindowForm.Elements.$Item.GetType().Name) {
                     "ComboBox" {
                         $Script:MainWindowForm.Elements.$Item.Items.Clear()

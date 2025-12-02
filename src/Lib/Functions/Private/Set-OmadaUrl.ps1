@@ -24,7 +24,7 @@ function Set-OmadaUrl {
                 $null | Set-ConfigProperty -Property "BaseUrl"
                 $Script:MainWindowForm.Elements.TextBoxURL.Text = $null
                 "Input Url {0} is not valid." -f $Script:MainWindowForm.Elements.TextBoxURL.Text.Trim() | Write-LogOutput -LogType ERROR
-                Set-SqlConnection -Status $false
+                Set-SqlConnectionState -Status $false
                 return
             }
 
@@ -32,7 +32,7 @@ function Set-OmadaUrl {
                 $DnsResult = Resolve-DnsName -Name $Uri.Host -QuickTimeout -ErrorAction SilentlyContinue
                 if (($DnsResult | Measure-Object).Count -le 0) {
                     "DNS resolution for {0} failed!" -f $Uri.Host | Write-LogOutput -LogType ERROR
-                    Set-SqlConnection -Status $false
+                    Set-SqlConnectionState -Status $false
                     return
                 }
             }
@@ -41,7 +41,7 @@ function Set-OmadaUrl {
                 $Script:MainWindowForm.Elements.TextBoxURL.Text = $null
                 $Script:MainWindowForm.Elements.TextBlockStatusBarUrl.Text = $null
                 "Endpoint {0} not found!" -f $Uri.AbsoluteUri | Write-LogOutput -LogType ERROR -ErrorObject $_
-                Set-SqlConnection -Status $false
+                Set-SqlConnectionState -Status $false
             }
 
             $Uri.AbsoluteUri.TrimEnd("/") | Set-ConfigProperty -Property "BaseUrl"
@@ -49,13 +49,13 @@ function Set-OmadaUrl {
             if ($Script:CurrentUrl -ne $Script:AppConfig.BaseUrl) {
                 "Omada Url set to: {0}" -f $Script:AppConfig.BaseUrl | Write-LogOutput -LogType DEBUG
                 $Script:CurrentUrl = $Script:AppConfig.BaseUrl
-                Set-SqlConnection -Status $false
+                Set-SqlConnectionState -Status $false
                 $Script:RunTimeData.RestMethodParam.ForceAuthentication = $true
 
             }
             elseif ([string]::IsNullOrEmpty($Script:AppConfig.BaseUrl)) {
                 "Omada Url is empty!" | Write-LogOutput -LogType DEBUG
-                Set-SqlConnection -Status $false
+                Set-SqlConnectionState -Status $false
             }
             else {
                 "Omada Url maintained: {0}" -f $Script:AppConfig.BaseUrl | Write-LogOutput -LogType DEBUG

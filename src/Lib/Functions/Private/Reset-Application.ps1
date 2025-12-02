@@ -20,7 +20,7 @@
             $null | Set-ConfigProperty -Property "BaseUrl"
             $null, $null | Set-ConfigProperty -Property "CurrentDataConnection"
             $null, $null | Set-ConfigProperty -Property "CurrentSqlQuery"
-            Set-SqlConnection -Status $false
+            Set-SqlConnectionState -Status $false
         }
         $Script:MainWindowForm.Elements.TextBoxURL.IsEnabled = $true
 
@@ -50,7 +50,7 @@
         }
 
         if (!$SkipTextBoxURL -and !$SkipAuthentication) {
-            Set-SqlQueryOptionStatus -Status $false
+            Set-SqlQueryFunctionState -Status $false
             "Clear Editor Value because no query is selected!" | Write-LogOutput -LogType DEBUG
             $ScriptToExecute = "editor.setValue('');"
             Push-ToEditor -ScriptToExecute $ScriptToExecute

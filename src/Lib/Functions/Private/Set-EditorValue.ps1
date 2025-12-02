@@ -33,7 +33,7 @@ function Set-EditorValue {
                 $Private:Result.C_SQLTROUBLESHOOTING_DATACONNECTION.Id, $Private:Result.C_SQLTROUBLESHOOTING_DATACONNECTION.DisplayName | Set-ConfigProperty -Property "CurrentDataConnection"
 
                 Set-DataConnection
-                Set-SqlQueryOptionStatus -Status $true
+                Set-SqlQueryFunctionState -Status $true
                 $Script:MainWindowForm.Elements.ButtonSaveQuery.IsEnabled = $true
                 $Script:MainWindowForm.Elements.ButtonReset.IsEnabled = $true
                 if ($null -ne $Script:Webview.Object.CoreWebView2) {

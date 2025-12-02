@@ -12,7 +12,7 @@ $Script:MainWindowForm.Elements.ButtonConnect.Add_Click({
                 }
             }
             else {
-                Set-SqlConnection -Status $false
+                Set-SqlConnectionState -Status $false
             }
         }
         catch {

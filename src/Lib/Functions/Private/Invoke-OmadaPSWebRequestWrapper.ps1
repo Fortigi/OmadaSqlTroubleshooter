@@ -47,7 +47,7 @@ function Invoke-OmadaPSWebRequestWrapper {
         }
         elseif ($null -ne $_.Exception?.Response?.StatusCode -and $_.Exception.Response.StatusCode -eq [System.Net.HttpStatusCode]::Unauthorized) {
             $Message = "Access denied to {0}, message:`n`r{1}" -f [system.uri]::New($Script:AppConfig.BaseUrl).Host, $_.ErrorDetails.Message
-            Set-SqlConnection -Status $false
+            Set-SqlConnectionState -Status $false
             $Message | Write-Error -ErrorAction Stop -TargetObject $_
             $Script:RunTimeData.SkipRetryRequest = $true
         }
