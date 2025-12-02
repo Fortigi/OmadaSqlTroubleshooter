@@ -20,6 +20,13 @@ $Script:MainWindowForm.Elements.ComboBoxSelectAuthenticationOption.Add_Selection
             Set-AuthenticationOption
             "Changed authentication option to: {0}" -f $Script:AppConfig.LastAuthentication | Write-LogOutput -LogType DEBUG
 
+            if ($null -eq $Script:MainWindowForm.Elements.ComboBoxSelectAuthenticationOption.SelectedItem) {
+                $Script:RunTimeConfig.AuthenticationSet = $false
+            }
+            else {
+                $Script:RunTimeConfig.AuthenticationSet = $true
+            }
+
             if ($Script:RunTimeConfig.AuthenticationSet -and ![string]::IsNullOrWhiteSpace($Script:MainWindowForm.Elements.TextBoxURL.Text)) {
                 Set-OmadaUrl
             }
