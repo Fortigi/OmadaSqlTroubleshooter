@@ -22,7 +22,6 @@ function Get-GalleryModuleVersion {
     )
 
     try {
-        $Script:Tracer::WriteLine(("{0}: Function: {1} - Caller: {2}({3}) - Command: {4} - Parameters: {5}" -f $($Script:RunTimeConfig.ApplicationName), $($MyInvocation.MyCommand.Name), $($MyInvocation.ScriptName).Split("\")[-1], $($MyInvocation.ScriptLineNumber), $MyInvocation.Statement, ($PSBoundParameters | Out-String)))
         $ApiEndpoint = "https://www.powershellgallery.com/api/v2/FindPackagesById()?id='{0}'" -f $ModuleName
         $Response = Invoke-RestMethod -Uri $ApiEndpoint -Method Get -Headers @{
             "Accept" = "application/xml"
@@ -40,8 +39,6 @@ function Get-GalleryModuleVersion {
         return $null
     }
 }
-
-
 
 Task Dependencies {
     try {
@@ -64,7 +61,19 @@ Task Analyze {
             ExcludeRules = '*WriteHost', '*AvoidUsingEmptyCatchBlock*', '*UseShouldProcessForStateChangingFunctions*', '*AvoidOverwritingBuiltInCmdlets*', '*UseToExportFieldsInManifest*', '*UseProcessBlockForPipelineCommand*', '*ConvertToSecureStringWithPlainText*', '*UseSingularNouns*'
         }
         $SaResults = @()
-        @("functions", "events") | ForEach-Object {
+        @("functions") | ForEach-Object {
+            $LibSource = $_
+            $SourceChildPath = "lib\{0}" -f $LibSource
+            Get-ChildItem -Path (Join-Path $ModuleSource -ChildPath $SourceChildPath) -Recurse -File | Where-Object { $_.Name -notlike "_*.ps1" } | ForEach-Object {
+                $SaResults += Invoke-ScriptAnalyzer -Path $_.FullName -Severity @('Error', 'Warning') -Recurse -Profile $SaProfile -Verbose:$false
+            }
+        }
+        $SaProfile = @{
+            Severity     = @('Error', 'Warning')
+            IncludeRules = '*'
+            ExcludeRules = '*WriteHost', '*AvoidUsingEmptyCatchBlock*', '*UseShouldProcessForStateChangingFunctions*', '*AvoidOverwritingBuiltInCmdlets*', '*UseToExportFieldsInManifest*', '*UseProcessBlockForPipelineCommand*', '*ConvertToSecureStringWithPlainText*', '*UseSingularNouns*', 'PSAvoidAssignmentToAutomaticVariable', 'PSReviewUnusedParameter'
+        }
+        @("events") | ForEach-Object {
             $LibSource = $_
             $SourceChildPath = "lib\{0}" -f $LibSource
             Get-ChildItem -Path (Join-Path $ModuleSource -ChildPath $SourceChildPath) -Recurse -File | Where-Object { $_.Name -notlike "_*.ps1" } | ForEach-Object {
@@ -218,14 +227,13 @@ Task Build -depends Test {
         $HeaderContent += New-HeaderRow -Text  "" -Length $Length -FillChar "#"
         $HeaderContent += "`n"
 
-        if($null -ne $LatestOmadaWebPSVersion) {
-            $HeaderContent += '#requires -Module OmadaWeb.PS -MinimumVersion {0}' -f $LatestOmadaWebPSVersion
+        if ($null -ne $LatestOmadaWebPSVersion) {
+            $HeaderContent += '#requires -Modules @{{ ModuleName="OmadaWeb.PS"; ModuleVersion="{0}" }}' -f $LatestOmadaWebPSVersion
         }
         else {
             $HeaderContent += '#requires -Module OmadaWeb.PS'
         }
 
-        $HeaderContent += '#requires -Module OmadaWeb.PS'
         $HeaderContent += "`n"
         $HeaderContent += '#requires -Version 7.0'
         $HeaderContent += "`n"
@@ -327,6 +335,17 @@ Task TestAssemblies -depends Build {
 Task ImportModule -depends Build {
 
     try {
+
+        $LatestOmadaWebPSVersion = Get-GalleryModuleVersion -ModuleName "OmadaWeb.PS"
+
+        if(!(Get-Module -Name "OmadaWeb.PS" -ListAvailable)) {
+            Install-Module -Name "OmadaWeb.PS" -Scope CurrentUser -Force -MinimumVersion $LatestOmadaWebPSVersion
+        }
+        elseif(Get-Module -Name "OmadaWeb.PS" -ListAvailable -ErrorAction SilentlyContinue | Where-Object { $_.Version -lt $LatestOmadaWebPSVersion }) {
+            Update-Module -Name "OmadaWeb.PS" -Scope CurrentUser -Force -MinimumVersion $LatestOmadaWebPSVersion
+        }
+        "Import OmadaWeb.PS module" | Write-Host
+        Import-Module -Name "OmadaWeb.PS" -MinimumVersion $LatestOmadaWebPSVersion -Force
 
         "Test Import module" | Write-Host
         Test-ModuleManifest -Path "$OutputDir\$ModuleName.psd1"
