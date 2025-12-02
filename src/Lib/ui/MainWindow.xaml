@@ -429,23 +429,26 @@
                         <Button x:Name="ButtonNewQuery"
                                 TabIndex="12"
                                 ToolTip="Creates a new query object in Omada">
-                            <Grid HorizontalAlignment="Center"
-                                    VerticalAlignment="Center">
-                                <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="4"/>
-                                    <ColumnDefinition Width="Auto"/>
-                                    <ColumnDefinition Width="4"/>
-                                    <ColumnDefinition Width="40"/>
-                                </Grid.ColumnDefinitions>
-                                <Image Grid.Column="1"
-                                        x:Name="ButtonNewQueryImage"
-                                        Source="/images/folder-open-outline_25x25.png"
-                                        Tag="/images/folder-open-outline_25x25.png"/>
-                                <AccessText Grid.Column="3"
-                                        x:Name="ButtonNewQueryText"
-                                        Text="_New"
-                                        Style="{StaticResource ButtonAccessTextStyle}"/>
-                            </Grid>
+                            <Border Background="Transparent" IsHitTestVisible="False">
+                                <Grid HorizontalAlignment="Center"
+                                        VerticalAlignment="Center"
+                                        Background="Transparent">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="4"/>
+                                        <ColumnDefinition Width="Auto"/>
+                                        <ColumnDefinition Width="4"/>
+                                        <ColumnDefinition Width="40"/>
+                                    </Grid.ColumnDefinitions>
+                                    <Image Grid.Column="1"
+                                            x:Name="ButtonNewQueryImage"
+                                            Source="/images/folder-open-outline_25x25.png"
+                                            Tag="/images/folder-open-outline_25x25.png"/>
+                                    <AccessText Grid.Column="3"
+                                            x:Name="ButtonNewQueryText"
+                                            Text="_New"
+                                            Style="{StaticResource ButtonAccessTextStyle}"/>
+                                </Grid>
+                            </Border>
                         </Button>
 
                         <Separator Style="{StaticResource DefaultButtonWidthSeparatorStyle}"/>
@@ -453,23 +456,26 @@
                                 TabIndex="13"
                                 IsEnabled="True"
                                 ToolTip="Refresh query list">
-                            <Grid HorizontalAlignment="Center"
-                                    VerticalAlignment="Center">
-                                <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="4"/>
-                                    <ColumnDefinition Width="Auto"/>
-                                    <ColumnDefinition Width="4"/>
-                                    <ColumnDefinition Width="40"/>
-                                </Grid.ColumnDefinitions>
-                                <Image Grid.Column="1"
-                                        x:Name="ButtonRefreshQueriesImage"
-                                        Source="/images/refresh_25x25.png"
-                                        Tag="/images/refresh_25x25.png"/>
-                                <AccessText Grid.Column="3"
-                                        x:Name="ButtonRefreshQueriesText"
-                                        Text="_Refresh"
-                                        Style="{StaticResource ButtonAccessTextStyle}"/>
-                            </Grid>
+                            <Border Background="Transparent" IsHitTestVisible="False">
+                                <Grid HorizontalAlignment="Center"
+                                        VerticalAlignment="Center"
+                                        Background="Transparent">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="4"/>
+                                        <ColumnDefinition Width="Auto"/>
+                                        <ColumnDefinition Width="4"/>
+                                        <ColumnDefinition Width="40"/>
+                                    </Grid.ColumnDefinitions>
+                                    <Image Grid.Column="1"
+                                            x:Name="ButtonRefreshQueriesImage"
+                                            Source="/images/refresh_25x25.png"
+                                            Tag="/images/refresh_25x25.png"/>
+                                    <AccessText Grid.Column="3"
+                                            x:Name="ButtonRefreshQueriesText"
+                                            Text="_Refresh"
+                                            Style="{StaticResource ButtonAccessTextStyle}"/>
+                                </Grid>
+                            </Border>
                         </Button>
 
                         <Separator Style="{StaticResource DefaultButtonWidthSeparatorStyle}"/>
@@ -477,7 +483,8 @@
                                 TabIndex="14"
                                 ToolTip="Show Sql Schema">
                             <Grid HorizontalAlignment="Center"
-                                    VerticalAlignment="Center">
+                                    VerticalAlignment="Center"
+                                    Background="Transparent">
                                 <Grid.ColumnDefinitions>
                                     <ColumnDefinition Width="4"/>
                                     <ColumnDefinition Width="Auto"/>
@@ -487,7 +494,8 @@
                                 <Image Grid.Column="1"
                                         x:Name="ButtonShowSqlSchemaImage"
                                         Source="/images/file-tree-outline_25x25.png"
-                                        Tag="/images/file-tree-outline_25x25.png"/>
+                                        Tag="/images/file-tree-outline_25x25.png"
+                                        IsHitTestVisible="False"/>
                                 <AccessText Grid.Column="3"
                                         x:Name="ButtonShowSqlSchemaText"
                                         Text="S_chema"
@@ -500,7 +508,8 @@
                                 TabIndex="15"
                                 ToolTip="Save query in Omada">
                             <Grid HorizontalAlignment="Center"
-                                    VerticalAlignment="Center">
+                                    VerticalAlignment="Center"
+                                    Background="Transparent">
                                 <Grid.ColumnDefinitions>
                                     <ColumnDefinition Width="4"/>
                                     <ColumnDefinition Width="Auto"/>
@@ -510,7 +519,8 @@
                                 <Image Grid.Column="1"
                                         x:Name="ButtonSaveQueryImage"
                                         Source="/images/content-save_25x25.png"
-                                        Tag="/images/content-save_25x25.png"/>
+                                        Tag="/images/content-save_25x25.png"
+                                        IsHitTestVisible="False"/>
                                 <AccessText Grid.Column="3"
                                         x:Name="ButtonSaveQueryText"
                                         Text="_Save"
@@ -522,23 +532,26 @@
                         <Button x:Name="ButtonExecuteQuery"
                                 TabIndex="16"
                                 ToolTip="Execute">
-                            <Grid HorizontalAlignment="Center"
-                                    VerticalAlignment="Center">
-                                <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="4"/>
-                                    <ColumnDefinition Width="Auto"/>
-                                    <ColumnDefinition Width="4"/>
-                                    <ColumnDefinition Width="40"/>
-                                </Grid.ColumnDefinitions>
-                                <Image Grid.Column="1"
-                                        x:Name="ButtonExecuteQueryImage"
-                                        Source="/images/play_25x25.png"
-                                        Tag="/images/play_25x25.png"/>
-                                <AccessText Grid.Column="3"
-                                        x:Name="ButtonExecuteQueryText"
-                                        Text="_Execute"
-                                        Style="{StaticResource ButtonAccessTextStyle}"/>
-                            </Grid>
+                            <Border Background="Transparent" IsHitTestVisible="False">
+                                <Grid HorizontalAlignment="Center"
+                                        VerticalAlignment="Center"
+                                        Background="Transparent">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="4"/>
+                                        <ColumnDefinition Width="Auto"/>
+                                        <ColumnDefinition Width="4"/>
+                                        <ColumnDefinition Width="40"/>
+                                    </Grid.ColumnDefinitions>
+                                    <Image Grid.Column="1"
+                                            x:Name="ButtonExecuteQueryImage"
+                                            Source="/images/play_25x25.png"
+                                            Tag="/images/play_25x25.png"/>
+                                    <AccessText Grid.Column="3"
+                                            x:Name="ButtonExecuteQueryText"
+                                            Text="_Execute"
+                                            Style="{StaticResource ButtonAccessTextStyle}"/>
+                                </Grid>
+                            </Border>
                         </Button>
 
                         <Separator Style="{StaticResource DefaultButtonWidthSeparatorStyle}"/>
@@ -546,7 +559,8 @@
                                 TabIndex="17"
                                 ToolTip="View result in a new window">
                             <Grid HorizontalAlignment="Center"
-                                    VerticalAlignment="Center">
+                                    VerticalAlignment="Center"
+                                    Background="Transparent">
                                 <Grid.ColumnDefinitions>
                                     <ColumnDefinition Width="4"/>
                                     <ColumnDefinition Width="Auto"/>
@@ -556,7 +570,8 @@
                                 <Image Grid.Column="1"
                                         x:Name="ButtonShowOutputImage"
                                         Source="/images/database-search_25x25.png"
-                                        Tag="/images/database-search_25x25.png"/>
+                                        Tag="/images/database-search_25x25.png"
+                                        IsHitTestVisible="False"/>
                                 <AccessText Grid.Column="3"
                                         x:Name="ButtonShowOutputText"
                                         Text="_View"
@@ -569,7 +584,8 @@
                                 TabIndex="18"
                                 ToolTip="Export result to a file">
                             <Grid HorizontalAlignment="Center"
-                                    VerticalAlignment="Center">
+                                    VerticalAlignment="Center"
+                                    Background="Transparent">
                                 <Grid.ColumnDefinitions>
                                     <ColumnDefinition Width="4"/>
                                     <ColumnDefinition Width="Auto"/>
@@ -579,7 +595,8 @@
                                 <Image Grid.Column="1"
                                         x:Name="ButtonSaveOutputFileImage"
                                         Source="/images/database-export-outline_25x25.png"
-                                        Tag="/images/database-export-outline_25x25.png"/>
+                                        Tag="/images/database-export-outline_25x25.png"
+                                        IsHitTestVisible="False"/>
                                 <AccessText Grid.Column="3"
                                         x:Name="ButtonSaveOutputFileText"
                                         Text="E_xport"
@@ -592,7 +609,8 @@
                                 TabIndex="19"
                                 ToolTip="Open export file">
                             <Grid HorizontalAlignment="Center"
-                                    VerticalAlignment="Center">
+                                    VerticalAlignment="Center"
+                                    Background="Transparent">
                                 <Grid.ColumnDefinitions>
                                     <ColumnDefinition Width="4"/>
                                     <ColumnDefinition Width="Auto"/>
@@ -602,7 +620,8 @@
                                 <Image Grid.Column="1"
                                         x:Name="ButtonOpenOutputFileImage"
                                         Source="/images/table-eye_25x25.png"
-                                        Tag="/images/table-eye_25x25.png"/>
+                                        Tag="/images/table-eye_25x25.png"
+                                        IsHitTestVisible="False"/>
                                 <AccessText Grid.Column="3"
                                         x:Name="ButtonOpenOutputFileText"
                                         Text="_Open Export"
@@ -615,7 +634,8 @@
                                 TabIndex="20"
                                 ToolTip="Connect to Omada">
                             <Grid HorizontalAlignment="Center"
-                                    VerticalAlignment="Center">
+                                    VerticalAlignment="Center"
+                                    Background="Transparent">
                                 <Grid.ColumnDefinitions>
                                     <ColumnDefinition Width="4"/>
                                     <ColumnDefinition Width="Auto"/>
@@ -625,7 +645,8 @@
                                 <Image Grid.Column="1"
                                         x:Name="ButtonConnectImage"
                                         Source="/images/connection_25x25.png"
-                                        Tag="/images/connection_25x25.png"/>
+                                        Tag="/images/connection_25x25.png"
+                                        IsHitTestVisible="False"/>
                                 <AccessText Grid.Column="3"
                                         x:Name="ButtonConnectText"
                                         Text="_Connect"
@@ -639,7 +660,8 @@
                                 IsEnabled="True"
                                 ToolTip="Reset application">
                             <Grid HorizontalAlignment="Center"
-                                    VerticalAlignment="Center">
+                                    VerticalAlignment="Center"
+                                    Background="Transparent">
                                 <Grid.ColumnDefinitions>
                                     <ColumnDefinition Width="4"/>
                                     <ColumnDefinition Width="Auto"/>
@@ -649,7 +671,8 @@
                                 <Image Grid.Column="1"
                                         x:Name="ButtonResetImage"
                                         Source="/images/restart-alert_25x25.png"
-                                        Tag="/images/restart-alert_25x25.png"/>
+                                        Tag="/images/restart-alert_25x25.png"
+                                        IsHitTestVisible="False"/>
                                 <AccessText Grid.Column="3"
                                         x:Name="ButtonResetText"
                                         Text="_Reset"
@@ -663,7 +686,8 @@
                                 IsEnabled="True"
                                 ToolTip="Show log window">
                             <Grid HorizontalAlignment="Center"
-                                    VerticalAlignment="Center">
+                                    VerticalAlignment="Center"
+                                    Background="Transparent">
                                 <Grid.ColumnDefinitions>
                                     <ColumnDefinition Width="4"/>
                                     <ColumnDefinition Width="Auto"/>
@@ -673,7 +697,8 @@
                                 <Image Grid.Column="1"
                                         x:Name="ButtonShowLogImage"
                                         Source="/images/account-file-text-outline_25x25.png"
-                                        Tag="/images/account-file-text-outline_25x25.png"/>
+                                        Tag="/images/account-file-text-outline_25x25.png"
+                                        IsHitTestVisible="False"/>
                                 <AccessText Grid.Column="3"
                                         x:Name="ButtonShowLogText"
                                         Text="_Log"
