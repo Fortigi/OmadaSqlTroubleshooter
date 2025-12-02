@@ -7,7 +7,9 @@ function New-FormObject {
         [parameter(Mandatory = $false)]
         $Xaml,
         [parameter(Mandatory = $false)]
-        $ParentForm
+        $ParentForm,
+        [parameter(Mandatory = $false)]
+        [switch]$AppendVersion
     )
     try {
         $Script:Tracer::WriteLine(("{0}: Function: {1} - Caller: {2}({3}) - Command: {4} - Parameters: {5}" -f $($Script:RunTimeConfig.ApplicationName), $($MyInvocation.MyCommand.Name), $($MyInvocation.ScriptName).Split("\")[-1], $($MyInvocation.ScriptLineNumber), $MyInvocation.Statement, ($PSBoundParameters | Out-String)))
@@ -29,6 +31,12 @@ function New-FormObject {
         $Form = [Windows.Markup.XamlReader]::Load($Reader)
         "Create form: {0}" -f $Form.Name | Write-LogOutput -LogType DEBUG
         $Form.Icon = Get-Icon -Type Wpf
+
+        if ($AppendVersion) {
+            "Set form title to: {0}" -f $Form.Title | Write-LogOutput -LogType DEBUG
+            $Form.Title = "{0} - {1}" -f $Form.Title, $Script:RunTimeConfig.ApplicationVersion
+        }
+
 
         # Access controls
         $Elements = @()

@@ -59,8 +59,13 @@ function Invoke-OmadaSqlTroubleshooter {
     #region Initialize
     $StartVariables = Get-Variable
     $ApplicationName = "OmadaSqlTroubleshooter"
+    $ApplicationVersion = (Get-Command Invoke-OmadaSqlTroubleshooter).Version.ToString()
+    if($ApplicationVersion -eq "0.0"){
+        $ApplicationVersion = "Development"
+    }
     $Script:RunTimeConfig = @{
         ApplicationName    = $ApplicationName
+        ApplicationVersion = $ApplicationVersion
         ScriptName         = "OmadaSqlTroubleshooter"
         ApplicationTitle   = ""
         ModuleFolder       = Split-Path (Get-Module OmadaSqlTroubleShooter).Path
@@ -94,7 +99,7 @@ function Invoke-OmadaSqlTroubleshooter {
     #region wpf
     $SplashScreenForm = Open-SplashScreenForm
     "Loading Main Window Object" | Write-LogOutput -LogType DEBUG
-    $Script:MainWindowForm = New-FormObject -FormPath (Join-Path $Script:RunTimeConfig.ModuleFolder -ChildPath "lib\ui\MainWindow.xaml")
+    $Script:MainWindowForm = New-FormObject -FormPath (Join-Path $Script:RunTimeConfig.ModuleFolder -ChildPath "lib\ui\MainWindow.xaml") -AppendVersion
 
     $Script:RunTimeConfig.ApplicationTitle = $Script:MainWindowForm.Definition.Title.ToString()
     "Get WebView" | Write-LogOutput -LogType DEBUG

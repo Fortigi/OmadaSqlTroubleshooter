@@ -3,7 +3,7 @@
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
         xmlns:local="clr-x:Namespace:Fortigi"
         xmlns:Wpf="clr-namespace:Microsoft.Web.WebView2.Wpf;assembly=Microsoft.Web.WebView2.Wpf"
-        Title="Fortigi Omada Enterprise Cloud Sql Troubleshooter"
+        Title="Fortigi Omada Sql Troubleshooter"
         Background="{DynamicResource {x:Static SystemColors.ScrollBarBrushKey}}"
         x:Name="MainWindow"
         BorderBrush="#FFC8C8C8"
