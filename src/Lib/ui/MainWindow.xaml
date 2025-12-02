@@ -89,7 +89,11 @@
                     Value="Left"/>
             <Setter Property="MinHeight"
                     Value="25"/>
+            <Setter Property="Height"
+                    Value="25"/>
             <Setter Property="MinWidth"
+                    Value="300"/>
+            <Setter Property="Width"
                     Value="300"/>
         </Style>
         <Style TargetType="Button">
