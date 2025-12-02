@@ -39,7 +39,7 @@ $Script:MainWindowForm.Elements.TextBoxAppIdUri.Add_PreviewKeyDown({
                     Test-ConnectionButton
                     if ($Script:MainWindowForm.Elements.ButtonConnect.IsEnabled) {
                         "Executing connection" | Write-LogOutput -LogType VERBOSE
-                        $Script:MainWindowForm.Elements.TextBoxUrl.RaiseEvent([System.Windows.RoutedEventArgs]::new([System.Windows.Controls.Primitives.ModifierKeys]::KeyDownEvent))
+                        $Script:MainWindowForm.Elements.ButtonConnect.RaiseEvent([System.Windows.RoutedEventArgs]::new([System.Windows.Controls.Primitives.ButtonBase]::ClickEvent))
                     }
                 }
             }
