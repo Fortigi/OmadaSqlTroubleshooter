@@ -1,0 +1,109 @@
+﻿<Window xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:local="clr-x:Namespace:Fortigi"
+        Title="Query History Viewer"
+        Width="450"
+        MinWidth="450"
+        MinHeight="300"
+        Background="{DynamicResource {x:Static SystemColors.ScrollBarBrushKey}}"
+        BorderBrush="{DynamicResource {x:Static SystemColors.ActiveBorderBrushKey}}"
+        Name="History"
+        >
+
+    <Window.Resources>
+        <Style TargetType="TextBox">
+            <Setter Property="Background" Value="{DynamicResource {x:Static SystemColors.WindowBrushKey}}"/>
+        </Style>
+        <Style TargetType="Label">
+            <Setter Property="VerticalContentAlignment" Value="Center"/>
+            <Setter Property="Height" Value="25"/>
+            <Setter Property="Width" Value="100"/>
+        </Style>
+        <Style TargetType="Separator">
+            <Setter Property="Background" Value="Transparent"/>
+        </Style>
+        <!--<Style TargetType="Button">
+            <Setter Property="Height" Value="25"/>
+            <Setter Property="Width" Value="95"/>
+        </Style>-->
+        <Style TargetType="ComboBox">
+            <Setter Property="VerticalContentAlignment" Value="Center"/>
+            <Setter Property="HorizontalContentAlignment" Value="Left"/>
+            <Setter Property="Height" Value="25"/>
+            <Setter Property="Width" Value="300"/>
+        </Style>
+        <Style TargetType="Button">
+            <Setter Property="Height" Value="25"/>
+            <Setter Property="MinHeight" Value="25"/>
+            <Setter Property="Width" Value="98"/>
+            <Setter Property="MinWidth" Value="98"/>
+            <Setter Property="IsEnabled" Value="False"/>
+            <Setter Property="Padding" Value="2,3"/>
+        </Style>
+        <Style x:Key="ButtonAccessTextStyle" TargetType="AccessText">
+            <Setter Property="HorizontalAlignment" Value="Center"/>
+            <Setter Property="TextAlignment" Value="Center"/>
+            <Setter Property="Height" Value="25"/>
+            <Setter Property="Width" Value="100"/>
+            <Setter Property="MinWidth" Value="100"/>
+            <Setter Property="FontSize" Value="11"/>
+        </Style>
+    </Window.Resources>
+
+    <Grid Grid.Row="0" >
+        <Grid.RowDefinitions>
+            <RowDefinition Height="6"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="6"/>
+            <RowDefinition Height="30"/>
+            <RowDefinition Height="6"/>
+        </Grid.RowDefinitions>
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="6"/>
+            <ColumnDefinition Width="*"/>
+            <ColumnDefinition Width="6"/>
+        </Grid.ColumnDefinitions>
+        <Grid Grid.Row="1" Grid.Column="1" >
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="6"/>
+                <ColumnDefinition Width="*"/>
+            </Grid.ColumnDefinitions>
+
+            <ListBox Grid.Row="0" Grid.Column="0" />
+            <GridSplitter Grid.Row="1" Grid.Column="2"
+                            HorizontalAlignment="Stretch"
+                            Background="#FF293955"/>
+            <Border Grid.Row="1" Grid.Column="3" BorderBrush="Gray" BorderThickness="1" Background="{DynamicResource {x:Static SystemColors.AppWorkspaceBrushKey}}">
+                <TextBox x:Name="TextBoxLog"
+                         AcceptsReturn="True"
+                         VerticalScrollBarVisibility="Auto"
+                         HorizontalScrollBarVisibility="Auto"
+                         FontFamily="Consolas"
+                         IsReadOnly="True"
+                         HorizontalAlignment="Stretch"
+                         VerticalAlignment="Stretch"
+                         Background="{DynamicResource {x:Static SystemColors.WindowBrushKey}}"
+                         VerticalContentAlignment="Top" />
+            </Border>
+        </Grid>
+        <Grid Grid.Row="3" Grid.Column="1">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="Auto"/>
+            </Grid.ColumnDefinitions>
+            <Button Grid.Column="1" x:Name="ButtonRestoreQuery" TabIndex="15"  ToolTip="Export log file" IsEnabled="True"  >
+                <Grid HorizontalAlignment="Center" VerticalAlignment="Center">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="6"/>
+                        <ColumnDefinition Width="Auto"/>
+                        <ColumnDefinition Width="4"/>
+                        <ColumnDefinition Width="40"/>
+                    </Grid.ColumnDefinitions>
+                    <Image Grid.Column="1"  x:Name="ButtonRestoreQueryImage" Source="/images/history_25x25.png" Tag="/images/history_25x25.png" />
+                    <AccessText Grid.Column="3"  x:Name="ButtonRestoreQueryText" Text="_Restore" Style="{StaticResource ButtonAccessTextStyle}"/>
+                </Grid>
+            </Button>
+        </Grid>
+    </Grid>
+</Window>

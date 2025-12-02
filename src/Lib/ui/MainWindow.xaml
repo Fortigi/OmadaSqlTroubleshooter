@@ -7,19 +7,17 @@
         Background="{DynamicResource {x:Static SystemColors.ScrollBarBrushKey}}"
         x:Name="MainWindow"
         BorderBrush="#FFC8C8C8"
-        SizeToContent="Manual"
-        Height="800"
-        MinHeight="800"
-        Width="1340"
-        MinWidth="1340">
+        SizeToContent="Manual">
 
     <Window.Style>
         <Style TargetType="Window">
             <Setter Property="MinWidth"
-                    Value="1340"/>
+                    Value="1461"/>
             <Setter Property="Width"
-                    Value="1340"/>
+                    Value="1461"/>
             <Setter Property="MinHeight"
+                    Value="800"/>
+            <Setter Property="Height"
                     Value="800"/>
         </Style>
     </Window.Style>
@@ -561,8 +559,33 @@
                         </Button>
 
                         <Separator Style="{StaticResource DefaultButtonWidthSeparatorStyle}"/>
-                        <Button x:Name="ButtonShowOutput"
+                        <Button x:Name="ButtonShowHistory"
                                 TabIndex="17"
+                                IsEnabled="True"
+                                ToolTip="Show history window">
+                            <Grid HorizontalAlignment="Center"
+                                    VerticalAlignment="Center"
+                                    Background="Transparent">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="4"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                    <ColumnDefinition Width="4"/>
+                                    <ColumnDefinition Width="40"/>
+                                </Grid.ColumnDefinitions>
+                                <Image Grid.Column="1"
+                                        x:Name="ButtonShowHistoryImage"
+                                        Source="/images/history_25x25.png"
+                                        Tag="/images/history_25x25.png"
+                                        IsHitTestVisible="False"/>
+                                <AccessText Grid.Column="3"
+                                        x:Name="ButtonShowHistoryText"
+                                        Text="_History"
+                                        Style="{StaticResource ButtonAccessTextStyle}"/>
+                            </Grid>
+                        </Button>
+                        <Separator Style="{StaticResource ButtontBorderWidthSeparatorStyle}"/>
+                        <Button x:Name="ButtonShowOutput"
+                                TabIndex="18"
                                 ToolTip="View result in a new window">
                             <Grid HorizontalAlignment="Center"
                                     VerticalAlignment="Center"
@@ -587,7 +610,7 @@
 
                         <Separator Style="{StaticResource DefaultButtonWidthSeparatorStyle}"/>
                         <Button x:Name="ButtonSaveOutputFile"
-                                TabIndex="18"
+                                TabIndex="19"
                                 ToolTip="Export result to a file">
                             <Grid HorizontalAlignment="Center"
                                     VerticalAlignment="Center"
@@ -612,7 +635,7 @@
 
                         <Separator Style="{StaticResource DefaultButtonWidthSeparatorStyle}"/>
                         <Button x:Name="ButtonOpenOutputFile"
-                                TabIndex="19"
+                                TabIndex="20"
                                 ToolTip="Open export file">
                             <Grid HorizontalAlignment="Center"
                                     VerticalAlignment="Center"
@@ -637,9 +660,9 @@
 
                         <Separator Style="{StaticResource DefaultButtonWidthSeparatorStyle}"/>
                         <Button x:Name="ButtonConnect"
-                                TabIndex="20"
+                                TabIndex="21"
                                 ToolTip="Connect to Omada">
-                            <Grid HorizontalAlignment="Center"
+                                                        <Grid HorizontalAlignment="Center"
                                     VerticalAlignment="Center"
                                     Background="Transparent">
                                 <Grid.ColumnDefinitions>
@@ -659,10 +682,9 @@
                                         Style="{StaticResource ButtonAccessTextStyle}"/>
                             </Grid>
                         </Button>
-
                         <Separator Style="{StaticResource DefaultButtonWidthSeparatorStyle}"/>
                         <Button x:Name="ButtonReset"
-                                TabIndex="21"
+                                TabIndex="22"
                                 IsEnabled="True"
                                 ToolTip="Reset application">
                             <Grid HorizontalAlignment="Center"
@@ -688,7 +710,7 @@
 
                         <Separator Style="{StaticResource DefaultButtonWidthSeparatorStyle}"/>
                         <Button x:Name="ButtonShowLog"
-                                TabIndex="22"
+                                TabIndex="23"
                                 IsEnabled="True"
                                 ToolTip="Show log window">
                             <Grid HorizontalAlignment="Center"
@@ -712,9 +734,10 @@
                             </Grid>
                         </Button>
                         <Separator Style="{StaticResource ButtontBorderWidthSeparatorStyle}"/>
+
                     </StackPanel>
-                    <Separator Style="{StaticResource DefaultHeightSeparator}"
-                            Grid.Row="2"/>
+<Separator
+                Grid.Row="2" Style="{StaticResource DefaultHeightSeparator}"/>
                 </Grid>
                 <Grid Grid.Row="1">
                     <Grid.RowDefinitions>
@@ -722,7 +745,7 @@
                         <RowDefinition Height="*"
                                 MinHeight="225"/>
                         <RowDefinition Height="3"/>
-                        <RowDefinition Height="*"
+             <RowDefinition Height="*"
                                 MinHeight="60"/>
                     </Grid.RowDefinitions>
                     <GridSplitter Grid.Row="0"
