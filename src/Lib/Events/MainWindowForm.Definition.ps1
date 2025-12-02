@@ -1,5 +1,3 @@
-
-
 $Script:MainWindowForm.Definition.Add_Closed({
         try {
             $_ | Show-EventInfo
@@ -29,7 +27,6 @@ $Script:MainWindowForm.Definition.Add_Closing({
     })
 
 $Script:MainWindowForm.Definition.Add_PreviewKeyDown({
-        [System.Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSAvoidAssignmentToAutomaticVariable', 'EventArgs', Justification = 'The use of the variable is on purpose')]
         param(
             $EventSender,
             $EventArgs
@@ -141,7 +138,6 @@ $Script:MainWindowForm.Definition.Add_Loaded({
                     }
 
                     $Script:Webview.Object.add_PreviewKeyDown({
-                            [System.Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSAvoidAssignmentToAutomaticVariable', 'EventArgs', Justification = 'The use of the variable is on purpose')]
                             param(
                                 $EventSender,
                                 $EventArgs
@@ -174,7 +170,6 @@ $Script:MainWindowForm.Definition.Add_Loaded({
                         })
 
                     $Script:Webview.Object.CoreWebView2.add_WebMessageReceived({
-                            [System.Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSAvoidAssignmentToAutomaticVariable', 'EventArgs', Justification = 'The use of the variable is on purpose')]
                             param(
                                 $EventSender,
                                 $EventArgs
