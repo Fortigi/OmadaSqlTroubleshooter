@@ -44,7 +44,8 @@ $Script:SqlHistoryWindowForm.Elements.DataGridHistory.Add_SelectedCellsChanged({
             "Selected history item: {0} - {1}" -f $SelectedItem.ChangeDate, $SelectedItem.ChangedBy | Write-LogOutput -LogType DEBUG
         }
         catch {
-            $_.Exception.Message | Write-LogOutput -LogType ERROR -ErrorObject $_
+            #            $_.Exception.Message | Write-LogOutput -LogType ERROR -ErrorObject $_
+            $_
         }
 
     })

@@ -29,6 +29,9 @@ $Script:MainWindowForm.Elements.ComboBoxSelectQuery.Add_SelectionChanged({
             if (($Script:MainWindowForm.Elements.ComboBoxSelectQuery.Items | Measure-Object).Count -ge 0 -and ![string]::IsNullOrWhiteSpace($Script:MainWindowForm.Elements.ComboBoxSelectQuery.SelectedItem.Content)) {
                 #Update-QueryList
                 #Update-DataConnectionList
+                if (Test-SqlHistoryWindowOpen) {
+                    $Script:SqlHistoryWindowForm.Definition.Close()
+                }
                 Set-EditorValue
                 Set-SqlQueryFunctionState -Status $Script:ConnectionStatus
                 #Not working, needs to be investigated

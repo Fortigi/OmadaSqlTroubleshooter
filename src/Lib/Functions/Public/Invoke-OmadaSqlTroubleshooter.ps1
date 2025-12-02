@@ -111,7 +111,6 @@ function Invoke-OmadaSqlTroubleshooter {
     #How to lookup events for a button: ([System.Windows.Controls.Button].GetEvents()|where name -eq 'Click').AddMethod.Name
     # Events are moved to .\Lib\Events
     "Read Events" | Write-LogOutput -LogType DEBUG
-
     Initialize-FormEvents -FormName "MainWindowForm"
 
     #endregion

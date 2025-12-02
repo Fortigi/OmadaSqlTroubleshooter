@@ -40,7 +40,7 @@ function Initialize-FormObject {
 
         # Access controls
         $Elements = @()
-        $ElementNames = @( "AccessText", "Button", "CheckBox", "ComboBox", "ComboBoxItem", "DataGrid", "Image", "PasswordBox", "RadioButton","RichTextBox", "TextBlock", "TextBox", "TreeViewSqlSchema", "WebView2")
+        $ElementNames = @( "AccessText", "Button", "CheckBox", "ComboBox", "ComboBoxItem", "DataGrid", "Image", "PasswordBox", "RadioButton", "RichTextBox", "TextBlock", "TextBox", "TreeViewSqlSchema", "WebView2")
         foreach ($ElementName in $ElementNames) {
             "Find element type: {0}" -f $ElementName | Write-LogOutput -LogType DEBUG
             $Xaml.DocumentElement.SelectNodes("//default:$ElementName", $NamespaceManager) | ForEach-Object {
@@ -82,9 +82,6 @@ function Initialize-FormObject {
             "Set path for image '{0}' to: {1}" -f $Element.Name, $ImagePath | Write-LogOutput -LogType DEBUG
             $Elements.($Element.Name).Source = $ImagePath
         }
-
-        "Load events for form: {0}" -f $Form.Name | Write-LogOutput -LogType DEBUG
-        Initialize-FormEvents -FormName $Form.Name
 
         return [PSCustomObject]@{
             Definition      = $Form

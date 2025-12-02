@@ -15,7 +15,7 @@ function Open-SqlSchemaWindow {
         #Log window creation
         "Opening Sql Schema window" | Write-LogOutput -LogType DEBUG
         $Script:SqlSchemaWindowForm = Initialize-FormObject -FormPath (Join-Path $Script:RunTimeConfig.ModuleFolder -ChildPath "lib\ui\SqlSchemaWindow.xaml") -ParentForm $Script:MainWindowForm.Definition
-
+        Initialize-FormEvents -FormName "SqlSchemaWindowForm"
         [Int]$Script:SqlSchemaWindowForm.PositionManager.PositionOffSetRight = 405
 
         $true | Set-ConfigProperty -Property "SqlSchemaWindowFormOpen"

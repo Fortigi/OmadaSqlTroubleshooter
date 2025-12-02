@@ -16,7 +16,7 @@ function Open-SqlHistoryWindow {
         #Log window creation
         "Opening Sql History window" | Write-LogOutput -LogType DEBUG
         $Script:SqlHistoryWindowForm = Initialize-FormObject -FormPath (Join-Path $Script:RunTimeConfig.ModuleFolder -ChildPath "lib\ui\History.xaml") -ParentForm $Script:MainWindowForm.Definition
-
+        Initialize-FormEvents -FormName "SqlHistoryWindowForm"
         [Int]$Script:SqlHistoryWindowForm.PositionManager.PositionOffSetRight = 405
 
         $true | Set-ConfigProperty -Property "SqlHistoryWindowFormOpen"

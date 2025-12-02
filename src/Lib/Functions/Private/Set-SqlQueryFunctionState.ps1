@@ -94,6 +94,9 @@ function Set-SqlQueryFunctionState {
                 if (Test-SqlSchemaWindowOpen) {
                     $Script:SqlSchemaWindowForm.Definition.Close()
                 }
+                if (Test-SqlHistoryWindowOpen) {
+                    $Script:SqlHistoryWindowForm.Definition.Close()
+                }
             }
         }
     }

@@ -17,6 +17,9 @@ $Script:MainWindowForm.Definition.Add_Closing({
             if (Test-LogWindowOpen) {
                 $Script:LogWindowForm.Definition.Close()
             }
+            if (Test-SqlHistoryWindowOpen) {
+                $Script:SqlHistoryWindowForm.Definition.Close()
+            }
             if (Test-SqlSchemaWindowOpen) {
                 $Script:SqlSchemaWindowForm.Definition.Close()
             }
