@@ -11,26 +11,42 @@ $Script:MainWindowForm.Elements.TextBoxURL.Add_GotFocus({
     })
 
 $Script:MainWindowForm.Elements.TextBoxURL.Add_LostFocus({
+        $_ | Show-EventInfo
+
         try {
-            $_ | Show-EventInfo
-
-            try {
-                Set-OmadaUrl
-                Test-ConnectionButton
-            }
-            catch {
-
-                if ($_.Exception.Response.StatusCode -eq "NotFound") {
-                    "SQL Troubleshooting Object not found or OData endpoint for SQL Troubleshooting is not found. Is it enable for OData? Please check the data object type properties!" | Write-LogOutput -LogType ERROR -ErrorObject $_
-                }
-                else {
-                    $_.Exception.Message | Write-LogOutput -LogType ERROR -ErrorObject $_
-                }
-                Reset-Application -SkipTextBoxURL
-            }
+            Set-OmadaUrl
+            Test-ConnectionButton
         }
         catch {
             $_.Exception.Message | Write-LogOutput -LogType ERROR -ErrorObject $_
         }
     })
 
+$Script:MainWindowForm.Elements.TextBoxURL.Add_PreviewKeyDown({
+        param(
+            $EventSender,
+            $EventArgs
+        )
+        try {
+
+            $_ | Show-EventInfo
+
+            if ($EventArgs.Key -in ([System.Windows.Input.Key]::Enter, [System.Windows.Input.Key]::Return)) {
+                "Enter/Return key intercepted at MainWindow level" | Write-LogOutput -LogType VERBOSE
+
+                $EventArgs.Handled = $true
+
+                "Triggering connect" | Write-LogOutput -LogType VERBOSE
+                Set-OmadaUrl
+                Test-ConnectionButton
+
+                if ($Script:MainWindowForm.Elements.ButtonConnect.IsEnabled) {
+                    "Executing connection" | Write-LogOutput -LogType VERBOSE
+                    $Script:MainWindowForm.Elements.ButtonConnect.RaiseEvent([System.Windows.RoutedEventArgs]::new([System.Windows.Controls.Primitives.ButtonBase]::ClickEvent))
+                }
+            }
+        }
+        catch {
+            $_.Exception.Message | Write-LogOutput -LogType ERROR -ErrorObject $_
+        }
+    })

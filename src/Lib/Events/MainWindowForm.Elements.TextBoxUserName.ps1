@@ -39,3 +39,32 @@ $Script:MainWindowForm.Elements.TextBoxUserName.Add_LostFocus({
         }
 
     })
+
+$Script:MainWindowForm.Elements.TextBoxUserName.Add_PreviewKeyDown({
+        param(
+            $EventSender,
+            $EventArgs
+        )
+        try {
+
+            $_ | Show-EventInfo
+
+            if ($EventArgs.Key -in ([System.Windows.Input.Key]::Enter, [System.Windows.Input.Key]::Return)) {
+                "Enter/Return key intercepted at MainWindow level" | Write-LogOutput -LogType VERBOSE
+
+                $EventArgs.Handled = $true
+
+                if ($Script:MainWindowForm.Elements.TextBoxUrl.IsEnabled -and $Script:MainWindowForm.Elements.TextBoxUrl.Text -like "http*") {
+                    "Triggering connect" | Write-LogOutput -LogType VERBOSE
+                    Test-ConnectionButton
+                    if ($Script:MainWindowForm.Elements.ButtonConnect.IsEnabled) {
+                        "Executing connection" | Write-LogOutput -LogType VERBOSE
+                        $Script:MainWindowForm.Elements.TextBoxUrl.RaiseEvent([System.Windows.RoutedEventArgs]::new([System.Windows.Controls.Primitives.ModifierKeys]::KeyDownEvent))
+                    }
+                }
+            }
+        }
+        catch {
+            $_.Exception.Message | Write-LogOutput -LogType ERROR -ErrorObject $_
+        }
+    })
