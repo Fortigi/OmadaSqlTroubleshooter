@@ -358,7 +358,10 @@
                                             ToolTip="Query list"/>
                                     <ComboBox Grid.Column="3"
                                             x:Name="ComboBoxSelectQuery"
-                                            TabIndex="6"/>
+                                            TabIndex="6"
+                                            IsEditable="True"
+                                            IsTextSearchEnabled="True"
+                                            StaysOpenOnEdit="True"/>
                                     <TextBlock Grid.Column="5"
                                             Text="Save Password:"/>
                                     <StackPanel Grid.Column="7"
@@ -416,7 +419,10 @@
                                             ToolTip="Data Connection"/>
                                     <ComboBox Grid.Column="13"
                                             x:Name="ComboBoxSelectDataConnection"
-                                            TabIndex="11"/>
+                                            TabIndex="11"
+                                            IsEditable="True"
+                                            IsTextSearchEnabled="True"
+                                            StaysOpenOnEdit="True"/>
                                 </Grid>
                             </StackPanel>
                         </Grid>
