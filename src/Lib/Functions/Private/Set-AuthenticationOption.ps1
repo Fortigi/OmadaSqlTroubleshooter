@@ -44,8 +44,6 @@ function Set-AuthenticationOption {
                 }
 
                 default {
-                    $Script:MainWindowForm.Elements.TextBoxUserName.IsEnabled = $false
-                    $Script:MainWindowForm.Elements.TextBoxPassword.IsEnabled = $false
                     $Script:MainWindowForm.Elements.TextBoxAppIdUri.IsEnabled = $false
                     $Script:MainWindowForm.Elements.TextBoxEntraIdTenantId.IsEnabled = $false
                     $Script:MainWindowForm.Elements.TextBlockUserName | Set-TextBlockContent -Content "Username:"
