@@ -6,13 +6,24 @@ function Set-OmadaUrl {
 
         if (![string]::IsNullOrWhiteSpace($Script:MainWindowForm.Elements.TextBoxURL.Text)) {
 
-            if ($Script:MainWindowForm.Elements.TextBoxURL.Text -notlike "http*") {
-                if ($Script:MainWindowForm.Elements.TextBoxURL.Text -notlike "*.*" -and $Script:MainWindowForm.Elements.TextBoxURL.Text -notlike "*.omada.cloud") {
-                    $Script:MainWindowForm.Elements.TextBoxURL | Set-TextBlockText -Text "https://$($Script:MainWindowForm.Elements.TextBoxURL.Text).omada.cloud"
+            $Uri = $null
+            try {
+                $Uri = [System.Uri]::new($Script:MainWindowForm.Elements.TextBoxURL.Text.Trim())
+            }
+            catch {}
+
+            if ($null -eq $Uri) {
+                if ($Script:MainWindowForm.Elements.TextBoxURL.Text -notlike "http*") {
+                    if ($Script:MainWindowForm.Elements.TextBoxURL.Text -notlike "*.*" -and $Script:MainWindowForm.Elements.TextBoxURL.Text -notlike "*.omada.cloud") {
+                        $Script:MainWindowForm.Elements.TextBoxURL | Set-TextBlockText -Text "https://$($Script:MainWindowForm.Elements.TextBoxURL.Text).omada.cloud"
+                    }
+                    else {
+                        $Script:MainWindowForm.Elements.TextBoxURL | Set-TextBlockText -Text "https://$($Script:MainWindowForm.Elements.TextBoxURL.Text)"
+                    }
                 }
-                else {
-                    $Script:MainWindowForm.Elements.TextBoxURL | Set-TextBlockText -Text "https://$($Script:MainWindowForm.Elements.TextBoxURL.Text)"
-                }
+            }
+            elseif ($Uri.Scheme -ne 'http' -and $Uri.Scheme -ne 'https') {
+                "Input Url {0} is not valid." -f $Script:MainWindowForm.Elements.TextBoxURL.Text.Trim() | Write-LogOutput -LogType ERROR
             }
 
             $Uri = [System.Uri]::new($Script:MainWindowForm.Elements.TextBoxURL.Text.Trim())
@@ -21,27 +32,16 @@ function Set-OmadaUrl {
                 ("Input Url {0} is valid." -f $Uri.IsAbsoluteUri) | Write-LogOutput -LogType DEBUG
             }
             else {
-                $null | Set-ConfigProperty -Property "BaseUrl"
-                $Script:MainWindowForm.Elements.TextBoxURL.Text = $null
                 "Input Url {0} is not valid." -f $Script:MainWindowForm.Elements.TextBoxURL.Text.Trim() | Write-LogOutput -LogType ERROR
-                Set-SqlConnectionState -Status $false
-                return
             }
 
+            $DnsResult = $null
             try {
                 $DnsResult = Resolve-DnsName -Name $Uri.Host -QuickTimeout -ErrorAction SilentlyContinue
-                if (($DnsResult | Measure-Object).Count -le 0) {
-                    "DNS resolution for {0} failed!" -f $Uri.Host | Write-LogOutput -LogType ERROR
-                    Set-SqlConnectionState -Status $false
-                    return
-                }
             }
-            catch {
-                $null | Set-ConfigProperty -Property "BaseUrl"
-                $Script:MainWindowForm.Elements.TextBoxURL.Text = $null
-                $Script:MainWindowForm.Elements.TextBlockStatusBarUrl.Text = $null
-                "Endpoint {0} not found!" -f $Uri.AbsoluteUri | Write-LogOutput -LogType ERROR -ErrorObject $_
-                Set-SqlConnectionState -Status $false
+            catch {}
+            if (($DnsResult | Measure-Object).Count -le 0) {
+                "DNS resolution for {0} failed! Check the tenant url." -f $Uri.Host | Write-LogOutput -LogType ERROR
             }
 
             $Uri.AbsoluteUri.TrimEnd("/") | Set-ConfigProperty -Property "BaseUrl"
@@ -51,7 +51,6 @@ function Set-OmadaUrl {
                 $Script:CurrentUrl = $Script:AppConfig.BaseUrl
                 Set-SqlConnectionState -Status $false
                 $Script:RunTimeData.RestMethodParam.ForceAuthentication = $true
-
             }
             elseif ([string]::IsNullOrEmpty($Script:AppConfig.BaseUrl)) {
                 "Omada Url is empty!" | Write-LogOutput -LogType DEBUG
@@ -67,6 +66,9 @@ function Set-OmadaUrl {
         }
     }
     catch {
-        $_.Exception.Message | Write-LogOutput -LogType ERROR -ErrorObject $_
+        $Script:MainWindowForm.Elements.TextBoxURL | Set-TextBlockText -Text $null
+        $null | Set-ConfigProperty -Property "BaseUrl"
+        Set-SqlConnectionState -Status $false
+        $_
     }
 }
