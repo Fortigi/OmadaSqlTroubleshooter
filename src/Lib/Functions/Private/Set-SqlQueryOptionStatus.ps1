@@ -84,6 +84,10 @@ function Set-SqlQueryOptionStatus {
                         $Script:MainWindowForm.Elements.$Item.IsEnabled = $false
                     }
                 }
+
+                if (Test-SqlSchemaWindowOpen) {
+                    $Script:SqlSchemaWindowForm.Definition.Close()
+                }
             }
         }
     }
