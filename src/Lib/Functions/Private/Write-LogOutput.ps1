@@ -39,6 +39,7 @@ function Write-LogOutput {
         $LogMessage = @{
             #VERBOSE2 length = 8
             Text        = "{0} - {1}{2}- {3}: {4}" -f $DateTime, $LogType, ((0..(8 - $LogType.Length) | ForEach-Object { ' ' }) -join ''), $CalledFrom, $Message
+            CallStack   = ($PSCallStack | Select-Object -Skip 1 -SkipLast 1 | Select-Object Location -ExpandProperty Location) -join "`n"
             Show        = $false
             ShowWarning = $false
             ShowError   = $false
@@ -160,7 +161,7 @@ function Write-LogOutput {
                     $MessageBoxImage = [System.Windows.MessageBoxImage]::Warning
                 }
                 elseif ($LogMessage.ShowError) {
-                    $LogMessage.Text | Write-Error
+                    $LogMessage.Text, $LogMessage.CallStack -join ", `n" | Write-Error
                     $MessageBoxImage = [System.Windows.MessageBoxImage]::Error
                 }
                 else {
@@ -170,7 +171,7 @@ function Write-LogOutput {
             }
         }
         if ($LogMessage.ShowError) {
-            $LogMessage.Text | Write-Error
+            $LogMessage.Text, $LogMessage.CallStack -join ", `n" | Write-Error
         }
         if ($null -ne $Script:TextBoxLog -and $Script:TextBoxLog.IsLoaded) {
             if (Invoke-LogWindowScrollToEnd) {

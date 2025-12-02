@@ -98,6 +98,10 @@
     "Type": "Bool"
   },
   {
+    "Name": "SqlHistoryWindowFormOpen",
+    "Type": "Bool"
+  },
+  {
     "Name": "MainWindowPosition",
     "Type": "String"
   },
@@ -110,6 +114,10 @@
     "Type": "String"
   },
   {
+    "Name": "SqlHistoryWindowPosition",
+    "Type": "String"
+  },
+  {
     "Name": "MainWindowSize",
     "Type": "String"
   },
@@ -119,6 +127,10 @@
   },
   {
     "Name": "SqlSchemaWindowSize",
+    "Type": "String"
+  },
+  {
+    "Name": "SqlHistoryWindowSize",
     "Type": "String"
   },
   {

@@ -31,6 +31,7 @@ function Initialize-ConfigSettings {
         }
         if ($Script:RunTimeConfig.ReconnectStatus -eq 1) {
             "Skip reconnect" | Write-LogOutput -LogType DEBUG
+            Set-SqlConnectionState -Status $false
         }
 
         if ($Script:RunTimeConfig.Logging.LogToConsole -or $Script:AppConfig.CheckboxConsoleLog) {

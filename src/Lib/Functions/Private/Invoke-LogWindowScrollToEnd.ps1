@@ -18,7 +18,7 @@ function Invoke-LogWindowScrollToEnd {
         #         }
 
 
-        #     $ScrollViewer = [System.Windows.Controls.Primitives.ScrollViewer]::GetScrollViewer($Script:TextBoxLog.ScrollToEnd())
+        #     $ScrollViewer = [System.Windows.Controls.Primitives.ScrollViewer]::GetScrollViewer($Script:TextBoxLog
 
         #     $ScrollViewer.ScrollChanged += {
         #         $VerticalOffset = $ScrollViewer.VerticalOffset

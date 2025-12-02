@@ -60,7 +60,7 @@ function Invoke-OmadaSqlTroubleshooter {
     $StartVariables = Get-Variable
     $ApplicationName = "OmadaSqlTroubleshooter"
     $ApplicationVersion = (Get-Command Invoke-OmadaSqlTroubleshooter).Version.ToString()
-    if($ApplicationVersion -eq "0.0"){
+    if ($ApplicationVersion -eq "0.0") {
         $ApplicationVersion = "Development"
     }
     $Script:RunTimeConfig = @{
@@ -99,7 +99,7 @@ function Invoke-OmadaSqlTroubleshooter {
     #region wpf
     $SplashScreenForm = Open-SplashScreenForm
     "Loading Main Window Object" | Write-LogOutput -LogType DEBUG
-    $Script:MainWindowForm = New-FormObject -FormPath (Join-Path $Script:RunTimeConfig.ModuleFolder -ChildPath "lib\ui\MainWindow.xaml") -AppendVersion
+    $Script:MainWindowForm = Initialize-FormObject -FormPath (Join-Path $Script:RunTimeConfig.ModuleFolder -ChildPath "lib\ui\MainWindow.xaml") -AppendVersion
 
     $Script:RunTimeConfig.ApplicationTitle = $Script:MainWindowForm.Definition.Title.ToString()
     "Get WebView" | Write-LogOutput -LogType DEBUG
@@ -112,22 +112,7 @@ function Invoke-OmadaSqlTroubleshooter {
     # Events are moved to .\Lib\Events
     "Read Events" | Write-LogOutput -LogType DEBUG
 
-    Get-ChildItem -Path (Join-Path $Script:RunTimeConfig.ModuleFolder -ChildPath "Lib\Events") -Filter *.ps1 | Where-Object { $_.Name -notlike "_*.ps1" } | ForEach-Object {
-
-        "Loading event {0}" -f $_.Name | Write-LogOutput -LogType DEBUG
-        try {
-
-            . $_.FullName
-        }
-        catch {
-            if ($_.Exception.Response.StatusCode -eq "NotFound") {
-                "SQL Troubleshooting Object not found or OData endpoint for SQL Troubleshooting is not found. Is it enable for OData? Please check the data object type properties!" | Write-LogOutput -LogType ERROR -ErrorObject $_
-            }
-            else {
-                $_.Exception.Message | Write-LogOutput -LogType ERROR -ErrorObject $_
-            }
-        }
-    }
+    Initialize-FormEvents -FormName "MainWindowForm"
 
     #endregion
 

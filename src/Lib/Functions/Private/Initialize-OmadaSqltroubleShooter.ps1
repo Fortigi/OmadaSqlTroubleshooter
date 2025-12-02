@@ -58,6 +58,7 @@ function Initialize-OmadaSqlTroubleShooter {
             QueryText                      = $null
             SqlQueryObject                 = $null
             QueryResult                    = $null
+            HistoryResult                  = $null
             CurrentQueryText               = $null
             CurrentSqlQuery                = [PSCustomObject]@{
                 DoId        = $null

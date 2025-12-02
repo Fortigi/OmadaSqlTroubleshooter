@@ -57,6 +57,8 @@ function Set-SqlConnectionState {
             $ScriptToExecute = "editor.setValue('');"
             Push-ToEditor -ScriptToExecute $ScriptToExecute
 
+            # $null | Set-ConfigProperty -Property "CurrentDataConnection"
+            # $null | Set-ConfigProperty -Property "CurrentSqlQuery"
             $Script:ConnectionStatus = $false
         }
     }

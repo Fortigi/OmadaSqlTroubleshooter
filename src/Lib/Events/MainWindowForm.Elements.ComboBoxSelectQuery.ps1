@@ -30,6 +30,7 @@ $Script:MainWindowForm.Elements.ComboBoxSelectQuery.Add_SelectionChanged({
                 #Update-QueryList
                 #Update-DataConnectionList
                 Set-EditorValue
+                Set-SqlQueryFunctionState -Status $Script:ConnectionStatus
                 #Not working, needs to be investigated
                 #Set-EditorBackground
             }

@@ -3,6 +3,7 @@ $Script:MainWindowForm.Elements.ButtonConnect.Add_Click({
             $_ | Show-EventInfo
 
             if ($Script:MainWindowForm.Elements.ButtonConnectText.Text -eq "_Connect") {
+                $Script:RunTimeConfig.ReconnectStatus = 2
                 if (Test-OmadaConnection) {
                     Test-ConnectionSettings
                 }

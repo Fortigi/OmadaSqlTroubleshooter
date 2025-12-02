@@ -32,6 +32,9 @@ function Set-SqlQueryFunctionState {
             "ButtonShowSqlSchema"          = @{
                 AllowedStatusChange = "Disable"
             }
+            "ButtonShowHistory"            = @{
+                AllowedStatusChange = "Both"
+            }
             "ButtonSaveOutputFile"         = @{
                 AllowedStatusChange = "Disable"
             }
@@ -58,6 +61,10 @@ function Set-SqlQueryFunctionState {
                 switch ($Script:MainWindowForm.Elements.$Item.GetType().Name) {
                     "DataGrid" {}
                     default {
+
+                        if ($null -eq $Script:MainWindowForm.Elements.ComboBoxSelectQuery.SelectedItem.Content -and $Item -in ("ButtonShowSqlSchema", "ButtonSaveOutputFile", "ButtonShowOutput", "ButtonOpenOutputFile", "ButtonSaveQuery", "ButtonHistory", "ButtonRefreshQueries", "ButtonExecuteQuery")) {
+                            continue
+                        }
                         $Script:MainWindowForm.Elements.$Item.IsEnabled = $true
                     }
                 }

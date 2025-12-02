@@ -54,6 +54,12 @@ function Update-QueryList {
             $Script:MainWindowForm.Elements.TextBoxDisplayName.Text = $null
 
             $ClearQuery = $true
+            if ($null -ne $Private:Result -and $Private:Result -is [System.Management.Automation.ErrorRecord]) {
+                Set-SqlConnectionState -Status $false
+                $Private:Result.Exception.Message | Write-LogOutput -LogType ERROR
+                return
+            }
+
             $Private:Result.value | ForEach-Object {
                 $DoIdDisplayName = "{0} - {1}" -f $_.DisplayName, $_.Id
                 $Script:RunTimeData.QueryListCache.QueryList += @{
@@ -116,6 +122,6 @@ function Update-QueryList {
 
     }
     catch {
-        $_.Exception.Message | Write-LogOutput -LogType ERROR -ErrorObject $_
+        $_
     }
 }
