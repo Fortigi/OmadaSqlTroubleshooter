@@ -25,19 +25,20 @@
         $Script:MainWindowForm.Elements.TextBoxURL.IsEnabled = $true
 
         if (!$SkipAuthentication) {
-            $Script:MainWindowForm.Elements.ComboBoxSelectAuthenticationOption.SelectedItem = $null
-            $null | Set-ConfigProperty -Property "LastAuthentication"
+            "WebView2" | Set-ConfigProperty -Property "LastAuthentication"
+            $Script:MainWindowForm.Elements.ComboBoxSelectAuthenticationOption.SelectedItem = $Script:MainWindowForm.Elements.ComboBoxSelectAuthenticationOption.Items | Where-Object { $_.Content -eq $Script:AppConfig.LastAuthentication }
+
             if ($Script:MainWindowForm.Elements.TextBoxUserName.IsEnabled) {
                 $Script:MainWindowForm.Elements.TextBoxUserName.Text = $null
-                $Script:MainWindowForm.Elements.TextBoxUserName.IsEnabled = $false
+                $Script:MainWindowForm.Elements.TextBoxUserName.IsEnabled = $true
             }
             if ($Script:MainWindowForm.Elements.TextBoxPassword.IsEnabled) {
                 $Script:MainWindowForm.Elements.TextBoxPassword.Password = $null
-                $Script:MainWindowForm.Elements.TextBoxPassword.IsEnabled = $false
+                $Script:MainWindowForm.Elements.TextBoxPassword.IsEnabled = $true
             }
             if ($Script:MainWindowForm.Elements.CheckboxSavePassword.IsEnabled) {
                 $Script:MainWindowForm.Elements.CheckboxSavePassword.IsChecked = $false
-                $Script:MainWindowForm.Elements.CheckboxSavePassword.IsEnabled = $false
+                $Script:MainWindowForm.Elements.CheckboxSavePassword.IsEnabled = $true
             }
             if ($Script:MainWindowForm.Elements.TextBoxAppIdUri.IsEnabled) {
                 $Script:MainWindowForm.Elements.TextBoxAppIdUri.Text = $null
