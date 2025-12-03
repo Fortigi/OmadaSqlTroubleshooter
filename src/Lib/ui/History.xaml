@@ -96,10 +96,10 @@
                     <DataGrid.Columns>
                         <DataGridTextColumn Header="Change Date"
                                            Binding="{Binding ChangeDate, StringFormat=yyyy-MM-dd HH:mm:ss}"
-                                           Width="140"/>
+                                           MinWidth="100"/>
                         <DataGridTextColumn Header="Changed By"
                                            Binding="{Binding ChangedBy}"
-                                           Width="100"/>
+                                           MinWidth="100"/>
                     </DataGrid.Columns>
                 </DataGrid>
             </Border>
@@ -108,7 +108,7 @@
             <GridSplitter Grid.Column="1"
                          HorizontalAlignment="Stretch"
                          VerticalAlignment="Stretch"
-                         Background="#FF293955"
+                         Background="{DynamicResource {x:Static SystemColors.ScrollBarBrushKey}}"
                          Width="6"/>
 
             <!-- Content Viewer TabControl -->
