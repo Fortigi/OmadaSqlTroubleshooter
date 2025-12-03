@@ -10,8 +10,8 @@ $Script:SqlHistoryForm.Elements.ButtonExportHistory.Add_Click({
 
             $SaveFileDialog = New-Object Microsoft.Win32.SaveFileDialog
             $SaveFileDialog.Title = "Export SQL History"
-            $SaveFileDialog.Filter = "CSV Files (*.csv)|*.csv|JSON Files (*.json)|*.json|Text Files (*.txt)|*.txt|All Files (*.*)|*.*"
-            $SaveFileDialog.DefaultExt = ".csv"
+            $SaveFileDialog.Filter = "JSON Files (*.json)|*.json|CSV Files (*.csv)|*.csv|Text Files (*.txt)|*.txt|All Files (*.*)|*.*"
+            $SaveFileDialog.DefaultExt = ".json"
             $SaveFileDialog.FileName = "SQL_History_$((Get-Date).ToString('yyyyMMdd_HHmmss'))"
 
             $Result = $SaveFileDialog.ShowDialog()
