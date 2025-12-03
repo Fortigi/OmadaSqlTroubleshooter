@@ -153,6 +153,86 @@
                 }
             });
 
+            // Add F5 key handler to prevent refresh and signal PowerShell to execute query
+            editor.addCommand(monaco.KeyCode.F5, function() {
+                console.log('F5 pressed in Monaco Editor - signaling PowerShell to execute query');
+
+                // Send message to PowerShell to execute query
+                if (window.chrome && window.chrome.webview) {
+                    window.chrome.webview.postMessage({
+                        type: 'executeQuery',
+                        key: 'F5'
+                    });
+                }
+
+                // Prevent the editor from handling F5 internally
+                return false;
+            });
+
+            // Also handle Ctrl+F5 as an alternative shortcut
+            editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.F5, function() {
+                console.log('Ctrl+F5 pressed in Monaco Editor - signaling PowerShell to execute query');
+
+                // Send message to PowerShell to execute query
+                if (window.chrome && window.chrome.webview) {
+                    window.chrome.webview.postMessage({
+                        type: 'executeQuery',
+                        key: 'Ctrl+F5'
+                    });
+                }
+
+                return false;
+            });
+
+            // Add Ctrl+S handler for saving queries
+            editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyS, function() {
+                console.log('Ctrl+S pressed in Monaco Editor - signaling PowerShell to save query');
+
+                // Send message to PowerShell to save query
+                if (window.chrome && window.chrome.webview) {
+                    window.chrome.webview.postMessage({
+                        type: 'saveQuery',
+                        key: 'Ctrl+S'
+                    });
+                }
+
+                return false;
+            });
+
+            // Also add a global keydown event listener as backup
+            document.addEventListener('keydown', function(event) {
+                if (event.key === 'F5') {
+                    console.log('F5 intercepted by document keydown listener');
+                    event.preventDefault();
+                    event.stopPropagation();
+
+                    // Send message to PowerShell to execute query
+                    if (window.chrome && window.chrome.webview) {
+                        window.chrome.webview.postMessage({
+                            type: 'executeQuery',
+                            key: 'F5_global'
+                        });
+                    }
+
+                    return false;
+                }
+                else if (event.key === 's' && event.ctrlKey) {
+                    console.log('Ctrl+S intercepted by document keydown listener');
+                    event.preventDefault();
+                    event.stopPropagation();
+
+                    // Send message to PowerShell to save query
+                    if (window.chrome && window.chrome.webview) {
+                        window.chrome.webview.postMessage({
+                            type: 'saveQuery',
+                            key: 'Ctrl+S_global'
+                        });
+                    }
+
+                    return false;
+                }
+            }, true); // Use capture phase to intercept early
+
         });
     </script>
 </body>

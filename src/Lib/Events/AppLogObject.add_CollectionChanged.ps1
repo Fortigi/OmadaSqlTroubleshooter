@@ -3,7 +3,7 @@ $Script:RunTimeConfig.Logging.AppLogObject.add_CollectionChanged({
         #$_ | Show-EventInfo
 
         try {
-            Update-LogWindow
+            Update-LogForm
         }
         catch {
             Write-Host $_

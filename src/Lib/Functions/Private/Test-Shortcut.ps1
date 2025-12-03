@@ -1,8 +1,8 @@
 function Test-Shortcut {
     [CmdLetBinding()]
-    PARAM()
+    param()
     try {
-        $Script:Tracer::WriteLine(("{0}: Function: {1} - Caller: {2}({3}) - Command: {4}" -f $($Script:RunTimeConfig.ApplicationName), $($MyInvocation.MyCommand.Name), $($MyInvocation.ScriptName).Split("\")[-1], $($MyInvocation.ScriptLineNumber), $MyInvocation.Statement))
+        $Script:Tracer::WriteLine(("{0}: Function: {1} - Caller: {2}({3}) - Command: {4} - Parameters: {5}" -f $($Script:RunTimeConfig.ApplicationName), $($MyInvocation.MyCommand.Name), $($MyInvocation.ScriptName).Split("\")[-1], $($MyInvocation.ScriptLineNumber), $MyInvocation.Statement, ($PSBoundParameters | Out-String)))
         $LocalAppDataPath = Join-Path ([System.Environment]::GetFolderPath([System.Environment+SpecialFolder]::LocalApplicationData)) -ChildPath "OmadaSqlTroubleShooter"
         if (-not (Test-Path -Path $LocalAppDataPath)) {
             New-Item -Path $LocalAppDataPath -ItemType Directory -Force | Out-Null
@@ -10,8 +10,8 @@ function Test-Shortcut {
         $PsCallStack = Get-PSCallStack | Where-Object { $_.ScriptName -like "*OmadaSqlTroubleShooter.psm1" }
 
         $ModulePath = Split-Path -Path $PsCallStack.ScriptName -Parent
-        [xml]$MainWindowXaml = Get-Content (Join-Path $ModulePath -ChildPath "lib\ui\MainWindow.xaml")
-        $ScriptTitle = $MainWindowXaml.Window.Title
+        [xml]$MainFormXaml = Get-Content (Join-Path $ModulePath -ChildPath "lib\ui\MainForm.xaml")
+        $ScriptTitle = $MainFormXaml.Window.Title
         $WshShell = New-Object -ComObject WScript.Shell
         $ShortcutFullPath = Join-Path $WshShell.SpecialFolders("Programs") -ChildPath ("{0}.lnk" -f $ScriptTitle)
 
@@ -27,7 +27,7 @@ function Test-Shortcut {
         }
     }
     catch {
-        $_.Exception.Message | Write-LogOutput -LogType ERROR
+        $_.Exception.Message | Write-LogOutput -LogType ERROR -ErrorObject $_
     }
 }
 

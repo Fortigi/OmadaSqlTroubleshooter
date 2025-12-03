@@ -9,6 +9,6 @@ $Script:Webview.Object.add_NavigationCompleted({
             $Script:RunTimeConfig.ReconnectStatus = 3
         }
         catch {
-            $_.Exception.Message | Write-LogOutput -LogType ERROR
+            $_.Exception.Message | Write-LogOutput -LogType ERROR -ErrorObject $_
         }
     })

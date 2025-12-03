@@ -1,38 +1,38 @@
-function Update-LogWindowPosition {
+function Update-LogFormPosition {
     [CmdLetBinding()]
-    PARAM()
+    param()
     try {
-        $Script:Tracer::WriteLine(("{0}: Function: {1} - Caller: {2}({3}) - Command: {4}" -f $($Script:RunTimeConfig.ApplicationName), $($MyInvocation.MyCommand.Name), $($MyInvocation.ScriptName).Split("\")[-1], $($MyInvocation.ScriptLineNumber), $MyInvocation.Statement))
-        $Script:LogWindowForm.PositionManager.MainWindowRight = [Int]::Abs($Script:MainWindowForm.Definition.Left) + [Int]::Abs($Script:MainWindowForm.Definition.Width)
-        "PositionManagerLogWindow MainWindowRight: {0}" -f $Script:LogWindowForm.PositionManager.MainWindowRight | Write-LogOutput -LogType DEBUG
-        $Script:LogWindowForm.PositionManager.MainWindowBottom = [Int]::Abs($Script:MainWindowForm.Definition.Top) - [Int]::Abs($Script:MainWindowForm.Definition.Height)
-        "PositionManagerLogWindow MainWindowBottom: {0}" -f $Script:LogWindowForm.PositionManager.MainWindowRight | Write-LogOutput -LogType DEBUG
-        $Script:LogWindowForm.PositionManager.ChildWindowRight = [Int]::Abs($Script:LogWindowForm.Definition.Left) + [Int]::Abs($Script:LogWindowForm.Definition.Width)
-        "PositionManagerLogWindow ChildWindowRight: {0}" -f $Script:LogWindowForm.PositionManager.ChildWindowRight | Write-LogOutput -LogType DEBUG
-        $Script:LogWindowForm.PositionManager.ChildWindowBottom = [Int]::Abs($Script:LogWindowForm.Definition.Top) - [Int]::Abs($Script:LogWindowForm.Definition.Height)
-        "PositionManagerLogWindow ChildWindowBottom: {0}" -f $Script:LogWindowForm.PositionManager.ChildWindowBottom | Write-LogOutput -LogType DEBUG
+        $Script:Tracer::WriteLine(("{0}: Function: {1} - Caller: {2}({3}) - Command: {4} - Parameters: {5}" -f $($Script:RunTimeConfig.ApplicationName), $($MyInvocation.MyCommand.Name), $($MyInvocation.ScriptName).Split("\")[-1], $($MyInvocation.ScriptLineNumber), $MyInvocation.Statement, ($PSBoundParameters | Out-String)))
+        $Script:LogForm.PositionManager.MainFormRight = [Int]::Abs($Script:MainForm.Definition.Left) + [Int]::Abs($Script:MainForm.Definition.Width)
+        "PositionManagerLogForm MainFormRight: {0}" -f $Script:LogForm.PositionManager.MainFormRight | Write-LogOutput -LogType DEBUG
+        $Script:LogForm.PositionManager.MainFormBottom = [Int]::Abs($Script:MainForm.Definition.Top) - [Int]::Abs($Script:MainForm.Definition.Height)
+        "PositionManagerLogForm MainFormBottom: {0}" -f $Script:LogForm.PositionManager.MainFormRight | Write-LogOutput -LogType DEBUG
+        $Script:LogForm.PositionManager.ChildFormRight = [Int]::Abs($Script:LogForm.Definition.Left) + [Int]::Abs($Script:LogForm.Definition.Width)
+        "PositionManagerLogForm ChildFormRight: {0}" -f $Script:LogForm.PositionManager.ChildFormRight | Write-LogOutput -LogType DEBUG
+        $Script:LogForm.PositionManager.ChildFormBottom = [Int]::Abs($Script:LogForm.Definition.Top) - [Int]::Abs($Script:LogForm.Definition.Height)
+        "PositionManagerLogForm ChildFormBottom: {0}" -f $Script:LogForm.PositionManager.ChildFormBottom | Write-LogOutput -LogType DEBUG
 
-        if ([Int]::Abs($Script:LogWindowForm.Definition.Left) -lt [Int]::Abs($Script:MainWindowForm.Definition.Left)) {
-            $Script:LogWindowForm.Definition.Left = [Int]::Abs($Script:MainWindowForm.Definition.Left) + [Int]::Abs($Script:MainWindowForm.Definition.Width)
-            "LogWindowForm Definition Left: {0}" -f $Script:LogWindowForm.Definition.Left | Write-LogOutput -LogType DEBUG
+        if ([Int]::Abs($Script:LogForm.Definition.Left) -lt [Int]::Abs($Script:MainForm.Definition.Left)) {
+            $Script:LogForm.Definition.Left = [Int]::Abs($Script:MainForm.Definition.Left) + [Int]::Abs($Script:MainForm.Definition.Width)
+            "LogForm Definition Left: {0}" -f $Script:LogForm.Definition.Left | Write-LogOutput -LogType DEBUG
 
         }
-        elseif ($Script:LogWindowForm.PositionManager.ChildWindowRight -gt $Script:LogWindowForm.PositionManager.MainWindowRight) {
-            $Script:LogWindowForm.Definition.Left = [Int]::Abs($Script:MainWindowForm.Definition.Left) - $Script:LogWindowForm.Definition.Width
-            "LogWindowForm Definition Left: {0}" -f $Script:LogWindowForm.Definition.Left | Write-LogOutput -LogType DEBUG
+        elseif ($Script:LogForm.PositionManager.ChildFormRight -gt $Script:LogForm.PositionManager.MainFormRight) {
+            $Script:LogForm.Definition.Left = [Int]::Abs($Script:MainForm.Definition.Left) - $Script:LogForm.Definition.Width
+            "LogForm Definition Left: {0}" -f $Script:LogForm.Definition.Left | Write-LogOutput -LogType DEBUG
         }
 
-        if ($Script:LogWindowForm.Definition.Top -lt [Int]::Abs($Script:MainWindowForm.Definition.Top)) {
-            $Script:LogWindowForm.Definition.Top = [Int]::Abs($Script:MainWindowForm.Definition.Top) + [Int]::Abs($Script:MainWindowForm.Definition.Height)
-            "LogWindowForm Definition Top: {0}" -f $Script:LogWindowForm.Definition.Top | Write-LogOutput -LogType DEBUG
+        if ($Script:LogForm.Definition.Top -lt [Int]::Abs($Script:MainForm.Definition.Top)) {
+            $Script:LogForm.Definition.Top = [Int]::Abs($Script:MainForm.Definition.Top) + [Int]::Abs($Script:MainForm.Definition.Height)
+            "LogForm Definition Top: {0}" -f $Script:LogForm.Definition.Top | Write-LogOutput -LogType DEBUG
         }
-        elseif ($Script:PositionManager.ChildWindowBottom -gt $MainWindowBottom) {
-            $Script:LogWindowForm.Definition.Top = [Int]::Abs($Script:MainWindowForm.Definition.Top) - [Int]::Abs($Script:LogWindowForm.Definition.Height)
-            "LogWindowForm Definition Top: {0}" -f $Script:LogWindowForm.Definition.Top | Write-LogOutput -LogType DEBUG
+        elseif ($Script:PositionManager.ChildFormBottom -gt $MainFormBottom) {
+            $Script:LogForm.Definition.Top = [Int]::Abs($Script:MainForm.Definition.Top) - [Int]::Abs($Script:LogForm.Definition.Height)
+            "LogForm Definition Top: {0}" -f $Script:LogForm.Definition.Top | Write-LogOutput -LogType DEBUG
         }
 
     }
     catch {
-        $_.Exception.Message | Write-LogOutput -LogType ERROR
+        $_.Exception.Message | Write-LogOutput -LogType ERROR -ErrorObject $_
     }
 }

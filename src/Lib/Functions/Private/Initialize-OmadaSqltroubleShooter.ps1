@@ -3,7 +3,7 @@ function Initialize-OmadaSqlTroubleShooter {
     [System.Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSUseDeclaredVarsMoreThanAssignments', 'WebView2AlreadyLoaded', Justification = 'The variable is used, but script analyzer does not recognize it')]
     param()
     try {
-        $Script:Tracer::WriteLine(("{0}: Function: {1} - Caller: {2}({3}) - Command: {4}" -f $($Script:RunTimeConfig.ApplicationName), $($MyInvocation.MyCommand.Name), $($MyInvocation.ScriptName).Split("\")[-1], $($MyInvocation.ScriptLineNumber), $MyInvocation.Statement))
+        $Script:Tracer::WriteLine(("{0}: Function: {1} - Caller: {2}({3}) - Command: {4} - Parameters: {5}" -f $($Script:RunTimeConfig.ApplicationName), $($MyInvocation.MyCommand.Name), $($MyInvocation.ScriptName).Split("\")[-1], $($MyInvocation.ScriptLineNumber), $MyInvocation.Statement, ($PSBoundParameters | Out-String)))
         "Initializing application..." | Write-LogOutput -LogType DEBUG
         Push-Location $Script:RunTimeConfig.ModuleFolder
 
@@ -52,11 +52,13 @@ function Initialize-OmadaSqlTroubleShooter {
                 EntraIdTenantId       = $null
                 ForceAuthentication   = $false
             }
+            AuthenticationRetryCount       = 0
             QuerySaved                     = $false
             Password                       = $null
             QueryText                      = $null
             SqlQueryObject                 = $null
             QueryResult                    = $null
+            HistoryResult                  = $null
             CurrentQueryText               = $null
             CurrentSqlQuery                = [PSCustomObject]@{
                 DoId        = $null
@@ -74,7 +76,7 @@ function Initialize-OmadaSqlTroubleShooter {
                 SqlQueryCreatedBy = "c-2"
                 SqlQueryChangedBy = "c-4"
             }
-            SkipRetryRequest = $false
+            SkipRetryRequest               = $false
         }
         $Script:WebView = @{
             Object                  = $null

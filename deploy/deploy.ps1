@@ -70,9 +70,9 @@ try {
     $DeployScriptRoot = (Get-Item ($MyInvocation.MyCommand.Path | Split-Path )).Parent.FullName
     Push-Location $DeployScriptRoot
     $ScriptRootName = "src"
-    [xml]$MainWindowXaml = Get-Content (Join-Path $DeployScriptRoot -ChildPath "$ScriptRootName\lib\ui\MainWindow.xaml")
+    [xml]$MainFormXaml = Get-Content (Join-Path $DeployScriptRoot -ChildPath "$ScriptRootName\lib\ui\MainForm.xaml")
     $ScriptName = "OmadaSqlTroubleshooter.ps1"
-    $ScriptTitle = $MainWindowXaml.Window.Title
+    $ScriptTitle = $MainFormXaml.Window.Title
 
     $CommitId = "Unknown"
     try {

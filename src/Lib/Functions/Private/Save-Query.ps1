@@ -1,14 +1,14 @@
 function Save-Query {
     [CmdLetBinding()]
-    PARAM(
+    param(
         [switch]$NewQuery
     )
     try {
-        $Script:Tracer::WriteLine(("{0}: Function: {1} - Caller: {2}({3}) - Command: {4}" -f $($Script:RunTimeConfig.ApplicationName), $($MyInvocation.MyCommand.Name), $($MyInvocation.ScriptName).Split("\")[-1], $($MyInvocation.ScriptLineNumber), $MyInvocation.Statement))
+        $Script:Tracer::WriteLine(("{0}: Function: {1} - Caller: {2}({3}) - Command: {4} - Parameters: {5}" -f $($Script:RunTimeConfig.ApplicationName), $($MyInvocation.MyCommand.Name), $($MyInvocation.ScriptName).Split("\")[-1], $($MyInvocation.ScriptLineNumber), $MyInvocation.Statement, ($PSBoundParameters | Out-String)))
         if ($NewQuery) {
             "Create new query" | Write-LogOutput -LogType DEBUG
 
-            $Script:RunTimeData.RestMethodParam.Uri = '{0}/odata/dataobjects/C_P_SQLTROUBLESHOOTING?$filter=Deleted ne true and NAME eq ''{1}''' -f $Script:AppConfig.BaseUrl, $Script:MainWindowForm.Elements.TextBoxDisplayName.Text
+            $Script:RunTimeData.RestMethodParam.Uri = '{0}/odata/dataobjects/C_P_SQLTROUBLESHOOTING?$filter=Deleted ne true and NAME eq ''{1}''' -f $Script:AppConfig.BaseUrl, $Script:MainForm.Elements.TextBoxDisplayName.Text
             "QueryUrl: {0}" -f $Script:RunTimeData.RestMethodParam.Uri | Write-LogOutput -LogType DEBUG
             "Check if a query with this name already exists" | Write-LogOutput -LogType DEBUG
             $Script:RunTimeData.RestMethodParam.Body = $null
@@ -20,8 +20,10 @@ function Save-Query {
                 $Script:RunTimeData.RestMethodParam.Method = "POST"
             }
             else {
-                $Script:MainWindowForm.Elements.ButtonSaveQuery.IsEnabled = $true
-                $Script:MainWindowForm.Elements.ButtonExecuteQuery.IsEnabled = $true
+
+                $Script:MainForm.Elements.ButtonSaveQuery.IsEnabled = $true
+                $Script:MainForm.Elements.ButtonExecuteQuery.IsEnabled = $true
+
                 "Query with this name already exists!" | Write-LogOutput -LogType ERROR
                 return
             }
@@ -39,8 +41,8 @@ function Save-Query {
                 $Script:RunTimeData.RestMethodParam.Body.Add("C_SQLTROUBLESHOOTING_DATACONNECTION", @{Id = $Script:AppConfig.CurrentDataConnection.DoId })
             }
         }
-        if ($Script:RunTimeData.CurrentSqlQuery.DisplayName -ne $Script:MainWindowForm.Elements.TextBoxDisplayName.Text) {
-            $Script:RunTimeData.RestMethodParam.Body.Add("NAME", $Script:MainWindowForm.Elements.TextBoxDisplayName.Text)
+        if ($Script:RunTimeData.CurrentSqlQuery.DisplayName -ne $Script:MainForm.Elements.TextBoxDisplayName.Text) {
+            $Script:RunTimeData.RestMethodParam.Body.Add("NAME", $Script:MainForm.Elements.TextBoxDisplayName.Text)
         }
         if (!$NewQuery -and ($Script:RunTimeData.RestMethodParam.Body.Keys | Measure-Object).Count -le 0) {
             "No changes detected! Saving not needed." | Write-LogOutput -LogType DEBUG
@@ -63,21 +65,21 @@ function Save-Query {
                     $private:Result.Id, $private:Result.Name | Set-ConfigProperty -Property "CurrentSqlQuery"
                     $ComboBoxSelectQueryItem = New-Object System.Windows.Controls.ComboBoxItem
                     $ComboBoxSelectQueryItem.Content = $Script:AppConfig.CurrentSqlQuery.FullName
-                    $Script:MainWindowForm.Elements.ComboBoxSelectQuery.Items.Add($ComboBoxSelectQueryItem) | Out-Null
+                    $Script:MainForm.Elements.ComboBoxSelectQuery.Items.Add($ComboBoxSelectQueryItem) | Out-Null
                 }
                 else {
                     "New display name, Current: {0}, New: {1}" -f $Script:RunTimeData.CurrentSqlQuery.DisplayName, $private:Result.DisplayName | Write-LogOutput -LogType VERBOSE
                     "Force update query list" | Write-LogOutput -LogType DEBUG
                     Update-QueryList -ForceRefresh
                     $Script:RunTimeData.CurrentSqlQuery.DoId = $Script:AppConfig.CurrentSqlQuery.DoId
-                    $ComboBoxSelectQueryItem = $Script:MainWindowForm.Elements.ComboBoxSelectQuery.Items | Where-Object { $_.Content -like "*$($Script:AppConfig.CurrentSqlQuery.DoId)" }
+                    $ComboBoxSelectQueryItem = $Script:MainForm.Elements.ComboBoxSelectQuery.Items | Where-Object { $_.Content -like "*$($Script:AppConfig.CurrentSqlQuery.DoId)" }
                     if ($null -eq $ComboBoxSelectQueryItem) {
                         $ComboBoxSelectQueryItem = New-Object System.Windows.Controls.ComboBoxItem
                         $ComboBoxSelectQueryItem.Content = $Script:AppConfig.CurrentSqlQuery.FullName
-                        $Script:MainWindowForm.Elements.ComboBoxSelectQuery.Items.Add($ComboBoxSelectQueryItem) | Out-Null
+                        $Script:MainForm.Elements.ComboBoxSelectQuery.Items.Add($ComboBoxSelectQueryItem) | Out-Null
                     }
                 }
-                $Script:MainWindowForm.Elements.ComboBoxSelectQuery.SelectedItem = $ComboBoxSelectQueryItem
+                $Script:MainForm.Elements.ComboBoxSelectQuery.SelectedItem = $ComboBoxSelectQueryItem
                 $Script:RunTimeData.CurrentSqlQuery.DisplayName = $private:Result.DisplayName
                 return $private:Result
             }
@@ -87,7 +89,7 @@ function Save-Query {
         }
     }
     catch {
-        $_.Exception.Message | Write-LogOutput -LogType ERROR
+        $_.Exception.Message | Write-LogOutput -LogType ERROR -ErrorObject $_
     }
 
 }

@@ -7,68 +7,58 @@
     )
 
     try {
-        $Script:Tracer::WriteLine(("{0}: Function: {1} - Caller: {2}({3}) - Command: {4}" -f $($Script:RunTimeConfig.ApplicationName), $($MyInvocation.MyCommand.Name), $($MyInvocation.ScriptName).Split("\")[-1], $($MyInvocation.ScriptLineNumber), $MyInvocation.Statement))
-        if ($null -ne $Script:SqlSchemaWindow -and $null -ne $Script:SqlSchemaWindow.Definitions -and $Script:SqlSchemaWindow.Definitions.IsVisible) {
-            $Script:SqlSchemaWindow.Definitions.Close()
+        $Script:Tracer::WriteLine(("{0}: Function: {1} - Caller: {2}({3}) - Command: {4} - Parameters: {5}" -f $($Script:RunTimeConfig.ApplicationName), $($MyInvocation.MyCommand.Name), $($MyInvocation.ScriptName).Split("\")[-1], $($MyInvocation.ScriptLineNumber), $MyInvocation.Statement, ($PSBoundParameters | Out-String)))
+        if ($null -ne $Script:SqlSchemaForm -and $null -ne $Script:SqlSchemaForm.Definitions -and $Script:SqlSchemaForm.Definitions.IsVisible) {
+            $Script:SqlSchemaForm.Definitions.Close()
         }
-        $Script:MainWindowForm.Elements.ButtonExecuteQuery.IsEnabled = $false
-        $Script:MainWindowForm.Elements.ButtonSaveOutputFile.IsEnabled = $false
-        $Script:MainWindowForm.Elements.ButtonOpenOutputFile.IsEnabled = $false
+        $Script:MainForm.Elements.ButtonExecuteQuery.IsEnabled = $false
+        $Script:MainForm.Elements.ButtonSaveOutputFile.IsEnabled = $false
+        $Script:MainForm.Elements.ButtonOpenOutputFile.IsEnabled = $false
 
         if (!$SkipTextBoxURL) {
-            $Script:MainWindowForm.Elements.TextBoxURL.Text = $null
+            $Script:MainForm.Elements.TextBoxURL.Text = $null
             $null | Set-ConfigProperty -Property "BaseUrl"
-            $Script:MainWindowForm.Elements.ComboBoxSelectDataConnection.SelectedItem = $null
-            $Script:MainWindowForm.Elements.ComboBoxSelectDataConnection.Clear()
-            $Script:MainWindowForm.Elements.ComboBoxSelectDataConnection.IsEnabled = $false
             $null, $null | Set-ConfigProperty -Property "CurrentDataConnection"
-            $Script:MainWindowForm.Elements.ComboBoxSelectQuery.SelectedItem = $null
-            $Script:MainWindowForm.Elements.ComboBoxSelectQuery.Items.Clear()
-            $Script:MainWindowForm.Elements.CheckboxMyCreatedQueries.IsChecked = $false
-            $Script:MainWindowForm.Elements.CheckboxMyCreatedQueries.IsEnabled = $false
-            $Script:MainWindowForm.Elements.CheckboxMyUpdatedQueries.IsChecked = $false
-            $Script:MainWindowForm.Elements.CheckboxMyUpdatedQueries.IsEnabled = $false
             $null, $null | Set-ConfigProperty -Property "CurrentSqlQuery"
+            Set-SqlConnectionState -Status $false
         }
-        $Script:MainWindowForm.Elements.TextBoxURL.IsEnabled = $true
+        $Script:MainForm.Elements.TextBoxURL.IsEnabled = $true
 
         if (!$SkipAuthentication) {
-            $Script:MainWindowForm.Elements.ComboBoxSelectAuthenticationOption.SelectedItem = $null
-            $null | Set-ConfigProperty -Property "LastAuthentication"
-            if ($Script:MainWindowForm.Elements.TextBoxUserName.IsEnabled) {
-                $Script:MainWindowForm.Elements.TextBoxUserName.Text = $null
-                $Script:MainWindowForm.Elements.TextBoxUserName.IsEnabled = $false
+            "WebView2" | Set-ConfigProperty -Property "LastAuthentication"
+            $Script:MainForm.Elements.ComboBoxSelectAuthenticationOption.SelectedItem = $Script:MainForm.Elements.ComboBoxSelectAuthenticationOption.Items | Where-Object { $_.Content -eq $Script:AppConfig.LastAuthentication }
+
+            if ($Script:MainForm.Elements.TextBoxUserName.IsEnabled) {
+                $Script:MainForm.Elements.TextBoxUserName.Text = $null
+                $Script:MainForm.Elements.TextBoxUserName.IsEnabled = $true
             }
-            if ($Script:MainWindowForm.Elements.TextBoxPassword.IsEnabled) {
-                $Script:MainWindowForm.Elements.TextBoxPassword.Password = $null
-                $Script:MainWindowForm.Elements.TextBoxPassword.IsEnabled = $false
+            if ($Script:MainForm.Elements.TextBoxPassword.IsEnabled) {
+                $Script:MainForm.Elements.TextBoxPassword.Password = $null
+                $Script:MainForm.Elements.TextBoxPassword.IsEnabled = $true
             }
-            if ($Script:MainWindowForm.Elements.CheckboxSavePassword.IsEnabled) {
-                $Script:MainWindowForm.Elements.CheckboxSavePassword.IsChecked = $false
-                $Script:MainWindowForm.Elements.CheckboxSavePassword.IsEnabled = $false
+            if ($Script:MainForm.Elements.CheckboxSavePassword.IsEnabled) {
+                $Script:MainForm.Elements.CheckboxSavePassword.IsChecked = $false
+                $Script:MainForm.Elements.CheckboxSavePassword.IsEnabled = $true
             }
-            if ($Script:MainWindowForm.Elements.TextBoxAppIdUri.IsEnabled) {
-                $Script:MainWindowForm.Elements.TextBoxAppIdUri.Text = $null
-                $Script:MainWindowForm.Elements.TextBoxAppIdUri.IsEnabled = $false
+            if ($Script:MainForm.Elements.TextBoxAppIdUri.IsEnabled) {
+                $Script:MainForm.Elements.TextBoxAppIdUri.Text = $null
+                $Script:MainForm.Elements.TextBoxAppIdUri.IsEnabled = $false
             }
-            if ($Script:MainWindowForm.Elements.TextEntraIdTenantId.IsEnabled) {
-                $Script:MainWindowForm.Elements.TextEntraIdTenantId.Text = $null
-                $Script:MainWindowForm.Elements.TextEntraIdTenantId.IsEnabled = $false
+            if ($Script:MainForm.Elements.TextEntraIdTenantId.IsEnabled) {
+                $Script:MainForm.Elements.TextEntraIdTenantId.Text = $null
+                $Script:MainForm.Elements.TextEntraIdTenantId.IsEnabled = $false
             }
         }
 
         if (!$SkipTextBoxURL -and !$SkipAuthentication) {
-            # $Script:MainWindowForm.Elements.ButtonReset.IsEnabled = $false
-            $Script:MainWindowForm.Elements.TextBoxDisplayName.IsEnabled = $false
-            $Script:MainWindowForm.Elements.TextBoxDisplayName.Text = $null
+            Set-SqlQueryFunctionState -Status $false
             "Clear Editor Value because no query is selected!" | Write-LogOutput -LogType DEBUG
             $ScriptToExecute = "editor.setValue('');"
             Push-ToEditor -ScriptToExecute $ScriptToExecute
         }
 
-        $Script:MainWindowForm.Elements.ButtonShowOutput.IsEnabled = $false
-        $Script:MainWindowForm.Elements.ButtonSaveQuery.IsEnabled = $false
-        $Script:MainWindowForm.Elements.ButtonShowSqlSchema.IsEnabled = $false
+        $Script:MainForm.Elements.ButtonShowOutput.IsEnabled = $false
+        $Script:MainForm.Elements.ButtonSaveQuery.IsEnabled = $false
 
         if ($ResetEditor -and $null -ne $Script:Webview.Object.CoreWebView2) {
             Set-EditorValue
@@ -77,6 +67,6 @@
         $Script:RunTimeData.RestMethodParam.ForceAuthentication = $true
     }
     catch {
-        $_.Exception.Message | Write-LogOutput -LogType ERROR
+        $_.Exception.Message | Write-LogOutput -LogType ERROR -ErrorObject $_
     }
 }
