@@ -4,9 +4,9 @@ function Set-EditorValue {
     try {
         $Script:Tracer::WriteLine(("{0}: Function: {1} - Caller: {2}({3}) - Command: {4} - Parameters: {5}" -f $($Script:RunTimeConfig.ApplicationName), $($MyInvocation.MyCommand.Name), $($MyInvocation.ScriptName).Split("\")[-1], $($MyInvocation.ScriptLineNumber), $MyInvocation.Statement, ($PSBoundParameters | Out-String)))
 
-        if ($null -ne $Script:MainWindowForm.Elements.ComboBoxSelectQuery.SelectedItem) {
-            "Selected SQL Query object: {0}" -f $Script:MainWindowForm.Elements.ComboBoxSelectQuery.SelectedItem.Content | Write-LogOutput -LogType DEBUG
-            $Script:MainWindowForm.Elements.ComboBoxSelectQuery.SelectedItem.Content | Set-ConfigProperty -Property "CurrentSqlQuery"
+        if ($null -ne $Script:MainForm.Elements.ComboBoxSelectQuery.SelectedItem) {
+            "Selected SQL Query object: {0}" -f $Script:MainForm.Elements.ComboBoxSelectQuery.SelectedItem.Content | Write-LogOutput -LogType DEBUG
+            $Script:MainForm.Elements.ComboBoxSelectQuery.SelectedItem.Content | Set-ConfigProperty -Property "CurrentSqlQuery"
 
             if ([string]::IsNullOrWhiteSpace($Script:AppConfig.CurrentSqlQuery.DoId)) {
                 "Omada Url not set or Query not selected. Set correct values to execute queries!" | Write-LogOutput -LogType WARNING
@@ -29,19 +29,22 @@ function Set-EditorValue {
                 $Script:RunTimeData.CurrentSqlQuery.DoId = $Private:Result.Id
                 $Script:RunTimeData.CurrentSqlQuery.DisplayName = $Private:Result.DisplayName
 
-                $Script:MainWindowForm.Elements.TextBoxDisplayName.Text = $Private:Result.DisplayName
+                $Script:MainForm.Elements.TextBoxDisplayName.Text = $Private:Result.DisplayName
                 $Private:Result.C_SQLTROUBLESHOOTING_DATACONNECTION.Id, $Private:Result.C_SQLTROUBLESHOOTING_DATACONNECTION.DisplayName | Set-ConfigProperty -Property "CurrentDataConnection"
 
                 Set-DataConnection
                 Set-SqlQueryFunctionState -Status $true
-                $Script:MainWindowForm.Elements.ButtonSaveQuery.IsEnabled = $true
-                $Script:MainWindowForm.Elements.ButtonReset.IsEnabled = $true
+                $Script:MainForm.Elements.ButtonSaveQuery.IsEnabled = $true
+                $Script:MainForm.Elements.ButtonReset.IsEnabled = $true
 
                 if ($null -ne $Script:Webview.Object.CoreWebView2) {
-                    # Add a small delay and check if Monaco Editor is ready before setting value
+                    "Push query to editor!" | Write-LogOutput -LogType DEBUG
                     $SafeQuery = $Private:Result.C_QUERY -replace "`n", "\n" -replace "`r", "\r" -replace "`t", "\t" -replace "'", "\'"
                     $ScriptToExecute = @"
 (function() {
+    let retryCount = 0;
+    const maxRetries = 10;
+
     function setEditorValue() {
         if (typeof editor !== 'undefined' && editor && typeof editor.setValue === 'function') {
             try {
@@ -53,8 +56,14 @@ function Set-EditorValue {
                 return false;
             }
         } else {
-            console.log('Editor not ready yet, retrying...');
-            setTimeout(setEditorValue, 100);
+            retryCount++;
+            if (retryCount < maxRetries) {
+                console.log('Editor not ready yet, retry ' + retryCount + '/' + maxRetries);
+                setTimeout(setEditorValue, 100);
+            } else {
+                console.error('Failed to set editor value after ' + maxRetries + ' attempts');
+                return false;
+            }
         }
     }
     setEditorValue();

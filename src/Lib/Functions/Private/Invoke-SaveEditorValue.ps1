@@ -28,8 +28,8 @@ function Invoke-SaveEditorValue {
                     "Task result: {0}" -f $Script:Task.Status | Write-LogOutput -LogType DEBUG
                 }
 
-                $Script:MainWindowForm.Elements.ButtonSaveQuery.IsEnabled = $true
-                $Script:MainWindowForm.Elements.ButtonExecuteQuery.IsEnabled = $true
+                $Script:MainForm.Elements.ButtonSaveQuery.IsEnabled = $true
+                $Script:MainForm.Elements.ButtonExecuteQuery.IsEnabled = $true
             }
             catch {
                 $Script:Task.Exception.Message | Write-LogOutput -LogType ERROR -ErrorObject $_

@@ -1,4 +1,4 @@
-function Update-LogWindow {
+function Update-LogForm {
     [CmdLetBinding()]
     PARAM()
     try {
@@ -6,7 +6,7 @@ function Update-LogWindow {
         if ($null -ne $Script:TextBoxLog) {
             $Script:TextBoxLog.Dispatcher.Invoke({
                     $Script:TextBoxLog.AppendText($LogMessage.Text + "`n")
-                    if ($Script:TextBoxLog.IsLoaded -and (Invoke-LogWindowScrollToEnd)) {
+                    if ($Script:TextBoxLog.IsLoaded -and (Invoke-LogFormScrollToEnd)) {
                         $Script:TextBoxLog.ScrollToEnd()
                     }
                 })

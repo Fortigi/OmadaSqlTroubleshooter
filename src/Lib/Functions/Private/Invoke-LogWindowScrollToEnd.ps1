@@ -1,4 +1,4 @@
-function Invoke-LogWindowScrollToEnd {
+function Invoke-LogFormScrollToEnd {
     [CmdLetBinding()]
     param()
     try {

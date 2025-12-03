@@ -8,25 +8,25 @@ function Set-SqlConnectionState {
 
         Set-SqlQueryFunctionState -Status $Status
         if ($Status) {
-            $Script:MainWindowForm.Elements.ButtonReset.IsEnabled = $true
-            $Script:MainWindowForm.Elements.TextBoxUserName.IsEnabled = $false
-            $Script:MainWindowForm.Elements.TextBoxPassword.IsEnabled = $false
-            $Script:MainWindowForm.Elements.CheckBoxSavePassword.IsEnabled = $false
-            $Script:MainWindowForm.Elements.TextBoxAppIdUri.IsEnabled = $false
-            $Script:MainWindowForm.Elements.TextBoxEntraIdTenantId.IsEnabled = $false
-            $Script:MainWindowForm.Elements.TextBoxUrl.IsEnabled = $false
-            $Script:MainWindowForm.Elements.TextBlockStatusBarConnectionStatus | Set-TextBlockText -Text "Connected"
-            $Script:MainWindowForm.Elements.ButtonConnectText | Set-ButtonText -Value "_Disconnect"
-            $Script:MainWindowForm.Elements.TextBlockStatusBarUrl.Text = ([System.Uri]::new($Script:MainWindowForm.Elements.TextBoxUrl.Text)).Authority
+            $Script:MainForm.Elements.ButtonReset.IsEnabled = $true
+            $Script:MainForm.Elements.TextBoxUserName.IsEnabled = $false
+            $Script:MainForm.Elements.TextBoxPassword.IsEnabled = $false
+            $Script:MainForm.Elements.CheckBoxSavePassword.IsEnabled = $false
+            $Script:MainForm.Elements.TextBoxAppIdUri.IsEnabled = $false
+            $Script:MainForm.Elements.TextBoxEntraIdTenantId.IsEnabled = $false
+            $Script:MainForm.Elements.TextBoxUrl.IsEnabled = $false
+            $Script:MainForm.Elements.TextBlockStatusBarConnectionStatus | Set-TextBlockText -Text "Connected"
+            $Script:MainForm.Elements.ButtonConnectText | Set-ButtonText -Value "_Disconnect"
+            $Script:MainForm.Elements.TextBlockStatusBarUrl.Text = ([System.Uri]::new($Script:MainForm.Elements.TextBoxUrl.Text)).Authority
 
-            if (($Script:MainWindowForm.Elements.ComboBoxSelectDataConnection.Items | Measure-Object).Count -le 1 -or ($Script:MainWindowForm.Elements.ComboBoxSelectQuery.Items | Measure-Object).Count -le 1 -and $null -ne $Script:RunTimeConfig.ReconnectStatus -and $Script:RunTimeConfig.ReconnectStatus -ge 2) {
-                if ($null -ne $Script:MainWindowForm -and $Script:MainWindowForm.Definition -and $Script:MainWindowForm.Definition.IsVisible) {
+            if (($Script:MainForm.Elements.ComboBoxSelectDataConnection.Items | Measure-Object).Count -le 1 -or ($Script:MainForm.Elements.ComboBoxSelectQuery.Items | Measure-Object).Count -le 1 -and $null -ne $Script:RunTimeConfig.ReconnectStatus -and $Script:RunTimeConfig.ReconnectStatus -ge 2) {
+                if ($null -ne $Script:MainForm -and $Script:MainForm.Definition -and $Script:MainForm.Definition.IsVisible) {
                     $ConnectingWindow = Show-PopupWindow -Message "Connecting to Omada..."
                 }
-                if ($null -ne $Script:Webview.Object.CoreWebView2 -and ($Script:MainWindowForm.Elements.ComboBoxSelectDataConnection.Items | Measure-Object).Count -lt 8) {
+                if ($null -ne $Script:Webview.Object.CoreWebView2 -and ($Script:MainForm.Elements.ComboBoxSelectDataConnection.Items | Measure-Object).Count -lt 8) {
                     Update-DataConnectionList -NotShowPopupWindow
                 }
-                if ($null -ne $Script:Webview.Object.CoreWebView2 -and ($Script:MainWindowForm.Elements.ComboBoxSelectQuery.Items | Measure-Object).Count -le 1) {
+                if ($null -ne $Script:Webview.Object.CoreWebView2 -and ($Script:MainForm.Elements.ComboBoxSelectQuery.Items | Measure-Object).Count -le 1) {
                     Update-QueryList -NotShowPopupWindow
                 }
                 if ($null -ne $ConnectingWindow) {
@@ -34,25 +34,25 @@ function Set-SqlConnectionState {
                 }
             }
             $Script:ConnectionStatus = $true
-            $Script:MainWindowForm.Definition.Title = "{0} - {1}" -f $Script:RunTimeConfig.ApplicationTitle, ([System.Uri]::new($Script:MainWindowForm.Elements.TextBoxUrl.Text)).Authority
+            $Script:MainForm.Definition.Title = "{0} - {1}" -f $Script:RunTimeConfig.ApplicationTitle, ([System.Uri]::new($Script:MainForm.Elements.TextBoxUrl.Text)).Authority
             $Script:RunTimeData.RestMethodParam.ForceAuthentication = $false
         }
         else {
-            $Script:MainWindowForm.Elements.ButtonReset.IsEnabled = $true
-            $Script:MainWindowForm.Elements.ComboBoxSelectAuthenticationOption.IsEnabled = $true
-            $Script:MainWindowForm.Elements.TextBoxUserName.IsEnabled = $true
-            $Script:MainWindowForm.Elements.TextBoxPassword.IsEnabled = $true
-            $Script:MainWindowForm.Elements.CheckBoxSavePassword.IsEnabled = $true
-            $Script:MainWindowForm.Elements.TextBoxAppIdUri.IsEnabled = $true
-            $Script:MainWindowForm.Elements.TextBoxEntraIdTenantId.IsEnabled = $true
-            $Script:MainWindowForm.Elements.TextBoxUrl.IsEnabled = $true
-            $Script:MainWindowForm.Elements.TextBlockStatusBarConnectionStatus | Set-TextBlockText -Text "Disconnected"
-            $Script:MainWindowForm.Elements.ButtonConnectText | Set-ButtonText -Value "_Connect"
-            $Script:MainWindowForm.Elements.TextBlockStatusBarUrl | Set-TextBlockText -Text "-"
-            $Script:MainWindowForm.Elements.TextBlockStatusBarDatabaseName | Set-TextBlockText -Text "-"
-            $Script:MainWindowForm.Elements.TextBlockStatusBarQueryTime | Set-TextBlockText -Text "00:00:00.0000000"
-            $Script:MainWindowForm.Elements.TextBlockStatusBarRows | Set-TextBlockText -Text "0 rows"
-            $Script:MainWindowForm.Definition.Title = $Script:RunTimeConfig.ApplicationTitle
+            $Script:MainForm.Elements.ButtonReset.IsEnabled = $true
+            $Script:MainForm.Elements.ComboBoxSelectAuthenticationOption.IsEnabled = $true
+            $Script:MainForm.Elements.TextBoxUserName.IsEnabled = $true
+            $Script:MainForm.Elements.TextBoxPassword.IsEnabled = $true
+            $Script:MainForm.Elements.CheckBoxSavePassword.IsEnabled = $true
+            $Script:MainForm.Elements.TextBoxAppIdUri.IsEnabled = $true
+            $Script:MainForm.Elements.TextBoxEntraIdTenantId.IsEnabled = $true
+            $Script:MainForm.Elements.TextBoxUrl.IsEnabled = $true
+            $Script:MainForm.Elements.TextBlockStatusBarConnectionStatus | Set-TextBlockText -Text "Disconnected"
+            $Script:MainForm.Elements.ButtonConnectText | Set-ButtonText -Value "_Connect"
+            $Script:MainForm.Elements.TextBlockStatusBarUrl | Set-TextBlockText -Text "-"
+            $Script:MainForm.Elements.TextBlockStatusBarDatabaseName | Set-TextBlockText -Text "-"
+            $Script:MainForm.Elements.TextBlockStatusBarQueryTime | Set-TextBlockText -Text "00:00:00.0000000"
+            $Script:MainForm.Elements.TextBlockStatusBarRows | Set-TextBlockText -Text "0 rows"
+            $Script:MainForm.Definition.Title = $Script:RunTimeConfig.ApplicationTitle
 
             $ScriptToExecute = "editor.setValue('');"
             Push-ToEditor -ScriptToExecute $ScriptToExecute

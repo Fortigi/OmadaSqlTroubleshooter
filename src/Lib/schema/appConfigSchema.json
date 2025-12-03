@@ -90,51 +90,51 @@
     ]
   },
   {
-    "Name": "LogWindowFormOpen",
+    "Name": "LogFormOpen",
     "Type": "String"
   },
   {
-    "Name": "SqlSchemaWindowFormOpen",
+    "Name": "SqlSchemaFormOpen",
     "Type": "Bool"
   },
   {
-    "Name": "SqlHistoryWindowFormOpen",
+    "Name": "SqlHistoryFormOpen",
     "Type": "Bool"
   },
   {
-    "Name": "MainWindowPosition",
+    "Name": "MainFormPosition",
     "Type": "String"
   },
   {
-    "Name": "LogWindowPosition",
+    "Name": "LogFormPosition",
     "Type": "String"
   },
   {
-    "Name": "SqlSchemaWindowPosition",
+    "Name": "SqlSchemaFormPosition",
     "Type": "String"
   },
   {
-    "Name": "SqlHistoryWindowPosition",
+    "Name": "SqlHistoryFormPosition",
     "Type": "String"
   },
   {
-    "Name": "MainWindowSize",
+    "Name": "MainFormSize",
     "Type": "String"
   },
   {
-    "Name": "LogWindowSize",
+    "Name": "LogFormSize",
     "Type": "String"
   },
   {
-    "Name": "SqlSchemaWindowSize",
+    "Name": "SqlSchemaFormSize",
     "Type": "String"
   },
   {
-    "Name": "SqlHistoryWindowSize",
+    "Name": "SqlHistoryFormSize",
     "Type": "String"
   },
   {
-    "Name": "LogWindowWordWrap",
+    "Name": "LogFormWordWrap",
     "Type": "Bool"
   },
   {

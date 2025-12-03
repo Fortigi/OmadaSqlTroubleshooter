@@ -4,32 +4,32 @@ function Test-ConnectionButton {
     try {
         $Script:Tracer::WriteLine(("{0}: Function: {1} - Caller: {2}({3}) - Command: {4} - Parameters: {5}" -f $($Script:RunTimeConfig.ApplicationName), $($MyInvocation.MyCommand.Name), $($MyInvocation.ScriptName).Split("\")[-1], $($MyInvocation.ScriptLineNumber), $MyInvocation.Statement, ($PSBoundParameters | Out-String)))
 
-        if ([string]::IsNullOrEmpty($Script:MainWindowForm.Elements.TextBoxURL.Text) -or $null -eq $Script:MainWindowForm.Elements.ComboBoxSelectAuthenticationOption.SelectedItem) {
-            $Script:MainWindowForm.Elements.ButtonConnect.IsEnabled = $false
-            $Script:MainWindowForm.Elements.ButtonConnectText | Set-ButtonText -Value "_Connect"
-            $Script:MainWindowForm.Elements.ButtonConnect.ToolTip = "Connect to Omada"
+        if ([string]::IsNullOrEmpty($Script:MainForm.Elements.TextBoxURL.Text) -or $null -eq $Script:MainForm.Elements.ComboBoxSelectAuthenticationOption.SelectedItem) {
+            $Script:MainForm.Elements.ButtonConnect.IsEnabled = $false
+            $Script:MainForm.Elements.ButtonConnectText | Set-ButtonText -Value "_Connect"
+            $Script:MainForm.Elements.ButtonConnect.ToolTip = "Connect to Omada"
         }
         else {
-            if ($Script:MainWindowForm.Elements.ComboBoxSelectAuthenticationOption.SelectedItem.Content -eq "OAuth" -and
+            if ($Script:MainForm.Elements.ComboBoxSelectAuthenticationOption.SelectedItem.Content -eq "OAuth" -and
                 (
-                    [string]::IsNullOrWhiteSpace($Script:MainWindowForm.Elements.TextBoxUserName.Text) -or
-                    [string]::IsNullOrWhiteSpace($Script:MainWindowForm.Elements.TextBoxPassword.Password) -or
-                    [string]::IsNullOrWhiteSpace($Script:MainWindowForm.Elements.TextBoxEntraIdTenantId.Text)
+                    [string]::IsNullOrWhiteSpace($Script:MainForm.Elements.TextBoxUserName.Text) -or
+                    [string]::IsNullOrWhiteSpace($Script:MainForm.Elements.TextBoxPassword.Password) -or
+                    [string]::IsNullOrWhiteSpace($Script:MainForm.Elements.TextBoxEntraIdTenantId.Text)
                 )
             ) {
-                $Script:MainWindowForm.Elements.ButtonConnect.IsEnabled = $false
-                $Script:MainWindowForm.Elements.ButtonConnectText | Set-ButtonText -Value "_Connect"
-                $Script:MainWindowForm.Elements.ButtonConnect.ToolTip = "Connect to Omada"
+                $Script:MainForm.Elements.ButtonConnect.IsEnabled = $false
+                $Script:MainForm.Elements.ButtonConnectText | Set-ButtonText -Value "_Connect"
+                $Script:MainForm.Elements.ButtonConnect.ToolTip = "Connect to Omada"
             }
             else {
-                $Script:MainWindowForm.Elements.ButtonConnect.IsEnabled = $true
+                $Script:MainForm.Elements.ButtonConnect.IsEnabled = $true
                 if ($Script:ConnectionStatus) {
-                    $Script:MainWindowForm.Elements.ButtonConnectText | Set-ButtonText -Value "_Disconnect"
-                    $Script:MainWindowForm.Elements.ButtonConnect.ToolTip = "Disconnect from Omada"
+                    $Script:MainForm.Elements.ButtonConnectText | Set-ButtonText -Value "_Disconnect"
+                    $Script:MainForm.Elements.ButtonConnect.ToolTip = "Disconnect from Omada"
                 }
                 else {
-                    $Script:MainWindowForm.Elements.ButtonConnectText | Set-ButtonText -Value "_Connect"
-                    $Script:MainWindowForm.Elements.ButtonConnect.ToolTip = "Connect to Omada"
+                    $Script:MainForm.Elements.ButtonConnectText | Set-ButtonText -Value "_Connect"
+                    $Script:MainForm.Elements.ButtonConnect.ToolTip = "Connect to Omada"
                 }
             }
         }

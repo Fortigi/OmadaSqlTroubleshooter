@@ -5,7 +5,7 @@ function Show-PopupWindow {
     )
     try {
         $Script:Tracer::WriteLine(("{0}: Function: {1} - Caller: {2}({3}) - Command: {4} - Parameters: {5}" -f $($Script:RunTimeConfig.ApplicationName), $($MyInvocation.MyCommand.Name), $($MyInvocation.ScriptName).Split("\")[-1], $($MyInvocation.ScriptLineNumber), $MyInvocation.Statement, ($PSBoundParameters | Out-String)))
-        if ($null -eq $Script:MainWindowForm -or $null -eq $Script:MainWindowForm.Definition -or !$Script:MainWindowForm.Definition.IsVisible) {
+        if ($null -eq $Script:MainForm -or $null -eq $Script:MainForm.Definition -or !$Script:MainForm.Definition.IsVisible) {
             return
         }
 
@@ -18,13 +18,13 @@ function Show-PopupWindow {
         $PopupWindow.AllowsTransparency = $true
         $PopupWindow.Opacity = 0.8
         $PopupWindow.WindowStartupLocation = [System.Windows.WindowStartupLocation]::CenterOwner
-        $PopupWindow.Owner = $Script:MainWindowForm.Definition
+        $PopupWindow.Owner = $Script:MainForm.Definition
         $PopupWindow.ShowInTaskbar = $false
         $PopupWindow.Focusable = $false
         $PopupWindow.IsTabStop = $false
 
         $PopupWindow.Add_Closed({
-                Restore-MainWindowFocus
+                Restore-MainFormFocus
             })
 
         $Grid = New-Object System.Windows.Controls.Grid

@@ -40,7 +40,7 @@ function Initialize-FormObject {
 
         # Access controls
         $Elements = @()
-        $ElementNames = @( "AccessText", "Button", "CheckBox", "ComboBox", "ComboBoxItem", "DataGrid", "Image", "PasswordBox", "RadioButton", "RichTextBox", "TextBlock", "TextBox", "TreeViewSqlSchema", "WebView2")
+        $ElementNames = @( "AccessText", "Button", "CheckBox", "ComboBox", "ComboBoxItem", "DataGrid", "Image", "Label", "PasswordBox", "RadioButton", "RichTextBox", "TextBlock", "TextBox", "TreeViewSqlSchema", "WebView2")
         foreach ($ElementName in $ElementNames) {
             "Find element type: {0}" -f $ElementName | Write-LogOutput -LogType DEBUG
             $Xaml.DocumentElement.SelectNodes("//default:$ElementName", $NamespaceManager) | ForEach-Object {
@@ -77,7 +77,7 @@ function Initialize-FormObject {
         "Return form object for: {0}" -f $Form.Name | Write-LogOutput -LogType DEBUG
 
         "Set Image Paths" | Write-LogOutput -LogType DEBUG
-        foreach ($Element in ($Elements.Keys | ForEach-Object { $Elements.$_ | Where-Object { $_ -is [System.Windows.Controls.Image] } })) {
+        foreach ($Element in ($Elements.Keys | ForEach-Object { $Elements.$_ | Where-Object { $_ -is [System.Windows.Controls.Image] -and $null -ne $_.Tag } })) {
             $ImagePath = Join-Path $Script:RunTimeConfig.ModuleFolder -ChildPath (Join-Path "lib\ui"  -ChildPath $Elements.($Element.Name).Tag)
             "Set path for image '{0}' to: {1}" -f $Element.Name, $ImagePath | Write-LogOutput -LogType DEBUG
             $Elements.($Element.Name).Source = $ImagePath
@@ -101,11 +101,11 @@ function Initialize-FormObject {
                 PositionOffSetLeft  = 0
                 PositionOffSetRight = 0
                 PositionOffSetTop   = 0
-                MainWindowRight     = 0
-                MainWindowBottom    = 0
-                ChildWindowLeft     = 0
-                ChildWindowRight    = 0
-                ChildWindowBottom   = 0
+                MainFormRight     = 0
+                MainFormBottom    = 0
+                ChildFormLeft     = 0
+                ChildFormRight    = 0
+                ChildFormBottom   = 0
                 LastPositionChange  = Get-Date
             }
         }

@@ -10,8 +10,8 @@ function Test-Shortcut {
         $PsCallStack = Get-PSCallStack | Where-Object { $_.ScriptName -like "*OmadaSqlTroubleShooter.psm1" }
 
         $ModulePath = Split-Path -Path $PsCallStack.ScriptName -Parent
-        [xml]$MainWindowXaml = Get-Content (Join-Path $ModulePath -ChildPath "lib\ui\MainWindow.xaml")
-        $ScriptTitle = $MainWindowXaml.Window.Title
+        [xml]$MainFormXaml = Get-Content (Join-Path $ModulePath -ChildPath "lib\ui\MainForm.xaml")
+        $ScriptTitle = $MainFormXaml.Window.Title
         $WshShell = New-Object -ComObject WScript.Shell
         $ShortcutFullPath = Join-Path $WshShell.SpecialFolders("Programs") -ChildPath ("{0}.lnk" -f $ScriptTitle)
 

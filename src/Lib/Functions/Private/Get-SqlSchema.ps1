@@ -27,7 +27,7 @@ function Get-SqlSchemaObject {
             $Script:RunTimeData.RestMethodParam.Method = "POST"
             $ReturnValue = Invoke-OmadaPSWebRequestWrapper
 
-            $Script:SqlSchemaWindowForm.Definition.Title = "Sql Schema - {0}" -f $Script:AppConfig.CurrentDataConnection.FullName
+            $Script:SqlSchemaForm.Definition.Title = "Sql Schema - {0}" -f $Script:AppConfig.CurrentDataConnection.FullName
 
             "Retrieved object {0}" -f $Script:RunTimeData.SqlQueryObject | Write-LogOutput -LogType VERBOSE
 

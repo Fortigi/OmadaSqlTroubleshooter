@@ -4,35 +4,35 @@ function Set-OmadaUrl {
     try {
         $Script:Tracer::WriteLine(("{0}: Function: {1} - Caller: {2}({3}) - Command: {4} - Parameters: {5}" -f $($Script:RunTimeConfig.ApplicationName), $($MyInvocation.MyCommand.Name), $($MyInvocation.ScriptName).Split("\")[-1], $($MyInvocation.ScriptLineNumber), $MyInvocation.Statement, ($PSBoundParameters | Out-String)))
 
-        if (![string]::IsNullOrWhiteSpace($Script:MainWindowForm.Elements.TextBoxURL.Text)) {
+        if (![string]::IsNullOrWhiteSpace($Script:MainForm.Elements.TextBoxURL.Text)) {
 
             $Uri = $null
             try {
-                $Uri = [System.Uri]::new($Script:MainWindowForm.Elements.TextBoxURL.Text.Trim())
+                $Uri = [System.Uri]::new($Script:MainForm.Elements.TextBoxURL.Text.Trim())
             }
             catch {}
 
             if ($null -eq $Uri) {
-                if ($Script:MainWindowForm.Elements.TextBoxURL.Text -notlike "http*") {
-                    if ($Script:MainWindowForm.Elements.TextBoxURL.Text -notlike "*.*" -and $Script:MainWindowForm.Elements.TextBoxURL.Text -notlike "*.omada.cloud") {
-                        $Script:MainWindowForm.Elements.TextBoxURL | Set-TextBlockText -Text "https://$($Script:MainWindowForm.Elements.TextBoxURL.Text).omada.cloud"
+                if ($Script:MainForm.Elements.TextBoxURL.Text -notlike "http*") {
+                    if ($Script:MainForm.Elements.TextBoxURL.Text -notlike "*.*" -and $Script:MainForm.Elements.TextBoxURL.Text -notlike "*.omada.cloud") {
+                        $Script:MainForm.Elements.TextBoxURL | Set-TextBlockText -Text "https://$($Script:MainForm.Elements.TextBoxURL.Text).omada.cloud"
                     }
                     else {
-                        $Script:MainWindowForm.Elements.TextBoxURL | Set-TextBlockText -Text "https://$($Script:MainWindowForm.Elements.TextBoxURL.Text)"
+                        $Script:MainForm.Elements.TextBoxURL | Set-TextBlockText -Text "https://$($Script:MainForm.Elements.TextBoxURL.Text)"
                     }
                 }
             }
             elseif ($Uri.Scheme -ne 'http' -and $Uri.Scheme -ne 'https') {
-                "Input Url {0} is not valid." -f $Script:MainWindowForm.Elements.TextBoxURL.Text.Trim() | Write-LogOutput -LogType ERROR
+                "Input Url {0} is not valid." -f $Script:MainForm.Elements.TextBoxURL.Text.Trim() | Write-LogOutput -LogType ERROR
             }
 
-            $Uri = [System.Uri]::new($Script:MainWindowForm.Elements.TextBoxURL.Text.Trim())
+            $Uri = [System.Uri]::new($Script:MainForm.Elements.TextBoxURL.Text.Trim())
 
             if ($Uri.IsAbsoluteUri -and ($Uri.Scheme -eq 'http' -or $Uri.Scheme -eq 'https')) {
                 ("Input Url {0} is valid." -f $Uri.IsAbsoluteUri) | Write-LogOutput -LogType DEBUG
             }
             else {
-                "Input Url {0} is not valid." -f $Script:MainWindowForm.Elements.TextBoxURL.Text.Trim() | Write-LogOutput -LogType ERROR
+                "Input Url {0} is not valid." -f $Script:MainForm.Elements.TextBoxURL.Text.Trim() | Write-LogOutput -LogType ERROR
             }
 
             $DnsResult = $null
@@ -58,7 +58,7 @@ function Set-OmadaUrl {
             }
             else {
                 "Omada Url maintained: {0}" -f $Script:AppConfig.BaseUrl | Write-LogOutput -LogType DEBUG
-                $Script:MainWindowForm.Elements.ComboBoxSelectAuthenticationOption.IsEnabled = $true
+                $Script:MainForm.Elements.ComboBoxSelectAuthenticationOption.IsEnabled = $true
             }
         }
         else {
@@ -66,7 +66,7 @@ function Set-OmadaUrl {
         }
     }
     catch {
-        $Script:MainWindowForm.Elements.TextBoxURL | Set-TextBlockText -Text $null
+        $Script:MainForm.Elements.TextBoxURL | Set-TextBlockText -Text $null
         $null | Set-ConfigProperty -Property "BaseUrl"
         Set-SqlConnectionState -Status $false
         $_

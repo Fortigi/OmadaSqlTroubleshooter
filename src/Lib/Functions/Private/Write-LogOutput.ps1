@@ -149,10 +149,10 @@ function Write-LogOutput {
             $LogMessage.Text | Write-Verbose
         }
         if ($LogMessageDialog.Show -and !$SkipDialog) {
-            if ($null -ne $Script:MainWindowForm -and $null -ne $Script:MainWindowForm.Definition -and $Script:MainWindowForm.Definition.IsVisible) {
+            if ($null -ne $Script:MainForm -and $null -ne $Script:MainForm.Definition -and $Script:MainForm.Definition.IsVisible) {
                 $TrimmedText = Limit-MessageBoxText -Text $LogMessageDialog.Text
                 [System.Windows.Forms.MessageBox]::Show($TrimmedText, $LogMessageDialog.Title, [System.Windows.Forms.MessageBoxButtons]::OK, $LogMessageDialog.Icon)
-                Restore-MainWindowFocus
+                Restore-MainFormFocus
             }
             else {
                 $MessageBoxImage = [System.Windows.MessageBoxImage]::Information
@@ -174,7 +174,7 @@ function Write-LogOutput {
             $LogMessage.Text, $LogMessage.CallStack -join ", `n" | Write-Error
         }
         if ($null -ne $Script:TextBoxLog -and $Script:TextBoxLog.IsLoaded) {
-            if (Invoke-LogWindowScrollToEnd) {
+            if (Invoke-LogFormScrollToEnd) {
                 $Script:TextBoxLog.ScrollToEnd()
             }
         }

@@ -51,37 +51,37 @@ function Invoke-ExecuteQuery {
 
                     if ($null -ne $Script:RunTimeData.QueryResult -and ($Script:RunTimeData.QueryResult.d.Rows | Measure-Object).Count -le 0) {
                         "Query did not return any results!" | Write-LogOutput -LogType WARNING
-                        $Script:MainWindowForm.Elements.TextBlockStatusBarRows | Set-TextBlockText -Text "0 rows"
-                        $Script:MainWindowForm.Elements.DataGridQueryResult.ItemsSource = $null
+                        $Script:MainForm.Elements.TextBlockStatusBarRows | Set-TextBlockText -Text "0 rows"
+                        $Script:MainForm.Elements.DataGridQueryResult.ItemsSource = $null
                     }
                     else {
-                        $Script:MainWindowForm.Elements.DataGridQueryResult.AutoGenerateColumns = $true
+                        $Script:MainForm.Elements.DataGridQueryResult.AutoGenerateColumns = $true
                         try {
-                            $Script:MainWindowForm.Elements.DataGridQueryResult.ItemsSource = @($Script:RunTimeData.QueryResult.d.Rows)
+                            $Script:MainForm.Elements.DataGridQueryResult.ItemsSource = @($Script:RunTimeData.QueryResult.d.Rows)
                         }
                         catch {
                             #Work-around issue that Omada can return invalid JSON keys.
-                            $Script:MainWindowForm.Elements.DataGridQueryResult.ItemsSource = @(($Script:RunTimeData.QueryResult | ConvertTo-Json -Depth 10 | Invoke-SanitizeJsonKeys | ConvertFrom-Json -Depth 10).d.Rows)
+                            $Script:MainForm.Elements.DataGridQueryResult.ItemsSource = @(($Script:RunTimeData.QueryResult | ConvertTo-Json -Depth 10 | Invoke-SanitizeJsonKeys | ConvertFrom-Json -Depth 10).d.Rows)
                         }
                         "Result:`r`n{0}" -f ($Script:RunTimeData.QueryResult.d.rows | Format-Table -AutoSize | Out-String -Width 10000000 ) | Write-LogOutput -LogType VERBOSE2
-                        $Script:MainWindowForm.Elements.ButtonShowOutput.IsEnabled = $true
-                        $Script:MainWindowForm.Elements.ButtonSaveOutputFile.IsEnabled = $true
+                        $Script:MainForm.Elements.ButtonShowOutput.IsEnabled = $true
+                        $Script:MainForm.Elements.ButtonSaveOutputFile.IsEnabled = $true
                         "{0} record(s) retrieved!" -f $Script:RunTimeData.QueryResult.d.Records | Write-LogOutput
 
-                        $Script:MainWindowForm.Elements.TextBlockStatusBarRows | Set-TextBlockText -Text ("{0:n0} rows" -f [Int]$Script:RunTimeData.QueryResult.d.Records)
+                        $Script:MainForm.Elements.TextBlockStatusBarRows | Set-TextBlockText -Text ("{0:n0} rows" -f [Int]$Script:RunTimeData.QueryResult.d.Records)
                         $Private:Result.Id, $Private:Result.DisplayName | Set-ConfigProperty -Property "CurrentSqlQuery"
                         if ($Private:Result.DisplayName -ne $Script:RunTimeData.CurrentSqlQuery.DisplayName) {
                             "New display name, Current: {0}, New: {1}" -f $Script:RunTimeData.CurrentSqlQuery.DisplayName, $Private:Result.DisplayName | Write-LogOutput -LogType DEBUG
                             "Force update query list" | Write-LogOutput -LogType DEBUG
                             Update-QueryList -ForceRefresh
                             if ($null -ne $ComboBoxSelectQueryItem) {
-                                $ComboBoxSelectQueryItem = $Script:MainWindowForm.Elements.ComboBoxSelectQuery.Items | Where-Object { $_.Content -like "*$($Script:AppConfig.CurrentSqlQuery.DoId)" }
+                                $ComboBoxSelectQueryItem = $Script:MainForm.Elements.ComboBoxSelectQuery.Items | Where-Object { $_.Content -like "*$($Script:AppConfig.CurrentSqlQuery.DoId)" }
 
                                 $ComboBoxSelectQueryItem = New-Object System.Windows.Controls.ComboBoxItem
                                 $ComboBoxSelectQueryItem.Content = $Script:AppConfig.CurrentSqlQuery.FullName
-                                $Script:MainWindowForm.Elements.ComboBoxSelectQuery.Items.Add($ComboBoxSelectQueryItem) | Out-Null
+                                $Script:MainForm.Elements.ComboBoxSelectQuery.Items.Add($ComboBoxSelectQueryItem) | Out-Null
                             }
-                            $Script:MainWindowForm.Elements.ComboBoxSelectQuery.SelectedItem = $ComboBoxSelectQueryItem
+                            $Script:MainForm.Elements.ComboBoxSelectQuery.SelectedItem = $ComboBoxSelectQueryItem
                         }
                     }
                 }
@@ -91,8 +91,8 @@ function Invoke-ExecuteQuery {
                 else {
                     "Task result: {0}" -f $Script:Task.Status | Write-LogOutput -LogType DEBUG
                 }
-                $Script:MainWindowForm.Elements.ButtonSaveQuery.IsEnabled = $true
-                $Script:MainWindowForm.Elements.ButtonExecuteQuery.IsEnabled = $true
+                $Script:MainForm.Elements.ButtonSaveQuery.IsEnabled = $true
+                $Script:MainForm.Elements.ButtonExecuteQuery.IsEnabled = $true
                 if ($null -ne $Script:PopupWindowExecuteQuery) {
                     $Script:PopupWindowExecuteQuery.Close()
                 }
@@ -100,12 +100,12 @@ function Invoke-ExecuteQuery {
                 if ($null -ne $Script:RunTimeData.StopWatch) {
                     $Script:RunTimeData.StopWatch.Stop()
                     "Elapsed time: {0}" -f $Script:RunTimeData.StopWatch.Elapsed.ToString() | Write-LogOutput -LogType Debug
-                    $Script:MainWindowForm.Elements.TextBlockStatusBarQueryTime.Text = $Script:RunTimeData.StopWatch.Elapsed.ToString()
+                    $Script:MainForm.Elements.TextBlockStatusBarQueryTime.Text = $Script:RunTimeData.StopWatch.Elapsed.ToString()
                 }
             }
             catch {
-                $Script:MainWindowForm.Elements.ButtonSaveQuery.IsEnabled = $true
-                $Script:MainWindowForm.Elements.ButtonExecuteQuery.IsEnabled = $true
+                $Script:MainForm.Elements.ButtonSaveQuery.IsEnabled = $true
+                $Script:MainForm.Elements.ButtonExecuteQuery.IsEnabled = $true
                 if ($null -ne $Script:PopupWindowExecuteQuery) {
                     $Script:PopupWindowExecuteQuery.Close()
                 }
@@ -117,10 +117,10 @@ function Invoke-ExecuteQuery {
     catch {
         if ($null -ne $Script:RunTimeData.StopWatch) {
             $Script:RunTimeData.StopWatch.Stop()
-            $Script:MainWindowForm.Elements.TextBlockStatusBarQueryTime.Text = $Script:RunTimeData.StopWatch.Elapsed.ToString()
+            $Script:MainForm.Elements.TextBlockStatusBarQueryTime.Text = $Script:RunTimeData.StopWatch.Elapsed.ToString()
         }
-        $Script:MainWindowForm.Elements.ButtonSaveQuery.IsEnabled = $true
-        $Script:MainWindowForm.Elements.ButtonExecuteQuery.IsEnabled = $true
+        $Script:MainForm.Elements.ButtonSaveQuery.IsEnabled = $true
+        $Script:MainForm.Elements.ButtonExecuteQuery.IsEnabled = $true
         if ($null -ne $Script:PopupWindowExecuteQuery) {
             $Script:PopupWindowExecuteQuery.Close()
         }

@@ -3,21 +3,21 @@ function Test-ConnectionRequirements {
     param()
     try {
         $Script:Tracer::WriteLine(("{0}: Function: {1} - Caller: {2}({3}) - Command: {4} - Parameters: {5}" -f $($Script:RunTimeConfig.ApplicationName), $($MyInvocation.MyCommand.Name), $($MyInvocation.ScriptName).Split("\")[-1], $($MyInvocation.ScriptLineNumber), $MyInvocation.Statement, ($PSBoundParameters | Out-String)))
-        if ([string]::IsNullOrEmpty($Script:MainWindowForm.Elements.TextBoxURL.Text)) {
+        if ([string]::IsNullOrEmpty($Script:MainForm.Elements.TextBoxURL.Text)) {
             "URL is empty" | Write-LogOutput -LogType DEBUG
             return $false
         }
-        if ($null -eq $Script:MainWindowForm.Elements.ComboBoxSelectAuthenticationOption.SelectedItem) {
+        if ($null -eq $Script:MainForm.Elements.ComboBoxSelectAuthenticationOption.SelectedItem) {
             "Authentication option is not selected" | Write-LogOutput -LogType DEBUG
             return $false
         }
-        if ($Script:MainWindowForm.Elements.ComboBoxSelectAuthenticationOption.SelectedItem.Content -eq "OAuth") {
+        if ($Script:MainForm.Elements.ComboBoxSelectAuthenticationOption.SelectedItem.Content -eq "OAuth") {
             "OAuth is selected" | Write-LogOutput -LogType DEBUG
-            if ([string]::IsNullOrWhiteSpace($Script:MainWindowForm.Elements.TextBoxUserName.Text)) {
+            if ([string]::IsNullOrWhiteSpace($Script:MainForm.Elements.TextBoxUserName.Text)) {
                 "Username is empty" | Write-LogOutput -LogType DEBUG
                 return $false
             }
-            if ([string]::IsNullOrWhiteSpace($Script:MainWindowForm.Elements.TextBoxPassword.Password)) {
+            if ([string]::IsNullOrWhiteSpace($Script:MainForm.Elements.TextBoxPassword.Password)) {
                 "Password is empty" | Write-LogOutput -LogType DEBUG
                 return $false
             }

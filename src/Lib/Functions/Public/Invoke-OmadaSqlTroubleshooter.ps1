@@ -78,7 +78,7 @@ function Invoke-OmadaSqlTroubleshooter {
             AppLogObject        = [System.Collections.ObjectModel.ObservableCollection[string]]::new()
         }
         StopWatch          = $null
-        LastWindowMeasured = Get-Date
+        LastFormMeasured = Get-Date
         ConfigFile         = [PSCustomObject]@{
             Path = $null
             Name = $null
@@ -98,12 +98,12 @@ function Invoke-OmadaSqlTroubleshooter {
 
     #region wpf
     $SplashScreenForm = Open-SplashScreenForm
-    "Loading Main Window Object" | Write-LogOutput -LogType DEBUG
-    $Script:MainWindowForm = Initialize-FormObject -FormPath (Join-Path $Script:RunTimeConfig.ModuleFolder -ChildPath "lib\ui\MainWindow.xaml") -AppendVersion
+    "Loading Main Form Object" | Write-LogOutput -LogType DEBUG
+    $Script:MainForm = Initialize-FormObject -FormPath (Join-Path $Script:RunTimeConfig.ModuleFolder -ChildPath "lib\ui\MainForm.xaml") -AppendVersion
 
-    $Script:RunTimeConfig.ApplicationTitle = $Script:MainWindowForm.Definition.Title.ToString()
+    $Script:RunTimeConfig.ApplicationTitle = $Script:MainForm.Definition.Title.ToString()
     "Get WebView" | Write-LogOutput -LogType DEBUG
-    $Script:Webview.Object = $Script:MainWindowForm.Definition.FindName("webView21")
+    $Script:Webview.Object = $Script:MainForm.Definition.FindName("webView21")
     #endregion
 
     #region events
@@ -111,15 +111,13 @@ function Invoke-OmadaSqlTroubleshooter {
     #How to lookup events for a button: ([System.Windows.Controls.Button].GetEvents()|where name -eq 'Click').AddMethod.Name
     # Events are moved to .\Lib\Events
     "Read Events" | Write-LogOutput -LogType DEBUG
-    Initialize-FormEvents -FormName "MainWindowForm"
+    Initialize-FormEvents -FormName "MainForm"
 
     #endregion
 
     #region process
     try {
-        "Show Splash Screen" | Write-LogOutput -LogType DEBUG
-        [void]$SplashScreenForm.Show()
-        [System.Windows.Forms.Application]::DoEvents()
+        [System.Windows.Threading.Dispatcher]::CurrentDispatcher.Invoke([System.Windows.Threading.DispatcherPriority]::Background, [action]{})
 
         "Application '{0}': Start initialization..." -f $Script:RunTimeConfig.ApplicationTitle | Write-Host -ForegroundColor Green
         $Script:ConnectionStatus = $false
@@ -138,22 +136,22 @@ function Invoke-OmadaSqlTroubleshooter {
         $Message = "Application '{0}': Initialized!" -f $Script:RunTimeConfig.ApplicationTitle
         $Message | Write-Host -ForegroundColor Green
         $Message | Write-LogOutput -LogType DEBUG
-        "Loading Main Window with settings:`r`n{0}" -f ($Script:AppConfig | ConvertTo-Json) | Write-LogOutput -LogType DEBUG
+        "Loading Main form with settings:`r`n{0}" -f ($Script:AppConfig | ConvertTo-Json) | Write-LogOutput -LogType DEBUG
 
-        [void]$Script:MainWindowForm.Definition.ShowDialog()
+        [void]$Script:MainForm.Definition.ShowDialog()
         $Message = "Application '{0}': Closed, cleaning-up!" -f $Script:RunTimeConfig.ApplicationTitle
         if (!$Script:RunTimeConfig.SavePassword) {
             $null | Set-ConfigProperty -Property "Password"
         }
-        elseif ($null -ne $Script:MainWindowForm.Elements.TextBoxPassword.Password) {
-            $Script:MainWindowForm.Elements.TextBoxPassword.Password | Set-ConfigProperty -Property "Password"
+        elseif ($null -ne $Script:MainForm.Elements.TextBoxPassword.Password) {
+            $Script:MainForm.Elements.TextBoxPassword.Password | Set-ConfigProperty -Property "Password"
         }
         $Message | Write-Host -ForegroundColor Green
         $Message | Write-LogOutput -LogType DEBUG
         "Set-ConfigProperty" | Write-LogOutput -LogType DEBUG
         Set-ConfigProperty
-        "Close Main Window" | Write-LogOutput -LogType DEBUG
-        $Script:MainWindowForm.Definition.Close() | Out-Null
+        "Close Main Form" | Write-LogOutput -LogType DEBUG
+        $Script:MainForm.Definition.Close() | Out-Null
         $Script:Webview.Object.Dispose() | Out-Null
     }
     catch {

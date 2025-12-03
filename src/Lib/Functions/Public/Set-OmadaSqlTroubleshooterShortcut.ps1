@@ -36,8 +36,8 @@ function Set-OmadaSqlTroubleShooterShortcut {
     }
     $ModuleInfo = Get-Module OmadaSqlTroubleShooter
     $ModulePath = Split-Path -Path $ModuleInfo.Path -Parent
-    [xml]$MainWindowXaml = Get-Content (Join-Path $ModulePath -ChildPath "lib\ui\MainWindow.xaml")
-    $ScriptTitle = $MainWindowXaml.Window.Title
+    [xml]$MainFormXaml = Get-Content (Join-Path $ModulePath -ChildPath "lib\ui\MainForm.xaml")
+    $ScriptTitle = $MainFormXaml.Window.Title
 
     $WshShell = New-Object -ComObject WScript.Shell
     $PowerShellExecPath = (Get-Command "pwsh.exe").Path
