@@ -104,7 +104,7 @@ function Initialize-ConfigSettings {
             $Script:RunTimeData.RestMethodParam.EntraIdTenantId = $Script:AppConfig.EntraIdTenantId
         }
 
-        $Script:RunTimeData.RestMethodParam.ForceAuthentication = $true
+        $Script:RunTimeData.RestMethodParam.ForceAuthentication = $false
         Set-AuthenticationOption
         Set-OmadaUrl
 
