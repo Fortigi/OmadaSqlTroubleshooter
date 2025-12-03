@@ -67,8 +67,8 @@ function Get-SqlHistory {
                     $SqlHistoryObject = [PSCustomObject]@{
                         DoId          = $Script:AppConfig.CurrentSqlQuery.DoId
                         SqlObjectName = $Row.Object
-                        OldValue      = $ChangedField.OldValue
-                        NewValue      = $ChangedField.NewValue
+                        OldValue      = $null -ne $ChangedField.OldValue ? [System.Web.HttpUtility]::HtmlDecode($ChangedField.OldValue) : $null
+                        NewValue      = $null -ne $ChangedField.NewValue ? [System.Web.HttpUtility]::HtmlDecode($ChangedField.NewValue) : $null
                         ChangedBy     = $Row.Who
                         ChangeType    = $Row.What
                         ChangeDate    = (Get-Date ($Row.When))
