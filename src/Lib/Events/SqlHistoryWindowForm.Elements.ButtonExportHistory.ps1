@@ -8,7 +8,6 @@ $Script:SqlHistoryWindowForm.Elements.ButtonExportHistory.Add_Click({
         try {
             $_ | Show-EventInfo
 
-            # Create save file dialog
             $SaveFileDialog = New-Object Microsoft.Win32.SaveFileDialog
             $SaveFileDialog.Title = "Export SQL History"
             $SaveFileDialog.Filter = "CSV Files (*.csv)|*.csv|JSON Files (*.json)|*.json|Text Files (*.txt)|*.txt|All Files (*.*)|*.*"
@@ -21,7 +20,6 @@ $Script:SqlHistoryWindowForm.Elements.ButtonExportHistory.Add_Click({
                 $FilePath = $SaveFileDialog.FileName
                 $Extension = [System.IO.Path]::GetExtension($FilePath).ToLower()
 
-                # Get all history data from DataGrid
                 $HistoryData = $Script:SqlHistoryWindowForm.Elements.DataGridHistory.ItemsSource
 
                 if ($null -eq $HistoryData -or $HistoryData.Count -eq 0) {
@@ -37,7 +35,7 @@ $Script:SqlHistoryWindowForm.Elements.ButtonExportHistory.Add_Click({
                         $HistoryData | ConvertTo-Json -Depth 3 | Set-Content -Path $FilePath -Encoding UTF8
                     }
                     default {
-                        # Default to text format
+
                         $TextContent = @()
                         $TextContent += "SQL Query History Export - Generated: $((Get-Date).ToString('yyyy-MM-dd HH:mm:ss'))"
                         $TextContent += "=" * 80
@@ -68,7 +66,6 @@ $Script:SqlHistoryWindowForm.Elements.ButtonExportHistory.Add_Click({
 
                 "SQL history exported to: $FilePath" | Write-LogOutput
 
-                # Ask if user wants to open the exported file
                 $OpenResult = [System.Windows.MessageBox]::Show(
                     "SQL history has been exported successfully.`n`nWould you like to open the exported file?",
                     "Export Complete",

@@ -14,7 +14,6 @@ $Script:SqlHistoryWindowForm.Elements.ButtonRestoreQuery.Add_Click({
                 return
             }
 
-            # Confirm restore action
             $Result = [System.Windows.MessageBox]::Show(
                 "Are you sure you want to restore this query version?`n`nChanged by: $($SelectedItem.ChangedBy)`nChange date: $($SelectedItem.ChangeDate.ToString('yyyy-MM-dd HH:mm:ss'))",
                 "Confirm Query Restore",
@@ -23,7 +22,6 @@ $Script:SqlHistoryWindowForm.Elements.ButtonRestoreQuery.Add_Click({
             )
 
             if ($Result -eq [System.Windows.MessageBoxResult]::Yes) {
-                # Set the Monaco Editor content to the selected version
                 try {
 
                     if ($null -ne $Script:Webview.Object.CoreWebView2) {
@@ -35,7 +33,6 @@ $Script:SqlHistoryWindowForm.Elements.ButtonRestoreQuery.Add_Click({
                     }
                     "Query restored from history: {0}" -f $SelectedItem.ChangeDate.ToString('yyyy-MM-dd HH:mm:ss') | Write-LogOutput
 
-                    # Close history window
                     $Script:SqlHistoryWindowForm.Definition.Close()
                 }
                 catch {
