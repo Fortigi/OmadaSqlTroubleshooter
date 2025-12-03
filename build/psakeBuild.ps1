@@ -226,14 +226,6 @@ Task Build -depends Test {
         $HeaderContent += New-HeaderRow -Text  ("Copyright Fortigi (C) {0}" -f $Date.ToString("yyyy")) -Length $Length -FillChar " "
         $HeaderContent += New-HeaderRow -Text  "" -Length $Length -FillChar "#"
         $HeaderContent += "`n"
-
-        if ($null -ne $LatestOmadaWebPSVersion) {
-            $HeaderContent += '#requires -Modules @{{ ModuleName="OmadaWeb.PS"; ModuleVersion="{0}" }}' -f $LatestOmadaWebPSVersion
-        }
-        else {
-            $HeaderContent += '#requires -Module OmadaWeb.PS'
-        }
-
         $HeaderContent += "`n"
         $HeaderContent += '#requires -Version 7.0'
         $HeaderContent += "`n"
@@ -242,6 +234,10 @@ Task Build -depends Test {
 
         $ModuleFileContent = Get-Content -Path "$ModuleSource\OmadaSqlTroubleShooter.psm1" -Encoding UTF8 -ErrorAction Stop
         $ModuleFileContent = $ModuleFileContent | Where-Object { $_ -notmatch '^\s*#requires' -and $_ -notmatch '^\s*#' }
+
+        #Work-around for enforcing minimum version
+        $ModuleFileContent = $ModuleFileContent -replace "\`$MinimumOmadaWebPSVersion\s*=\s*`"0.0`"", ("`$MinimumOmadaWebPSVersion = `"{0}`"" -f $LatestOmadaWebPSVersion)
+
         $ModuleFileContent = ($ModuleFileContent | Out-String).Trim()
 
         #$ModuleFileContent = $ModuleFileContent -replace "\`$Private.*-Recurse\)", "`$Private = @()"
