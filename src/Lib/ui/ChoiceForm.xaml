@@ -40,7 +40,6 @@
             <RowDefinition Height="Auto"/>
         </Grid.RowDefinitions>
 
-        <!-- Message content -->
         <Border Grid.Row="0">
             <Label x:Name="MessageLabel"
                    HorizontalContentAlignment="Left"
@@ -52,7 +51,6 @@
             </Label>
         </Border>
 
-        <!-- Button panel -->
         <StackPanel Grid.Row="1"
                    Orientation="Horizontal"
                    HorizontalAlignment="Center">

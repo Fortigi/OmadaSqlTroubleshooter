@@ -129,7 +129,6 @@
                                   MinWidth="400"/>
             </Grid.ColumnDefinitions>
 
-            <!-- History List DataGrid -->
             <Border Grid.Column="0"
                     BorderBrush="Gray"
                     BorderThickness="1"
@@ -148,14 +147,12 @@
                 </DataGrid>
             </Border>
 
-            <!-- GridSplitter -->
             <GridSplitter Grid.Column="1"
                           HorizontalAlignment="Stretch"
                           VerticalAlignment="Stretch"
                           Background="{DynamicResource {x:Static SystemColors.ScrollBarBrushKey}}"
                           Width="6"/>
 
-            <!-- Content Viewer TabControl -->
             <Border Grid.Column="2"
                     BorderBrush="Gray"
                     BorderThickness="1"
@@ -418,7 +415,7 @@
                             <ColumnDefinition Width="Auto"/>
                             <ColumnDefinition Width="4"/>
                             <ColumnDefinition Width="40"/>
-                        </Grid.ColumnDefinitions>S
+                        </Grid.ColumnDefinitions>
                         <Image Grid.Column="1"
                                x:Name="ButtonExportHistoryImage"
                                Source="/images/content-save_25x25.png"

@@ -9,13 +9,14 @@
         WindowStyle="None"
         WindowStartupLocation="CenterScreen"
         Background="White"
-        Name="SplashScreen"
-        >
+        Name="SplashScreen">
 
     <Window.Resources>
         <Style TargetType="Label">
-            <Setter Property="HorizontalAlignment" Value="Center"/>
-            <Setter Property="FontFamily" Value="Segoe UI"/>
+            <Setter Property="HorizontalAlignment"
+                    Value="Center"/>
+            <Setter Property="FontFamily"
+                    Value="Segoe UI"/>
         </Style>
     </Window.Resources>
 
@@ -23,13 +24,14 @@
         <Grid.RowDefinitions>
             <RowDefinition Height="20"/>
             <RowDefinition Height="150"/>
-            <RowDefinition Height="40"/>
             <RowDefinition Height="30"/>
+            <RowDefinition Height="40"/>
             <RowDefinition Height="10"/>
         </Grid.RowDefinitions>
 
-        <!-- Logo -->
-        <Border Grid.Row="1" HorizontalAlignment="Center" VerticalAlignment="Center">
+        <Border Grid.Row="1"
+                HorizontalAlignment="Center"
+                VerticalAlignment="Center">
             <Image x:Name="LogoImage"
                    Width="150"
                    Height="150"
@@ -37,7 +39,6 @@
                    RenderOptions.BitmapScalingMode="HighQuality"/>
         </Border>
 
-        <!-- Loading text -->
         <Label Grid.Row="2"
                x:Name="SplashLabel"
                Content="Initializing application..."
@@ -46,9 +47,8 @@
                HorizontalAlignment="Center"
                VerticalAlignment="Center"/>
 
-        <!-- Version text -->
         <Label Grid.Row="3"
-               x:Name="SplashVersion"
+               x:Name="TextboxSplashVersion"
                Content="Version"
                FontSize="10"
                FontWeight="Normal"

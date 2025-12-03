@@ -1,7 +1,7 @@
 function Open-SqlSchemaForm {
     [CmdLetBinding()]
     [System.Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSAvoidAssignmentToAutomaticVariable', 'Sender', Justification = 'The use of the variable is on purpose')]
-    [System.Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSAvoidAssignmentToAutomaticVariable', 'Args', Justification = 'The use of the variable is on purpose')]
+    [System.Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSAvoidAssignmentToAutomaticVariable', 'EventArgs', Justification = 'The use of the variable is on purpose')]
     param()
     try {
         $Script:Tracer::WriteLine(("{0}: Function: {1} - Caller: {2}({3}) - Command: {4} - Parameters: {5}" -f $($Script:RunTimeConfig.ApplicationName), $($MyInvocation.MyCommand.Name), $($MyInvocation.ScriptName).Split("\")[-1], $($MyInvocation.ScriptLineNumber), $MyInvocation.Statement, ($PSBoundParameters | Out-String)))
@@ -24,9 +24,9 @@ function Open-SqlSchemaForm {
         $Script:TreeViewSqlSchema = $Script:SqlSchemaForm.Definition.FindName("TreeViewSqlSchema")
 
         $Script:TreeViewSqlSchema.Add_SelectedItemChanged({
-                param ($Sender, $Args)
+                param ($Sender, $EventArgs)
                 $_ | Show-EventInfo
-                Invoke-OnTreeViewItemShiftClick -sender $Sender -args $Args
+                Invoke-OnTreeViewItemShiftClick -Sender $Sender -EventArgs $EventArgs
             })
 
         # $Script:SqlSchemaForm.Definition.Add_LostFocus({

@@ -23,7 +23,6 @@
         </Window.Style>
 
         <Window.Resources>
-                <!-- Default TextBox Style -->
                 <Style TargetType="TextBox">
                         <Setter Property="VerticalContentAlignment"
                                 Value="Center"/>
@@ -176,7 +175,6 @@
                                 Value="19"/>
                 </Style>
 
-                <!-- DataGrid Row Header Style -->
                 <Style TargetType="DataGridRowHeader">
                         <Setter Property="MinWidth"
                                 Value="40"/>
@@ -202,7 +200,6 @@
                                                                            FontWeight="Normal"
                                                                            Foreground="{DynamicResource {x:Static SystemColors.ControlTextBrushKey}}"/>
                                                         </Grid>
-                                                        <!-- Tooltip for reset functionality -->
                                                         <Border.ToolTip>
                                                                 <ToolTip Content="Click top-left corner to reset sort order"/>
                                                         </Border.ToolTip>

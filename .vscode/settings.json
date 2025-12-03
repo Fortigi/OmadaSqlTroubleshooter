@@ -51,5 +51,8 @@
         "sord",
         "SQLTROUBLESHOOTING",
         "Webiew"
-    ]
+    ],
+    "xmlTools.xmlFormatterImplementation": "v2",
+    "xmlTools.splitAttributesOnFormat": false,
+    "azureAutomation.directory.basePath": "c:\\Users\\mark"
 }
