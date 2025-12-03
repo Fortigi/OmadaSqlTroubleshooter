@@ -97,7 +97,7 @@ function Invoke-OmadaSqlTroubleshooter {
     #endregion
 
     #region wpf
-    $SplashScreenForm = Open-SplashScreenForm
+    $null  = Open-SplashScreenForm
     "Loading Main Form Object" | Write-LogOutput -LogType DEBUG
     $Script:MainForm = Initialize-FormObject -FormPath (Join-Path $Script:RunTimeConfig.ModuleFolder -ChildPath "lib\ui\MainForm.xaml") -AppendVersion
 
