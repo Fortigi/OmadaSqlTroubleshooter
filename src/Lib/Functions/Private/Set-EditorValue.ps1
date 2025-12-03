@@ -36,9 +36,30 @@ function Set-EditorValue {
                 Set-SqlQueryFunctionState -Status $true
                 $Script:MainWindowForm.Elements.ButtonSaveQuery.IsEnabled = $true
                 $Script:MainWindowForm.Elements.ButtonReset.IsEnabled = $true
-                if ($null -ne $Script:Webview.Object.CoreWebView2) {
 
-                    $ScriptToExecute = "editor.setValue('{0}');" -f ($Private:Result.C_QUERY -replace "`n", "\n" -replace "`r", "\r" -replace "`t", "\t" -replace "'", "\'")
+                if ($null -ne $Script:Webview.Object.CoreWebView2) {
+                    # Add a small delay and check if Monaco Editor is ready before setting value
+                    $SafeQuery = $Private:Result.C_QUERY -replace "`n", "\n" -replace "`r", "\r" -replace "`t", "\t" -replace "'", "\'"
+                    $ScriptToExecute = @"
+(function() {
+    function setEditorValue() {
+        if (typeof editor !== 'undefined' && editor && typeof editor.setValue === 'function') {
+            try {
+                editor.setValue('$SafeQuery');
+                console.log('Editor value set successfully');
+                return true;
+            } catch (e) {
+                console.error('Error setting editor value:', e);
+                return false;
+            }
+        } else {
+            console.log('Editor not ready yet, retrying...');
+            setTimeout(setEditorValue, 100);
+        }
+    }
+    setEditorValue();
+})();
+"@
                     Push-ToEditor -ScriptToExecute $ScriptToExecute
                     $Script:RunTimeData.CurrentQueryText = $Private:Result.C_QUERY
                     "Query {0} retrieved!" -f $Script:AppConfig.CurrentSqlQuery.DoId | Write-LogOutput

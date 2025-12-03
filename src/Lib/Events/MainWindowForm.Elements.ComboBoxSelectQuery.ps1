@@ -33,7 +33,7 @@ $Script:MainWindowForm.Elements.ComboBoxSelectQuery.Add_SelectionChanged({
                     $Script:SqlHistoryWindowForm.Definition.Close()
                 }
                 Set-EditorValue
-                Set-SqlQueryFunctionState -Status $Script:ConnectionStatus
+                Set-SqlQueryFunctionState -Status $true
                 #Not working, needs to be investigated
                 #Set-EditorBackground
             }

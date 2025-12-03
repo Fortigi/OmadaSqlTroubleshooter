@@ -23,10 +23,10 @@ function Set-SqlConnectionState {
                 if ($null -ne $Script:MainWindowForm -and $Script:MainWindowForm.Definition -and $Script:MainWindowForm.Definition.IsVisible) {
                     $ConnectingWindow = Show-PopupWindow -Message "Connecting to Omada..."
                 }
-                if (($Script:MainWindowForm.Elements.ComboBoxSelectDataConnection.Items | Measure-Object).Count -lt 8) {
+                if ($null -ne $Script:Webview.Object.CoreWebView2 -and ($Script:MainWindowForm.Elements.ComboBoxSelectDataConnection.Items | Measure-Object).Count -lt 8) {
                     Update-DataConnectionList -NotShowPopupWindow
                 }
-                if (($Script:MainWindowForm.Elements.ComboBoxSelectQuery.Items | Measure-Object).Count -le 1) {
+                if ($null -ne $Script:Webview.Object.CoreWebView2 -and ($Script:MainWindowForm.Elements.ComboBoxSelectQuery.Items | Measure-Object).Count -le 1) {
                     Update-QueryList -NotShowPopupWindow
                 }
                 if ($null -ne $ConnectingWindow) {

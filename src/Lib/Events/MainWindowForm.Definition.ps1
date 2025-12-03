@@ -37,7 +37,6 @@ $Script:MainWindowForm.Definition.Add_PreviewKeyDown({
         try {
             $_ | Show-EventInfo
 
-
             if ($EventArgs.Key -eq [System.Windows.Input.Key]::F5) {
                 "F5 key intercepted at MainWindow level" | Write-LogOutput -LogType VERBOSE
 
@@ -113,6 +112,7 @@ $Script:MainWindowForm.Definition.Add_Loaded({
             if (-not (Test-Path $Script:WebView2UserProfilePath -PathType Container)) { New-Item -ItemType Directory -Force -Path $Script:WebView2UserProfilePath | Out-Null }
 
             $Script:Webview.Object.EnsureCoreWebView2Async($Script:Webview.Environment).GetAwaiter().OnCompleted({
+                "EnsureCoreWebView2Async OnCompleted script" | Write-LogOutput -LogType DEBUG
                     if ($null -eq $Script:Webview.Object.CoreWebView2) {
                         $Script:MainWindowForm.Definition.Dispatcher.Invoke([System.Action] {
                                 $Message = "WebView2 environment initialization failed. If this system does not have the Webview2 Runtime installed, please download the fixed version from https://developer.microsoft.com/en-us/microsoft-edge/webview2/ and extract the cab file to folder '{0}'" -f $Script:Webview.EdgeWebview2RuntimePath
@@ -139,6 +139,7 @@ $Script:MainWindowForm.Definition.Add_Loaded({
                     if ($Script:AppConfig.SqlSchemaWindowFormOpen) {
                         Open-SqlSchemaWindow
                     }
+                    Update-QueryList
 
                     $Script:Webview.Object.add_PreviewKeyDown({
                             param(
@@ -146,6 +147,8 @@ $Script:MainWindowForm.Definition.Add_Loaded({
                                 $EventArgs
                             )
                             try {
+                                $_ | Show-EventInfo
+
                                 if ($EventArgs.Key -eq [System.Windows.Input.Key]::F5) {
                                     "F5 key intercepted in WebView2 (PreviewKeyDown)" | Write-LogOutput -LogType DEBUG
 
@@ -178,6 +181,9 @@ $Script:MainWindowForm.Definition.Add_Loaded({
                                 $EventArgs
                             )
                             try {
+                                $_ | Show-EventInfo
+                                "CoreWebView2.add_WebMessageReceived" | Write-LogOutput -LogType DEBUG
+
                                 $message = $EventArgs.TryGetWebMessageAsString()
                                 "WebView2 message received: {0}" -f $message | Write-LogOutput -LogType DEBUG
 
