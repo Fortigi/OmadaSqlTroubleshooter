@@ -18,3 +18,10 @@ $Script:MainForm.Elements.ButtonSaveQuery.Add_Click({
     })
 
 
+#$Script:MainForm.Elements.ButtonSaveQueryText.Add_MouseLeftButtonDown({
+#        Invoke-ButtonClick -ButtonName "ButtonSaveQuery"
+#    }))
+
+#$Script:MainForm.Elements.ButtonSaveQueryImage.Add_MouseLeftButtonDown({
+#        Invoke-ButtonClick -ButtonName "ButtonSaveQuery"
+#    }))

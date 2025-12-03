@@ -20,3 +20,11 @@ $Script:MainForm.Elements.ButtonRefreshQueries.Add_Click({
             "WebView2 initialization failed: {0}" -f $_.Exception.Message | Write-LogOutput -LogType ERROR -ErrorObject $_
         }
     })
+
+#    $Script:MainForm.Elements.ButtonRefreshQueriesText.Add_MouseLeftButtonDown({
+#        Invoke-ButtonClick -ButtonName "ButtonRefreshQueries"
+#    }))
+
+#$Script:MainForm.Elements.ButtonRefreshQueriesImage.Add_MouseLeftButtonDown({
+#        Invoke-ButtonClick -ButtonName "ButtonRefreshQueries"
+#    }))

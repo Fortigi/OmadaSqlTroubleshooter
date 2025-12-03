@@ -9,3 +9,11 @@ $Script:MainForm.Elements.ButtonOpenOutputFile.Add_Click({
             $_.Exception.Message | Write-LogOutput -LogType ERROR -ErrorObject $_
         }
     })
+
+#    $Script:MainForm.Elements.ButtonOpenOutputFileText.Add_MouseLeftButtonDown({
+#        Invoke-ButtonClick -ButtonName "ButtonOpenOutputFile"
+#    }))
+
+#$Script:MainForm.Elements.ButtonOpenOutputFileImage.Add_MouseLeftButtonDown({
+#        Invoke-ButtonClick -ButtonName "ButtonOpenOutputFile"
+#    }))

@@ -101,3 +101,11 @@ $Script:MainForm.Elements.ButtonSaveOutputFile.Add_Click({
             $_.Exception.Message | Write-LogOutput -LogType ERROR -ErrorObject $_
         }
     })
+
+#    $Script:MainForm.Elements.ButtonSaveOutputFileText.Add_MouseLeftButtonDown({
+#        Invoke-ButtonClick -ButtonName "ButtonSaveOutputFile"
+#    }))
+
+#$Script:MainForm.Elements.ButtonSaveOutputFileImage.Add_MouseLeftButtonDown({
+#        Invoke-ButtonClick -ButtonName "ButtonSaveOutputFile"
+#    }))

@@ -82,3 +82,11 @@ $Script:SqlHistoryForm.Elements.ButtonExportHistory.Add_Click({
             $_.Exception.Message | Write-LogOutput -LogType ERROR -ErrorObject $_
         }
     })
+
+##$Script:SqlHistoryForm.Elements.ButtonExportHistoryText.Add_MouseLeftButtonDown({
+##        Invoke-ButtonClick -ButtonName "ButtonExportHistory"
+##    })
+
+##$Script:SqlHistoryForm.Elements.ButtonExportHistoryImage.Add_MouseLeftButtonDown({
+##        Invoke-ButtonClick -ButtonName "ButtonExportHistory"
+##    })

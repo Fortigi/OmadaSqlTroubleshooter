@@ -45,3 +45,11 @@ $Script:SqlHistoryForm.Elements.ButtonRestoreQuery.Add_Click({
         }
 
     })
+
+#$Script:SqlHistoryForm.Elements.ButtonRestoreQueryText.Add_MouseLeftButtonDown({
+#        Invoke-ButtonClick -ButtonName "ButtonRestoreQuery"
+#    })
+
+#$Script:SqlHistoryForm.Elements.ButtonRestoreQueryImage.Add_MouseLeftButtonDown({
+#        Invoke-ButtonClick -ButtonName "ButtonRestoreQuery"
+#    })

@@ -2,7 +2,7 @@ $Script:MainForm.Elements.ButtonNewQuery.Add_Click({
         try {
             $_ | Show-EventInfo
             $Script:MainForm.Elements.ButtonSaveQuery.IsEnabled = $false
-            $Script:MainForm.Elements.ButtonExecuteQuery.IsEnabled = $false
+            $Script:MainForm.Elements.ButtonNewQuery.IsEnabled = $false
 
             if (!(Test-ConnectionRequirements)) {
                 "Omada Url not set or Query not selected, cannot retrieve data!" | Write-LogOutput -LogType WARNING
@@ -26,3 +26,11 @@ $Script:MainForm.Elements.ButtonNewQuery.Add_Click({
             $_.Exception.Message | Write-LogOutput -LogType ERROR -ErrorObject $_
         }
     })
+
+##    $Script:MainForm.Elements.ButtonNewQueryText.Add_MouseLeftButtonDown({
+##        Invoke-ButtonClick -ButtonName "ButtonNewQuery"
+##    })
+
+##$Script:MainForm.Elements.ButtonNewQueryImage.Add_MouseLeftButtonDown({
+##        Invoke-ButtonClick -ButtonName "ButtonNewQuery"
+##    })

@@ -8,3 +8,11 @@ $Script:MainForm.Elements.ButtonReset.Add_Click({
             $_.Exception.Message | Write-LogOutput -LogType ERROR -ErrorObject $_
         }
     })
+
+#    $Script:MainForm.Elements.ButtonResetText.Add_MouseLeftButtonDown({
+#        Invoke-ButtonClick -ButtonName "ButtonReset"
+#    }))
+
+#$Script:MainForm.Elements.ButtonResetImage.Add_MouseLeftButtonDown({
+#        Invoke-ButtonClick -ButtonName "ButtonReset"
+#    }))

@@ -28,3 +28,11 @@ $Script:MainForm.Elements.ButtonExecuteQuery.Add_Click({
             $_.Exception.Message | Write-LogOutput -LogType ERROR -ErrorObject $_
         }
     })
+
+#    $Script:MainForm.Elements.ButtonExecuteQueryText.Add_MouseLeftButtonDown({
+#        Invoke-ButtonClick -ButtonName "ButtonExecuteQuery"
+#    })
+
+#$Script:MainForm.Elements.ButtonExecuteQueryImage.Add_MouseLeftButtonDown({
+#        Invoke-ButtonClick -ButtonName "ButtonExecuteQuery"
+#    })

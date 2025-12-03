@@ -15,3 +15,11 @@ $Script:MainForm.Elements.ButtonShowLog.Add_Click({
         }
 
     })
+
+#    $Script:MainForm.Elements.ButtonShowLogText.Add_MouseLeftButtonDown({
+#        Invoke-ButtonClick -ButtonName "ButtonShowLog"
+#    }))))
+
+#$Script:MainForm.Elements.ButtonShowLogImage.Add_MouseLeftButtonDown({
+#        Invoke-ButtonClick -ButtonName "ButtonShowLog"
+#    }))))

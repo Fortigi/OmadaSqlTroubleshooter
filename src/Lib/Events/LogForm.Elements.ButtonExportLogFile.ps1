@@ -21,3 +21,12 @@ $Script:LogForm.Elements.ButtonExportLogFile.Add_Click({
             "File was not saved!" | Write-LogOutput -LogType DEBUG
         }
     })
+
+#$Script:SqlHistoryForm.Elements.ButtonExportLogFileText.Add_MouseLeftButtonDown({
+#        Invoke-ButtonClick -ButtonName "ButtonExportLogFile"
+#    })
+
+#$Script:SqlHistoryForm.Elements.ButtonExportLogFileImage.Add_MouseLeftButtonDown({
+#        Invoke-ButtonClick -ButtonName "ButtonExportLogFile"
+#    })
+

@@ -44,22 +44,22 @@ function Invoke-GenerateDiffView {
 
             if ($OldLine -ne $NewLine) {
                 if ($i -ge $OldLines.Count) {
-                    $NewRun.Background = New-Object System.Windows.Media.SolidColorBrush([System.Windows.Media.Color]::FromRgb(230, 255, 230))
-                    $NewParagraph.Background = New-Object System.Windows.Media.SolidColorBrush([System.Windows.Media.Color]::FromRgb(230, 255, 230))
+                    $NewRun.Background = New-Object System.Windows.Media.SolidColorBrush([System.Windows.Media.Color]::FromRgb(170, 255, 170))
+                    $NewParagraph.Background = New-Object System.Windows.Media.SolidColorBrush([System.Windows.Media.Color]::FromRgb(170, 255, 170))
                     $OldRun.Text = ""
                     $NewRun.Text = $NewLine
                 }
                 elseif ($i -ge $NewLines.Count) {
-                    $OldRun.Background = New-Object System.Windows.Media.SolidColorBrush([System.Windows.Media.Color]::FromRgb(255, 230, 230))
-                    $OldParagraph.Background = New-Object System.Windows.Media.SolidColorBrush([System.Windows.Media.Color]::FromRgb(255, 230, 230))
+                    $OldRun.Background = New-Object System.Windows.Media.SolidColorBrush([System.Windows.Media.Color]::FromRgb(255, 170, 170))
+                    $OldParagraph.Background = New-Object System.Windows.Media.SolidColorBrush([System.Windows.Media.Color]::FromRgb(255, 170, 170))
                     $OldRun.Text = $OldLine
                     $NewRun.Text = ""
                 }
                 else {
-                    $OldRun.Background = New-Object System.Windows.Media.SolidColorBrush([System.Windows.Media.Color]::FromRgb(255, 230, 230))
-                    $NewRun.Background = New-Object System.Windows.Media.SolidColorBrush([System.Windows.Media.Color]::FromRgb(230, 255, 230))
-                    $OldParagraph.Background = New-Object System.Windows.Media.SolidColorBrush([System.Windows.Media.Color]::FromRgb(255, 230, 230))
-                    $NewParagraph.Background = New-Object System.Windows.Media.SolidColorBrush([System.Windows.Media.Color]::FromRgb(230, 255, 230))
+                    $OldRun.Background = New-Object System.Windows.Media.SolidColorBrush([System.Windows.Media.Color]::FromRgb(255, 170, 170))
+                    $NewRun.Background = New-Object System.Windows.Media.SolidColorBrush([System.Windows.Media.Color]::FromRgb(170, 255, 170))
+                    $OldParagraph.Background = New-Object System.Windows.Media.SolidColorBrush([System.Windows.Media.Color]::FromRgb(255, 170, 170))
+                    $NewParagraph.Background = New-Object System.Windows.Media.SolidColorBrush([System.Windows.Media.Color]::FromRgb(170, 255, 170))
                     $OldRun.Text = $OldLine
                     $NewRun.Text = $NewLine
                 }

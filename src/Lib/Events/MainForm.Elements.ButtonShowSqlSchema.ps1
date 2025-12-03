@@ -14,3 +14,11 @@ $Script:MainForm.Elements.ButtonShowSqlSchema.Add_Click({
             $_.Exception.Message | Write-LogOutput -LogType ERROR -ErrorObject $_
         }
     })
+
+##    $Script:MainForm.Elements.ButtonShowSqlSchemaText.Add_MouseLeftButtonDown({
+##        Invoke-ButtonClick -ButtonName "ButtonShowSqlSchema"
+##    })
+
+##$Script:MainForm.Elements.ButtonShowSqlSchemaImage.Add_MouseLeftButtonDown({
+##        Invoke-ButtonClick -ButtonName "ButtonShowSqlSchema"
+##    })

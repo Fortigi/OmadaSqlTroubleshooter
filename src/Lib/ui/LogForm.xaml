@@ -94,8 +94,8 @@
                             <ColumnDefinition Width="4"/>
                             <ColumnDefinition Width="40"/>
                         </Grid.ColumnDefinitions>
-                        <Image Grid.Column="1"  x:Name="ButtonExportLogFileImage" Source="/images/content-save_25x25.png" Tag="/images/content-save_25x25.png" />
-                        <AccessText Grid.Column="3"  x:Name="ButtonExportLogFileText" Text="_Save" Style="{StaticResource ButtonAccessTextStyle}"/>
+                        <Image Grid.Column="1"  x:Name="ButtonExportLogFileImage" Source="/images/content-save_25x25.png" Tag="/images/content-save_25x25.png" IsHitTestVisible="False" />
+                        <AccessText Grid.Column="3"  x:Name="ButtonExportLogFileText" Text="_Save" Style="{StaticResource ButtonAccessTextStyle}"  IsHitTestVisible="False"/>
                     </Grid>
                 </Button>
                 <Button Grid.Column="3" x:Name="ButtonClearLog" TabIndex="15"  ToolTip="Clear log" IsEnabled="True" >
@@ -106,8 +106,8 @@
                             <ColumnDefinition Width="4"/>
                             <ColumnDefinition Width="40"/>
                         </Grid.ColumnDefinitions>
-                        <Image Grid.Column="1"  x:Name="ButtonClearLogImage" Source="/images/delete-alert_25x25.png" Tag="/images/delete-alert_25x25.png" />
-                        <AccessText Grid.Column="3"  x:Name="ButtonClearLogText" Text="_Clear" Style="{StaticResource ButtonAccessTextStyle}"/>
+                        <Image Grid.Column="1"  x:Name="ButtonClearLogImage" Source="/images/delete-alert_25x25.png" Tag="/images/delete-alert_25x25.png" IsHitTestVisible="False" />
+                        <AccessText Grid.Column="3"  x:Name="ButtonClearLogText" Text="_Clear" Style="{StaticResource ButtonAccessTextStyle}"  IsHitTestVisible="False"/>
                     </Grid>
                 </Button>
             </Grid>

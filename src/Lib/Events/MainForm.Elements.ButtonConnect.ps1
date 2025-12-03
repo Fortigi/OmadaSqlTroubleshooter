@@ -21,3 +21,11 @@ $Script:MainForm.Elements.ButtonConnect.Add_Click({
             $_.Exception.Message | Write-LogOutput -LogType ERROR -ErrorObject $_
         }
     })
+
+#$Script:MainForm.Elements.ButtonConnectText.Add_MouseLeftButtonDown({
+#        Invoke-ButtonClick -ButtonName "ButtonConnect"
+#    })
+
+#$Script:MainForm.Elements.ButtonConnectImage.Add_MouseLeftButtonDown({
+#        Invoke-ButtonClick -ButtonName "ButtonConnect"
+#    })

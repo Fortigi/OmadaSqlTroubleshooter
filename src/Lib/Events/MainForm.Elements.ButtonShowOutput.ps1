@@ -8,3 +8,11 @@ $Script:MainForm.Elements.ButtonShowOutput.Add_Click({
             $_.Exception.Message | Write-LogOutput -LogType ERROR -ErrorObject $_
         }
     })
+
+#    $Script:MainForm.Elements.ButtonShowOutputText.Add_MouseLeftButtonDown({
+#        Invoke-ButtonClick -ButtonName "ButtonShowOutput"
+#    }))
+
+#$Script:MainForm.Elements.ButtonShowOutputImage.Add_MouseLeftButtonDown({
+#        Invoke-ButtonClick -ButtonName "ButtonShowOutput"
+#    }))

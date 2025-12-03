@@ -5,7 +5,6 @@ function Invoke-LoadSqlHistoryData {
     try {
         "Loading SQL history data..." | Write-LogOutput -LogType DEBUG
 
-        # Get SQL history using existing function
         $SqlHistoryObjects = Get-SqlHistory
 
         if ($null -eq $SqlHistoryObjects -or $SqlHistoryObjects.Count -eq 0) {
@@ -13,7 +12,6 @@ function Invoke-LoadSqlHistoryData {
             return
         }
 
-        # Create observable collection for data binding
         $HistoryCollection = New-Object System.Collections.ObjectModel.ObservableCollection[PSCustomObject]
 
         # Add items to collection (sorted by ChangeDate descending)
@@ -22,8 +20,10 @@ function Invoke-LoadSqlHistoryData {
             $HistoryCollection.Add($Item)
         }
 
-        # Bind data to DataGrid
         $Script:SqlHistoryForm.Elements.DataGridHistory.ItemsSource = $HistoryCollection
+        if ($HistoryCollection.Count -gt 0) {
+            $Script:SqlHistoryForm.Elements.DataGridHistory.SelectedIndex = 0
+        }
 
         "Loaded {0} SQL history records" -f $HistoryCollection.Count | Write-LogOutput -LogType DEBUG
     }

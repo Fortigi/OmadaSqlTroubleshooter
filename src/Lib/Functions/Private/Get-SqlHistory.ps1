@@ -60,7 +60,7 @@ function Get-SqlHistory {
                         continue
                     }
 
-                    if ($ChangedField.OldValue -eq $null -or $ChangedField.OldValue -eq '[N/A]') {
+                    if ($null -eq $ChangedField.OldValue -or $ChangedField.OldValue -eq '[N/A]') {
                         $ChangedField.OldValue = $null
                     }
 
