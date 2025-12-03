@@ -46,12 +46,12 @@ function Update-QueryList {
             $Script:RunTimeData.RestMethodParam.Body = $null
             $Private:Result = Invoke-OmadaPSWebRequestWrapper
 
-            $SelectedQuery = $Script:MainWindowForm.Elements.ComboBoxSelectQuery.SelectedItem.Content
+            $SelectedQuery = $Script:MainFormForm.Elements.ComboBoxSelectQuery.SelectedItem.Content
             "Stored current selected query (if not empty): {0}" -f $SelectedQuery | Write-LogOutput -LogType DEBUG
-            $SelectedQueryDisplayName = $Script:MainWindowForm.Elements.TextBoxDisplayName.Text
+            $SelectedQueryDisplayName = $Script:MainFormForm.Elements.TextBoxDisplayName.Text
             "Stored current selected query display name (if not empty): {0}" -f $SelectedQueryDisplayName | Write-LogOutput -LogType DEBUG
-            $Script:MainWindowForm.Elements.ComboBoxSelectQuery.Items.Clear()
-            $Script:MainWindowForm.Elements.TextBoxDisplayName.Text = $null
+            $Script:MainFormForm.Elements.ComboBoxSelectQuery.Items.Clear()
+            $Script:MainFormForm.Elements.TextBoxDisplayName.Text = $null
 
             $ClearQuery = $true
             if ($null -ne $Private:Result -and $Private:Result -is [System.Management.Automation.ErrorRecord]) {
@@ -81,13 +81,13 @@ function Update-QueryList {
                     }
                     $ComboBoxSelectQueryItem = New-Object System.Windows.Controls.ComboBoxItem
                     $ComboBoxSelectQueryItem.Content = $DoIdDisplayName
-                    $Script:MainWindowForm.Elements.ComboBoxSelectQuery.Items.Add($ComboBoxSelectQueryItem) | Out-Null
+                    $Script:MainFormForm.Elements.ComboBoxSelectQuery.Items.Add($ComboBoxSelectQueryItem) | Out-Null
                 }
                 if ($ClearQuery -and $null -ne $SelectedQuery -and $SelectedQuery -eq $DoIdDisplayName) {
                     "Set query {0} as selected query" -f $DoIdDisplayName | Write-LogOutput -LogType DEBUG
-                    $Script:MainWindowForm.Elements.ComboBoxSelectQuery.SelectedItem = $ComboBoxSelectQueryItem
+                    $Script:MainFormForm.Elements.ComboBoxSelectQuery.SelectedItem = $ComboBoxSelectQueryItem
                     "Set query display name to: {0}" -f $SelectedQueryDisplayName | Write-LogOutput -LogType DEBUG
-                    $Script:MainWindowForm.Elements.TextBoxDisplayName.Text = $SelectedQueryDisplayName
+                    $Script:MainFormForm.Elements.TextBoxDisplayName.Text = $SelectedQueryDisplayName
                     $ClearQuery = $false
                 }
             }
@@ -102,21 +102,21 @@ function Update-QueryList {
         else {
             "Query list retrieved from cache! Click `"Refresh`" to refresh queries" | Write-LogOutput -LogType INFO
         }
-        # $ComboBoxSelectedQueryItem = $Script:MainWindowForm.Elements.ComboBoxSelectQuery.SelectedItem
-        # $ComboBoxSelectQueryItems = $Script:MainWindowForm.Elements.ComboBoxSelectQuery.Items | Sort-Object
-        # $Script:MainWindowForm.Elements.ComboBoxSelectQuery.Items?.Clear()
+        # $ComboBoxSelectedQueryItem = $Script:MainFormForm.Elements.ComboBoxSelectQuery.SelectedItem
+        # $ComboBoxSelectQueryItems = $Script:MainFormForm.Elements.ComboBoxSelectQuery.Items | Sort-Object
+        # $Script:MainFormForm.Elements.ComboBoxSelectQuery.Items?.Clear()
         # foreach ($Item in $ComboBoxSelectQueryItems) {
-        #     $Script:MainWindowForm.Elements.ComboBoxSelectQuery.Items.Add($Item) | Out-Null
+        #     $Script:MainFormForm.Elements.ComboBoxSelectQuery.Items.Add($Item) | Out-Null
         # }
         # if ($null -ne $ComboBoxSelectedQueryItem) {
-        #     $Script:MainWindowForm.Elements.ComboBoxSelectQuery.SelectedItem = $Script:MainWindowForm.Elements.ComboBoxSelectQuery.Items | Where-Object { $_.Content -eq $ComboBoxSelectedQueryItem.Content }
+        #     $Script:MainFormForm.Elements.ComboBoxSelectQuery.SelectedItem = $Script:MainFormForm.Elements.ComboBoxSelectQuery.Items | Where-Object { $_.Content -eq $ComboBoxSelectedQueryItem.Content }
         # }
 
-        $Script:MainWindowForm.Elements.ComboBoxSelectQuery.IsEnabled = $true
-        $Script:MainWindowForm.Elements.ButtonRefreshQueries.IsEnabled = $true
-        $Script:MainWindowForm.Elements.CheckboxMyCreatedQueries.IsEnabled = $true
-        $Script:MainWindowForm.Elements.CheckboxMyUpdatedQueries.IsEnabled = $true
-        $Script:MainWindowForm.Elements.ButtonShowSqlSchema.IsEnabled = $true
+        $Script:MainFormForm.Elements.ComboBoxSelectQuery.IsEnabled = $true
+        $Script:MainFormForm.Elements.ButtonRefreshQueries.IsEnabled = $true
+        $Script:MainFormForm.Elements.CheckboxMyCreatedQueries.IsEnabled = $true
+        $Script:MainFormForm.Elements.CheckboxMyUpdatedQueries.IsEnabled = $true
+        $Script:MainFormForm.Elements.ButtonShowSqlSchema.IsEnabled = $true
         $Script:RunTimeData.QueryListCache.LastRefresh = $CurrentTimestamp
         "{0} queries retrieved!" -f ($Script:RunTimeData.QueryListCache.QueryList | Measure-Object).Count | Write-LogOutput
 

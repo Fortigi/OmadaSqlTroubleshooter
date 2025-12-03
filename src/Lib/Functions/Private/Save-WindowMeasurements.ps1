@@ -13,35 +13,35 @@ function Save-WindowMeasurements {
         "WindowMeasurements Current Measurement save timestamp = '{0}', last measurement save timestamp: '{1}'" -f $Timestamp.ToString("o"), $Script:RunTimeConfig.LastWindowMeasured.ToString("o") | Write-LogOutput -LogType VERBOSE2
         $Script:RunTimeConfig.LastWindowMeasured = Get-Date
 
-        if ($Script:MainWindowForm.Definition.IsVisible) {
-            $ValueSize = "{0}x{1}" -f [Int]::Abs(($Script:MainWindowForm.Definition | Get-ValidWindowMeasurement -Setting "Width")), [Int]::Abs(($Script:MainWindowForm.Definition | Get-ValidWindowMeasurement -Setting "Height"))
-            $ValueSize | Set-ConfigProperty -Property "MainWindowSize"
-            $ValuePosition = "{0}x{1}" -f [Int]::Abs(($Script:MainWindowForm.Definition | Get-ValidWindowPosition -Setting "Left")), [Int]::Abs(($Script:MainWindowForm.Definition | Get-ValidWindowPosition -Setting "Top"))
-            $ValuePosition | Set-ConfigProperty -Property "MainWindowPosition"
-            "MainWindowForm Size:'{0}', Position: '{1}'" -f $ValueSize, $ValuePosition | Write-LogOutput -LogType VERBOSE2
-            if ($null -ne $Script:LogWindowForm -and $null -ne $Script:LogWindowForm.Definition -and $Script:LogWindowForm.Definition.IsVisible) {
-                $ValueSize = "{0}x{1}" -f [Int]::Abs(($Script:LogWindowForm.Definition | Get-ValidWindowMeasurement -Setting "Width")), [Int]::Abs(($Script:LogWindowForm.Definition | Get-ValidWindowMeasurement -Setting "Height"))
+        if ($Script:MainFormForm.Definition.IsVisible) {
+            $ValueSize = "{0}x{1}" -f [Int]::Abs(($Script:MainFormForm.Definition | Get-ValidWindowMeasurement -Setting "Width")), [Int]::Abs(($Script:MainFormForm.Definition | Get-ValidWindowMeasurement -Setting "Height"))
+            $ValueSize | Set-ConfigProperty -Property "MainFormSize"
+            $ValuePosition = "{0}x{1}" -f [Int]::Abs(($Script:MainFormForm.Definition | Get-ValidWindowPosition -Setting "Left")), [Int]::Abs(($Script:MainFormForm.Definition | Get-ValidWindowPosition -Setting "Top"))
+            $ValuePosition | Set-ConfigProperty -Property "MainFormPosition"
+            "MainFormForm Size:'{0}', Position: '{1}'" -f $ValueSize, $ValuePosition | Write-LogOutput -LogType VERBOSE2
+            if ($null -ne $Script:LogForm -and $null -ne $Script:LogForm.Definition -and $Script:LogForm.Definition.IsVisible) {
+                $ValueSize = "{0}x{1}" -f [Int]::Abs(($Script:LogForm.Definition | Get-ValidWindowMeasurement -Setting "Width")), [Int]::Abs(($Script:LogForm.Definition | Get-ValidWindowMeasurement -Setting "Height"))
                 $ValueSize | Set-ConfigProperty -Property "LogWindowSize"
-                $ValuePosition = "{0}x{1}" -f [Int]::Abs(($Script:LogWindowForm.Definition | Get-ValidWindowPosition -Setting "Left")), [Int]::Abs(($Script:LogWindowForm.Definition | Get-ValidWindowPosition -Setting "Top"))
+                $ValuePosition = "{0}x{1}" -f [Int]::Abs(($Script:LogForm.Definition | Get-ValidWindowPosition -Setting "Left")), [Int]::Abs(($Script:LogForm.Definition | Get-ValidWindowPosition -Setting "Top"))
                 $ValuePosition | Set-ConfigProperty -Property "LogWindowPosition"
-                "LogWindowForm Size:'{0}', Position: '{1}'" -f $ValueSize, $ValuePosition | Write-LogOutput -LogType VERBOSE2
+                "LogForm Size:'{0}', Position: '{1}'" -f $ValueSize, $ValuePosition | Write-LogOutput -LogType VERBOSE2
             }
             else {
-                "LogWindowForm is not visible" | Write-LogOutput -LogType VERBOSE2
+                "LogForm is not visible" | Write-LogOutput -LogType VERBOSE2
             }
-            if ($null -ne $Script:SqlSchemaWindowForm -and $null -ne $Script:SqlSchemaWindowForm.Definition -and $Script:SqlSchemaWindowForm.Definition.IsVisible) {
-                $ValueSize = "{0}x{1}" -f [Int]::Abs(($Script:SqlSchemaWindowForm.Definition | Get-ValidWindowMeasurement -Setting "Width")), [Int]::Abs(($Script:SqlSchemaWindowForm.Definition | Get-ValidWindowMeasurement -Setting "Height"))
-                $ValueSize | Set-ConfigProperty -Property "SqlSchemaWindowSize"
-                $ValuePosition = "{0}x{1}" -f [Int]::Abs(($Script:SqlSchemaWindowForm.Definition | Get-ValidWindowPosition -Setting "Left")), [Int]::Abs(($Script:SqlSchemaWindowForm.Definition | Get-ValidWindowPosition -Setting "Top"))
-                $ValuePosition | Set-ConfigProperty -Property "SqlSchemaWindowPosition"
-                "SqlSchemaWindowForm Size:'{0}', Position: '{1}'" -f $ValueSize, $ValuePosition | Write-LogOutput -LogType VERBOSE2
+            if ($null -ne $Script:SqlSchemaForm -and $null -ne $Script:SqlSchemaForm.Definition -and $Script:SqlSchemaForm.Definition.IsVisible) {
+                $ValueSize = "{0}x{1}" -f [Int]::Abs(($Script:SqlSchemaForm.Definition | Get-ValidWindowMeasurement -Setting "Width")), [Int]::Abs(($Script:SqlSchemaForm.Definition | Get-ValidWindowMeasurement -Setting "Height"))
+                $ValueSize | Set-ConfigProperty -Property "SqlSchemaFormSize"
+                $ValuePosition = "{0}x{1}" -f [Int]::Abs(($Script:SqlSchemaForm.Definition | Get-ValidWindowPosition -Setting "Left")), [Int]::Abs(($Script:SqlSchemaForm.Definition | Get-ValidWindowPosition -Setting "Top"))
+                $ValuePosition | Set-ConfigProperty -Property "SqlSchemaFormPosition"
+                "SqlSchemaForm Size:'{0}', Position: '{1}'" -f $ValueSize, $ValuePosition | Write-LogOutput -LogType VERBOSE2
             }
             else {
-                "SqlSchemaWindowForm is not visible" | Write-LogOutput -LogType VERBOSE2
+                "SqlSchemaForm is not visible" | Write-LogOutput -LogType VERBOSE2
             }
         }
         else {
-            "MainWindowForm is not visible" | Write-LogOutput -LogType VERBOSE2
+            "MainFormForm is not visible" | Write-LogOutput -LogType VERBOSE2
         }
     }
     catch {

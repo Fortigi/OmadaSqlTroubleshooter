@@ -85,7 +85,7 @@ function Invoke-OnTreeViewItemShiftClick {
                     }
                     if ($null -ne $Script:SenderTest.SelectedItem) {
                         $Script:SenderTest.SelectedItem.IsSelected = $false
-                        Restore-MainWindowFocus
+                        Restore-MainFormFocus
                         $Script:Webview.Object.Focus()
                     }
                 }

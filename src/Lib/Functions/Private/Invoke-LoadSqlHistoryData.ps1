@@ -23,7 +23,7 @@ function Invoke-LoadSqlHistoryData {
         }
 
         # Bind data to DataGrid
-        $Script:SqlHistoryWindowForm.Elements.DataGridHistory.ItemsSource = $HistoryCollection
+        $Script:SqlHistoryForm.Elements.DataGridHistory.ItemsSource = $HistoryCollection
 
         "Loaded {0} SQL history records" -f $HistoryCollection.Count | Write-LogOutput -LogType DEBUG
     }

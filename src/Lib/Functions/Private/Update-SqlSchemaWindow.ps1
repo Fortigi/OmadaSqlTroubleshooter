@@ -1,4 +1,4 @@
-function Update-SqlSchemaWindow {
+function Update-SqlSchemaForm {
     [CmdLetBinding()]
     param()
     try {

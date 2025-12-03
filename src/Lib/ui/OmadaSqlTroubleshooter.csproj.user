@@ -2,18 +2,12 @@
 <Project ToolsVersion="Current" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
   <PropertyGroup />
   <ItemGroup>
-    <Compile Update="LogWindow.xaml.cs">
-      <SubType>Code</SubType>
-    </Compile>
-    <Compile Update="SqlSchemaWindow.xaml.cs">
+    <Compile Update="LogForm.xaml.cs">
       <SubType>Code</SubType>
     </Compile>
   </ItemGroup>
   <ItemGroup>
-    <Page Update="LogWindow.xaml">
-      <SubType>Designer</SubType>
-    </Page>
-    <Page Update="SqlSchemaWindow.xaml">
+    <Page Update="LogForm.xaml">
       <SubType>Designer</SubType>
     </Page>
   </ItemGroup>

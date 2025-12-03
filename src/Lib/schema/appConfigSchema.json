@@ -90,19 +90,19 @@
     ]
   },
   {
-    "Name": "LogWindowFormOpen",
+    "Name": "LogFormOpen",
     "Type": "String"
   },
   {
-    "Name": "SqlSchemaWindowFormOpen",
+    "Name": "SqlSchemaFormOpen",
     "Type": "Bool"
   },
   {
-    "Name": "SqlHistoryWindowFormOpen",
+    "Name": "SqlHistoryFormOpen",
     "Type": "Bool"
   },
   {
-    "Name": "MainWindowPosition",
+    "Name": "MainFormPosition",
     "Type": "String"
   },
   {
@@ -110,7 +110,7 @@
     "Type": "String"
   },
   {
-    "Name": "SqlSchemaWindowPosition",
+    "Name": "SqlSchemaFormPosition",
     "Type": "String"
   },
   {
@@ -118,7 +118,7 @@
     "Type": "String"
   },
   {
-    "Name": "MainWindowSize",
+    "Name": "MainFormSize",
     "Type": "String"
   },
   {
@@ -126,7 +126,7 @@
     "Type": "String"
   },
   {
-    "Name": "SqlSchemaWindowSize",
+    "Name": "SqlSchemaFormSize",
     "Type": "String"
   },
   {

@@ -58,14 +58,14 @@ function Set-SqlQueryFunctionState {
         if ($Status) {
             $ElementList.Keys | Where-Object { $ElementList.$_.AllowedStatusChange -ne "Disable" } | ForEach-Object {
                 $Item = $_
-                switch ($Script:MainWindowForm.Elements.$Item.GetType().Name) {
+                switch ($Script:MainFormForm.Elements.$Item.GetType().Name) {
                     "DataGrid" {}
                     default {
 
-                        if ($null -eq $Script:MainWindowForm.Elements.ComboBoxSelectQuery.SelectedItem.Content -and $Item -in ("ButtonShowSqlSchema", "ButtonSaveOutputFile", "ButtonShowOutput", "ButtonOpenOutputFile", "ButtonSaveQuery", "ButtonHistory", "ButtonRefreshQueries", "ButtonExecuteQuery")) {
+                        if ($null -eq $Script:MainFormForm.Elements.ComboBoxSelectQuery.SelectedItem.Content -and $Item -in ("ButtonShowSqlSchema", "ButtonSaveOutputFile", "ButtonShowOutput", "ButtonOpenOutputFile", "ButtonSaveQuery", "ButtonHistory", "ButtonRefreshQueries", "ButtonExecuteQuery")) {
                             continue
                         }
-                        $Script:MainWindowForm.Elements.$Item.IsEnabled = $true
+                        $Script:MainFormForm.Elements.$Item.IsEnabled = $true
                     }
                 }
             }
@@ -74,28 +74,28 @@ function Set-SqlQueryFunctionState {
             $ElementList.Keys | Where-Object { $ElementList.$_.AllowedStatusChange -ne "Enable" } | ForEach-Object {
                 $Item = $_
 
-                switch ($Script:MainWindowForm.Elements.$Item.GetType().Name) {
+                switch ($Script:MainFormForm.Elements.$Item.GetType().Name) {
                     "ComboBox" {
-                        $Script:MainWindowForm.Elements.$Item.Items.Clear()
-                        $Script:MainWindowForm.Elements.$Item.IsEnabled = $false
+                        $Script:MainFormForm.Elements.$Item.Items.Clear()
+                        $Script:MainFormForm.Elements.$Item.IsEnabled = $false
                     }
                     "TextBox" {
-                        $Script:MainWindowForm.Elements.$Item.Text = $null
-                        $Script:MainWindowForm.Elements.$Item.IsEnabled = $false
+                        $Script:MainFormForm.Elements.$Item.Text = $null
+                        $Script:MainFormForm.Elements.$Item.IsEnabled = $false
                     }
                     "DataGrid" {
-                        $Script:MainWindowForm.Elements.$Item.ItemsSource = $null
+                        $Script:MainFormForm.Elements.$Item.ItemsSource = $null
                     }
                     default {
-                        $Script:MainWindowForm.Elements.$Item.IsEnabled = $false
+                        $Script:MainFormForm.Elements.$Item.IsEnabled = $false
                     }
                 }
 
-                if (Test-SqlSchemaWindowOpen) {
-                    $Script:SqlSchemaWindowForm.Definition.Close()
+                if (Test-SqlSchemaFormIsVisible) {
+                    $Script:SqlSchemaForm.Definition.Close()
                 }
-                if (Test-SqlHistoryWindowOpen) {
-                    $Script:SqlHistoryWindowForm.Definition.Close()
+                if (Test-SqlHistoryFormOpen) {
+                    $Script:SqlHistoryForm.Definition.Close()
                 }
             }
         }

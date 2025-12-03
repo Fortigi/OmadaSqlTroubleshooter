@@ -149,10 +149,10 @@ function Write-LogOutput {
             $LogMessage.Text | Write-Verbose
         }
         if ($LogMessageDialog.Show -and !$SkipDialog) {
-            if ($null -ne $Script:MainWindowForm -and $null -ne $Script:MainWindowForm.Definition -and $Script:MainWindowForm.Definition.IsVisible) {
+            if ($null -ne $Script:MainFormForm -and $null -ne $Script:MainFormForm.Definition -and $Script:MainFormForm.Definition.IsVisible) {
                 $TrimmedText = Limit-MessageBoxText -Text $LogMessageDialog.Text
                 [System.Windows.Forms.MessageBox]::Show($TrimmedText, $LogMessageDialog.Title, [System.Windows.Forms.MessageBoxButtons]::OK, $LogMessageDialog.Icon)
-                Restore-MainWindowFocus
+                Restore-MainFormFocus
             }
             else {
                 $MessageBoxImage = [System.Windows.MessageBoxImage]::Information

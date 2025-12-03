@@ -3,33 +3,33 @@ function Set-AuthenticationOption {
     param()
     try {
         $Script:Tracer::WriteLine(("{0}: Function: {1} - Caller: {2}({3}) - Command: {4} - Parameters: {5}" -f $($Script:RunTimeConfig.ApplicationName), $($MyInvocation.MyCommand.Name), $($MyInvocation.ScriptName).Split("\")[-1], $($MyInvocation.ScriptLineNumber), $MyInvocation.Statement, ($PSBoundParameters | Out-String)))
-        if ($null -ne $Script:MainWindowForm.Elements.ComboBoxSelectAuthenticationOption.SelectedItem.Content) {
+        if ($null -ne $Script:MainFormForm.Elements.ComboBoxSelectAuthenticationOption.SelectedItem.Content) {
 
-            switch ($Script:MainWindowForm.Elements.ComboBoxSelectAuthenticationOption.SelectedItem.Content) {
+            switch ($Script:MainFormForm.Elements.ComboBoxSelectAuthenticationOption.SelectedItem.Content) {
                 { $_ -in @("Basic", "Windows", "OAuth" ) } {
 
                     if ($_ -eq "OAuth") {
-                        $Script:MainWindowForm.Elements.TextBlockUserName | Set-TextBlockContent -Content "Client ID:"
-                        $Script:MainWindowForm.Elements.TextBlockPassword | Set-TextBlockContent -Content "Client Secret:"
+                        $Script:MainFormForm.Elements.TextBlockUserName | Set-TextBlockContent -Content "Client ID:"
+                        $Script:MainFormForm.Elements.TextBlockPassword | Set-TextBlockContent -Content "Client Secret:"
                     }
                     else {
-                        $Script:MainWindowForm.Elements.TextBlockUserName | Set-TextBlockContent -Content "Username:"
-                        $Script:MainWindowForm.Elements.TextBlockPassword | Set-TextBlockContent -Content "Password:"
+                        $Script:MainFormForm.Elements.TextBlockUserName | Set-TextBlockContent -Content "Username:"
+                        $Script:MainFormForm.Elements.TextBlockPassword | Set-TextBlockContent -Content "Password:"
                     }
-                    $Script:MainWindowForm.Elements.TextBlockUserName.Visibility = "Visible"
-                    $Script:MainWindowForm.Elements.TextBlockPassword.Visibility = "Visible"
-                    $Script:MainWindowForm.Elements.TextBlockAppIdUri.Visibility = "Visible"
-                    $Script:MainWindowForm.Elements.TextBlockEntraIdTenantId.Visibility = "Visible"
-                    $Script:MainWindowForm.Elements.TextBoxUserName.Visibility = "Visible"
-                    $Script:MainWindowForm.Elements.TextBoxPassword.Visibility = "Visible"
-                    $Script:MainWindowForm.Elements.CheckBoxSavePassword.Visibility = "Visible"
-                    $Script:MainWindowForm.Elements.TextBoxAppIdUri.Visibility = "Visible"
-                    $Script:MainWindowForm.Elements.TextBoxEntraIdTenantId.Visibility = "Visible"
-                    $Script:MainWindowForm.Elements.TextBoxUserName.IsEnabled = $true
-                    $Script:MainWindowForm.Elements.TextBoxPassword.IsEnabled = $true
-                    $Script:MainWindowForm.Elements.CheckBoxSavePassword.IsEnabled = $true
-                    $Script:MainWindowForm.Elements.TextBoxAppIdUri.IsEnabled = $true
-                    $Script:MainWindowForm.Elements.TextBoxEntraIdTenantId.IsEnabled = $true
+                    $Script:MainFormForm.Elements.TextBlockUserName.Visibility = "Visible"
+                    $Script:MainFormForm.Elements.TextBlockPassword.Visibility = "Visible"
+                    $Script:MainFormForm.Elements.TextBlockAppIdUri.Visibility = "Visible"
+                    $Script:MainFormForm.Elements.TextBlockEntraIdTenantId.Visibility = "Visible"
+                    $Script:MainFormForm.Elements.TextBoxUserName.Visibility = "Visible"
+                    $Script:MainFormForm.Elements.TextBoxPassword.Visibility = "Visible"
+                    $Script:MainFormForm.Elements.CheckBoxSavePassword.Visibility = "Visible"
+                    $Script:MainFormForm.Elements.TextBoxAppIdUri.Visibility = "Visible"
+                    $Script:MainFormForm.Elements.TextBoxEntraIdTenantId.Visibility = "Visible"
+                    $Script:MainFormForm.Elements.TextBoxUserName.IsEnabled = $true
+                    $Script:MainFormForm.Elements.TextBoxPassword.IsEnabled = $true
+                    $Script:MainFormForm.Elements.CheckBoxSavePassword.IsEnabled = $true
+                    $Script:MainFormForm.Elements.TextBoxAppIdUri.IsEnabled = $true
+                    $Script:MainFormForm.Elements.TextBoxEntraIdTenantId.IsEnabled = $true
                     if (!$Script:RunTimeData.RestMethodParam.ContainsKey("Credential")) {
                         $Script:RunTimeData.RestMethodParam.Add("Credential", $null)
                     }
@@ -44,30 +44,30 @@ function Set-AuthenticationOption {
                 }
 
                 default {
-                    $Script:MainWindowForm.Elements.TextBoxAppIdUri.IsEnabled = $false
-                    $Script:MainWindowForm.Elements.TextBoxEntraIdTenantId.IsEnabled = $false
-                    $Script:MainWindowForm.Elements.TextBlockUserName | Set-TextBlockContent -Content "Username:"
-                    $Script:MainWindowForm.Elements.TextBlockPassword | Set-TextBlockContent -Content "Password:"
-                    $Script:MainWindowForm.Elements.TextBlockUserName.Visibility = "Visible"
-                    $Script:MainWindowForm.Elements.TextBlockPassword.Visibility = "Visible"
-                    $Script:MainWindowForm.Elements.TextBoxUserName.Visibility = "Visible"
-                    $Script:MainWindowForm.Elements.TextBoxPassword.Visibility = "Visible"
-                    $Script:MainWindowForm.Elements.CheckBoxSavePassword.Visibility = "Visible"
-                    $Script:MainWindowForm.Elements.TextBoxUserName.IsEnabled = $true
-                    $Script:MainWindowForm.Elements.TextBoxPassword.IsEnabled = $true
-                    $Script:MainWindowForm.Elements.TextBlockAppIdUri.Visibility = "Hidden"
-                    $Script:MainWindowForm.Elements.TextBlockEntraIdTenantId.Visibility = "Hidden"
-                    $Script:MainWindowForm.Elements.TextBlockUserName.Visibility = "Visible"
-                    $Script:MainWindowForm.Elements.TextBlockPassword.Visibility = "Visible"
-                    $Script:MainWindowForm.Elements.TextBoxUserName.Visibility = "Visible"
-                    $Script:MainWindowForm.Elements.TextBoxPassword.Visibility = "Visible"
-                    $Script:MainWindowForm.Elements.TextBoxAppIdUri.Visibility = "Hidden"
-                    $Script:MainWindowForm.Elements.TextBoxEntraIdTenantId.Visibility = "Hidden"
-                    $Script:MainWindowForm.Elements.TextBoxUserName.IsEnabled = $true
-                    $Script:MainWindowForm.Elements.TextBoxPassword.IsEnabled = $true
-                    $Script:MainWindowForm.Elements.CheckBoxSavePassword.IsEnabled = $true
-                    $Script:MainWindowForm.Elements.TextBoxAppIdUri.Text = $null
-                    $Script:MainWindowForm.Elements.TextBoxEntraIdTenantId.Text = $null
+                    $Script:MainFormForm.Elements.TextBoxAppIdUri.IsEnabled = $false
+                    $Script:MainFormForm.Elements.TextBoxEntraIdTenantId.IsEnabled = $false
+                    $Script:MainFormForm.Elements.TextBlockUserName | Set-TextBlockContent -Content "Username:"
+                    $Script:MainFormForm.Elements.TextBlockPassword | Set-TextBlockContent -Content "Password:"
+                    $Script:MainFormForm.Elements.TextBlockUserName.Visibility = "Visible"
+                    $Script:MainFormForm.Elements.TextBlockPassword.Visibility = "Visible"
+                    $Script:MainFormForm.Elements.TextBoxUserName.Visibility = "Visible"
+                    $Script:MainFormForm.Elements.TextBoxPassword.Visibility = "Visible"
+                    $Script:MainFormForm.Elements.CheckBoxSavePassword.Visibility = "Visible"
+                    $Script:MainFormForm.Elements.TextBoxUserName.IsEnabled = $true
+                    $Script:MainFormForm.Elements.TextBoxPassword.IsEnabled = $true
+                    $Script:MainFormForm.Elements.TextBlockAppIdUri.Visibility = "Hidden"
+                    $Script:MainFormForm.Elements.TextBlockEntraIdTenantId.Visibility = "Hidden"
+                    $Script:MainFormForm.Elements.TextBlockUserName.Visibility = "Visible"
+                    $Script:MainFormForm.Elements.TextBlockPassword.Visibility = "Visible"
+                    $Script:MainFormForm.Elements.TextBoxUserName.Visibility = "Visible"
+                    $Script:MainFormForm.Elements.TextBoxPassword.Visibility = "Visible"
+                    $Script:MainFormForm.Elements.TextBoxAppIdUri.Visibility = "Hidden"
+                    $Script:MainFormForm.Elements.TextBoxEntraIdTenantId.Visibility = "Hidden"
+                    $Script:MainFormForm.Elements.TextBoxUserName.IsEnabled = $true
+                    $Script:MainFormForm.Elements.TextBoxPassword.IsEnabled = $true
+                    $Script:MainFormForm.Elements.CheckBoxSavePassword.IsEnabled = $true
+                    $Script:MainFormForm.Elements.TextBoxAppIdUri.Text = $null
+                    $Script:MainFormForm.Elements.TextBoxEntraIdTenantId.Text = $null
                     if ($Script:RunTimeData.RestMethodParam.ContainsKey("EntraApplicationIdUri")) {
                         $Script:RunTimeData.RestMethodParam.Remove("EntraApplicationIdUri")
                         $null | Set-ConfigProperty -Property "EntraApplicationIdUri"
@@ -80,7 +80,7 @@ function Set-AuthenticationOption {
                 }
             }
             $Script:RunTimeConfig.AuthenticationSet = $true
-            $Script:MainWindowForm.Elements.ComboBoxSelectAuthenticationOption.SelectedItem.Content | Set-ConfigProperty -Property "LastAuthentication"
+            $Script:MainFormForm.Elements.ComboBoxSelectAuthenticationOption.SelectedItem.Content | Set-ConfigProperty -Property "LastAuthentication"
         }
     }
     catch {

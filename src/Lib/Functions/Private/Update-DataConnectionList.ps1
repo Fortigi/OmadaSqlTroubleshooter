@@ -22,17 +22,17 @@ function Update-DataConnectionList {
 
             if ($null -eq $Private:Result) {
                 "Failed to retrieve data connections! Data connection cannot be changed!" | Write-LogOutput -LogType WARNING
-                $Script:MainWindowForm.Elements.ComboBoxSelectDataConnection.IsEnabled = $false
-                $Script:MainWindowForm.Elements.ButtonShowSqlSchema.IsEnabled = $false
+                $Script:MainFormForm.Elements.ComboBoxSelectDataConnection.IsEnabled = $false
+                $Script:MainFormForm.Elements.ButtonShowSqlSchema.IsEnabled = $false
             }
             else {
                 if (!$NotShowPopupWindow) {
                     $UpdateDataConnectionsWindow = Show-PopupWindow -Message "Updating Data Connections..."
                 }
 
-                $SelectedDataConnection = $Script:MainWindowForm.Elements.ComboBoxSelectDataConnection.SelectedItem.Content
+                $SelectedDataConnection = $Script:MainFormForm.Elements.ComboBoxSelectDataConnection.SelectedItem.Content
                 "Stored current selected data connection (if not empty): {0}" -f $SelectedDataConnection | Write-LogOutput -LogType DEBUG
-                $Script:MainWindowForm.Elements.ComboBoxSelectDataConnection.Items.Clear()
+                $Script:MainFormForm.Elements.ComboBoxSelectDataConnection.Items.Clear()
 
                 if ($null -ne $Private:Result) {
 
@@ -42,14 +42,14 @@ function Update-DataConnectionList {
                         $Options = [regex]::Matches($Private:Result, '<option.*?value="(\d+).*?data-uid="(.*?)".*?>(.*?)</option>')
                         foreach ($Match in $Options) {
                             $DataConnectionDisplayName = "{0} - {1}" -f $Match.Groups[3].Value, $Match.Groups[1].Value
-                            if ($DataConnectionDisplayName -notin $Script:MainWindowForm.Elements.ComboBoxSelectDataConnection.Items.Content) {
+                            if ($DataConnectionDisplayName -notin $Script:MainFormForm.Elements.ComboBoxSelectDataConnection.Items.Content) {
                                 "Add data connection {0}" -f $DataConnectionDisplayName | Write-LogOutput -LogType DEBUG
                                 $ComboBoxDataConnectionItem = New-Object System.Windows.Controls.ComboBoxItem
                                 $ComboBoxDataConnectionItem.Content = $DataConnectionDisplayName
-                                $Script:MainWindowForm.Elements.ComboBoxSelectDataConnection.Items.Add($ComboBoxDataConnectionItem) | Out-Null
+                                $Script:MainFormForm.Elements.ComboBoxSelectDataConnection.Items.Add($ComboBoxDataConnectionItem) | Out-Null
                                 if ($null -ne $SelectedDataConnection -and $SelectedDataConnection -eq $DataConnectionDisplayName) {
                                     "Set connection {0} as selected data connection" -f $DataConnectionDisplayName | Write-LogOutput -LogType DEBUG
-                                    $Script:MainWindowForm.Elements.ComboBoxSelectDataConnection.SelectedItem = $ComboBoxDataConnectionItem
+                                    $Script:MainFormForm.Elements.ComboBoxSelectDataConnection.SelectedItem = $ComboBoxDataConnectionItem
                                     $SetInitialConnection = $false
                                 }
                             }
@@ -59,24 +59,24 @@ function Update-DataConnectionList {
 
                     if ($SetInitialConnection) {
                         "Set initial data connection to OISES" | Write-LogOutput -LogType DEBUG
-                        $Script:MainWindowForm.Elements.ComboBoxSelectDataConnection.SelectedItem = $Script:MainWindowForm.Elements.ComboBoxSelectDataConnection.Items | Where-Object { $_.Content -like "OISES -*" }
+                        $Script:MainFormForm.Elements.ComboBoxSelectDataConnection.SelectedItem = $Script:MainFormForm.Elements.ComboBoxSelectDataConnection.Items | Where-Object { $_.Content -like "OISES -*" }
                     }
 
-                    $ComboBoxDataConnectionSelectedItem = $Script:MainWindowForm.Elements.ComboBoxSelectDataConnection.SelectedItem
-                    $ComboBoxDataConnectionItems = $Script:MainWindowForm.Elements.ComboBoxSelectDataConnection.Items | Sort-Object
-                    $Script:MainWindowForm.Elements.ComboBoxSelectDataConnection.Items?.Clear()
+                    $ComboBoxDataConnectionSelectedItem = $Script:MainFormForm.Elements.ComboBoxSelectDataConnection.SelectedItem
+                    $ComboBoxDataConnectionItems = $Script:MainFormForm.Elements.ComboBoxSelectDataConnection.Items | Sort-Object
+                    $Script:MainFormForm.Elements.ComboBoxSelectDataConnection.Items?.Clear()
                     foreach ($Item in $ComboBoxDataConnectionItems) {
-                        $Script:MainWindowForm.Elements.ComboBoxSelectDataConnection.Items.Add($Item) | Out-Null
+                        $Script:MainFormForm.Elements.ComboBoxSelectDataConnection.Items.Add($Item) | Out-Null
                     }
                     if ($null -ne $ComboBoxDataConnectionSelectedItem) {
-                        $Script:MainWindowForm.Elements.ComboBoxSelectDataConnection.SelectedItem = $Script:MainWindowForm.Elements.ComboBoxSelectDataConnection.Items | Where-Object { $_.Content -eq $ComboBoxDataConnectionSelectedItem.Content }
+                        $Script:MainFormForm.Elements.ComboBoxSelectDataConnection.SelectedItem = $Script:MainFormForm.Elements.ComboBoxSelectDataConnection.Items | Where-Object { $_.Content -eq $ComboBoxDataConnectionSelectedItem.Content }
                     }
 
-                    $Script:MainWindowForm.Elements.TextBoxDisplayName.IsEnabled = $true
-                    $Script:MainWindowForm.Elements.ComboBoxSelectDataConnection.IsEnabled = $true
-                    $Script:MainWindowForm.Elements.ButtonShowSqlSchema.IsEnabled = $true
+                    $Script:MainFormForm.Elements.TextBoxDisplayName.IsEnabled = $true
+                    $Script:MainFormForm.Elements.ComboBoxSelectDataConnection.IsEnabled = $true
+                    $Script:MainFormForm.Elements.ButtonShowSqlSchema.IsEnabled = $true
                 }
-                "{0} data connections processed!" -f ($Script:MainWindowForm.Elements.ComboBoxSelectDataConnection.Items | Measure-Object).Count | Write-LogOutput
+                "{0} data connections processed!" -f ($Script:MainFormForm.Elements.ComboBoxSelectDataConnection.Items | Measure-Object).Count | Write-LogOutput
 
                 if ($null -ne $UpdateDataConnectionsWindow) {
                     $UpdateDataConnectionsWindow.Close()

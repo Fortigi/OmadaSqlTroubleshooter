@@ -5,7 +5,7 @@ PARAM(
     [string]$Name,
     [parameter(Mandatory = $false, Position = 1, ParameterSetName = 'Force')]
     [parameter(Mandatory = $false, Position = 1, ParameterSetName = 'Append')]
-    [string]$FormName = "MainWindowForm",
+    [string]$FormName = "MainFormForm",
     [parameter(Mandatory = $false, Position = 3, ParameterSetName = 'Force')]
     [parameter(Mandatory = $false, Position = 3, ParameterSetName = 'Append')]
     [regex]$Filter,

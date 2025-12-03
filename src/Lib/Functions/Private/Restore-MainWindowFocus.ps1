@@ -1,10 +1,10 @@
-function Restore-MainWindowFocus {
+function Restore-MainFormFocus {
     [CmdLetBinding()]
     param()
     try {
-        if ($null -ne $Script:MainWindowForm -and $null -ne $Script:MainWindowForm.Definition) {
-            $Script:MainWindowForm.Definition.Dispatcher.Invoke({
-                    $Script:MainWindowForm.Definition.Activate()
+        if ($null -ne $Script:MainFormForm -and $null -ne $Script:MainFormForm.Definition) {
+            $Script:MainFormForm.Definition.Dispatcher.Invoke({
+                    $Script:MainFormForm.Definition.Activate()
                 })
         }
     }
