@@ -15,13 +15,11 @@ function Open-SqlHistoryForm {
 
         #Log form creation
         "Opening Sql History form" | Write-LogOutput -LogType DEBUG
-        $Script:SqlHistoryForm = Initialize-FormObject -FormPath (Join-Path $Script:RunTimeConfig.ModuleFolder -ChildPath "lib\ui\HistoryForm.xaml") -ParentForm $Script:MainForm.Definition
+        $Script:SqlHistoryForm = Initialize-FormObject -FormPath (Join-Path $Script:RunTimeConfig.ModuleFolder -ChildPath "lib\ui\SqlHistoryForm.xaml") -ParentForm $Script:MainForm.Definition
         Initialize-FormEvents -FormName "SqlHistoryForm"
         [Int]$Script:SqlHistoryForm.PositionManager.PositionOffSetRight = 405
 
         $true | Set-ConfigProperty -Property "SqlHistoryFormOpen"
-
-        $Script:SqlHistoryForm.Definition.ShowInTaskbar = $false
 
         $Script:SqlHistoryForm.Definition.Add_SizeChanged({
                 $_ | Show-EventInfo -LogType VERBOSE2
@@ -68,7 +66,7 @@ function Open-SqlHistoryForm {
 
 
         #endregion
-        $Script:SqlHistoryForm.Definition.Show()
+        $Script:SqlHistoryForm.Definition.ShowDialog()
 
     }
     catch {

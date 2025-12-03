@@ -12,10 +12,10 @@ using System.Windows.Shapes;
 
 namespace OmadaSqlTroubleshooter {
     /// <summary>
-    /// Interaction logic for LogWindow.xaml
+    /// Interaction logic for LogForm.xaml
     /// </summary>
-    public partial class LogWindow : Window {
-        public LogWindow() {
+    public partial class LogForm : Window {
+        public LogForm() {
             InitializeComponent();
         }
     }

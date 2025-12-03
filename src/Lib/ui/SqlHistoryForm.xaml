@@ -8,7 +8,9 @@
         MinHeight="500"
         Background="{DynamicResource {x:Static SystemColors.ScrollBarBrushKey}}"
         BorderBrush="{DynamicResource {x:Static SystemColors.ActiveBorderBrushKey}}"
-        Name="History"
+        WindowStartupLocation="CenterOwner"
+        ShowInTaskbar="False"
+        Name="SqlHistoryForm"
         >
 
     <Window.Resources>

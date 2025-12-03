@@ -14,10 +14,10 @@ using System.Windows.Shapes;
 
 namespace OmadaSqlTroubleshooter {
     /// <summary>
-    /// Interaction logic for ChoiceWindow.xaml
+    /// Interaction logic for ChoiceForm.xaml
     /// </summary>
-    public partial class ChoiceWindow : Window {
-        public ChoiceWindow() {
+    public partial class ChoiceForm : Window {
+        public ChoiceForm() {
             InitializeComponent();
         }
     }

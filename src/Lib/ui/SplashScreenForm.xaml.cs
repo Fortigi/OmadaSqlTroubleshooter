@@ -14,10 +14,10 @@ using System.Windows.Shapes;
 
 namespace OmadaSqlTroubleshooter {
     /// <summary>
-    /// Interaction logic for LogWindow.xaml
+    /// Interaction logic for SplashScreenForm.xaml
     /// </summary>
-    public partial class SplashScreen : Window {
-        public SplashScreen() {
+    public partial class SplashScreenForm : Window {
+        public SplashScreenForm() {
             InitializeComponent();
         }
     }

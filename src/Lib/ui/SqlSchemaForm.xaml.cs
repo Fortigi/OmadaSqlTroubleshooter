@@ -14,10 +14,10 @@ using System.Windows.Shapes;
 
 namespace OmadaSqlTroubleshooter {
     /// <summary>
-    /// Interaction logic for SchemaView.xaml
+    /// Interaction logic for SqlSchemaForm.xaml
     /// </summary>
-    public partial class SchemaView : Window {
-        public SchemaView() {
+    public partial class SqlSchemaForm : Window {
+        public SqlSchemaForm() {
             InitializeComponent();
         }
     }

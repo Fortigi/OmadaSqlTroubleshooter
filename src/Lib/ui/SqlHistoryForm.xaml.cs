@@ -14,10 +14,10 @@ using System.Windows.Shapes;
 
 namespace OmadaSqlTroubleshooter {
     /// <summary>
-    /// Interaction logic for LogWindow.xaml
+    /// Interaction logic for SqlHistoryForm.xaml
     /// </summary>
-    public partial class History : Window {
-        public History() {
+    public partial class SqlHistoryForm : Window {
+        public SqlHistoryForm() {
             InitializeComponent();
         }
     }
