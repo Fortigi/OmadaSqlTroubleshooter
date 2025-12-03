@@ -284,6 +284,7 @@
                                                                                    ToolTip="Application ID Uri:"/>
                                                                         <TextBox Grid.Column="11"
                                                                                  x:Name="TextBoxAppIdUri"
+                                                                                 TabIndex="5"
                                                                                  IsEnabled="False"
                                                                                  Visibility="Hidden"/>
                                                                 </Grid>
@@ -308,6 +309,7 @@
                                                                         <ComboBox Grid.Column="3"
                                                                                   x:Name="ComboBoxSelectAuthenticationOption"
                                                                                   SelectedIndex="0"
+                                                                                  TabIndex="2"
                                                                                   VerticalAlignment="Center">
                                                                                 <ComboBoxItem Content="Browser"/>
                                                                                 <ComboBoxItem Content="WebView2"/>
@@ -320,6 +322,7 @@
                                                                                    VerticalAlignment="Center"/>
                                                                         <PasswordBox Grid.Column="7"
                                                                                      x:Name="TextBoxPassword"
+                                                                                     TabIndex="4"
                                                                                      Visibility="Hidden"
                                                                                      VerticalAlignment="Center"/>
                                                                         <TextBlock Grid.Column="9"
@@ -330,6 +333,7 @@
                                                                         <TextBox Grid.Column="11"
                                                                                  x:Name="TextBoxEntraIdTenantId"
                                                                                  Visibility="Hidden"
+                                                                                 TabIndex="6"
                                                                                  VerticalAlignment="Center"/>
                                                                 </Grid>
                                                                 <Grid Margin="5">
@@ -353,7 +357,7 @@
                                                                                     ToolTip="Query list"/>
                                                                         <ComboBox Grid.Column="3"
                                                                                   x:Name="ComboBoxSelectQuery"
-                                                                                  TabIndex="6"
+                                                                                  TabIndex="7"
                                                                                   IsEditable="True"
                                                                                   IsTextSearchEnabled="True"
                                                                                   StaysOpenOnEdit="True"/>
@@ -363,7 +367,7 @@
                                                                                     Orientation="Horizontal"
                                                                                     VerticalAlignment="Center">
                                                                                 <CheckBox x:Name="CheckBoxSavePassword"
-                                                                                          TabIndex="7"/>
+                                                                                          TabIndex="8"/>
                                                                         </StackPanel>
                                                                 </Grid>
                                                                 <Grid Margin="5"
@@ -391,7 +395,7 @@
                                                                         <TextBox Grid.Column="3"
                                                                                  x:Name="TextBoxDisplayName"
                                                                                  IsEnabled="False"
-                                                                                 TabIndex="8"/>
+                                                                                 TabIndex="9"/>
                                                                         <TextBlock Grid.Column="5"
                                                                                    Text="Filter my queries:"
                                                                                    Grid.RowSpan="5"/>
@@ -399,10 +403,10 @@
                                                                                     Orientation="Horizontal"
                                                                                     VerticalAlignment="Center">
                                                                                 <CheckBox x:Name="CheckboxMyCreatedQueries"
-                                                                                          TabIndex="9"
+                                                                                          TabIndex="10"
                                                                                           Content="Crea_ted"/>
                                                                                 <CheckBox x:Name="CheckboxMyUpdatedQueries"
-                                                                                          TabIndex="10"
+                                                                                          TabIndex="11"
                                                                                           Content="Last _Updated"/>
                                                                         </StackPanel>
                                                                         <TextBlock Grid.Column="9"
@@ -414,7 +418,7 @@
                                                                                    ToolTip="Data Connection"/>
                                                                         <ComboBox Grid.Column="13"
                                                                                   x:Name="ComboBoxSelectDataConnection"
-                                                                                  TabIndex="11"
+                                                                                  TabIndex="12"
                                                                                   IsEditable="True"
                                                                                   IsTextSearchEnabled="True"
                                                                                   StaysOpenOnEdit="True"/>
@@ -428,7 +432,7 @@
                                                     Grid.Row="2">
                                                 <Separator Style="{StaticResource ButtontBorderWidthSeparatorStyle}"/>
                                                 <Button x:Name="ButtonNewQuery"
-                                                        TabIndex="12"
+                                                        TabIndex="13"
                                                         ToolTip="Creates a new query object in Omada">
                                                         <Border Background="Transparent"
                                                                 IsHitTestVisible="False">
@@ -457,7 +461,7 @@
 
                                                 <Separator Style="{StaticResource DefaultButtonWidthSeparatorStyle}"/>
                                                 <Button x:Name="ButtonRefreshQueries"
-                                                        TabIndex="13"
+                                                        TabIndex="14"
                                                         IsEnabled="True"
                                                         ToolTip="Refresh query list">
                                                         <Border Background="Transparent"
@@ -487,7 +491,7 @@
 
                                                 <Separator Style="{StaticResource DefaultButtonWidthSeparatorStyle}"/>
                                                 <Button x:Name="ButtonShowSqlSchema"
-                                                        TabIndex="14"
+                                                        TabIndex="15"
                                                         ToolTip="Show Sql Schema">
                                                         <Border Background="Transparent"
                                                                 IsHitTestVisible="False">
@@ -516,7 +520,7 @@
 
                                                 <Separator Style="{StaticResource DefaultButtonWidthSeparatorStyle}"/>
                                                 <Button x:Name="ButtonSaveQuery"
-                                                        TabIndex="15"
+                                                        TabIndex="16"
                                                         ToolTip="Save query in Omada">
                                                         <Border Background="Transparent"
                                                                 IsHitTestVisible="False">
@@ -545,7 +549,7 @@
 
                                                 <Separator Style="{StaticResource DefaultButtonWidthSeparatorStyle}"/>
                                                 <Button x:Name="ButtonExecuteQuery"
-                                                        TabIndex="16"
+                                                        TabIndex="17"
                                                         ToolTip="Execute">
                                                         <Border Background="Transparent"
                                                                 IsHitTestVisible="False">
@@ -574,7 +578,7 @@
 
                                                 <Separator Style="{StaticResource DefaultButtonWidthSeparatorStyle}"/>
                                                 <Button x:Name="ButtonShowHistory"
-                                                        TabIndex="17"
+                                                        TabIndex="18"
                                                         IsEnabled="True"
                                                         ToolTip="Show history window">
                                                         <Border Background="Transparent"
@@ -603,7 +607,7 @@
                                                 </Button>
                                                 <Separator Style="{StaticResource ButtontBorderWidthSeparatorStyle}"/>
                                                 <Button x:Name="ButtonShowOutput"
-                                                        TabIndex="18"
+                                                        TabIndex="19"
                                                         ToolTip="View result in a new window">
                                                         <Border Background="Transparent"
                                                                 IsHitTestVisible="False">
@@ -632,7 +636,7 @@
 
                                                 <Separator Style="{StaticResource DefaultButtonWidthSeparatorStyle}"/>
                                                 <Button x:Name="ButtonSaveOutputFile"
-                                                        TabIndex="19"
+                                                        TabIndex="20"
                                                         ToolTip="Export result to a file">
                                                         <Border Background="Transparent"
                                                                 IsHitTestVisible="False">
@@ -661,7 +665,7 @@
 
                                                 <Separator Style="{StaticResource DefaultButtonWidthSeparatorStyle}"/>
                                                 <Button x:Name="ButtonOpenOutputFile"
-                                                        TabIndex="20"
+                                                        TabIndex="21"
                                                         ToolTip="Open export file">
                                                         <Border Background="Transparent"
                                                                 IsHitTestVisible="False">
@@ -690,7 +694,7 @@
 
                                                 <Separator Style="{StaticResource DefaultButtonWidthSeparatorStyle}"/>
                                                 <Button x:Name="ButtonConnect"
-                                                        TabIndex="21"
+                                                        TabIndex="22"
                                                         ToolTip="Connect to Omada">
                                                         <Border Background="Transparent"
                                                                 IsHitTestVisible="False">
@@ -718,7 +722,7 @@
                                                 </Button>
                                                 <Separator Style="{StaticResource DefaultButtonWidthSeparatorStyle}"/>
                                                 <Button x:Name="ButtonReset"
-                                                        TabIndex="22"
+                                                        TabIndex="23"
                                                         IsEnabled="True"
                                                         ToolTip="Reset application">
                                                         <Border Background="Transparent"
@@ -748,7 +752,7 @@
 
                                                 <Separator Style="{StaticResource DefaultButtonWidthSeparatorStyle}"/>
                                                 <Button x:Name="ButtonShowLog"
-                                                        TabIndex="23"
+                                                        TabIndex="24"
                                                         IsEnabled="True"
                                                         ToolTip="Show log window">
                                                         <Border Background="Transparent"
