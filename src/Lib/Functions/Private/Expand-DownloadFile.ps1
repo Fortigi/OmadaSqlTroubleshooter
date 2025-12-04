@@ -1,5 +1,5 @@
 function Expand-DownloadFile {
-    PARAM(
+    param(
         [parameter(Mandatory = $true)]
         [validateScript({ Test-Path $_ -PathType Leaf })]
         $FilePath

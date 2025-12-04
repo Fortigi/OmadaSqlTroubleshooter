@@ -9,11 +9,36 @@ Properties {
     New-Item -Path $OutputDir -ItemType Directory -Force | Out-Null
 }
 
-
 Task default -depends Analyze, Test, Build, ImportModule
 Task TestBuildOnly -depends Analyze, Test, Build
 Task Pipeline -depends Analyze, Test, Build
 Task DeployOnly -depends Build, Deploy
+
+
+function Get-GalleryModuleVersion {
+    [CmdLetBinding()]
+    param (
+        [string]$ModuleName
+    )
+
+    try {
+        $ApiEndpoint = "https://www.powershellgallery.com/api/v2/FindPackagesById()?id='{0}'" -f $ModuleName
+        $Response = Invoke-RestMethod -Uri $ApiEndpoint -Method Get -Headers @{
+            "Accept" = "application/xml"
+        } -ConnectionTimeoutSeconds 1
+
+        if ($null -ne $Response) {
+            $LatestVersion = $Response | Sort-Object updated -Descending | Select-Object -First 1
+            return $LatestVersion.Properties.version
+        }
+        else {
+            return $null
+        }
+    }
+    catch {
+        return $null
+    }
+}
 
 Task Dependencies {
     try {
@@ -36,7 +61,19 @@ Task Analyze {
             ExcludeRules = '*WriteHost', '*AvoidUsingEmptyCatchBlock*', '*UseShouldProcessForStateChangingFunctions*', '*AvoidOverwritingBuiltInCmdlets*', '*UseToExportFieldsInManifest*', '*UseProcessBlockForPipelineCommand*', '*ConvertToSecureStringWithPlainText*', '*UseSingularNouns*'
         }
         $SaResults = @()
-        @("functions", "events") | ForEach-Object {
+        @("functions") | ForEach-Object {
+            $LibSource = $_
+            $SourceChildPath = "lib\{0}" -f $LibSource
+            Get-ChildItem -Path (Join-Path $ModuleSource -ChildPath $SourceChildPath) -Recurse -File | Where-Object { $_.Name -notlike "_*.ps1" } | ForEach-Object {
+                $SaResults += Invoke-ScriptAnalyzer -Path $_.FullName -Severity @('Error', 'Warning') -Recurse -Profile $SaProfile -Verbose:$false
+            }
+        }
+        $SaProfile = @{
+            Severity     = @('Error', 'Warning')
+            IncludeRules = '*'
+            ExcludeRules = '*WriteHost', '*AvoidUsingEmptyCatchBlock*', '*UseShouldProcessForStateChangingFunctions*', '*AvoidOverwritingBuiltInCmdlets*', '*UseToExportFieldsInManifest*', '*UseProcessBlockForPipelineCommand*', '*ConvertToSecureStringWithPlainText*', '*UseSingularNouns*', 'PSAvoidAssignmentToAutomaticVariable', 'PSReviewUnusedParameter'
+        }
+        @("events") | ForEach-Object {
             $LibSource = $_
             $SourceChildPath = "lib\{0}" -f $LibSource
             Get-ChildItem -Path (Join-Path $ModuleSource -ChildPath $SourceChildPath) -Recurse -File | Where-Object { $_.Name -notlike "_*.ps1" } | ForEach-Object {
@@ -177,6 +214,8 @@ Task Build -depends Test {
         "Module psd1 output file: {0}" -f $($ModulePsd1Path) | Write-Host
         (Get-Content $($ModulePsd1Path) -Raw) -replace "`r?`n", "`r`n" | Invoke-Formatter -Settings $FormattingSettings | Set-Content -Path $($ModulePsd1Path) -Encoding UTF8 -Force
 
+        $LatestOmadaWebPSVersion = Get-GalleryModuleVersion -ModuleName "OmadaWeb.PS"
+
         $Length = 150
         $HeaderContent = $null
         $HeaderContent = New-HeaderRow -Text "" -Length $Length -FillChar "#"
@@ -187,7 +226,6 @@ Task Build -depends Test {
         $HeaderContent += New-HeaderRow -Text  ("Copyright Fortigi (C) {0}" -f $Date.ToString("yyyy")) -Length $Length -FillChar " "
         $HeaderContent += New-HeaderRow -Text  "" -Length $Length -FillChar "#"
         $HeaderContent += "`n"
-        $HeaderContent += '#requires -Module OmadaWeb.PS'
         $HeaderContent += "`n"
         $HeaderContent += '#requires -Version 7.0'
         $HeaderContent += "`n"
@@ -196,6 +234,10 @@ Task Build -depends Test {
 
         $ModuleFileContent = Get-Content -Path "$ModuleSource\OmadaSqlTroubleShooter.psm1" -Encoding UTF8 -ErrorAction Stop
         $ModuleFileContent = $ModuleFileContent | Where-Object { $_ -notmatch '^\s*#requires' -and $_ -notmatch '^\s*#' }
+
+        #Work-around for enforcing minimum version
+        $ModuleFileContent = $ModuleFileContent -replace "\`$MinimumOmadaWebPSVersion\s*=\s*`"0.0`"", ("`$MinimumOmadaWebPSVersion = `"{0}`"" -f $LatestOmadaWebPSVersion)
+
         $ModuleFileContent = ($ModuleFileContent | Out-String).Trim()
 
         #$ModuleFileContent = $ModuleFileContent -replace "\`$Private.*-Recurse\)", "`$Private = @()"
@@ -290,13 +332,24 @@ Task ImportModule -depends Build {
 
     try {
 
+        $LatestOmadaWebPSVersion = Get-GalleryModuleVersion -ModuleName "OmadaWeb.PS"
+
+        if(!(Get-Module -Name "OmadaWeb.PS" -ListAvailable)) {
+            Install-Module -Name "OmadaWeb.PS" -Scope CurrentUser -Force -MinimumVersion $LatestOmadaWebPSVersion
+        }
+        elseif(Get-Module -Name "OmadaWeb.PS" -ListAvailable -ErrorAction SilentlyContinue | Where-Object { $_.Version -lt $LatestOmadaWebPSVersion }) {
+            Update-Module -Name "OmadaWeb.PS" -Scope CurrentUser -Force -MinimumVersion $LatestOmadaWebPSVersion
+        }
+        "Import OmadaWeb.PS module" | Write-Host
+        Import-Module -Name "OmadaWeb.PS" -MinimumVersion $LatestOmadaWebPSVersion -Force
+
         "Test Import module" | Write-Host
         Test-ModuleManifest -Path "$OutputDir\$ModuleName.psd1"
 
         $Test = Import-Module "$OutputDir\$ModuleName.psd1" -Force -PassThru
         if ($Test) {
             "Module loaded successfully" | Write-Verbose
-            Remove-Module -Name $Test.Name -Force
+            Remove-Module -name $Test.Name -Force
         }
         else {
             "Module failed to load" | Write-Error -ErrorAction Stop

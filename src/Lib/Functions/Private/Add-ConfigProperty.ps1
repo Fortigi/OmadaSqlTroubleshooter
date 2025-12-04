@@ -4,7 +4,7 @@ function Add-ConfigProperty {
         $Property
     )
     try {
-        $Script:Tracer::WriteLine(("{0}: Function: {1} - Caller: {2}({3}) - Command: {4}" -f $($Script:RunTimeConfig.ApplicationName), $($MyInvocation.MyCommand.Name), $($MyInvocation.ScriptName).Split("\")[-1], $($MyInvocation.ScriptLineNumber), $MyInvocation.Statement))
+        $Script:Tracer::WriteLine(("{0}: Function: {1} - Caller: {2}({3}) - Command: {4} - Parameters: {5}" -f $($Script:RunTimeConfig.ApplicationName), $($MyInvocation.MyCommand.Name), $($MyInvocation.ScriptName).Split("\")[-1], $($MyInvocation.ScriptLineNumber), $MyInvocation.Statement, ($PSBoundParameters | Out-String)))
         if ($Property.Name -notin $CurrentProperties.Name) {
             # "Add property {0} to config object!" -f $Property | Write-LogOutput -LogType VERBOSE
             $Private:Value = $null
@@ -48,6 +48,6 @@ function Add-ConfigProperty {
         }
     }
     catch {
-        $_.Exception.Message | Write-LogOutput -LogType ERROR
+        $_.Exception.Message | Write-LogOutput -LogType ERROR -ErrorObject $_
     }
 }

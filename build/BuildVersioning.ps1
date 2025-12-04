@@ -10,8 +10,8 @@ try {
     "Current day: {0}" -f $Day | Write-Host
     "Revision: {0}" -f $Env:Revision | Write-Host
     $VersionString = "{0:d4}.{1:d2}.{2:d2}.{3}" -f $Year, $Month, $Day, ($Env:Revision -eq $null ? 0 : $Env:Revision)
-$SourceBranchName = "$($env:BUILD_SOURCEBRANCHNAME)"
-$SourceBranchName = $SourceBranchName -replace 'refs/heads/', '' -replace '/', ''
+    $SourceBranchName = "$($env:BUILD_SOURCEBRANCHNAME)"
+    $SourceBranchName = $SourceBranchName -replace 'refs/heads/', '' -replace '/', ''
     if ("$SourceBranchName" -notin ("master", "main")) {
         $VersionString = "$VersionString-$SourceBranchName"
     }

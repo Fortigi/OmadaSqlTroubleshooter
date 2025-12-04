@@ -8,7 +8,7 @@ BeforeAll {
 Describe 'Test-Variable' {
     BeforeAll {
 
-        $Global:MainWindowForm1 = @{
+        $Global:MainForm1 = @{
             Elements = @{
                 ButtonSaveQuery = @{
                     IsEnabled = $true
@@ -16,7 +16,7 @@ Describe 'Test-Variable' {
             }
         }
 
-        $Global:MainWindowForm2 = [PSCustomObject]@{
+        $Global:MainForm2 = [PSCustomObject]@{
             Elements = [PSCustomObject]@{
                 ButtonSaveQuery = [PSCustomObject]@{
                     IsEnabled = $true
@@ -24,7 +24,7 @@ Describe 'Test-Variable' {
             }
         }
 
-        $Global:MainWindowForm3 = @{
+        $Global:MainForm3 = @{
             Elements = [PSCustomObject]@{
                 ButtonSaveQuery = @{
                     IsEnabled = "test"
@@ -32,7 +32,7 @@ Describe 'Test-Variable' {
             }
         }
 
-        $Global:MainWindowForm4 = @{
+        $Global:MainForm4 = @{
             Elements = [PSCustomObject]@{
                 ButtonSaveQuery = @{
                     IsEnabled = $null
@@ -44,7 +44,7 @@ Describe 'Test-Variable' {
     }
 
     It 'should return true for existing variable and attribute chain1' {
-        '$Global:MainWindowForm1.Elements.ButtonSaveQuery.IsEnabled' | Test-Variable | Should -Be $true
+        '$Global:MainForm1.Elements.ButtonSaveQuery.IsEnabled' | Test-Variable | Should -Be $true
     }
 
     It 'should return false for non-existing variable1' {
@@ -55,18 +55,18 @@ Describe 'Test-Variable' {
     }
 
     It 'should return true for existing variable but non-existing attribute chain1' {
-        ('$Global:MainWindowForm1.Elements.NonExistingAttribute' | Test-Variable).VariableExists | Should -Be $true
+        ('$Global:MainForm1.Elements.NonExistingAttribute' | Test-Variable).VariableExists | Should -Be $true
     }
     It 'should return false for existing variable but non-existing attribute chain2' {
-        ('$Global:MainWindowForm1.Elements.NonExistingAttribute' | Test-Variable).AttributeExists | Should -Be $false
+        ('$Global:MainForm1.Elements.NonExistingAttribute' | Test-Variable).AttributeExists | Should -Be $false
     }
 
     # It 'should return true for existing variable and attribute chain with ExcludeVariable1' {
-    #     '$Global:MainWindowForm1.Elements.ButtonSaveQuery.IsEnabled' | Test-Variable -ExcludeVariable | Should -Be $true
+    #     '$Global:MainForm1.Elements.ButtonSaveQuery.IsEnabled' | Test-Variable -ExcludeVariable | Should -Be $true
     # }
 
     # It 'should return true for existing variable and attribute chain with ExcludeAttribute2' {
-    #     '$Global:MainWindowForm1.Elements.ButtonSaveQuery.IsEnabled' | Test-Variable -ExcludeAttribute | Should -Be $true
+    #     '$Global:MainForm1.Elements.ButtonSaveQuery.IsEnabled' | Test-Variable -ExcludeAttribute | Should -Be $true
     # }
 
     It 'should return false for non-existing variable with ExcludeVariable1' {
@@ -74,6 +74,6 @@ Describe 'Test-Variable' {
     }
 
     # It 'should return false for non-existing attribute chain with ExcludeAttribute1' {
-    #     '$Global:MainWindowForm1.Elements.NonExistingAttribute' | Test-Variable -ExcludeAttribute | Should -Be $false
+    #     '$Global:MainForm1.Elements.NonExistingAttribute' | Test-Variable -ExcludeAttribute | Should -Be $false
     # }
 }

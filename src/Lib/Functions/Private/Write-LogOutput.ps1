@@ -3,6 +3,7 @@ function Write-LogOutput {
     param(
         [parameter(Mandatory = $false, Position = 0, ValueFromPipeline = $true)]
         [string]$Message,
+        $ErrorObject,
         [ValidateSet("DEBUG", "INFO", "ERROR", "VERBOSE", "WARNING", "FATAL", "LOG", "VERBOSE2")]
         [string]$LogType = "INFO",
         [switch]$SkipDialog
@@ -38,6 +39,7 @@ function Write-LogOutput {
         $LogMessage = @{
             #VERBOSE2 length = 8
             Text        = "{0} - {1}{2}- {3}: {4}" -f $DateTime, $LogType, ((0..(8 - $LogType.Length) | ForEach-Object { ' ' }) -join ''), $CalledFrom, $Message
+            CallStack   = ($PSCallStack | Select-Object -Skip 1 -SkipLast 1 | Select-Object Location -ExpandProperty Location) -join "`n"
             Show        = $false
             ShowWarning = $false
             ShowError   = $false
@@ -114,8 +116,19 @@ function Write-LogOutput {
                 catch {}
                 $LogMessage.ShowError = $true
                 $LogMessageDialog.Show = $true
-                $LogMessageDialog.Text = "Failure occurred:`r`n`r`n{0}" -f $LogMessageDialog.Text
                 $LogMessageDialog.Title = "Error"
+                try {
+                    if ($Null -ne $ErrorObject) {
+                        if ($null -ne $ErrorObject.Exception?.StatusCode) {
+                            $LogMessageDialog.Title += "{0} - ({1} - {2})" -f $LogMessageDialog.Title, $ErrorObject.Exception.StatusCode, $ErrorObject.Exception.Response.ReasonPhrase
+                            $LogMessageDialog.Text = "Failure {0} - {1} occurred:`r`n`r`n{2}" -f $LogMessageDialog.Text, $ErrorObject.Exception.StatusCode, $ErrorObject.Exception.Response.ReasonPhrase
+                        }
+                    }
+                    else {
+                        $LogMessageDialog.Text = "Failure occurred:`r`n`r`n{0}" -f $LogMessageDialog.Text
+                    }
+                }
+                catch {}
                 $LogMessageDialog.Icon = [System.Windows.Forms.MessageBoxIcon]::Error
                 $LogMessage.Color = "Red"
                 if ($null -ne $Script:PopUpWindowQueryRefresh) {
@@ -136,8 +149,10 @@ function Write-LogOutput {
             $LogMessage.Text | Write-Verbose
         }
         if ($LogMessageDialog.Show -and !$SkipDialog) {
-            if ($null -ne $Script:MainWindowForm -and $null -ne $Script:MainWindowForm.Definition -and $Script:MainWindowForm.Definition.IsVisible) {
-                [System.Windows.Forms.MessageBox]::Show($LogMessageDialog.Text, $LogMessageDialog.Title, [System.Windows.Forms.MessageBoxButtons]::OK, $LogMessageDialog.Icon)
+            if ($null -ne $Script:MainForm -and $null -ne $Script:MainForm.Definition -and $Script:MainForm.Definition.IsVisible) {
+                $TrimmedText = Limit-MessageBoxText -Text $LogMessageDialog.Text
+                [System.Windows.Forms.MessageBox]::Show($TrimmedText, $LogMessageDialog.Title, [System.Windows.Forms.MessageBoxButtons]::OK, $LogMessageDialog.Icon)
+                Restore-MainFormFocus
             }
             else {
                 $MessageBoxImage = [System.Windows.MessageBoxImage]::Information
@@ -146,20 +161,20 @@ function Write-LogOutput {
                     $MessageBoxImage = [System.Windows.MessageBoxImage]::Warning
                 }
                 elseif ($LogMessage.ShowError) {
-                    $LogMessage.Text | Write-Error
+                    $LogMessage.Text, $LogMessage.CallStack -join ", `n" | Write-Error
                     $MessageBoxImage = [System.Windows.MessageBoxImage]::Error
                 }
                 else {
                     $LogMessage.Text | Write-Host -ForegroundColor $LogMessage.Color
                 }
-                [System.Windows.MessageBox]::Show($LogMessageDialog.Text, $LogMessageDialog.Title, [System.Windows.Forms.MessageBoxButtons]::OK, $MessageBoxImage) | Out-Null
+                [System.Windows.MessageBox]::Show((Limit-MessageBoxText -Text $LogMessageDialog.Text), $LogMessageDialog.Title, [System.Windows.Forms.MessageBoxButtons]::OK, $MessageBoxImage) | Out-Null
             }
         }
         if ($LogMessage.ShowError) {
-            $LogMessage.Text | Write-Error
+            $LogMessage.Text, $LogMessage.CallStack -join ", `n" | Write-Error
         }
         if ($null -ne $Script:TextBoxLog -and $Script:TextBoxLog.IsLoaded) {
-            if (Invoke-LogWindowScrollToEnd) {
+            if (Invoke-LogFormScrollToEnd) {
                 $Script:TextBoxLog.ScrollToEnd()
             }
         }

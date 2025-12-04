@@ -26,8 +26,8 @@
     "Type": "String"
   },
   {
-    "Name": "LastExtension",
-    "Type": "String"
+    "Name": "LastExtensionIndex",
+    "Type": "Int"
   },
   {
     "Name": "LastAuthentication",
@@ -90,39 +90,51 @@
     ]
   },
   {
-    "Name": "LogWindowFormOpen",
+    "Name": "LogFormOpen",
     "Type": "String"
   },
   {
-    "Name": "SqlSchemaWindowFormOpen",
+    "Name": "SqlSchemaFormOpen",
     "Type": "Bool"
   },
   {
-    "Name": "MainWindowPosition",
+    "Name": "SqlHistoryFormOpen",
+    "Type": "Bool"
+  },
+  {
+    "Name": "MainFormPosition",
     "Type": "String"
   },
   {
-    "Name": "LogWindowPosition",
+    "Name": "LogFormPosition",
     "Type": "String"
   },
   {
-    "Name": "SqlSchemaWindowPosition",
+    "Name": "SqlSchemaFormPosition",
     "Type": "String"
   },
   {
-    "Name": "MainWindowSize",
+    "Name": "SqlHistoryFormPosition",
     "Type": "String"
   },
   {
-    "Name": "LogWindowSize",
+    "Name": "MainFormSize",
     "Type": "String"
   },
   {
-    "Name": "SqlSchemaWindowSize",
+    "Name": "LogFormSize",
     "Type": "String"
   },
   {
-    "Name": "LogWindowWordWrap",
+    "Name": "SqlSchemaFormSize",
+    "Type": "String"
+  },
+  {
+    "Name": "SqlHistoryFormSize",
+    "Type": "String"
+  },
+  {
+    "Name": "LogFormWordWrap",
     "Type": "Bool"
   },
   {

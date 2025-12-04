@@ -1,4 +1,3 @@
-#requires -Modules @{ ModuleName="OmadaWeb.PS"; ModuleVersion="2025.10.9.1" }
 #requires -Version 7.0
 
 [CmdLetBinding()]
@@ -11,6 +10,14 @@ try {
 
     $ModuleName = "OmadaSqlTroubleshooter"
     "Loading {0} Module" -f $ModuleName | Write-Verbose
+
+    $MinimumOmadaWebPSVersion = "0.0"
+    if ($MinimumOmadaWebPSVersion -ne "0.0") {
+        Import-Module OmadaWeb.PS -MinimumVersion $MinimumOmadaWebPSVersion -ErrorAction Stop
+        if ((Get-Module -Name OmadaWeb.PS).Version -lt [version]$MinimumOmadaWebPSVersion) {
+            throw ("OmadaWeb.PS module version {0} or higher is required." -f $MinimumOmadaWebPSVersion)
+        }
+    }
 
     $LocalAppDataPath = [System.Environment]::GetFolderPath([System.Environment+SpecialFolder]::LocalApplicationData)
     $ModuleAppDataPath = (New-Item (Join-Path $LocalAppDataPath -ChildPath $ModuleName) -ItemType Directory -Force).FullName

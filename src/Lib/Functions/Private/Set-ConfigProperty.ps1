@@ -13,7 +13,7 @@ function Set-ConfigProperty {
 
     begin {
         try {
-            $Script:Tracer::WriteLine(("{0}: Function: {1} - Caller: {2}({3}) - Command: {4}" -f $($Script:RunTimeConfig.ApplicationName), $($MyInvocation.MyCommand.Name), $($MyInvocation.ScriptName).Split("\")[-1], $($MyInvocation.ScriptLineNumber), $MyInvocation.Statement))
+            $Script:Tracer::WriteLine(("{0}: Function: {1} - Caller: {2}({3}) - Command: {4} - Parameters: {5}" -f $($Script:RunTimeConfig.ApplicationName), $($MyInvocation.MyCommand.Name), $($MyInvocation.ScriptName).Split("\")[-1], $($MyInvocation.ScriptLineNumber), $MyInvocation.Statement, ($PSBoundParameters | Out-String)))
             $InputObject = @()
             if ($Reset) {
                 "Reset configuration!" | Write-LogOutput -LogType DEBUG
@@ -73,7 +73,7 @@ function Set-ConfigProperty {
             }
         }
         catch {
-            $_.Exception.Message | Write-LogOutput -LogType ERROR
+            $_.Exception.Message | Write-LogOutput -LogType ERROR -ErrorObject $_
         }
     }
     process {
@@ -162,7 +162,7 @@ function Set-ConfigProperty {
             $Script:AppConfig = $Config
         }
         catch {
-            $_.Exception.Message | Write-LogOutput -LogType ERROR
+            $_.Exception.Message | Write-LogOutput -LogType ERROR -ErrorObject $_
         }
     }
 }

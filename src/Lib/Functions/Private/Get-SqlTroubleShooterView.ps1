@@ -1,8 +1,8 @@
 function Get-SqlTroubleShooterView {
     [CmdLetBinding()]
-    PARAM()
+    param()
     try {
-        $Script:Tracer::WriteLine(("{0}: Function: {1} - Caller: {2}({3}) - Command: {4}" -f $($Script:RunTimeConfig.ApplicationName), $($MyInvocation.MyCommand.Name), $($MyInvocation.ScriptName).Split("\")[-1], $($MyInvocation.ScriptLineNumber), $MyInvocation.Statement))
+        $Script:Tracer::WriteLine(("{0}: Function: {1} - Caller: {2}({3}) - Command: {4} - Parameters: {5}" -f $($Script:RunTimeConfig.ApplicationName), $($MyInvocation.MyCommand.Name), $($MyInvocation.ScriptName).Split("\")[-1], $($MyInvocation.ScriptLineNumber), $MyInvocation.Statement, ($PSBoundParameters | Out-String)))
         $ViewResult = Get-OmadaGetPagingDataObject -SearchString "SQL Troubleshooting" -DataType "Views" -DataTypeArgs @{OwnerShipType = "Both" }
         $View = $null
         if ($null -ne $ViewResult -and $ViewResult.d.Records -gt 0) {
@@ -24,6 +24,6 @@ function Get-SqlTroubleShooterView {
 
     }
     catch {
-        $_.Exception.Message | Write-LogOutput -LogType ERROR
+        $_.Exception.Message | Write-LogOutput -LogType ERROR -ErrorObject $_
     }
 }

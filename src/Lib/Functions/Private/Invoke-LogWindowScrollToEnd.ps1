@@ -1,6 +1,6 @@
-function Invoke-LogWindowScrollToEnd {
+function Invoke-LogFormScrollToEnd {
     [CmdLetBinding()]
-    PARAM()
+    param()
     try {
 
         #TODO: Implement disable scroll when not at the end
@@ -18,7 +18,7 @@ function Invoke-LogWindowScrollToEnd {
         #         }
 
 
-        #     $ScrollViewer = [System.Windows.Controls.Primitives.ScrollViewer]::GetScrollViewer($Script:TextBoxLog.ScrollToEnd())
+        #     $ScrollViewer = [System.Windows.Controls.Primitives.ScrollViewer]::GetScrollViewer($Script:TextBoxLog
 
         #     $ScrollViewer.ScrollChanged += {
         #         $VerticalOffset = $ScrollViewer.VerticalOffset
@@ -33,6 +33,6 @@ function Invoke-LogWindowScrollToEnd {
         #         }
     }
     catch {
-        $_.Exception.Message | Write-LogOutput -LogType ERROR
+        $_.Exception.Message | Write-LogOutput -LogType ERROR -ErrorObject $_
     }
 }

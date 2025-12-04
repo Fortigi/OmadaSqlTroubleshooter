@@ -4,7 +4,7 @@
 
 
 
-$Global:MainWindowForm1 = @{
+$Global:MainForm1 = @{
     Elements = @{
         ButtonSaveQuery = @{
             IsEnabled = $true
@@ -12,7 +12,7 @@ $Global:MainWindowForm1 = @{
     }
 }
 
-$Global:MainWindowForm2 = [PSCustomObject]@{
+$Global:MainForm2 = [PSCustomObject]@{
     Elements = [PSCustomObject]@{
         ButtonSaveQuery = [PSCustomObject]@{
             IsEnabled = $true
@@ -20,7 +20,7 @@ $Global:MainWindowForm2 = [PSCustomObject]@{
     }
 }
 
-$Global:MainWindowForm3 = @{
+$Global:MainForm3 = @{
     Elements = [PSCustomObject]@{
         ButtonSaveQuery = @{
             IsEnabled = "test"
@@ -28,7 +28,7 @@ $Global:MainWindowForm3 = @{
     }
 }
 
-$Global:MainWindowForm4 = @{
+$Global:MainForm4 = @{
     Elements = [PSCustomObject]@{
         ButtonSaveQuery = @{
             IsEnabled = $null
@@ -39,25 +39,25 @@ $Global:MainWindowForm4 = @{
 $Test = "test"
 
 
-'$Global:MainWindowForm1.Elements.ButtonSaveQuery.IsEnabled' | Test-VariableAndAttribute
-'$Global:MainWindowForm1.Elements.ButtonSaveQuery.IsEnabled' | Test-VariableAndAttribute -ExcludeVariable
-'$Global:MainWindowForm1.Elements.ButtonSaveQuery.IsEnabled' | Test-VariableAndAttribute -ExcludeAttribute
-'$Global:MainWindowForm1.Elements.ButtonSaveQuery.IsEnabled' | Test-VariableAndAttribute -ExcludeVariable -ExcludeAttribute
+'$Global:MainForm1.Elements.ButtonSaveQuery.IsEnabled' | Test-VariableAndAttribute
+'$Global:MainForm1.Elements.ButtonSaveQuery.IsEnabled' | Test-VariableAndAttribute -ExcludeVariable
+'$Global:MainForm1.Elements.ButtonSaveQuery.IsEnabled' | Test-VariableAndAttribute -ExcludeAttribute
+'$Global:MainForm1.Elements.ButtonSaveQuery.IsEnabled' | Test-VariableAndAttribute -ExcludeVariable -ExcludeAttribute
 
-'$Global:MainWindowForm2.Elements.ButtonSaveQuery.IsEnabled' | Test-VariableAndAttribute
-'$Global:MainWindowForm2.Elements.ButtonSaveQuery.IsEnabled' | Test-VariableAndAttribute -ExcludeVariable
-'$Global:MainWindowForm2.Elements.ButtonSaveQuery.IsEnabled' | Test-VariableAndAttribute -ExcludeAttribute
-'$Global:MainWindowForm2.Elements.ButtonSaveQuery.IsEnabled' | Test-VariableAndAttribute -ExcludeVariable -ExcludeAttribute
+'$Global:MainForm2.Elements.ButtonSaveQuery.IsEnabled' | Test-VariableAndAttribute
+'$Global:MainForm2.Elements.ButtonSaveQuery.IsEnabled' | Test-VariableAndAttribute -ExcludeVariable
+'$Global:MainForm2.Elements.ButtonSaveQuery.IsEnabled' | Test-VariableAndAttribute -ExcludeAttribute
+'$Global:MainForm2.Elements.ButtonSaveQuery.IsEnabled' | Test-VariableAndAttribute -ExcludeVariable -ExcludeAttribute
 
-'$Global:MainWindowForm3.Elements.ButtonSaveQuery.IsEnabled' | Test-VariableAndAttribute
-'$Global:MainWindowForm3.Elements.ButtonSaveQuery.IsEnabled' | Test-VariableAndAttribute -ExcludeVariable
-'$Global:MainWindowForm3.Elements.ButtonSaveQuery.IsEnabled' | Test-VariableAndAttribute -ExcludeAttribute
-'$Global:MainWindowForm3.Elements.ButtonSaveQuery.IsEnabled' | Test-VariableAndAttribute -ExcludeVariable -ExcludeAttribute
+'$Global:MainForm3.Elements.ButtonSaveQuery.IsEnabled' | Test-VariableAndAttribute
+'$Global:MainForm3.Elements.ButtonSaveQuery.IsEnabled' | Test-VariableAndAttribute -ExcludeVariable
+'$Global:MainForm3.Elements.ButtonSaveQuery.IsEnabled' | Test-VariableAndAttribute -ExcludeAttribute
+'$Global:MainForm3.Elements.ButtonSaveQuery.IsEnabled' | Test-VariableAndAttribute -ExcludeVariable -ExcludeAttribute
 
-'$Global:MainWindowForm4.Elements.ButtonSaveQuery.IsEnabled' | Test-VariableAndAttribute
-'$Global:MainWindowForm4.Elements.ButtonSaveQuery.IsEnabled' | Test-VariableAndAttribute -ExcludeVariable
-'$Global:MainWindowForm4.Elements.ButtonSaveQuery.IsEnabled' | Test-VariableAndAttribute -ExcludeAttribute
-'$Global:MainWindowForm4.Elements.ButtonSaveQuery.IsEnabled' | Test-VariableAndAttribute -ExcludeVariable -ExcludeAttribute
+'$Global:MainForm4.Elements.ButtonSaveQuery.IsEnabled' | Test-VariableAndAttribute
+'$Global:MainForm4.Elements.ButtonSaveQuery.IsEnabled' | Test-VariableAndAttribute -ExcludeVariable
+'$Global:MainForm4.Elements.ButtonSaveQuery.IsEnabled' | Test-VariableAndAttribute -ExcludeAttribute
+'$Global:MainForm4.Elements.ButtonSaveQuery.IsEnabled' | Test-VariableAndAttribute -ExcludeVariable -ExcludeAttribute
 
 '$Test' | Test-VariableAndAttribute
 '$Test' | Test-VariableAndAttribute -ExcludeVariable

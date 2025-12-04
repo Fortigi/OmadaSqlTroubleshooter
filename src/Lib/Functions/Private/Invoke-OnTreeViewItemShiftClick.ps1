@@ -1,15 +1,15 @@
 function Invoke-OnTreeViewItemShiftClick {
     [CmdLetBinding()]
     [System.Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSAvoidAssignmentToAutomaticVariable', 'Sender', Justification = 'The use of the variable is on purpose')]
-    [System.Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSAvoidAssignmentToAutomaticVariable', 'Args', Justification = 'The use of the variable is on purpose')]
-    [System.Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSReviewUnusedParameter', 'Args', Justification = 'The variable is declared because the call contains the parameter')]
-    PARAM (
+    [System.Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSAvoidAssignmentToAutomaticVariable', 'EventArgs', Justification = 'The use of the variable is on purpose')]
+    [System.Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSReviewUnusedParameter', 'EventArgs', Justification = 'The variable is declared because the call contains the parameter')]
+    param (
         $Sender,
-        $Args
+        $EventArgs
     )
 
     try {
-        $Script:Tracer::WriteLine(("{0}: Function: {1} - Caller: {2}({3}) - Command: {4}" -f $($Script:RunTimeConfig.ApplicationName), $($MyInvocation.MyCommand.Name), $($MyInvocation.ScriptName).Split("\")[-1], $($MyInvocation.ScriptLineNumber), $MyInvocation.Statement))
+        $Script:Tracer::WriteLine(("{0}: Function: {1} - Caller: {2}({3}) - Command: {4} - Parameters: {5}" -f $($Script:RunTimeConfig.ApplicationName), $($MyInvocation.MyCommand.Name), $($MyInvocation.ScriptName).Split("\")[-1], $($MyInvocation.ScriptLineNumber), $MyInvocation.Statement, ($PSBoundParameters | Out-String)))
         "Left shift {0}, Right shift {1}" -f [System.Windows.Input.Keyboard]::IsKeyDown([System.Windows.Input.Key]::LeftShift), [System.Windows.Input.Keyboard]::IsKeyDown([System.Windows.Input.Key]::RightShift) | Write-LogOutput -LogType VERBOSE
 
         if ([System.Windows.Input.Keyboard]::IsKeyDown([System.Windows.Input.Key]::LeftShift) -or
@@ -19,6 +19,7 @@ function Invoke-OnTreeViewItemShiftClick {
 
                 $ItemValue = $Sender.SelectedValue.Header.ToString()
                 [System.Windows.Clipboard]::SetText($ItemValue)
+                $EventArgs.Handled = $true
                 "Copied to clipboard: {0}" -f $ItemValue | Write-LogOutput -LogType DEBUG
                 if ($null -eq $Script:PreviousLevel) {
                     $Script:PreviousLevel = -1
@@ -80,11 +81,11 @@ function Invoke-OnTreeViewItemShiftClick {
                         }
                     }
                     catch {
-                        $Script:Task.Exception.Message | Write-LogOutput -LogType ERROR
+                        $Script:Task.Exception.Message | Write-LogOutput -LogType ERROR -ErrorObject $_
                     }
                     if ($null -ne $Script:SenderTest.SelectedItem) {
                         $Script:SenderTest.SelectedItem.IsSelected = $false
-                        $Script:MainWindowForm.Definition.Focus()
+                        Restore-MainFormFocus
                         $Script:Webview.Object.Focus()
                     }
                 }
@@ -95,6 +96,6 @@ function Invoke-OnTreeViewItemShiftClick {
         }
     }
     catch {
-        $_.Exception.Message | Write-LogOutput -LogType ERROR
+        $_.Exception.Message | Write-LogOutput -LogType ERROR -ErrorObject $_
     }
 }
