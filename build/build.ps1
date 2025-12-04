@@ -1,4 +1,4 @@
-[cmdletbinding()]
+[CmdLetBinding()]
 param(
     [string[]]$Task = 'default',
     [string[]]$BuildVersion = ""

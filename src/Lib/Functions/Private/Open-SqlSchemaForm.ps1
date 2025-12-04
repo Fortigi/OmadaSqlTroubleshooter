@@ -15,7 +15,7 @@ function Open-SqlSchemaForm {
         #Log form creation
         "Opening Sql Schema form" | Write-LogOutput -LogType DEBUG
         $Script:SqlSchemaForm = Initialize-FormObject -FormPath (Join-Path $Script:RunTimeConfig.ModuleFolder -ChildPath "lib\ui\SqlSchemaForm.xaml") -ParentForm $Script:MainForm.Definition
-        Initialize-FormEvents -FormName "SqlSchemaForm"
+        Import-EventObjects -ClassName "SqlSchemaForm"
         [Int]$Script:SqlSchemaForm.PositionManager.PositionOffSetRight = 405
 
         $true | Set-ConfigProperty -Property "SqlSchemaFormOpen"

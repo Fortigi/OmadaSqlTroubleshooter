@@ -223,7 +223,7 @@ Task Build -depends Test {
         $HeaderContent += New-HeaderRow -Text  "" -Length $Length -FillChar " "
         $HeaderContent += New-HeaderRow -Text  ('Generated via psake on: {0}' -f $Date.ToString("yyyy-MM-ddTHH:mm:ss.fffZ")) -Length $Length -FillChar " "
         $HeaderContent += New-HeaderRow -Text  ("Version: {0}" -f $NewVersion.ToString()) -Length $Length -FillChar " "
-        $HeaderContent += New-HeaderRow -Text  ("Copyright Fortigi (C) {0}" -f $Date.ToString("yyyy")) -Length $Length -FillChar " "
+        $HeaderContent += New-HeaderRow -Text  ("Copyright Fortigi (C) 2024-{0}" -f $Date.ToString("yyyy")) -Length $Length -FillChar " "
         $HeaderContent += New-HeaderRow -Text  "" -Length $Length -FillChar "#"
         $HeaderContent += "`n"
         $HeaderContent += "`n"
@@ -237,6 +237,14 @@ Task Build -depends Test {
 
         #Work-around for enforcing minimum version
         $ModuleFileContent = $ModuleFileContent -replace "\`$MinimumOmadaWebPSVersion\s*=\s*`"0.0`"", ("`$MinimumOmadaWebPSVersion = `"{0}`"" -f $LatestOmadaWebPSVersion)
+
+        #Set Module Version
+        if (![String]::IsNullOrWhiteSpace($Version)) {
+            $ModuleFileContent = $ModuleFileContent -replace "\`$Script:ModuleVersion\s*=\s*`"Development`"", ("`$Script:ModuleVersion = `"{0}`"" -f $Version)
+        }
+
+
+
 
         $ModuleFileContent = ($ModuleFileContent | Out-String).Trim()
 
@@ -266,24 +274,47 @@ Task Build -depends Test {
         New-Item (Join-Path $OutputDir -ChildPath  "lib\schema") -ItemType Directory -Force | Out-Null
         Get-ChildItem -Path (Join-Path $ModuleSource -ChildPath "lib\schema") -Filter *.json | Where-Object { $_.BaseName -notlike "_*" } | Copy-Item -Destination (Join-Path $OutputDir -ChildPath "lib\schema") -Force -Recurse
 
-        @("functions", "events") | ForEach-Object {
-            $LibSource = $_
-            $SourceChildPath = "lib\{0}" -f $LibSource
-            $TargetChildPath = "lib\{0}" -f $LibSource
-            $TargetFilePath = "{0}\{1}.ps1" -f $TargetChildPath, $LibSource
+
+        $LibSource = "functions"
+        $SourceChildPath = "lib\{0}" -f $LibSource
+        $TargetChildPath = "lib\{0}" -f $LibSource
+        $TargetFilePath = "{0}\{1}.ps1" -f $TargetChildPath, $LibSource
+        New-Item (Join-Path $OutputDir -ChildPath $TargetChildPath) -ItemType Directory -Force | Out-Null
+        Get-ChildItem -Path (Join-Path $OutputDir -ChildPath $TargetChildPath) -Recurse -File | ForEach-Object {
+            Get-Item $_ | Remove-Item -Force
+        }
+        $HeaderContent | Out-File -Path (Join-Path $OutputDir -ChildPath $TargetFilePath) -Force -Append -Encoding utf8
+        Get-ChildItem -Path (Join-Path $ModuleSource -ChildPath $SourceChildPath) -Recurse -File | Where-Object { $_.Name -notlike "_*.ps1" } | ForEach-Object {
+            $Content = Get-Content $_ -Encoding UTF8 | Where-Object { $_ -notmatch '^\s*#requires' -and $_ -notmatch '^\s*#(?!>)' }
+            if (($content | Select-String -SimpleMatch "Wait-Debugger" -AllMatches | Measure-Object).Count -gt 0) {
+                "Use of 'Wait-Debugger' command found in script:{0}. This must be removed before building the module" -f $_.Name | Write-Error -ErrorAction Stop
+            }
+            $Content.Trim() | Out-File -Path (Join-Path $OutputDir -ChildPath $TargetFilePath) -Force -Append -Encoding utf8
+        }
+        (Get-Content (Join-Path $OutputDir -ChildPath $TargetFilePath) -Raw) -replace "(\r?\n\s*){3,}", "`r`n" -replace "`r?`n", "`r`n" | Invoke-Formatter -Settings $FormattingSettings | Set-Content -Path (Join-Path $OutputDir -ChildPath $TargetFilePath) -Encoding UTF8 -Force
+
+        $LibSource = "events"
+        $SourceChildPath = "lib\{0}" -f $LibSource
+        $TargetChildPath = "lib\{0}" -f $LibSource
+
+        $EventFiles = Get-ChildItem -Path (Join-Path $ModuleSource -ChildPath $SourceChildPath) -Recurse -File | Where-Object { $_.Name -notlike "_*.ps1" }
+        $EventFileGroups = $EventFiles | Select-Object *,@{Name="ClassName";Expression={ ($_.BaseName -split '\.')[0] } } | Group-Object -Property ClassName
+        foreach($EventFileGroupName in $EventFileGroups.Name) {
+            $EventFileGroup = $EventFileGroups | Where-Object { $_.Name -eq $EventFileGroupName }
+            $TargetFilePath = "{0}\{1}.ps1" -f $TargetChildPath, $EventFileGroupName
             New-Item (Join-Path $OutputDir -ChildPath $TargetChildPath) -ItemType Directory -Force | Out-Null
-            Get-ChildItem -Path (Join-Path $OutputDir -ChildPath $TargetChildPath) -Recurse -File | ForEach-Object {
+            Get-ChildItem -Path (Join-Path $OutputDir -ChildPath $TargetChildPath) -Recurse -File | Where-Object { $_.BaseName -eq $EventFileGroup.Name } | ForEach-Object {
                 Get-Item $_ | Remove-Item -Force
             }
             $HeaderContent | Out-File -Path (Join-Path $OutputDir -ChildPath $TargetFilePath) -Force -Append -Encoding utf8
-            Get-ChildItem -Path (Join-Path $ModuleSource -ChildPath $SourceChildPath) -Recurse -File | Where-Object { $_.Name -notlike "_*.ps1" } | ForEach-Object {
-                $Content = Get-Content $_ -Encoding UTF8 | Where-Object { $_ -notmatch '^\s*#requires' -and $_ -notmatch '^\s*#(?!>)' }
+            foreach($EventFile in $EventFileGroup.Group.FullName) {
+                $Content = Get-Content $EventFile -Encoding UTF8 | Where-Object { $_ -notmatch '^\s*#requires' -and $_ -notmatch '^\s*#(?!>)' }
                 if (($content | Select-String -SimpleMatch "Wait-Debugger" -AllMatches | Measure-Object).Count -gt 0) {
-                    "Use of 'Wait-Debugger' command found in script:{0}. This must be removed before building the module" -f $_.Name | Write-Error -ErrorAction Stop
+                    "Use of 'Wait-Debugger' command found in script:{0}. This must be removed before building the module" -f $EventFile.Name | Write-Error -ErrorAction Stop
                 }
                 $Content.Trim() | Out-File -Path (Join-Path $OutputDir -ChildPath $TargetFilePath) -Force -Append -Encoding utf8
             }
-            (Get-Content (Join-Path $OutputDir -ChildPath $TargetFilePath) -Raw) -replace "`r?`n", "`r`n" | Invoke-Formatter -Settings $FormattingSettings | Set-Content -Path (Join-Path $OutputDir -ChildPath $TargetFilePath) -Encoding UTF8 -Force
+            (Get-Content (Join-Path $OutputDir -ChildPath $TargetFilePath) -Raw) -replace "(\r?\n\s*){3,}", "`r`n" -replace "`r?`n", "`r`n" | Invoke-Formatter -Settings $FormattingSettings | Set-Content -Path (Join-Path $OutputDir -ChildPath $TargetFilePath) -Encoding UTF8 -Force
         }
     }
     catch {
@@ -338,7 +369,7 @@ Task ImportModule -depends Build {
             Install-Module -Name "OmadaWeb.PS" -Scope CurrentUser -Force -MinimumVersion $LatestOmadaWebPSVersion
         }
         elseif(Get-Module -Name "OmadaWeb.PS" -ListAvailable -ErrorAction SilentlyContinue | Where-Object { $_.Version -lt $LatestOmadaWebPSVersion }) {
-            Update-Module -Name "OmadaWeb.PS" -Scope CurrentUser -Force -MinimumVersion $LatestOmadaWebPSVersion
+            Update-Module -Name "OmadaWeb.PS" -Scope CurrentUser -Force -RequiredVersion $LatestOmadaWebPSVersion
         }
         "Import OmadaWeb.PS module" | Write-Host
         Import-Module -Name "OmadaWeb.PS" -MinimumVersion $LatestOmadaWebPSVersion -Force
@@ -349,10 +380,21 @@ Task ImportModule -depends Build {
         $Test = Import-Module "$OutputDir\$ModuleName.psd1" -Force -PassThru
         if ($Test) {
             "Module loaded successfully" | Write-Verbose
-            Remove-Module -name $Test.Name -Force
+            try{
+                Remove-Module -Name $Test.Name -Force
+            }
+            catch{}
+            try{
+                Remove-Module -Name "OmadaWeb.PS" -Force
+            }
+            catch{}
         }
         else {
             "Module failed to load" | Write-Error -ErrorAction Stop
+            try{
+                Remove-Module -name $Test.Name -Force
+            }
+            catch{}
         }
     }
     catch {

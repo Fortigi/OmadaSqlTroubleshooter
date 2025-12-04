@@ -7,6 +7,7 @@ function Open-SplashScreenForm {
         "Loading Splash Screen" | Write-LogOutput -LogType DEBUG
 
         $Script:SplashScreenForm = Initialize-FormObject -FormPath (Join-Path $Script:RunTimeConfig.ModuleFolder -ChildPath "lib\ui\SplashScreenForm.xaml")
+        Import-EventObjects -ClassName "SplashScreenForm"
 
         try {
             $Script:SplashScreenForm.Elements.LogoImage.Source = Get-Icon -Type Wpf
