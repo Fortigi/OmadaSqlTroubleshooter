@@ -7,7 +7,7 @@ function Open-LogForm {
 
         "Opening Log form" | Write-LogOutput -LogType DEBUG
         $Script:LogForm = Initialize-FormObject -FormPath (Join-Path $Script:RunTimeConfig.ModuleFolder -ChildPath "lib\ui\LogForm.xaml") -ParentForm $Script:MainForm.Definition
-        Initialize-FormEvents -FormName "LogForm"
+        Import-EventObjects -ClassName "LogForm"
         [Int]$Script:LogForm.PositionManager.PositionOffSetLeft = 1200
 
         $true | Set-ConfigProperty -Property "LogFormOpen"

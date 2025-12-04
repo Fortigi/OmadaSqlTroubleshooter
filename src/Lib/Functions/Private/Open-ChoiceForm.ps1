@@ -32,7 +32,7 @@ function Open-ChoiceForm {
         $Script:ChoiceForm.Elements.LeftButton.Content = $LeftButtonText
         $Script:ChoiceForm.Elements.RightButton.Content = $RightButtonText
 
-        Initialize-FormEvents -FormName "ChoiceForm"
+        Import-EventObjects -ClassName "ChoiceForm"
 
         $Script:DialogResult = $null
 

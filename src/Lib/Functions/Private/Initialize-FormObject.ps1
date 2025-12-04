@@ -34,11 +34,14 @@ function Initialize-FormObject {
 
         if ($AppendVersion) {
             "Set form title to: {0}" -f $Form.Title | Write-LogOutput -LogType DEBUG
-            $Form.Title = "{0} - {1}" -f $Form.Title, $Script:RunTimeConfig.ApplicationVersion
+            if ($Script:RunTimeConfig.ApplicationVersion -eq "Development") {
+                $Form.Title = "{0} (Development Version)" -f $Form.Title
+            }
+            else {
+                $Form.Title = "{0} v{1}" -f $Form.Title, $Script:RunTimeConfig.ApplicationVersion
+            }
         }
 
-
-        # Access controls
         $Elements = @()
         $ElementNames = @( "AccessText", "Button", "CheckBox", "ComboBox", "ComboBoxItem", "DataGrid", "Image", "Label", "PasswordBox", "RadioButton", "RichTextBox", "TextBlock", "TextBox", "TreeViewSqlSchema", "WebView2")
         foreach ($ElementName in $ElementNames) {

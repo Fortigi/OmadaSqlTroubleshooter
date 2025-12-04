@@ -11,6 +11,7 @@ try {
     $ModuleName = "OmadaSqlTroubleshooter"
     "Loading {0} Module" -f $ModuleName | Write-Verbose
 
+    $Script:ModuleVersion = "Development"
     $MinimumOmadaWebPSVersion = "0.0"
     if ($MinimumOmadaWebPSVersion -ne "0.0") {
         Import-Module OmadaWeb.PS -MinimumVersion $MinimumOmadaWebPSVersion -ErrorAction Stop

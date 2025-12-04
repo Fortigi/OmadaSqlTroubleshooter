@@ -59,13 +59,9 @@ function Invoke-OmadaSqlTroubleshooter {
     #region Initialize
     $StartVariables = Get-Variable
     $ApplicationName = "OmadaSqlTroubleshooter"
-    $ApplicationVersion = (Get-Command Invoke-OmadaSqlTroubleshooter).Version.ToString()
-    if ($ApplicationVersion -eq "0.0") {
-        $ApplicationVersion = "Development"
-    }
     $Script:RunTimeConfig = @{
         ApplicationName    = $ApplicationName
-        ApplicationVersion = $ApplicationVersion
+        ApplicationVersion = $Script:ModuleVersion
         ScriptName         = "OmadaSqlTroubleshooter"
         ApplicationTitle   = ""
         ModuleFolder       = Split-Path (Get-Module OmadaSqlTroubleShooter).Path
@@ -104,6 +100,8 @@ function Invoke-OmadaSqlTroubleshooter {
     $Script:RunTimeConfig.ApplicationTitle = $Script:MainForm.Definition.Title.ToString()
     "Get WebView" | Write-LogOutput -LogType DEBUG
     $Script:Webview.Object = $Script:MainForm.Definition.FindName("webView21")
+    Import-EventObjects -ClassName "WebView"
+
     #endregion
 
     #region events
@@ -111,7 +109,8 @@ function Invoke-OmadaSqlTroubleshooter {
     #How to lookup events for a button: ([System.Windows.Controls.Button].GetEvents()|where name -eq 'Click').AddMethod.Name
     # Events are moved to .\Lib\Events
     "Read Events" | Write-LogOutput -LogType DEBUG
-    Initialize-FormEvents -FormName "MainForm"
+    Import-EventObjects -ClassName "MainForm"
+    Import-EventObjects -ClassName "AppLogObject"
 
     #endregion
 

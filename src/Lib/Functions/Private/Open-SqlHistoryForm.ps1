@@ -16,7 +16,7 @@ function Open-SqlHistoryForm {
         #Log form creation
         "Opening Sql History form" | Write-LogOutput -LogType DEBUG
         $Script:SqlHistoryForm = Initialize-FormObject -FormPath (Join-Path $Script:RunTimeConfig.ModuleFolder -ChildPath "lib\ui\SqlHistoryForm.xaml") -ParentForm $Script:MainForm.Definition
-        Initialize-FormEvents -FormName "SqlHistoryForm"
+        Import-EventObjects -ClassName "SqlHistoryForm"
         [Int]$Script:SqlHistoryForm.PositionManager.PositionOffSetRight = 405
 
         $true | Set-ConfigProperty -Property "SqlHistoryFormOpen"
