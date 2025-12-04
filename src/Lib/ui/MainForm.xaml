@@ -314,6 +314,8 @@
                                                                                 <ComboBoxItem Content="Browser"/>
                                                                                 <ComboBoxItem Content="WebView2"/>
                                                                                 <ComboBoxItem Content="OAuth"/>
+                                                                                <ComboBoxItem Content="Browser-InPrivate"/>
+                                                                                <ComboBoxItem Content="WebView2-InPrivate"/>
                                                                         </ComboBox>
                                                                         <TextBlock Grid.Column="5"
                                                                                    x:Name="TextBlockPassword"

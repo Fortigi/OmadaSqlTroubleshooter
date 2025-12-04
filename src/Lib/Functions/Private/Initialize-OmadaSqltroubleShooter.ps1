@@ -51,6 +51,7 @@ function Initialize-OmadaSqlTroubleShooter {
                 EntraApplicationIdUri = $null
                 EntraIdTenantId       = $null
                 ForceAuthentication   = $false
+                InPrivate             = $false
             }
             AuthenticationRetryCount       = 0
             QuerySaved                     = $false
