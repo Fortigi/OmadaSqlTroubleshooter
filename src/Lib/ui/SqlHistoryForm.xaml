@@ -104,6 +104,14 @@
             <Setter Property="Padding"
                     Value="8,4"/>
         </Style>
+        <Style TargetType="Image">
+            <Setter Property="VerticalAlignment"
+                    Value="Center"/>
+            <Setter Property="Height"
+                    Value="15"/>
+            <Setter Property="Width"
+                    Value="15"/>
+        </Style>
     </Window.Resources>
 
     <Grid Grid.Row="0">
@@ -390,8 +398,8 @@
                         </Grid.ColumnDefinitions>
                         <Image Grid.Column="1"
                                x:Name="ButtonRestoreQueryImage"
-                               Source="/images/history_25x25.png"
-                               Tag="/images/history_25x25.png"
+                               Source="/images/history_15x15.png"
+                               Tag="/images/history_15x15.png"
                                IsHitTestVisible="False"/>
                         <AccessText Grid.Column="3"
                                     x:Name="ButtonRestoreQueryText"
@@ -418,8 +426,8 @@
                         </Grid.ColumnDefinitions>
                         <Image Grid.Column="1"
                                x:Name="ButtonExportHistoryImage"
-                               Source="/images/content-save_25x25.png"
-                               Tag="/images/content-save_25x25.png"
+                               Source="/images/content-save_15x15.png"
+                               Tag="/images/content-save_15x15.png"
                                IsHitTestVisible="False"/>
                         <AccessText Grid.Column="3"
                                     x:Name="ButtonExportHistoryText"
