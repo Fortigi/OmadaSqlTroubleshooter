@@ -30,7 +30,7 @@ $Script:MainForm.Elements.ButtonSaveOutputFile.Add_Click({
             if ($null -ne $Script:AppConfig.LastExtensionIndex -and $Script:AppConfig.LastExtensionIndex -gt 0 -and $Script:AppConfig.LastExtensionIndex -ne $DefaultFilterIndex) {
                 $DefaultFilterIndex = $Script:AppConfig.LastExtensionIndex
             }
-            $SaveFileDialogFilterString = ("{0}|{1}" -f $SaveFileDialogFilterList.$DefaultFilterIndex.Name, $SaveFileDialogFilterList.$DefaultFilterIndex.Extension), (($SaveFileDialogFilterList.GetEnumerator() | Where-Object { $_.Name -ne $DefaultFilterIndex } | Sort-Object Name | ForEach-Object {
+            $SaveFileDialogFilterString = ("{0}|{1}" -f $($SaveFileDialogFilterList.[int32]$($DefaultFilterIndex))['Name'], $($SaveFileDialogFilterList.[int32]$($DefaultFilterIndex))['Extension']), (($SaveFileDialogFilterList.GetEnumerator() | Where-Object { $_.Name -ne $DefaultFilterIndex } | Sort-Object Name | ForEach-Object {
                         $Item = $_.Value
                         "{0}|{1}" -f $Item.Name, $Item.Extension
                     }) -join "|") -join "|"
@@ -42,25 +42,38 @@ $Script:MainForm.Elements.ButtonSaveOutputFile.Add_Click({
             if ([string]::IsNullOrWhiteSpace($Script:AppConfig.LastOutputFolder)) {
                 1 | Set-ConfigProperty -Property "LastExtensionIndex"
             }
-            $DefaultExt = $SaveFileDialogFilterList.$DefaultFilterIndex.Extension
+            $DefaultExt = $SaveFileDialogFilterList.[int32]$DefaultFilterIndex.Extension
             if ($DefaultFilterIndex -eq 5) {
                 $DefaultExt = ".json"
             }
+
             $SaveFileDialog.DefaultExt = $DefaultExt
             $InvalidFileNameChars = [System.IO.Path]::GetInvalidFileNameChars()
+            #$CustomInvalidChars = @( ":", '"', "<", ">", "|")
+            $InvalidFileNameChars = $InvalidFileNameChars + $CustomInvalidChars
             $SaveFileDisplayName = $Script:MainForm.Elements.TextBoxDisplayName.Text
             if (![string]::IsNullOrWhiteSpace($SaveFileDisplayName)) {
                 $SaveFileDisplayName = ($SaveFileDisplayName.ToCharArray() | ForEach-Object {
                         if ($InvalidFileNameChars -contains $_) {
                             "_"
                         }
-                        $_
+                        else {
+                            $_
+                        }
                     }) -join ""
             }
             else {
                 $SaveFileDisplayName = "Output"
             }
-            $SaveFileDialog.FileName = "SqlQuery_{0}_{1}_{2}_{3}_Output{4}" -f $Script:AppConfig.CurrentSqlQuery.DoId, $SaveFileDisplayName, $Script:AppConfig.CurrentDataConnection.DisplayName, [system.uri]::New($Script:AppConfig.BaseUrl).Host, $Script:AppConfig.LastExtensionIndex
+            $SaveFileDialog.FileName = "SqlQuery_{0}_{1}_{2}_{3}_Output{4}" -f $Script:AppConfig.CurrentSqlQuery.DoId, $SaveFileDisplayName, $Script:AppConfig.CurrentDataConnection.DisplayName, [system.uri]::New($Script:AppConfig.BaseUrl).Host, $($SaveFileDialogFilterList.[int32]$($Script:AppConfig.LastExtensionIndex))['Extension'].Replace("*", "")
+            $ExistingFiles = Get-ChildItem -Path $SaveFileDialog.InitialDirectory -Filter $SaveFileDialog.FileName -File -ErrorAction SilentlyContinue
+            $Count = 1
+            while ($ExistingFiles -ne $null -and $ExistingFiles.Count -gt 0) {
+                $SaveFileDialog.FileName = "SqlQuery_{0}_{1}_{2}_{3}_Output({4}){5}" -f $Script:AppConfig.CurrentSqlQuery.DoId, $SaveFileDisplayName, $Script:AppConfig.CurrentDataConnection.DisplayName, [system.uri]::New($Script:AppConfig.BaseUrl).Host, $Count, $($SaveFileDialogFilterList.[int32]$($Script:AppConfig.LastExtensionIndex))['Extension'].Replace("*", "")
+                $ExistingFiles = Get-ChildItem -Path $SaveFileDialog.InitialDirectory -Filter $SaveFileDialog.FileName -File -ErrorAction SilentlyContinue
+                $Count++
+            }
+
             if ($SaveFileDialog.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
                 $Script:RunTimeConfig.OutputFileName = $SaveFileDialog.FileName
                 "Save outputfile: {0}" -f $Script:RunTimeConfig.OutputFileName | Write-LogOutput

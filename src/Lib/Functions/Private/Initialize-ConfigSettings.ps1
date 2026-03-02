@@ -23,7 +23,7 @@ function Initialize-ConfigSettings {
                     $null -ne $Script:AppConfig.EntraIdTenantId
                 ) -or
                 (
-                    $Script:AppConfig.LastAuthentication -in ("WebView2", "Browser")
+                    $Script:AppConfig.LastAuthentication -in ("WebView2", "Browser","WebView2-InPrivate", "Browser-InPrivate")
                 )
             ) {
                 $Script:RunTimeConfig.ReconnectStatus = Open-ChoiceForm -Title "Reconnect?" -Message ("Reconnect to '{0}' using existing connection settings?" -f $Script:AppConfig.BaseUrl) -LeftButtonReturnValue 2 -RightButtonReturnValue 1

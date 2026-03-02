@@ -6,7 +6,7 @@ function Invoke-OmadaPSWebRequestWrapper {
     try {
         if (!$Script:RunTimeData.SkipRetryRequest) {
             $Private:Parameters = $Script:RunTimeData.RestMethodParam
-            $Private:Parameters.AuthenticationType = $($Script:MainForm.Elements.ComboBoxSelectAuthenticationOption.SelectedItem.Content)
+            #$Private:Parameters.AuthenticationType = $($Script:MainForm.Elements.ComboBoxSelectAuthenticationOption.SelectedItem.Content)
             $Private:Parameters.UseWebView2 = $Private:Parameters.AuthenticationType -eq "Browser" ? $($Script:RunTimeConfig.UseWebView2Auth) : $false
             if ($null -eq $Private:Parameters.Body) {
                 if ($Private:Parameters.ContainsKey("Body")) {

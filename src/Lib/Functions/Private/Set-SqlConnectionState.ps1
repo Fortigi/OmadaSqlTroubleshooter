@@ -9,6 +9,7 @@ function Set-SqlConnectionState {
         Set-SqlQueryFunctionState -Status $Status
         if ($Status) {
             $Script:MainForm.Elements.ButtonReset.IsEnabled = $true
+            $Script:MainForm.Elements.ComboBoxSelectAuthenticationOption.IsEnabled = $false
             $Script:MainForm.Elements.TextBoxUserName.IsEnabled = $false
             $Script:MainForm.Elements.TextBoxPassword.IsEnabled = $false
             $Script:MainForm.Elements.CheckBoxSavePassword.IsEnabled = $false
