@@ -8,6 +8,8 @@ function Install-WebView2 {
     try {
         "{0}" -f $MyInvocation.MyCommand | Write-Verbose
 
+        $UpdateNeeded = Test-WebView2RuntimeVersion -IncludeWpf:$IncludeWpf.IsPresent
+
         if (
             (
                 -not (Test-Path $Script:WebView2WinFormsPath -PathType Leaf) -or
@@ -17,14 +19,14 @@ function Install-WebView2 {
                     $IncludeWpf.IsPresent -and
                     -not (Test-Path $Script:WebView2WpfPath -PathType Leaf)
                 )
-            ) -or
-            $Force) {
+            ) -or $Force -or $UpdateNeeded
+        ) {
             "'Microsoft.Web.WebView2' needs to be downloaded. Downloading from NuGet" | Write-Host
 
             #TODO: Troubleshoot why Get-NuGetPackage does not work here as expected
             #$NuGetResults = Get-NuGetPackage -PackageName "Microsoft.Web.WebView2"
 
-            $PackageUrl = "https://www.nuget.org/api/v2/package/Microsoft.Web.WebView2/1.0.3537.50"
+            $PackageUrl = "https://www.nuget.org/api/v2/package/Microsoft.Web.WebView2/{0}" -f $Script:WebView2LatestVersion
 
             $DirectoryName = "net462"
             $NuGetDirectoryPath = ".\lib\net462"
@@ -81,7 +83,7 @@ function Install-WebView2 {
                 else {
                     $DllFileListString = "'{0}', '{1}' and '{2}'" -f ( $NuGetDirectoryPath, (Split-Path $Script:WebView2CorePath -Leaf) -join "\"), ($NuGetDirectoryPath, (Split-Path $Script:WebView2WinFormsPath -Leaf) -join "\"), ( ".\runtimes", $RuntimeFolder , (Split-Path $Script:WebView2LoaderPath -Leaf) -join "\")
                 }
-                "Failed to download the binaries. Try downloading the WebView2 NuGet package manually from '{0}', rename the extension to .zip and extract the files in a temporary location. Copy the following files {1} from the extracted NuGet package to {2} Error:`r`n {3}" -f $PackageUrl, $DllFileListString, ([System.IO.Path]::Combine($Script:BinPath, $RuntimeFolder)), $_.Exception | Write-Error -ErrorAction Stop
+                "Failed to install the binaries. Try restart your PowerShell session or downloading the WebView2 NuGet package manually from '{0}', rename the extension to .zip and extract the files in a temporary location. Copy the following files {1} from the extracted NuGet package to {2} Error:`r`n {3}" -f $PackageUrl, $DllFileListString, ([System.IO.Path]::Combine($Script:BinPath, $RuntimeFolder)), $_.Exception | Write-Error -ErrorAction Stop
                 return $false
             }
         }
