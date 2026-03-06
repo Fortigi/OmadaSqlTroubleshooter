@@ -78,6 +78,7 @@ function Initialize-OmadaSqlTroubleShooter {
                 SqlQueryChangedBy = "c-4"
             }
             SkipRetryRequest               = $false
+            SelectionText                  = $null
         }
         $Script:WebView = @{
             Object                  = $null

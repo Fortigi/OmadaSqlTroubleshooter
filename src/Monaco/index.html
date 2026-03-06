@@ -157,11 +157,14 @@
             editor.addCommand(monaco.KeyCode.F5, function() {
                 console.log('F5 pressed in Monaco Editor - signaling PowerShell to execute query');
 
-                // Send message to PowerShell to execute query
+                var selection = editor.getSelection();
+                var hasSelection = selection && !selection.isEmpty();
                 if (window.chrome && window.chrome.webview) {
                     window.chrome.webview.postMessage({
                         type: 'executeQuery',
-                        key: 'F5'
+                        key: 'F5',
+                        hasSelection: hasSelection,
+                        selectedText: hasSelection ? editor.getModel().getValueInRange(selection) : null
                     });
                 }
 
@@ -173,11 +176,14 @@
             editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.F5, function() {
                 console.log('Ctrl+F5 pressed in Monaco Editor - signaling PowerShell to execute query');
 
-                // Send message to PowerShell to execute query
+                var selection = editor.getSelection();
+                var hasSelection = selection && !selection.isEmpty();
                 if (window.chrome && window.chrome.webview) {
                     window.chrome.webview.postMessage({
                         type: 'executeQuery',
-                        key: 'Ctrl+F5'
+                        key: 'Ctrl+F5',
+                        hasSelection: hasSelection,
+                        selectedText: hasSelection ? editor.getModel().getValueInRange(selection) : null
                     });
                 }
 
@@ -206,11 +212,14 @@
                     event.preventDefault();
                     event.stopPropagation();
 
-                    // Send message to PowerShell to execute query
+                    var selection = typeof editor !== 'undefined' && editor ? editor.getSelection() : null;
+                    var hasSelection = selection && !selection.isEmpty();
                     if (window.chrome && window.chrome.webview) {
                         window.chrome.webview.postMessage({
                             type: 'executeQuery',
-                            key: 'F5_global'
+                            key: 'F5_global',
+                            hasSelection: hasSelection,
+                            selectedText: hasSelection ? editor.getModel().getValueInRange(selection) : null
                         });
                     }
 
