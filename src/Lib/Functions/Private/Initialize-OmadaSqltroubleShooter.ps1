@@ -51,6 +51,7 @@ function Initialize-OmadaSqlTroubleShooter {
                 EntraApplicationIdUri = $null
                 EntraIdTenantId       = $null
                 ForceAuthentication   = $false
+                InPrivate             = $false
             }
             AuthenticationRetryCount       = 0
             QuerySaved                     = $false
@@ -77,6 +78,7 @@ function Initialize-OmadaSqlTroubleShooter {
                 SqlQueryChangedBy = "c-4"
             }
             SkipRetryRequest               = $false
+            SelectionText                  = $null
         }
         $Script:WebView = @{
             Object                  = $null

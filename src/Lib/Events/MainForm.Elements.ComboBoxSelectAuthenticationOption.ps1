@@ -6,6 +6,14 @@ $Script:MainForm.Elements.ComboBoxSelectAuthenticationOption.Add_GotFocus({
             }
             else {
                 $Script:RunTimeConfig.AuthenticationSet = $true
+                if($Script:AppConfig.LastAuthentication -in @("Browser-InPrivate","WebView2-InPrivate")){
+                    $Script:RunTimeData.RestMethodParam.InPrivate = $true
+                    $Script:RunTimeData.RestMethodParam.AuthenticationType = $Script:AppConfig.LastAuthentication.Replace("-InPrivate","")
+                }
+                else{
+                    $Script:RunTimeData.RestMethodParam.InPrivate = $false
+                    $Script:RunTimeData.RestMethodParam.AuthenticationType = $Script:AppConfig.LastAuthentication
+                }
             }
         }
         catch {
@@ -25,6 +33,14 @@ $Script:MainForm.Elements.ComboBoxSelectAuthenticationOption.Add_SelectionChange
             }
             else {
                 $Script:RunTimeConfig.AuthenticationSet = $true
+                if($Script:AppConfig.LastAuthentication -in @("Browser-InPrivate","WebView2-InPrivate")){
+                    $Script:RunTimeData.RestMethodParam.InPrivate = $true
+                    $Script:RunTimeData.RestMethodParam.AuthenticationType = $Script:AppConfig.LastAuthentication.Replace("-InPrivate","")
+                }
+                else{
+                    $Script:RunTimeData.RestMethodParam.InPrivate = $false
+                    $Script:RunTimeData.RestMethodParam.AuthenticationType = $Script:AppConfig.LastAuthentication
+                }
             }
 
             if ($Script:RunTimeConfig.AuthenticationSet -and ![string]::IsNullOrWhiteSpace($Script:MainForm.Elements.TextBoxURL.Text)) {

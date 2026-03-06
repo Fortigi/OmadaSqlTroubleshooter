@@ -8,27 +8,37 @@ function Invoke-ExecuteQuery {
             return
         }
 
-        $ScriptToExecute = "editor.getValue();"
+        $ScriptToExecute = "(function() { var fullText = editor.getValue(); var sel = editor.getSelection(); var hasSelection = sel && !sel.isEmpty(); var selectedText = hasSelection ? editor.getModel().getValueInRange(sel) : null; return { fullText: fullText, selectedText: selectedText }; })();"
 
         $OnCompletedScriptBlock = {
+            $Private:TempQueryDoId = $null
             try {
                 if ($Script:Task.Status -eq "RanToCompletion") {
-                    $Script:RunTimeData.QueryText = $Script:Task.Result
-
-                    if (![string]::IsNullOrWhiteSpace($Script:RunTimeData.QueryText.ResultAsJson)) {
-                        $Script:RunTimeData.QueryText = $Script:RunTimeData.QueryText.ResultAsJson | ConvertFrom-Json
-                    }
-                    else {
-                        $Script:RunTimeData.QueryText = $Script:RunTimeData.QueryText | ConvertFrom-Json
-                    }
+                    $Private:EditorData = $Script:Task.Result | ConvertFrom-Json
+                    $Script:RunTimeData.QueryText = $Private:EditorData.fullText
+                    $Private:SelectionText = $Private:EditorData.selectedText
 
                     $Private:Result = Save-Query -NewQuery:$false
+
+                    $Private:ExecutionTargetId = $Script:AppConfig.CurrentSqlQuery.DoId
+                    if (![string]::IsNullOrWhiteSpace($Private:SelectionText)) {
+                        "Execute selection mode: creating temporary query object" | Write-LogOutput -LogType DEBUG
+                        $Private:TempQueryDoId = New-TemporarySqlQueryObject -QueryText $Private:SelectionText
+                        if ($null -ne $Private:TempQueryDoId) {
+                            $Private:ExecutionTargetId = $Private:TempQueryDoId
+                        }
+                        else {
+                            "Failed to create temporary query object for selection execution." | Write-LogOutput -LogType ERROR
+                            return
+                        }
+                    }
+
                     $Script:RunTimeData.RestMethodParam.Uri = "{0}/webservice/jQGridPopulationWebService.asmx/GetPagingData" -f $Script:AppConfig.BaseUrl
 
                     $Script:RunTimeData.RestMethodParam.Body = @{
                         "dataType"     = "SqlDataProducer"
                         "dataTypeArgs" = @{
-                            "targetId" = $Script:AppConfig.CurrentSqlQuery.DoId
+                            "targetId" = $Private:ExecutionTargetId
                         }
                         "page"         = 1
                         "rows"         = 100000
@@ -48,6 +58,10 @@ function Invoke-ExecuteQuery {
                     $Script:RunTimeData.QueryResult = $null
                     $Script:RunTimeData.QueryResult = Invoke-OmadaPSWebRequestWrapper
 
+                    if ($null -ne $Private:TempQueryDoId) {
+                        Remove-SqlQueryObject -DoId $Private:TempQueryDoId
+                        $Private:TempQueryDoId = $null
+                    }
 
                     if ($null -ne $Script:RunTimeData.QueryResult -and ($Script:RunTimeData.QueryResult.d.Rows | Measure-Object).Count -le 0) {
                         "Query did not return any results!" | Write-LogOutput -LogType WARNING
@@ -104,6 +118,9 @@ function Invoke-ExecuteQuery {
                 }
             }
             catch {
+                if ($null -ne $Private:TempQueryDoId) {
+                    Remove-SqlQueryObject -DoId $Private:TempQueryDoId
+                }
                 $Script:MainForm.Elements.ButtonSaveQuery.IsEnabled = $true
                 $Script:MainForm.Elements.ButtonExecuteQuery.IsEnabled = $true
                 if ($null -ne $Script:PopupWindowExecuteQuery) {

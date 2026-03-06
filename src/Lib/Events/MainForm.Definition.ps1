@@ -38,12 +38,20 @@ $Script:MainForm.Definition.Add_PreviewKeyDown({
             $_ | Show-EventInfo
 
             if ($EventArgs.Key -eq [System.Windows.Input.Key]::F5) {
-                "F5 key intercepted at MainForm level" | Write-LogOutput -LogType VERBOSE
+                # When the WebView2 (Monaco editor) has focus, let Monaco handle F5 via postMessage
+                # so it can include selection information for "execute selection" behaviour.
+                # Only intercept here when focus is outside the WebView2.
+                if ($null -ne $Script:Webview.Object -and $Script:Webview.Object.IsKeyboardFocusWithin) {
+                    "F5 key at MainForm level - WebView2 has focus, deferring to Monaco" | Write-LogOutput -LogType VERBOSE
+                }
+                else {
+                    "F5 key intercepted at MainForm level" | Write-LogOutput -LogType VERBOSE
 
-                $EventArgs.Handled = $true
+                    $EventArgs.Handled = $true
 
-                "Triggering Execute Query from F5 key press (MainForm)" | Write-LogOutput -LogType VERBOSE
-                $Script:MainForm.Elements.ButtonExecuteQuery.RaiseEvent([System.Windows.RoutedEventArgs]::new([System.Windows.Controls.Primitives.ButtonBase]::ClickEvent))
+                    "Triggering Execute Query from F5 key press (MainForm)" | Write-LogOutput -LogType VERBOSE
+                    $Script:MainForm.Elements.ButtonExecuteQuery.RaiseEvent([System.Windows.RoutedEventArgs]::new([System.Windows.Controls.Primitives.ButtonBase]::ClickEvent))
+                }
             }
 
             elseif ($EventArgs.Key -eq [System.Windows.Input.Key]::S -and ([System.Windows.Input.Keyboard]::Modifiers -band [System.Windows.Input.ModifierKeys]::Control)) {
@@ -150,17 +158,7 @@ $Script:MainForm.Definition.Add_Loaded({
                             try {
                                 $_ | Show-EventInfo
 
-                                if ($EventArgs.Key -eq [System.Windows.Input.Key]::F5) {
-                                    "F5 key intercepted in WebView2 (PreviewKeyDown)" | Write-LogOutput -LogType DEBUG
-
-                                    $EventArgs.Handled = $true
-
-                                    $Script:MainForm.Definition.Dispatcher.Invoke([System.Action] {
-                                            "Triggering Execute Query from F5 key press" | Write-LogOutput -LogType DEBUG
-                                            $Script:MainForm.Elements.ButtonExecuteQuery.RaiseEvent([System.Windows.RoutedEventArgs]::new([System.Windows.Controls.Primitives.ButtonBase]::ClickEvent))
-                                        })
-                                }
-                                elseif ($EventArgs.Key -eq [System.Windows.Input.Key]::S -and ([System.Windows.Input.Keyboard]::Modifiers -band [System.Windows.Input.ModifierKeys]::Control)) {
+                                if ($EventArgs.Key -eq [System.Windows.Input.Key]::S -and ([System.Windows.Input.Keyboard]::Modifiers -band [System.Windows.Input.ModifierKeys]::Control)) {
                                     "Ctrl+S key intercepted in WebView2 (PreviewKeyDown)" | Write-LogOutput -LogType DEBUG
 
                                     $EventArgs.Handled = $true
