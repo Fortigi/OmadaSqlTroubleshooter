@@ -33,7 +33,9 @@
         </Grid.ColumnDefinitions>
 
         <Border Grid.Row="1" Grid.Column="1" BorderBrush="Gray" BorderThickness="1" Background="{DynamicResource {x:Static SystemColors.AppWorkspaceBrushKey}}">
-            <TreeView  x:Name="TreeViewSqlSchema" FontFamily="Consolas"></TreeView>
+            <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Auto">
+                <TreeView x:Name="TreeViewSqlSchema" FontFamily="Consolas"></TreeView>
+            </ScrollViewer>
         </Border>
         <StackPanel Orientation="Horizontal" Grid.Row="2" Grid.Column="1" VerticalAlignment="Center">
             <Grid>
