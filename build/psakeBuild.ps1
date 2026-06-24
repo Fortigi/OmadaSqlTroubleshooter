@@ -92,6 +92,26 @@ Task Analyze {
 }
 
 Task Test -depends Analyze {
+    try {
+        $PesterConfig = New-PesterConfiguration
+        $PesterConfig.Run.Path = $TestSource
+        $PesterConfig.Run.Exit = $false
+        $PesterConfig.Run.PassThru = $true
+        $PesterConfig.TestResult.Enabled = $true
+        $PesterConfig.TestResult.OutputFormat = 'JUnitXml'
+        $PesterConfig.TestResult.OutputPath = (Join-Path $ParentPath -ChildPath 'buildoutput\TestResults.xml')
+        $PesterConfig.Output.Verbosity = 'Detailed'
+
+        $Result = Invoke-Pester -Configuration $PesterConfig
+
+        if ($Result.FailedCount -gt 0) {
+            Write-Error -Message ('{0} Pester test(s) failed. Build cannot continue!' -f $Result.FailedCount) -ErrorAction Stop
+        }
+    }
+    catch {
+        throw $_
+        exit 1
+    }
 }
 
 Task Build -depends Test {
