@@ -18,6 +18,15 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Determine changed files
+        shell: pwsh
+        run: |
+          $files = git diff --name-only ${{ github.event.pull_request.base.sha }} ${{ github.event.pull_request.head.sha }}
+          $joined = ($files -join ';')
+          "PR_CHANGED_FILES=$joined" | Out-File -FilePath $env:GITHUB_ENV -Append
 
       - name: Install modules
         shell: pwsh

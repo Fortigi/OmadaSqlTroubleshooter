@@ -7,6 +7,14 @@ Properties {
     $TestSource = Join-Path -Path $ParentPath -ChildPath 'tests'
     $OutputDir = Join-Path -Path $ParentPath -ChildPath 'buildoutput\OmadaSqlTroubleShooter'
     New-Item -Path $OutputDir -ItemType Directory -Force | Out-Null
+
+    # When set (PR validation only), scopes Analyze/Test to just these files so unrelated pre-existing issues don't block unrelated PRs.
+    $ChangedFiles = @()
+    if ($env:PR_CHANGED_FILES) {
+        $ChangedFiles = $env:PR_CHANGED_FILES -split ';' | Where-Object { $_ } | ForEach-Object {
+            (Resolve-Path -Path (Join-Path $ParentPath $_) -ErrorAction SilentlyContinue).Path
+        } | Where-Object { $_ }
+    }
 }
 
 Task default -depends Analyze, Test, Build, ImportModule
@@ -64,7 +72,7 @@ Task Analyze {
         @("functions") | ForEach-Object {
             $LibSource = $_
             $SourceChildPath = "lib\{0}" -f $LibSource
-            Get-ChildItem -Path (Join-Path $ModuleSource -ChildPath $SourceChildPath) -Recurse -File | Where-Object { $_.Name -notlike "_*.ps1" } | ForEach-Object {
+            Get-ChildItem -Path (Join-Path $ModuleSource -ChildPath $SourceChildPath) -Recurse -File | Where-Object { $_.Name -notlike "_*.ps1" } | Where-Object { $ChangedFiles.Count -eq 0 -or $_.FullName -in $ChangedFiles } | ForEach-Object {
                 $SaResults += Invoke-ScriptAnalyzer -Path $_.FullName -Severity @('Error', 'Warning') -Recurse -Profile $SaProfile -Verbose:$false
             }
         }
@@ -76,7 +84,7 @@ Task Analyze {
         @("events") | ForEach-Object {
             $LibSource = $_
             $SourceChildPath = "lib\{0}" -f $LibSource
-            Get-ChildItem -Path (Join-Path $ModuleSource -ChildPath $SourceChildPath) -Recurse -File | Where-Object { $_.Name -notlike "_*.ps1" } | ForEach-Object {
+            Get-ChildItem -Path (Join-Path $ModuleSource -ChildPath $SourceChildPath) -Recurse -File | Where-Object { $_.Name -notlike "_*.ps1" } | Where-Object { $ChangedFiles.Count -eq 0 -or $_.FullName -in $ChangedFiles } | ForEach-Object {
                 $SaResults += Invoke-ScriptAnalyzer -Path $_.FullName -Severity @('Error', 'Warning') -Recurse -Profile $SaProfile -Verbose:$false
             }
         }
@@ -93,8 +101,20 @@ Task Analyze {
 
 Task Test -depends Analyze {
     try {
+        $TestFiles = Get-ChildItem -Path $TestSource -Filter '*.Tests.ps1' -Recurse
+        if ($ChangedFiles.Count -gt 0) {
+            $TestFiles = $TestFiles | Where-Object {
+                $SourceFileName = '{0}.ps1' -f ($_.BaseName -replace '\.Tests$', '')
+                $_.FullName -in $ChangedFiles -or ($ChangedFiles | Where-Object { (Split-Path $_ -Leaf) -eq $SourceFileName })
+            }
+            if (($TestFiles | Measure-Object).Count -eq 0) {
+                "No Pester tests relevant to the changed files were found. Skipping test run." | Write-Host
+                return
+            }
+        }
+
         $PesterConfig = New-PesterConfiguration
-        $PesterConfig.Run.Path = $TestSource
+        $PesterConfig.Run.Path = $TestFiles.FullName
         $PesterConfig.Run.Exit = $false
         $PesterConfig.Run.PassThru = $true
         $PesterConfig.TestResult.Enabled = $true
