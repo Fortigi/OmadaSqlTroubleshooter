@@ -103,9 +103,10 @@ Task Test -depends Analyze {
     try {
         $TestFiles = Get-ChildItem -Path $TestSource -Filter '*.Tests.ps1' -Recurse
         if ($ChangedFiles.Count -gt 0) {
+            $ChangedFileLeafNames = $ChangedFiles | ForEach-Object { Split-Path $_ -Leaf }
             $TestFiles = $TestFiles | Where-Object {
                 $SourceFileName = '{0}.ps1' -f ($_.BaseName -replace '\.Tests$', '')
-                $_.FullName -in $ChangedFiles -or ($ChangedFiles | Where-Object { (Split-Path $_ -Leaf) -eq $SourceFileName })
+                $_.FullName -in $ChangedFiles -or $ChangedFileLeafNames -contains $SourceFileName
             }
             if (($TestFiles | Measure-Object).Count -eq 0) {
                 "No Pester tests relevant to the changed files were found. Skipping test run." | Write-Host
