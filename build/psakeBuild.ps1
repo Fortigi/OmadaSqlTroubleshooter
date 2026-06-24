@@ -129,8 +129,7 @@ Task Test -depends Analyze {
         }
     }
     catch {
-        throw $_
-        exit 1
+        throw
     }
 }
 

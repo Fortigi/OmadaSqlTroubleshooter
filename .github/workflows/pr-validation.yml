@@ -30,15 +30,23 @@ jobs:
 
       - name: Install modules
         shell: pwsh
-        run: ./Build/InstallModules.ps1
+        run: ./build/InstallModules.ps1
 
       - name: Analyze, test and build
         shell: pwsh
-        run: ./Build/build.ps1 -Task TestBuildOnly -BuildVersion '0.0.0'
+        run: ./build/build.ps1 -Task TestBuildOnly -BuildVersion '0.0.0'
+
+      - name: Check for test results
+        id: test-results
+        if: always()
+        shell: pwsh
+        run: |
+          $exists = Test-Path 'buildoutput/TestResults.xml'
+          "exists=$exists" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
 
       - name: Publish test results
         uses: dorny/test-reporter@v1
-        if: always()
+        if: always() && steps.test-results.outputs.exists == 'True'
         with:
           name: Pester Tests
           path: buildoutput/TestResults.xml
