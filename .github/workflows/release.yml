@@ -43,7 +43,7 @@ jobs:
       - name: Build module
         shell: pwsh
         run: |
-          ./Build/build.ps1 -Task Build -BuildVersion '${{ steps.versioning.outputs.build_version }}'
+          ./build/build.ps1 -Task Build -BuildVersion '${{ steps.versioning.outputs.build_version }}'
 
       - name: Upload build output
         uses: actions/upload-artifact@v4
@@ -55,6 +55,7 @@ jobs:
     name: Package and Release
     runs-on: windows-latest
     needs: build
+    environment: release
 
     env:
       BUILD_VERSION: ${{ needs.build.outputs.build_version }}
@@ -83,7 +84,7 @@ jobs:
       - name: Publish to PSGallery
         shell: pwsh
         run: |
-          ./deploy/PushToPsGallery.ps1 `
+          ./build/PushToPsGallery.ps1 `
             -SystemDefaultWorkingDirectory '${{ github.workspace }}' `
             -PsGalleryKey '${{ secrets.PSGALLERY_API_KEY }}' `
             -BuildPath 'OmadaSqlTroubleshooter'
