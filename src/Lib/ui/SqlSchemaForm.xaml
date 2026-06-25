@@ -22,8 +22,8 @@
         <Grid.RowDefinitions>
             <RowDefinition Height="10"/>
             <RowDefinition Height="*"/>
-            <RowDefinition Height="40"/>
-            <RowDefinition Height="30"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
             <RowDefinition Height="10"/>
         </Grid.RowDefinitions>
         <Grid.ColumnDefinitions>
@@ -33,7 +33,7 @@
         </Grid.ColumnDefinitions>
 
         <Border Grid.Row="1" Grid.Column="1" BorderBrush="Gray" BorderThickness="1" Background="{DynamicResource {x:Static SystemColors.AppWorkspaceBrushKey}}">
-            <TreeView  x:Name="TreeViewSqlSchema" FontFamily="Consolas"></TreeView>
+            <TreeView x:Name="TreeViewSqlSchema" FontFamily="Consolas" VirtualizingStackPanel.IsVirtualizing="True" ScrollViewer.VerticalScrollBarVisibility="Auto" ScrollViewer.HorizontalScrollBarVisibility="Auto"></TreeView>
         </Border>
         <StackPanel Orientation="Horizontal" Grid.Row="2" Grid.Column="1" VerticalAlignment="Center">
             <Grid>

@@ -72,6 +72,11 @@ function Open-SqlSchemaForm {
             $Script:SqlSchemaForm.Definition.Left = [Int]::Abs($Position.Split("x")[0])
             $Script:SqlSchemaForm.Definition.Top = [Int]::Abs($Position.Split("x")[1])
         }
+        if ($null -ne ($Script:SqlSchemaForm.Definition | Get-FormSizeConfig)) {
+            $Size = $Script:SqlSchemaForm.Definition | Get-FormSizeConfig
+            "Sql Schema form size (pre-show): {0}" -f $Size | Write-LogOutput -LogType DEBUG
+            $Script:SqlSchemaForm.Definition.Width = [Int]$Size.Split("x")[0]
+        }
 
         #region SqlSchemaForm events
 
@@ -116,15 +121,6 @@ function Open-SqlSchemaForm {
                         $Script:SqlSchemaForm.PositionManager.PositionOffSetLeft = [Int]::Abs($Script:MainForm.Definition.Left) - [Int]::Abs($Script:SqlSchemaForm.Definition.Left)
 
                         "PositionManagerSqlSchemaForm PositionOffSetLeft: {0}" -f $Script:SqlSchemaForm.PositionManager.PositionOffSetLeft | Write-LogOutput -LogType DEBUG
-                        if ($null -ne ($Script:SqlSchemaForm.Definition | Get-FormSizeConfig)) {
-                            $Size = $Script:SqlSchemaForm.Definition | Get-FormSizeConfig
-
-                            "Sql Schema form size: {0}" -f $Size | Write-LogOutput -LogType DEBUG
-                            $Script:SqlSchemaForm.Definition.Width = $Size.Split("x")[0]
-                            $Script:SqlSchemaForm.Definition.Height = $Size.Split("x")[1]
-
-                            "SqlSchemaForm Height: {0}" -f $Script:SqlSchemaForm.Definition.Height | Write-LogOutput -LogType DEBUG
-                        }
                         $Script:SqlSchemaForm.PositionManager.Synchronizing = $false
                     }, [System.Windows.Threading.DispatcherPriority]::Render)
 
@@ -138,6 +134,21 @@ function Open-SqlSchemaForm {
 
                 "SqlSchemaForm Position: {0}x{1}, Dimensions: {2}x{3}" -f $Script:SqlSchemaForm.Definition.Left, $Script:SqlSchemaForm.Definition.Top, $Script:SqlSchemaForm.Definition.Width , $Script:SqlSchemaForm.Definition.Height | Write-LogOutput -LogType DEBUG
                 $Script:SqlSchemaForm.State = "Open"
+                $tv = $Script:TreeViewSqlSchema
+                $Script:SqlSchemaForm.Definition.Dispatcher.Invoke(
+                    {
+                        if ($tv.Items.Count -gt 0) {
+                            $firstSchema = $tv.Items[0]
+                            if ($null -ne $firstSchema -and $firstSchema.Items.Count -gt 0) {
+                                $firstTable = $firstSchema.Items[0]
+                                $firstTable.IsExpanded = $true
+                                $tv.UpdateLayout()
+                                $firstTable.IsExpanded = $false
+                            }
+                        }
+                    },
+                    [System.Windows.Threading.DispatcherPriority]::Background
+                )
                 Restore-MainFormFocus
             })
 
