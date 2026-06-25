@@ -3,6 +3,7 @@ BeforeAll {
     $ParentPath = Split-Path -Path $PSScriptRoot -Parent
     $Command = Join-Path $ParentPath -ChildPath "src\lib\functions\Private\Test-Variable.ps1"
     . $Command
+    $Script:Tracer = [System.Diagnostics.Trace]
 }
 
 Describe 'Test-Variable' {
