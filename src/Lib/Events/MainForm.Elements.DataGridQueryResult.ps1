@@ -291,6 +291,22 @@ $Private:MenuItemCopyWithHeader.Add_Click({
         }
     })
 
+$Script:MainForm.Elements.DataGridQueryResult.Add_AutoGeneratingColumn({
+        param(
+            $EventSender,
+            $EventArgs
+        )
+        try {
+            $Private:HeaderTemplate = [System.Windows.Markup.XamlReader]::Parse(
+                '<DataTemplate xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"><TextBlock Text="{Binding}" TextTrimming="CharacterEllipsis"/></DataTemplate>'
+            )
+            $EventArgs.Column.HeaderTemplate = $Private:HeaderTemplate
+        }
+        catch {
+            $_.Exception.Message | Write-LogOutput -LogType ERROR -ErrorObject $_
+        }
+    })
+
 $Script:MainForm.Elements.DataGridQueryResult.Add_LoadingRow({
         param(
             $EventSender,
