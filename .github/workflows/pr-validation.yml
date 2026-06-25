@@ -21,6 +21,17 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: Check branch is up to date with main
+        shell: pwsh
+        run: |
+          git fetch origin main
+          git merge-base --is-ancestor origin/main HEAD
+          if ($LASTEXITCODE -ne 0) {
+            Write-Error "This branch is behind 'main'. Please merge or rebase 'main' into your branch and push again."
+            exit 1
+          }
+          Write-Host "Branch is up to date with main."
+
       - name: Determine changed files
         shell: pwsh
         run: |
