@@ -81,6 +81,14 @@ jobs:
             -Properties "VERSION=${{ env.BUILD_VERSION }};YEAR=${{ env.YEAR }}" `
             -OutputDirectory staging/
 
+      - name: Find last non-nightly release tag
+        id: prev_tag
+        shell: bash
+        run: |
+          PREV_TAG=$(git tag -l 'v*' | grep -v -- '-nightly$' | sort -V | tail -n 1)
+          echo "Previous non-nightly tag: ${PREV_TAG:-<none>}"
+          echo "previous_tag=$PREV_TAG" >> "$GITHUB_OUTPUT"
+
       - name: Publish to PSGallery
         shell: pwsh
         run: |
@@ -104,3 +112,4 @@ jobs:
           name: Release v${{ env.BUILD_VERSION }}
           files: staging/*.nupkg
           generate_release_notes: true
+          previous_tag: ${{ steps.prev_tag.outputs.previous_tag }}
