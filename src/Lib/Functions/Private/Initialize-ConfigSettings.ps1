@@ -132,6 +132,11 @@ function Initialize-ConfigSettings {
             Test-ConnectionSettings
             Test-ConnectionButton
         }
+
+        if(![string]::IsNullOrWhiteSpace($Script:AppConfig.InstanceGuid)) {
+            "Config: Get InstanceGuid: {0}" -f $Script:AppConfig.InstanceGuid | Write-LogOutput -LogType DEBUG
+            $Script:RunTimeConfig.InstanceGuid = $Script:AppConfig.InstanceGuid
+        }
     }
     catch {
         $_.Exception.Message | Write-LogOutput -LogType ERROR -ErrorObject $_

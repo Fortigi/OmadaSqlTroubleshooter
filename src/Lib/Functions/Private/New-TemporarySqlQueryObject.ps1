@@ -7,11 +7,50 @@ function New-TemporarySqlQueryObject {
     try {
         $Script:Tracer::WriteLine(("{0}: Function: {1} - Caller: {2}({3}) - Command: {4} - Parameters: {5}" -f $($Script:RunTimeConfig.ApplicationName), $($MyInvocation.MyCommand.Name), $($MyInvocation.ScriptName).Split("\")[-1], $($MyInvocation.ScriptLineNumber), $MyInvocation.Statement, ($PSBoundParameters | Out-String)))
 
-        $TempName = "TMP_$(([System.Guid]::NewGuid()).ToString('N'))"
-        "Creating temporary query object with name: {0}" -f $TempName | Write-LogOutput -LogType DEBUG
+        $TempName = "TMP_$($Script:RunTimeConfig.InstanceGuid)"
 
-        $Script:RunTimeData.RestMethodParam.Uri = "{0}/odata/dataobjects/C_P_SQLTROUBLESHOOTING" -f $Script:AppConfig.BaseUrl
-        $Script:RunTimeData.RestMethodParam.Method = "POST"
+        try {
+            $Script:RunTimeData.RestMethodParam.Uri = "{0}/odata/dataobjects/C_P_SQLTROUBLESHOOTING?DeletedStatus=Both&`$filter=NAME eq '{1}'" -f $Script:AppConfig.BaseUrl, $TempName
+            $Script:RunTimeData.RestMethodParam.Method = "GET"
+            $Script:RunTimeData.RestMethodParam.Body = $null
+            $ExistingTempQuery = Invoke-OmadaPSWebRequestWrapper
+
+            $RestoreSuccess = $false
+            if ($null -ne $ExistingTempQuery -and $null -ne $ExistingTempQuery.Value -and $ExistingTempQuery.Value.Count -gt 0 -and ![string]::IsNullOrWhiteSpace($ExistingTempQuery.Value[0].Id)) {
+
+                if ($ExistingTempQuery.Value[0].Deleted -eq $true) {
+                    "Temporary query object with name '{0}' exists. Reuse it." -f $TempName | Write-LogOutput -LogType DEBUG
+                    $Script:RunTimeData.RestMethodParam.Uri = "{0}/WebService/DataObjectWebService.asmx/UndeleteDataObject" -f $Script:AppConfig.BaseUrl
+                    $Script:RunTimeData.RestMethodParam.Method = "POST"
+                    $Script:RunTimeData.RestMethodParam.Body = @{
+                        id = $ExistingTempQuery.Value[0].Id
+                    } | ConvertTo-Json
+                    $null = Invoke-OmadaPSWebRequestWrapper
+                }
+                else {
+                    "Temporary query object with name '{0}' exists and was not deleted somehow. Reuse it." -f $TempName | Write-LogOutput -LogType DEBUG
+                }
+                $RestoreSuccess = $true
+            }
+        }
+        catch {
+            "Error occurred while checking query object '{0}'" -f $TempName | Write-LogOutput -LogType DEBUG
+        }
+
+        if ($RestoreSuccess) {
+            "Reusing existing temporary query object with DoId: {0}" -f $ExistingTempQuery.Value[0].Id | Write-LogOutput -LogType DEBUG
+            $Script:RunTimeData.RestMethodParam.Uri = "{0}/odata/dataobjects/C_P_SQLTROUBLESHOOTING({1})" -f $Script:AppConfig.BaseUrl, $ExistingTempQuery.Value[0].Id
+            $Script:RunTimeData.RestMethodParam.Method = "PUT"
+        }
+        else {
+            "Temporary query object '{0}' does not exist. Creating a new one." -f $TempName | Write-LogOutput -LogType DEBUG
+            $Script:RunTimeConfig.InstanceGuid = $(([System.Guid]::NewGuid()).ToString('N'))
+            $Script:RunTimeConfig.InstanceGuid | Set-ConfigProperty -Property "InstanceGuid"
+            $TempName = "TMP_$($Script:RunTimeConfig.InstanceGuid)"
+            $Script:RunTimeData.RestMethodParam.Uri = "{0}/odata/dataobjects/C_P_SQLTROUBLESHOOTING" -f $Script:AppConfig.BaseUrl
+            $Script:RunTimeData.RestMethodParam.Method = "POST"
+        }
+
         $Script:RunTimeData.RestMethodParam.Body = @{
             "NAME"    = $TempName
             "C_QUERY" = $QueryText
