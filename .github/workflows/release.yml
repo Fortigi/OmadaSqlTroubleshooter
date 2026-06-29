@@ -6,7 +6,6 @@ on:
       - main
     paths:
       - 'src/**'
-					
 jobs:
   build:
     name: Build
