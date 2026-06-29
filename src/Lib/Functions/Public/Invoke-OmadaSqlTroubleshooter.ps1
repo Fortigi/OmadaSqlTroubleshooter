@@ -84,6 +84,7 @@ function Invoke-OmadaSqlTroubleshooter {
         UseWebView2Auth    = $UseWebView2Auth.IsPresent -or $false
         ReconnectStatus    = 0
         SavePassword       = $false
+        InstanceGuid       = $(([System.Guid]::NewGuid()).ToString('N'))
     }
     Get-ChildItem -Path (Join-Path $Script:RunTimeConfig.ModuleFolder -ChildPath "Lib\Functions") -Filter *.ps1 | Where-Object { $_.Name -notlike "_*.ps1" } | ForEach-Object {
         . $_.FullName

@@ -144,5 +144,9 @@
   {
     "Name": "UseWebView2Auth",
     "Type": "Bool"
+  },
+  {
+    "Name": "InstanceGuid",
+    "Type": "String"
   }
 ]
