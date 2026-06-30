@@ -98,6 +98,9 @@ function Invoke-OmadaSqlTroubleshooter {
     "Loading Main Form Object" | Write-LogOutput -LogType DEBUG
     $Script:MainForm = Initialize-FormObject -FormPath (Join-Path $Script:RunTimeConfig.ModuleFolder -ChildPath "lib\ui\MainForm.xaml") -AppendVersion
 
+    "Initializing UI components" | Write-LogOutput -LogType DEBUG
+    Initialize-UiComponents
+
     $Script:RunTimeConfig.ApplicationTitle = $Script:MainForm.Definition.Title.ToString()
     "Get WebView" | Write-LogOutput -LogType DEBUG
     $Script:Webview.Object = $Script:MainForm.Definition.FindName("webView21")

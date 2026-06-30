@@ -70,13 +70,30 @@
             <Setter Property="FontSize"
                     Value="11"/>
         </Style>
-        <Style TargetType="Image">
+        <Style x:Key="ToolbarGlyphStyle"
+               TargetType="TextBlock">
+            <Setter Property="FontFamily"
+                    Value="Segoe Fluent Icons, Segoe MDL2 Assets"/>
+            <Setter Property="FontSize"
+                    Value="14"/>
+            <Setter Property="Width"
+                    Value="15"/>
+            <Setter Property="MinWidth"
+                    Value="15"/>
             <Setter Property="Height"
                     Value="15"/>
-            <Setter Property="Width"
+            <Setter Property="MinHeight"
                     Value="15"/>
             <Setter Property="VerticalAlignment"
                     Value="Center"/>
+            <Setter Property="HorizontalAlignment"
+                    Value="Center"/>
+            <Setter Property="TextAlignment"
+                    Value="Center"/>
+            <Setter Property="Foreground"
+                    Value="#1F1F1F"/>
+            <Setter Property="IsHitTestVisible"
+                    Value="False"/>
         </Style>
     </Window.Resources>
 
@@ -135,11 +152,10 @@
                             <ColumnDefinition Width="4"/>
                             <ColumnDefinition Width="40"/>
                         </Grid.ColumnDefinitions>
-                        <Image Grid.Column="1"
-                               x:Name="ButtonExportLogFileImage"
-                               Source="/images/content-save_15x15.png"
-                               Tag="/images/content-save_15x15.png"
-                               IsHitTestVisible="False"/>
+                        <TextBlock Grid.Column="1"
+                                   x:Name="ButtonExportLogFileImage"
+                                   Style="{StaticResource ToolbarGlyphStyle}"
+                                   Text="&#xE74E;"/>
                         <AccessText Grid.Column="3"
                                     x:Name="ButtonExportLogFileText"
                                     Text="_Save"
@@ -160,11 +176,10 @@
                             <ColumnDefinition Width="4"/>
                             <ColumnDefinition Width="40"/>
                         </Grid.ColumnDefinitions>
-                        <Image Grid.Column="1"
-                               x:Name="ButtonClearLogImage"
-                               Source="/images/delete-alert_15x15.png"
-                               Tag="/images/delete-alert_15x15.png"
-                               IsHitTestVisible="False"/>
+                        <TextBlock Grid.Column="1"
+                                   x:Name="ButtonClearLogImage"
+                                   Style="{StaticResource ToolbarGlyphStyle}"
+                                   Text="&#xE74D;"/>
                         <AccessText Grid.Column="3"
                                     x:Name="ButtonClearLogText"
                                     Text="_Clear"
