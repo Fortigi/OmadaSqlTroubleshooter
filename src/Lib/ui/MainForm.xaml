@@ -20,11 +20,6 @@
                         <Setter Property="Width" Value="300" />
                         <Setter Property="Background" Value="{DynamicResource {x:Static SystemColors.WindowBrushKey}}" />
                 </Style>
-                <Style TargetType="Image">
-                        <Setter Property="Height" Value="15" />
-                        <Setter Property="Width" Value="15" />
-                        <Setter Property="VerticalAlignment" Value="Center" />
-                </Style>
                 <Style TargetType="PasswordBox">
                         <Setter Property="VerticalContentAlignment" Value="Center" />
                         <Setter Property="Height" Value="25" />
@@ -499,7 +494,7 @@
                                                                 <ColumnDefinition Width="15" />
                                                                 <ColumnDefinition Width="Auto" />
                                                         </Grid.ColumnDefinitions>
-                                                        <Image Grid.Column="1" IsHitTestVisible="False" x:Name="ImageOutputStatus" Tag="/images/table_15x15.png" Source="/images/table_15x15.png" />
+                                                        <TextBlock Grid.Column="1" x:Name="ImageOutputStatus" Style="{StaticResource ToolbarGlyphStyle}" Text="&#xF232;" />
                                                         <TextBlock Grid.Column="3" x:Name="TextBlockOutputBox" Text="Results:" />
                                                 </Grid>
                                                                                                 <DataGrid x:Name="DataGridQueryResult" Grid.Row="1" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Auto" FontFamily="Consolas" IsReadOnly="True" HorizontalAlignment="Stretch" VerticalAlignment="Stretch" Background="{DynamicResource {x:Static SystemColors.WindowBrushKey}}" AlternationCount="{Binding MyObservableCollection.Count}" MinHeight="200" ScrollViewer.CanContentScroll="True" ScrollViewer.VerticalScrollBarVisibility="Auto" ScrollViewer.HorizontalScrollBarVisibility="Auto" CanUserResizeColumns="True" CanUserReorderColumns="True" CanUserSortColumns="True" Focusable="True" IsTabStop="True" SelectionMode="Extended" SelectionUnit="CellOrRowHeader" ClipboardCopyMode="IncludeHeader">
