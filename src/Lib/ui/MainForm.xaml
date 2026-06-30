@@ -72,6 +72,20 @@
                         <Setter Property="MinWidth" Value="100" />
                         <Setter Property="FontSize" Value="12" />
                 </Style>
+                <Style x:Key="ToolbarGlyphStyle" TargetType="TextBlock">
+                        <Setter Property="FontFamily" Value="Segoe Fluent Icons, Segoe MDL2 Assets" />
+                        <Setter Property="FontSize" Value="14" />
+                        <Setter Property="Width" Value="15" />
+                        <Setter Property="MinWidth" Value="15" />
+                        <Setter Property="Height" Value="15" />
+                        <Setter Property="MinHeight" Value="15" />
+                        <Setter Property="VerticalAlignment" Value="Center" />
+                        <Setter Property="HorizontalAlignment" Value="Center" />
+                        <Setter Property="TextAlignment" Value="Center" />
+                        <Setter Property="Foreground" Value="#1F1F1F" />
+                        <Setter Property="IsHitTestVisible" Value="False" />
+                </Style>
+
                 <Style x:Key="CheckboxAccessTextStyle" TargetType="AccessText">
                         <Setter Property="HorizontalAlignment" Value="Center" />
                         <Setter Property="VerticalAlignment" Value="Center" />
@@ -265,7 +279,7 @@
                                                                                 <ColumnDefinition Width="4" />
                                                                                 <ColumnDefinition Width="40" />
                                                                         </Grid.ColumnDefinitions>
-                                                                        <Image Grid.Column="1" IsHitTestVisible="False" x:Name="ButtonNewQueryImage" Source="/images/folder-open-outline_15x15.png" Tag="/images/folder-open-outline_15x15.png" />
+                                                                        <TextBlock Grid.Column="1" x:Name="ButtonNewQueryImage" Style="{StaticResource ToolbarGlyphStyle}" Text="&#xE8E5;" />
                                                                         <AccessText Grid.Column="3" IsHitTestVisible="False" x:Name="ButtonNewQueryText" Text="_New" Style="{StaticResource ButtonAccessTextStyle}" />
                                                                 </Grid>
                                                         </Border>
@@ -281,7 +295,7 @@
                                                                                 <ColumnDefinition Width="4" />
                                                                                 <ColumnDefinition Width="40" />
                                                                         </Grid.ColumnDefinitions>
-                                                                        <Image Grid.Column="1" IsHitTestVisible="False" x:Name="ButtonRefreshQueriesImage" Source="/images/refresh_15x15.png" Tag="/images/refresh_15x15.png" />
+                                                                        <TextBlock Grid.Column="1" x:Name="ButtonRefreshQueriesImage" Style="{StaticResource ToolbarGlyphStyle}" Text="&#xE72C;" />
                                                                         <AccessText Grid.Column="3" IsHitTestVisible="False" x:Name="ButtonRefreshQueriesText" Text="_Refresh" Style="{StaticResource ButtonAccessTextStyle}" />
                                                                 </Grid>
                                                         </Border>
@@ -297,7 +311,7 @@
                                                                                 <ColumnDefinition Width="4" />
                                                                                 <ColumnDefinition Width="40" />
                                                                         </Grid.ColumnDefinitions>
-                                                                        <Image Grid.Column="1" x:Name="ButtonShowSqlSchemaImage" Source="/images/file-tree-outline_15x15.png" Tag="/images/file-tree-outline_15x15.png" IsHitTestVisible="False" />
+                                                                        <TextBlock Grid.Column="1" x:Name="ButtonShowSqlSchemaImage" Style="{StaticResource ToolbarGlyphStyle}" Text="&#xE8FD;" />
                                                                         <AccessText Grid.Column="3" IsHitTestVisible="False" x:Name="ButtonShowSqlSchemaText" Text="S_chema" Style="{StaticResource ButtonAccessTextStyle}" />
                                                                 </Grid>
                                                         </Border>
@@ -313,7 +327,7 @@
                                                                                 <ColumnDefinition Width="4" />
                                                                                 <ColumnDefinition Width="40" />
                                                                         </Grid.ColumnDefinitions>
-                                                                        <Image Grid.Column="1" x:Name="ButtonSaveQueryImage" Source="/images/content-save_15x15.png" Tag="/images/content-save_15x15.png" IsHitTestVisible="False" />
+                                                                        <TextBlock Grid.Column="1" x:Name="ButtonSaveQueryImage" Style="{StaticResource ToolbarGlyphStyle}" Text="&#xE74E;" />
                                                                         <AccessText Grid.Column="3" IsHitTestVisible="False" x:Name="ButtonSaveQueryText" Text="_Save" Style="{StaticResource ButtonAccessTextStyle}" />
                                                                 </Grid>
                                                         </Border>
@@ -329,7 +343,7 @@
                                                                                 <ColumnDefinition Width="4" />
                                                                                 <ColumnDefinition Width="40" />
                                                                         </Grid.ColumnDefinitions>
-                                                                        <Image Grid.Column="1" IsHitTestVisible="False" x:Name="ButtonExecuteQueryImage" Source="/images/play_15x15.png" Tag="/images/play_15x15.png" />
+                                                                        <TextBlock Grid.Column="1" x:Name="ButtonExecuteQueryImage" Style="{StaticResource ToolbarGlyphStyle}" Text="&#xE768;" />
                                                                         <AccessText Grid.Column="3" IsHitTestVisible="False" x:Name="ButtonExecuteQueryText" Text="_Execute" Style="{StaticResource ButtonAccessTextStyle}" />
                                                                 </Grid>
                                                         </Border>
@@ -345,7 +359,7 @@
                                                                                 <ColumnDefinition Width="4" />
                                                                                 <ColumnDefinition Width="40" />
                                                                         </Grid.ColumnDefinitions>
-                                                                        <Image Grid.Column="1" x:Name="ButtonShowHistoryImage" Source="/images/history_15x15.png" Tag="/images/history_15x15.png" IsHitTestVisible="False" />
+                                                                        <TextBlock Grid.Column="1" x:Name="ButtonShowHistoryImage" Style="{StaticResource ToolbarGlyphStyle}" Text="&#xE81C;" />
                                                                         <AccessText Grid.Column="3" IsHitTestVisible="False" x:Name="ButtonShowHistoryText" Text="_History" Style="{StaticResource ButtonAccessTextStyle}" />
                                                                 </Grid>
                                                         </Border>
@@ -360,7 +374,7 @@
                                                                                 <ColumnDefinition Width="4" />
                                                                                 <ColumnDefinition Width="40" />
                                                                         </Grid.ColumnDefinitions>
-                                                                        <Image Grid.Column="1" x:Name="ButtonShowOutputImage" Source="/images/database-search_15x15.png" Tag="/images/database-search_15x15.png" IsHitTestVisible="False" />
+                                                                        <TextBlock Grid.Column="1" x:Name="ButtonShowOutputImage" Style="{StaticResource ToolbarGlyphStyle}" Text="&#xE890;" />
                                                                         <AccessText Grid.Column="3" IsHitTestVisible="False" x:Name="ButtonShowOutputText" Text="_View" Style="{StaticResource ButtonAccessTextStyle}" />
                                                                 </Grid>
                                                         </Border>
@@ -376,7 +390,7 @@
                                                                                 <ColumnDefinition Width="4" />
                                                                                 <ColumnDefinition Width="40" />
                                                                         </Grid.ColumnDefinitions>
-                                                                        <Image Grid.Column="1" x:Name="ButtonSaveOutputFileImage" Source="/images/database-export-outline_15x15.png" Tag="/images/database-export-outline_15x15.png" IsHitTestVisible="False" />
+                                                                        <TextBlock Grid.Column="1" x:Name="ButtonSaveOutputFileImage" Style="{StaticResource ToolbarGlyphStyle}" Text="&#xEDE1;" />
                                                                         <AccessText Grid.Column="3" IsHitTestVisible="False" x:Name="ButtonSaveOutputFileText" Text="E_xport" Style="{StaticResource ButtonAccessTextStyle}" />
                                                                 </Grid>
                                                         </Border>
@@ -392,7 +406,7 @@
                                                                                 <ColumnDefinition Width="4" />
                                                                                 <ColumnDefinition Width="70" />
                                                                         </Grid.ColumnDefinitions>
-                                                                        <Image Grid.Column="1" x:Name="ButtonOpenOutputFileImage" Source="/images/table-eye_15x15.png" Tag="/images/table-eye_15x15.png" IsHitTestVisible="False" />
+                                                                        <TextBlock Grid.Column="1" x:Name="ButtonOpenOutputFileImage" Style="{StaticResource ToolbarGlyphStyle}" Text="&#xE8A7;" />
                                                                         <AccessText Grid.Column="3" IsHitTestVisible="False" x:Name="ButtonOpenOutputFileText" Text="_Open Export" Style="{StaticResource ButtonAccessTextStyle}" />
                                                                 </Grid>
                                                         </Border>
@@ -408,7 +422,7 @@
                                                                                 <ColumnDefinition Width="4" />
                                                                                 <ColumnDefinition Width="70" />
                                                                         </Grid.ColumnDefinitions>
-                                                                        <Image Grid.Column="1" x:Name="ButtonConnectImage" Source="/images/connection_15x15.png" Tag="/images/connection_15x15.png" IsHitTestVisible="False" />
+                                                                        <TextBlock Grid.Column="1" x:Name="ButtonConnectImage" Style="{StaticResource ToolbarGlyphStyle}" Text="&#xE8FA;" />
                                                                         <AccessText Grid.Column="3" IsHitTestVisible="False" x:Name="ButtonConnectText" Text="_Connect" Style="{StaticResource ButtonAccessTextStyle}" />
                                                                 </Grid>
                                                         </Border>
@@ -423,7 +437,7 @@
                                                                                 <ColumnDefinition Width="4" />
                                                                                 <ColumnDefinition Width="40" />
                                                                         </Grid.ColumnDefinitions>
-                                                                        <Image Grid.Column="1" x:Name="ButtonResetImage" Source="/images/restart-alert_15x15.png" Tag="/images/restart-alert_15x15.png" IsHitTestVisible="False" />
+                                                                        <TextBlock Grid.Column="1" x:Name="ButtonResetImage" Style="{StaticResource ToolbarGlyphStyle}" Text="&#xE777;" />
                                                                         <AccessText Grid.Column="3" IsHitTestVisible="False" x:Name="ButtonResetText" Text="_Reset" Style="{StaticResource ButtonAccessTextStyle}" />
                                                                 </Grid>
                                                         </Border>
@@ -439,7 +453,7 @@
                                                                                 <ColumnDefinition Width="4" />
                                                                                 <ColumnDefinition Width="40" />
                                                                         </Grid.ColumnDefinitions>
-                                                                        <Image Grid.Column="1" x:Name="ButtonShowLogImage" Source="/images/account-file-text-outline_15x15.png" Tag="/images/account-file-text-outline_15x15.png" IsHitTestVisible="False" />
+                                                                        <TextBlock Grid.Column="1" x:Name="ButtonShowLogImage" Style="{StaticResource ToolbarGlyphStyle}" Text="&#xE8A5;" />
                                                                         <AccessText Grid.Column="3" IsHitTestVisible="False" x:Name="ButtonShowLogText" Text="_Log" Style="{StaticResource ButtonAccessTextStyle}" />
                                                                 </Grid>
                                                         </Border>
@@ -495,12 +509,12 @@
                                                                                                                 </Style>
                                                                                                         </DataGrid.Resources>
                                                                                                         <DataGrid.ContextMenu>
-                                                                                                                <ContextMenu x:Name="DataGridQueryResultContextMenu" FontFamily="Segoe UI" FontSize="13" Foreground="#666666">
+                                                                                                                <ContextMenu x:Name="DataGridQueryResultContextMenu" FontFamily="Segoe UI" FontSize="13" Foreground="#1F1F1F">
                                                                                                                         <ContextMenu.Template>
                                                                                                                                 <ControlTemplate TargetType="ContextMenu">
-                                                                                                                                        <Border Background="White" BorderBrush="#E0E0E0" BorderThickness="1" CornerRadius="4" Margin="6" SnapsToDevicePixels="True">
+                                                                                                                                        <Border Background="White" BorderBrush="#D9D9D9" BorderThickness="1" CornerRadius="4" Margin="6" SnapsToDevicePixels="True">
                                                                                                                                                 <Border.Effect>
-                                                                                                                                                        <DropShadowEffect BlurRadius="8" ShadowDepth="2" Opacity="0.2" Color="Black"/>
+                                                                                                                                                        <DropShadowEffect BlurRadius="12" ShadowDepth="2" Opacity="0.18" Color="Black"/>
                                                                                                                                                 </Border.Effect>
                                                                                                                                                 <ItemsPresenter Margin="0,4"/>
                                                                                                                                         </Border>
@@ -508,19 +522,60 @@
                                                                                                                         </ContextMenu.Template>
                                                                                                                         <ContextMenu.Resources>
                                                                                                                                 <ControlTemplate x:Key="DataGridQueryResultFlatMenuItem" TargetType="MenuItem">
-                                                                                                                                        <Border x:Name="Border" Background="Transparent" Padding="32,8,40,8">
-                                                                                                                                                <ContentPresenter ContentSource="Header" RecognizesAccessKey="True"/>
+                                                                                                                                        <Border x:Name="Border" Background="Transparent" Padding="12,8">
+                                                                                                                                                <Grid>
+                                                                                                                                                        <Grid.ColumnDefinitions>
+                                                                                                                                                                <ColumnDefinition Width="18"/>
+                                                                                                                                                                <ColumnDefinition Width="12"/>
+                                                                                                                                                                <ColumnDefinition Width="*"/>
+                                                                                                                                                                <ColumnDefinition Width="16"/>
+                                                                                                                                                                <ColumnDefinition Width="Auto"/>
+                                                                                                                                                        </Grid.ColumnDefinitions>
+                                                                                                                                                        <ContentPresenter Grid.Column="0" ContentSource="Icon" VerticalAlignment="Center" HorizontalAlignment="Center"/>
+                                                                                                                                                        <ContentPresenter Grid.Column="2" ContentSource="Header" RecognizesAccessKey="True" VerticalAlignment="Center"/>
+                                                                                                                                                        <TextBlock Grid.Column="4" Text="{TemplateBinding InputGestureText}" VerticalAlignment="Center" Foreground="{TemplateBinding Foreground}" Opacity="0.75"/>
+                                                                                                                                                </Grid>
                                                                                                                                         </Border>
                                                                                                                                         <ControlTemplate.Triggers>
                                                                                                                                                 <Trigger Property="IsHighlighted" Value="True">
-                                                                                                                                                        <Setter TargetName="Border" Property="Background" Value="#0078D7"/>
-                                                                                                                                                        <Setter Property="Foreground" Value="White"/>
+                                                                                                                                                        <Setter TargetName="Border" Property="Background" Value="#F1F5F9"/>
+                                                                                                                                                </Trigger>
+                                                                                                                                                <Trigger Property="IsEnabled" Value="False">
+                                                                                                                                                        <Setter Property="Opacity" Value="0.5"/>
                                                                                                                                                 </Trigger>
                                                                                                                                         </ControlTemplate.Triggers>
                                                                                                                                 </ControlTemplate>
+                                                                                                                                <Style TargetType="Separator">
+                                                                                                                                        <Setter Property="Template">
+                                                                                                                                                <Setter.Value>
+                                                                                                                                                        <ControlTemplate TargetType="Separator">
+                                                                                                                                                                <Border Height="1" Margin="12,4" Background="#E5E7EB"/>
+                                                                                                                                                        </ControlTemplate>
+                                                                                                                                                </Setter.Value>
+                                                                                                                                        </Setter>
+                                                                                                                                </Style>
                                                                                                                         </ContextMenu.Resources>
-                                                                                                                        <MenuItem x:Name="DataGridQueryResultMenuItemCopy" Header="_Copy (Ctrl+C)" Template="{StaticResource DataGridQueryResultFlatMenuItem}"/>
-                                                                                                                        <MenuItem x:Name="DataGridQueryResultMenuItemCopyWithHeaders" Header="Copy with _Headers (Ctrl+Shift+C)" Template="{StaticResource DataGridQueryResultFlatMenuItem}"/>
+                                                                                                                        <MenuItem x:Name="DataGridQueryResultMenuItemCopy" Header="Copy" InputGestureText="Ctrl+C" Template="{StaticResource DataGridQueryResultFlatMenuItem}">
+                                                                                                                                <MenuItem.Icon>
+                                                                                                                                        <TextBlock FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets" FontSize="14" Text="&#xE8C8;" Foreground="#4B5563"/>
+                                                                                                                                </MenuItem.Icon>
+                                                                                                                        </MenuItem>
+                                                                                                                        <MenuItem x:Name="DataGridQueryResultMenuItemCopyWithHeaders" Header="Copy with Headers" InputGestureText="Ctrl+Shift+C" Template="{StaticResource DataGridQueryResultFlatMenuItem}">
+                                                                                                                                <MenuItem.Icon>
+                                                                                                                                        <TextBlock FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets" FontSize="14" Text="&#xE8C8;" Foreground="#4B5563"/>
+                                                                                                                                </MenuItem.Icon>
+                                                                                                                        </MenuItem>
+                                                                                                                        <MenuItem x:Name="DataGridQueryResultMenuItemSelectAll" Header="Select All" InputGestureText="Ctrl+A" Template="{StaticResource DataGridQueryResultFlatMenuItem}">
+                                                                                                                                <MenuItem.Icon>
+                                                                                                                                        <TextBlock FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets" FontSize="14" Text="&#xE8B3;" Foreground="#4B5563"/>
+                                                                                                                                </MenuItem.Icon>
+                                                                                                                        </MenuItem>
+                                                                                                                        <Separator/>
+                                                                                                                        <MenuItem x:Name="DataGridQueryResultMenuItemSaveAs" Header="Save Results As..." Template="{StaticResource DataGridQueryResultFlatMenuItem}">
+                                                                                                                                <MenuItem.Icon>
+                                                                                                                                        <TextBlock FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets" FontSize="14" Text="&#xE74E;" Foreground="#4B5563"/>
+                                                                                                                                </MenuItem.Icon>
+                                                                                                                        </MenuItem>
                                                                                                                 </ContextMenu>
                                                                                                         </DataGrid.ContextMenu>
                                                                                                 </DataGrid>
