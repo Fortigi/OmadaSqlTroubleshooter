@@ -2,6 +2,7 @@ name: Bug report
 description: Report a problem with OmadaSqlTroubleshooter
 title: "[Bug]: "
 labels: ["bug", "triage"]
+type: "Bug"
 body:
   - type: markdown
     attributes:
@@ -23,7 +24,7 @@ body:
       label: Steps to reproduce
       description: Step-by-step instructions to reproduce the behavior.
       placeholder: |
-        1. Run `Invoke-OmadaSqlTroubleshooter -LogLevel DEBUG`
+        1. Run `Invoke-OmadaSqlTroubleshooter -LogLevel VERBOSE -LogToConsole`
         2. Connect to '...'
         3. Execute query '...'
         4. See error
@@ -34,7 +35,7 @@ body:
     id: logs
     attributes:
       label: Relevant log output
-      description: Paste relevant output from the log window/console (use `-LogToConsole` and `-LogLevel DEBUG` to get more detail). This will be automatically formatted as code.
+      description: Paste relevant output from the log window/console (use `-LogToConsole` and `-LogLevel VERBOSE` to get more detail). This will be automatically formatted as code.
       render: shell
     validations:
       required: false
@@ -135,5 +136,5 @@ body:
           required: true
         - label: I have verified the C_P_SQLTROUBLESHOOTING OData endpoint is enabled and permissions are correct
           required: false
-        - label: I have reproduced this with `-LogLevel DEBUG -LogToConsole` and included the relevant log output above
+        - label: I have reproduced this with `-LogLevel VERBOSE -LogToConsole` and included the relevant log output above
           required: false
