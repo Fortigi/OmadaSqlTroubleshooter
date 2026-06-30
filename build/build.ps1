@@ -22,8 +22,12 @@ $ScriptBlockString = @"
 
     `$Location = Get-Location
     Invoke-psake -buildFile "`$Location\psakeBuild.ps1" -taskList `$Task -Verbose:`$VerbosePreference -parameters @{"BuildVersion" = `$BuildVersion }
+    if (-not `$psake.build_success) { exit 1 }
 "@
 
 $TaskParam = ($Task | ForEach-Object { "'$_'" }) -join ','
 $Command = "Set-Location '$($PSScriptRoot)'; & {$ScriptBlockString} -Task @($TaskParam) -BuildVersion '$BuildVersion'"
-Start-Process -FilePath "pwsh.exe" -ArgumentList "-NoProfile", "-NoLogo", "-ExecutionPolicy", "Bypass", "-Command", $Command -Wait -NoNewWindow
+$Process = Start-Process -FilePath "pwsh.exe" -ArgumentList "-NoProfile", "-NoLogo", "-ExecutionPolicy", "Bypass", "-Command", $Command -Wait -NoNewWindow -PassThru
+if ($Process.ExitCode -ne 0) {
+    throw "Build failed: psake exited with code $($Process.ExitCode). See output above for the failing task."
+}
