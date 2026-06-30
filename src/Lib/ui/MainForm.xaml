@@ -488,13 +488,42 @@
                                                         <Image Grid.Column="1" IsHitTestVisible="False" x:Name="ImageOutputStatus" Tag="/images/table_15x15.png" Source="/images/table_15x15.png" />
                                                         <TextBlock Grid.Column="3" x:Name="TextBlockOutputBox" Text="Results:" />
                                                 </Grid>
-                                                <DataGrid x:Name="DataGridQueryResult" Grid.Row="1" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Auto" FontFamily="Consolas" IsReadOnly="True" HorizontalAlignment="Stretch" VerticalAlignment="Stretch" Background="{DynamicResource {x:Static SystemColors.WindowBrushKey}}" AlternationCount="{Binding MyObservableCollection.Count}" MinHeight="200" ScrollViewer.CanContentScroll="True" ScrollViewer.VerticalScrollBarVisibility="Auto" ScrollViewer.HorizontalScrollBarVisibility="Auto" CanUserResizeColumns="True" CanUserReorderColumns="True" CanUserSortColumns="True" Focusable="True" IsTabStop="True" SelectionMode="Extended" SelectionUnit="CellOrRowHeader" ClipboardCopyMode="IncludeHeader">
-                                                    <DataGrid.Resources>
-                                                        <Style TargetType="TextBlock">
-                                                            <Setter Property="VerticalAlignment" Value="Center"/>
-                                                        </Style>
-                                                    </DataGrid.Resources>
-                                                </DataGrid>
+                                                                                                <DataGrid x:Name="DataGridQueryResult" Grid.Row="1" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Auto" FontFamily="Consolas" IsReadOnly="True" HorizontalAlignment="Stretch" VerticalAlignment="Stretch" Background="{DynamicResource {x:Static SystemColors.WindowBrushKey}}" AlternationCount="{Binding MyObservableCollection.Count}" MinHeight="200" ScrollViewer.CanContentScroll="True" ScrollViewer.VerticalScrollBarVisibility="Auto" ScrollViewer.HorizontalScrollBarVisibility="Auto" CanUserResizeColumns="True" CanUserReorderColumns="True" CanUserSortColumns="True" Focusable="True" IsTabStop="True" SelectionMode="Extended" SelectionUnit="CellOrRowHeader" ClipboardCopyMode="IncludeHeader">
+                                                                                                        <DataGrid.Resources>
+                                                                                                                <Style TargetType="TextBlock">
+                                                                                                                        <Setter Property="VerticalAlignment" Value="Center"/>
+                                                                                                                </Style>
+                                                                                                        </DataGrid.Resources>
+                                                                                                        <DataGrid.ContextMenu>
+                                                                                                                <ContextMenu x:Name="DataGridQueryResultContextMenu" FontFamily="Segoe UI" FontSize="13" Foreground="#666666">
+                                                                                                                        <ContextMenu.Template>
+                                                                                                                                <ControlTemplate TargetType="ContextMenu">
+                                                                                                                                        <Border Background="White" BorderBrush="#E0E0E0" BorderThickness="1" CornerRadius="4" Margin="6" SnapsToDevicePixels="True">
+                                                                                                                                                <Border.Effect>
+                                                                                                                                                        <DropShadowEffect BlurRadius="8" ShadowDepth="2" Opacity="0.2" Color="Black"/>
+                                                                                                                                                </Border.Effect>
+                                                                                                                                                <ItemsPresenter Margin="0,4"/>
+                                                                                                                                        </Border>
+                                                                                                                                </ControlTemplate>
+                                                                                                                        </ContextMenu.Template>
+                                                                                                                        <ContextMenu.Resources>
+                                                                                                                                <ControlTemplate x:Key="DataGridQueryResultFlatMenuItem" TargetType="MenuItem">
+                                                                                                                                        <Border x:Name="Border" Background="Transparent" Padding="32,8,40,8">
+                                                                                                                                                <ContentPresenter ContentSource="Header" RecognizesAccessKey="True"/>
+                                                                                                                                        </Border>
+                                                                                                                                        <ControlTemplate.Triggers>
+                                                                                                                                                <Trigger Property="IsHighlighted" Value="True">
+                                                                                                                                                        <Setter TargetName="Border" Property="Background" Value="#0078D7"/>
+                                                                                                                                                        <Setter Property="Foreground" Value="White"/>
+                                                                                                                                                </Trigger>
+                                                                                                                                        </ControlTemplate.Triggers>
+                                                                                                                                </ControlTemplate>
+                                                                                                                        </ContextMenu.Resources>
+                                                                                                                        <MenuItem x:Name="DataGridQueryResultMenuItemCopy" Header="_Copy (Ctrl+C)" Template="{StaticResource DataGridQueryResultFlatMenuItem}"/>
+                                                                                                                        <MenuItem x:Name="DataGridQueryResultMenuItemCopyWithHeaders" Header="Copy with _Headers (Ctrl+Shift+C)" Template="{StaticResource DataGridQueryResultFlatMenuItem}"/>
+                                                                                                                </ContextMenu>
+                                                                                                        </DataGrid.ContextMenu>
+                                                                                                </DataGrid>
                                         </Grid>
                                 </Grid>
                                 <StatusBar Height="30" Grid.Row="2" VerticalAlignment="Bottom" HorizontalAlignment="Stretch" Background="Khaki">

@@ -234,57 +234,69 @@
 #         }
 #     })
 
-$Private:ContextMenu = [System.Windows.Markup.XamlReader]::Parse(@'
-<ContextMenu xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
-             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-             FontFamily="Segoe UI" FontSize="13" Foreground="#666666">
-    <ContextMenu.Template>
-        <ControlTemplate TargetType="ContextMenu">
-            <Border Background="White" BorderBrush="#E0E0E0" BorderThickness="1"
-                    CornerRadius="4" Margin="6" SnapsToDevicePixels="True">
-                <Border.Effect>
-                    <DropShadowEffect BlurRadius="8" ShadowDepth="2" Opacity="0.2" Color="Black"/>
-                </Border.Effect>
-                <ItemsPresenter Margin="0,4"/>
-            </Border>
-        </ControlTemplate>
-    </ContextMenu.Template>
-    <ContextMenu.Resources>
-        <ControlTemplate x:Key="FlatMenuItem" TargetType="MenuItem">
-            <Border x:Name="Border" Background="Transparent" Padding="32,8,40,8">
-                <ContentPresenter ContentSource="Header" RecognizesAccessKey="True"/>
-            </Border>
-            <ControlTemplate.Triggers>
-                <Trigger Property="IsHighlighted" Value="True">
-                    <Setter TargetName="Border" Property="Background" Value="#0078D7"/>
-                    <Setter Property="Foreground" Value="White"/>
-                </Trigger>
-            </ControlTemplate.Triggers>
-        </ControlTemplate>
-    </ContextMenu.Resources>
-    <MenuItem Header="Copy" Template="{StaticResource FlatMenuItem}"/>
-    <MenuItem Header="Copy with Headers" Template="{StaticResource FlatMenuItem}"/>
-</ContextMenu>
-'@)
-$Private:MenuItemCopy = $Private:ContextMenu.Items[0]
-$Private:MenuItemCopyWithHeader = $Private:ContextMenu.Items[1]
-$Script:MainForm.Elements.DataGridQueryResult.ContextMenu = $Private:ContextMenu
+$Script:DataGridQueryResultContextMenu = $Script:MainForm.Elements.DataGridQueryResult.ContextMenu
+$Script:DataGridQueryResultMenuItemCopy = $null
+$Script:DataGridQueryResultMenuItemCopyWithHeader = $null
 
-$Private:MenuItemCopy.Add_Click({
-        try {
-            $Script:MainForm.Elements.DataGridQueryResult.ClipboardCopyMode = [System.Windows.Controls.DataGridClipboardCopyMode]::ExcludeHeader
-            [System.Windows.Input.ApplicationCommands]::Copy.Execute($null, $Script:MainForm.Elements.DataGridQueryResult)
-            $Script:MainForm.Elements.DataGridQueryResult.ClipboardCopyMode = [System.Windows.Controls.DataGridClipboardCopyMode]::IncludeHeader
-        }
-        catch {
-            $_.Exception.Message | Write-LogOutput -LogType ERROR -ErrorObject $_
-        }
-    })
+if ($null -ne $Script:DataGridQueryResultContextMenu -and $Script:DataGridQueryResultContextMenu.Items.Count -ge 2) {
+    $Script:DataGridQueryResultMenuItemCopy = $Script:DataGridQueryResultContextMenu.Items[0]
+    $Script:DataGridQueryResultMenuItemCopyWithHeader = $Script:DataGridQueryResultContextMenu.Items[1]
+}
+else {
+    "DataGridQueryResult context menu is missing or does not have expected menu items" | Write-LogOutput -LogType WARNING
+}
 
-$Private:MenuItemCopyWithHeader.Add_Click({
+if ($null -ne $Script:DataGridQueryResultMenuItemCopy) {
+    $Script:DataGridQueryResultMenuItemCopy.Add_Click({
+            try {
+                $Script:MainForm.Elements.DataGridQueryResult.ClipboardCopyMode = [System.Windows.Controls.DataGridClipboardCopyMode]::ExcludeHeader
+                [System.Windows.Input.ApplicationCommands]::Copy.Execute($null, $Script:MainForm.Elements.DataGridQueryResult)
+            }
+            catch {
+                $_.Exception.Message | Write-LogOutput -LogType ERROR -ErrorObject $_
+            }
+        })
+}
+
+if ($null -ne $Script:DataGridQueryResultMenuItemCopyWithHeader) {
+    $Script:DataGridQueryResultMenuItemCopyWithHeader.Add_Click({
+            try {
+                $Script:MainForm.Elements.DataGridQueryResult.ClipboardCopyMode = [System.Windows.Controls.DataGridClipboardCopyMode]::IncludeHeader
+                [System.Windows.Input.ApplicationCommands]::Copy.Execute($null, $Script:MainForm.Elements.DataGridQueryResult)
+                $Script:MainForm.Elements.DataGridQueryResult.ClipboardCopyMode = [System.Windows.Controls.DataGridClipboardCopyMode]::ExcludeHeader
+            }
+            catch {
+                $_.Exception.Message | Write-LogOutput -LogType ERROR -ErrorObject $_
+            }
+        })
+}
+
+$Script:MainForm.Elements.DataGridQueryResult.Add_PreviewKeyDown({
+        param(
+            $EventSender,
+            $EventArguments
+        )
         try {
-            $Script:MainForm.Elements.DataGridQueryResult.ClipboardCopyMode = [System.Windows.Controls.DataGridClipboardCopyMode]::IncludeHeader
-            [System.Windows.Input.ApplicationCommands]::Copy.Execute($null, $Script:MainForm.Elements.DataGridQueryResult)
+            $_ | Show-EventInfo
+
+            $ControlPressed = [System.Windows.Input.Keyboard]::Modifiers -band [System.Windows.Input.ModifierKeys]::Control
+            $ShiftPressed = [System.Windows.Input.Keyboard]::Modifiers -band [System.Windows.Input.ModifierKeys]::Shift
+
+            if ($EventArguments.Key -eq [System.Windows.Input.Key]::C -and $ControlPressed -and $ShiftPressed) {
+                "Ctrl+Shift+C key intercepted at DataGrid level - copying values only" | Write-LogOutput -LogType VERBOSE
+
+                $Script:MainForm.Elements.DataGridQueryResult.ClipboardCopyMode = [System.Windows.Controls.DataGridClipboardCopyMode]::IncludeHeader
+                [System.Windows.Input.ApplicationCommands]::Copy.Execute($null, $Script:MainForm.Elements.DataGridQueryResult)
+                $EventArguments.Handled = $true
+            }
+            elseif ($EventArguments.Key -eq [System.Windows.Input.Key]::C -and $ControlPressed) {
+                "Ctrl+C key intercepted at DataGrid level - copying values with headers" | Write-LogOutput -LogType VERBOSE
+
+                $Script:MainForm.Elements.DataGridQueryResult.ClipboardCopyMode = [System.Windows.Controls.DataGridClipboardCopyMode]::ExcludeHeader
+                [System.Windows.Input.ApplicationCommands]::Copy.Execute($null, $Script:MainForm.Elements.DataGridQueryResult)
+                $Script:MainForm.Elements.DataGridQueryResult.ClipboardCopyMode = [System.Windows.Controls.DataGridClipboardCopyMode]::IncludeHeader
+                $EventArguments.Handled = $true
+            }
         }
         catch {
             $_.Exception.Message | Write-LogOutput -LogType ERROR -ErrorObject $_
@@ -294,13 +306,13 @@ $Private:MenuItemCopyWithHeader.Add_Click({
 $Script:MainForm.Elements.DataGridQueryResult.Add_AutoGeneratingColumn({
         param(
             $EventSender,
-            $EventArgs
+            $EventArguments
         )
         try {
             $Private:HeaderTemplate = [System.Windows.Markup.XamlReader]::Parse(
                 '<DataTemplate xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"><TextBlock Text="{Binding}" TextTrimming="CharacterEllipsis"/></DataTemplate>'
             )
-            $EventArgs.Column.HeaderTemplate = $Private:HeaderTemplate
+            $EventArguments.Column.HeaderTemplate = $Private:HeaderTemplate
         }
         catch {
             $_.Exception.Message | Write-LogOutput -LogType ERROR -ErrorObject $_
@@ -310,12 +322,12 @@ $Script:MainForm.Elements.DataGridQueryResult.Add_AutoGeneratingColumn({
 $Script:MainForm.Elements.DataGridQueryResult.Add_LoadingRow({
         param(
             $EventSender,
-            $EventArgs
+            $EventArguments
         )
         $_ | Show-EventInfo
 
         try {
-            $EventArgs.Row.Header = ($EventArgs.Row.GetIndex() + 1).ToString()
+            $EventArguments.Row.Header = ($EventArguments.Row.GetIndex() + 1).ToString()
         }
         catch {
             $_.Exception.Message | Write-LogOutput -LogType ERROR -ErrorObject $_
