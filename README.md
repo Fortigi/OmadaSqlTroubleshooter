@@ -7,39 +7,48 @@ OmadaSqlTroubleshooter is a PowerShell Module that contains an interactive deskt
 
 ![OmadaSQLTroubleshooter Overview](./images/overview.png)
 
-### Features:
-- Create, update and execute SQL Queries;
-- View output in a PowerShell GridView;
-- Export output to:
-    - json;
-    - csv;
-    - PowerShell CliXml;
-    - Text.
-- Save queries without executing;
-- Basic IntelliSense for Sql, tables and columns;
-- Schema view with the ability to enter the selected item in the editor (SHIFT + Select Table/Column);
-- Select you query or connection while typing in the related input field;
-- Filter queries while typing into the
-- Query history view:
-    - Browse history;
-    - Restore query from history;
-    - Compare changes for each updated query;
-    - Export historic queries to:
-        - json;
-        - csv;
-        - txt.
-- Detailed logging to log window and console;
-- Authentication options:
-    - Browser: Browser based on Selenium;
-    - WebView2: Browser based on WebView2;
-    - OAuth: OAuth2 based authentication (Only Entra ID is currently supported).
-- Auto complete connection url. Eg. Tenant name completes to https://tenantname.omada.cloud;
-- Automatic storing of the current application state, e.g. current connection, current query, application layout, etc;
-- Option to store your credentials. When using Browser/WebView2 based authentication with Enter ID it is even able to enter your credentials automatically;
-- Keyboard shortcuts:
-  - F5: Execute query;
-  - Enter/Return after entering connection information: Initiate connection;
-  - CTRL + S: Save current query in Omada.
+### Features
+
+#### Query Management
+- Create, update, save and execute SQL queries
+- Save queries without executing
+- Query history
+  - Browse history
+  - Restore a query from history
+  - Compare changes for each updated query
+  - Export historic queries (JSON, CSV, TXT)
+
+#### Editor & IntelliSense
+- Basic IntelliSense for SQL, tables and columns
+- Schema view — press **Shift + click** on a table or column to insert it into the editor
+- Filter queries while typing in the editor
+
+#### Results & Export
+- View results in a PowerShell GridView
+- Context menu for quick copy, select and save
+- Export results to JSON, CSV, PowerShell CliXml or plain text
+
+#### Authentication
+- **WebView2** — browser-based via WebView2 (default)
+- **Browser** — browser-based via Selenium
+- **OAuth** — OAuth2 / Entra ID
+
+#### Connectivity & State
+- Auto-complete connection URL (e.g. `tenantname` → `https://tenantname.omada.cloud`)
+- Select query or connection from a dropdown while typing
+- Automatic persistence of connection, query and layout between sessions
+- Option to store credentials; WebView2/Browser with Entra ID can auto-fill them
+- Detailed logging to log window and console
+
+#### Keyboard Shortcuts
+
+| Shortcut | Action |
+|---|---|
+| `F5` | Execute query |
+| `Enter` (in connection field) | Initiate connection |
+| `Ctrl + S` | Save current query in Omada |
+| `Ctrl + C` (result pane) | Copy selected cell(s) to clipboard |
+| `Ctrl + Shift + C` (result pane) | Copy selected cell(s) including headers to clipboard |
 
 This application leverages the permissions of the user that is logged in. The application uses the built-in OData endpoint (C_P_SQLTROUBLESHOOTING) for the SQL Troubleshooter and the Omada Enterprise Server API.
 
@@ -218,6 +227,20 @@ This cmdlet supports the common parameters: -Debug, -ErrorAction, -ErrorVariable
 ### None
 
 ## NOTES
+
+### None
+
+## KNOWN ISSUES
+
+> [!NOTE]
+> **Queries that return no rows and queries that fail show the same warning.**
+> The message _"Warning: Query did not return any results!"_ is displayed in both cases.
+> This is a limitation of the SQL Troubleshooter component in Omada Identity Suite,
+> which does not distinguish between an empty result set and a query execution failure.
+
+## CONTRIBUTING
+
+Contributions are welcome! If you have ideas for improvements or bug fixes, feel free to open a pull request on [GitHub](https://github.com/Fortigi/OmadaSqlTroubleshooter).
 
 ## RELATED LINKS
 

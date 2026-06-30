@@ -1,0 +1,140 @@
+name: Bug report
+description: Report a problem with OmadaSqlTroubleshooter
+title: "[Bug]: "
+labels: ["bug", "triage"]
+type: "Bug"
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to report a bug. Please fill in as much detail as possible — this speeds up triage significantly.
+
+  - type: textarea
+    id: description
+    attributes:
+      label: Description
+      description: A clear and concise description of the bug.
+      placeholder: What happened? What did you expect to happen instead?
+    validations:
+      required: true
+
+  - type: textarea
+    id: repro-steps
+    attributes:
+      label: Steps to reproduce
+      description: Step-by-step instructions to reproduce the behavior.
+      placeholder: |
+        1. Run `Invoke-OmadaSqlTroubleshooter -LogLevel VERBOSE -LogToConsole`
+        2. Connect to '...'
+        3. Execute query '...'
+        4. See error
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Relevant log output
+      description: Paste relevant output from the log window/console (use `-LogToConsole` and `-LogLevel VERBOSE` to get more detail). This will be automatically formatted as code.
+      render: shell
+    validations:
+      required: false
+
+  - type: input
+    id: module-version
+    attributes:
+      label: OmadaSqlTroubleshooter version
+      description: Output of `Get-Module OmadaSqlTroubleshooter -ListAvailable | Select Version`
+      placeholder: e.g. 2026.03.06.9
+    validations:
+      required: true
+
+  - type: input
+    id: omadaweb-ps-version
+    attributes:
+      label: OmadaWeb.PS version
+      description: Output of `Get-Module OmadaWeb.PS -ListAvailable | Select Version`
+      placeholder: e.g. 2025.12.2.1
+    validations:
+      required: true
+
+  - type: input
+    id: powershell-version
+    attributes:
+      label: PowerShell version
+      description: Output of `$PSVersionTable.PSVersion`
+      placeholder: e.g. 7.4.6
+    validations:
+      required: true
+
+  - type: input
+    id: os-version
+    attributes:
+      label: Windows version
+      description: Output of `[System.Environment]::OSVersion.Version` or `winver`
+      placeholder: e.g. Windows 11 23H2 (build 22631)
+    validations:
+      required: true
+
+  - type: dropdown
+    id: auth-method
+    attributes:
+      label: Authentication method
+      description: Which authentication option were you using when the issue occurred?
+      options:
+        - Browser (Selenium)
+        - WebView2
+        - OAuth (Entra ID)
+        - Not applicable / unsure
+    validations:
+      required: true
+
+  - type: input
+    id: webview2-version
+    attributes:
+      label: WebView2 runtime version (if applicable)
+      description: Only relevant if authentication method is WebView2. Check via `Get-AppxPackage` or Windows Apps settings.
+      placeholder: e.g. 130.0.2849.68
+    validations:
+      required: false
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+      description: What did you expect to happen?
+    validations:
+      required: true
+
+  - type: textarea
+    id: screenshots
+    attributes:
+      label: Screenshots
+      description: If applicable, add screenshots to help explain the problem (drag & drop images here).
+    validations:
+      required: false
+
+  - type: textarea
+    id: additional-context
+    attributes:
+      label: Additional context
+      description: |
+        Anything else that might be relevant, e.g.:
+        - Was the C_P_SQLTROUBLESHOOTING OData endpoint recently enabled/changed?
+        - Any recent changes to OData permissions (Create/Read/Modify)?
+        - Does the issue occur on a fresh `-Reset`?
+        - Omada Identity Cloud version, if known
+    validations:
+      required: false
+
+  - type: checkboxes
+    id: checklist
+    attributes:
+      label: Checklist
+      options:
+        - label: I have searched existing issues to confirm this hasn't already been reported
+          required: true
+        - label: I have verified the C_P_SQLTROUBLESHOOTING OData endpoint is enabled and permissions are correct
+          required: false
+        - label: I have reproduced this with `-LogLevel VERBOSE -LogToConsole` and included the relevant log output above
+          required: false
