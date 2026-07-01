@@ -19,24 +19,32 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Check if main has new commits since last nightly tag
+      - name: Check if src/** changed since last nightly tag
         id: check
         shell: bash
         run: |
           LAST_NIGHTLY_TAG=$(git tag -l 'v*-nightly' --sort=-creatordate | head -n 1)
           if [ -z "$LAST_NIGHTLY_TAG" ]; then
-            echo "No previous nightly tag found, will build."
-            echo "should_build=true" >> "$GITHUB_OUTPUT"
+            BASE_COMMIT=$(git rev-list --max-parents=0 HEAD)
+            echo "No previous nightly tag found, comparing against first commit ($BASE_COMMIT)."
           else
-            LAST_NIGHTLY_COMMIT=$(git rev-list -n 1 "$LAST_NIGHTLY_TAG")
+            BASE_COMMIT=$(git rev-list -n 1 "$LAST_NIGHTLY_TAG")
             HEAD_COMMIT=$(git rev-parse HEAD)
-            if [ "$LAST_NIGHTLY_COMMIT" = "$HEAD_COMMIT" ]; then
+            if [ "$BASE_COMMIT" = "$HEAD_COMMIT" ]; then
               echo "No new commits since last nightly tag ($LAST_NIGHTLY_TAG), skipping build."
               echo "should_build=false" >> "$GITHUB_OUTPUT"
-            else
-              echo "New commits found since last nightly tag ($LAST_NIGHTLY_TAG), will build."
-              echo "should_build=true" >> "$GITHUB_OUTPUT"
+              exit 0
             fi
+            echo "Comparing src/** changes since $LAST_NIGHTLY_TAG ($BASE_COMMIT)."
+          fi
+          CHANGED=$(git diff --name-only "$BASE_COMMIT" HEAD -- src/)
+          if [ -z "$CHANGED" ]; then
+            echo "No src/** changes since last nightly tag, skipping build."
+            echo "should_build=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "src/** changes found:"
+            echo "$CHANGED"
+            echo "should_build=true" >> "$GITHUB_OUTPUT"
           fi
 
   build:
@@ -105,6 +113,15 @@ jobs:
         with:
           name: BuildOutput
           path: buildoutput/
+
+      - name: Publish to PSGallery (pre-release)
+        shell: pwsh
+        run: |
+          ./build/PushToPsGallery.ps1 `
+            -SystemDefaultWorkingDirectory '${{ github.workspace }}' `
+            -PsGalleryKey '${{ secrets.PSGALLERY_API_KEY }}' `
+            -BuildPath 'OmadaSqlTroubleshooter' `
+            -Prerelease 'nightly'
 
       - name: Pack NuGet package
         shell: pwsh
