@@ -17,10 +17,10 @@ Properties {
     }
 }
 
-Task default -depends Analyze, Test, Build, ImportModule
-Task TestBuildOnly -depends Analyze, Test, Build
-Task Pipeline -depends Analyze, Test, Build
-Task DeployOnly -depends Build, Deploy
+Task default -Depends Analyze, Test, Build, ImportModule
+Task TestBuildOnly -Depends Analyze, Test, Build
+Task Pipeline -Depends Analyze, Test, Build
+Task DeployOnly -Depends Build, Deploy
 
 
 function Get-GalleryModuleVersion {
@@ -99,7 +99,7 @@ Task Analyze {
     }
 }
 
-Task Test -depends Analyze {
+Task Test -Depends Analyze {
     try {
         $TestFiles = Get-ChildItem -Path $TestSource -Filter '*.Tests.ps1' -Recurse
         if ($ChangedFiles.Count -gt 0) {
@@ -134,7 +134,7 @@ Task Test -depends Analyze {
     }
 }
 
-Task Build -depends Test {
+Task Build -Depends Test {
     try {
         $FormattingSettings = @{
             IncludeRules = @("PSPlaceOpenBrace", "PSUseConsistentIndentation", "PsAvoidUsingCmdletAliases", "PSUseConsistentWhitespace", "PSAlignAssignmentStatement", "PSPlaceCloseBrace")
@@ -305,10 +305,13 @@ Task Build -depends Test {
 
         Get-Item -Path (Join-Path $ModuleSource -ChildPath "Monaco") | Copy-Item -Destination $OutputDir -Force -Recurse
         New-Item (Join-Path $OutputDir -ChildPath  "lib\ui") -ItemType Directory -Force | Out-Null
+        New-Item (Join-Path $ModuleSource -ChildPath  "lib\ui") -ItemType Directory -Force | Out-Null
         Get-ChildItem -Path (Join-Path $ModuleSource -ChildPath "lib\ui") -Filter *.xaml | Where-Object { $_.BaseName -notlike "_*" } | Copy-Item -Destination (Join-Path $OutputDir -ChildPath "lib\ui") -Force -Recurse
         New-Item (Join-Path $OutputDir -ChildPath  "lib\ui\icons") -ItemType Directory -Force | Out-Null
+        New-Item (Join-Path $ModuleSource -ChildPath  "lib\ui\icons") -ItemType Directory -Force | Out-Null
         Get-ChildItem -Path (Join-Path $ModuleSource -ChildPath "lib\ui\icons") -Filter *.ico | Where-Object { $_.BaseName -notlike "_*" } | Copy-Item -Destination (Join-Path $OutputDir -ChildPath "lib\ui\icons") -Force -Recurse
         New-Item (Join-Path $OutputDir -ChildPath  "lib\ui\images") -ItemType Directory -Force | Out-Null
+        New-Item (Join-Path $ModuleSource -ChildPath  "lib\ui\images") -ItemType Directory -Force | Out-Null
         Get-ChildItem -Path (Join-Path $ModuleSource -ChildPath "lib\ui\images") -Filter *.png | Where-Object { $_.BaseName -notlike "_*" } | Copy-Item -Destination (Join-Path $OutputDir -ChildPath "lib\ui\images") -Force -Recurse
 
         New-Item (Join-Path $OutputDir -ChildPath  "lib\schema") -ItemType Directory -Force | Out-Null
@@ -338,8 +341,8 @@ Task Build -depends Test {
         $TargetChildPath = "lib\{0}" -f $LibSource
 
         $EventFiles = Get-ChildItem -Path (Join-Path $ModuleSource -ChildPath $SourceChildPath) -Recurse -File | Where-Object { $_.Name -notlike "_*.ps1" }
-        $EventFileGroups = $EventFiles | Select-Object *,@{Name="ClassName";Expression={ ($_.BaseName -split '\.')[0] } } | Group-Object -Property ClassName
-        foreach($EventFileGroupName in $EventFileGroups.Name) {
+        $EventFileGroups = $EventFiles | Select-Object *, @{Name = "ClassName"; Expression = { ($_.BaseName -split '\.')[0] } } | Group-Object -Property ClassName
+        foreach ($EventFileGroupName in $EventFileGroups.Name) {
             $EventFileGroup = $EventFileGroups | Where-Object { $_.Name -eq $EventFileGroupName }
             $TargetFilePath = "{0}\{1}.ps1" -f $TargetChildPath, $EventFileGroupName
             New-Item (Join-Path $OutputDir -ChildPath $TargetChildPath) -ItemType Directory -Force | Out-Null
@@ -347,7 +350,7 @@ Task Build -depends Test {
                 Get-Item $_ | Remove-Item -Force
             }
             $HeaderContent | Out-File -Path (Join-Path $OutputDir -ChildPath $TargetFilePath) -Force -Append -Encoding utf8
-            foreach($EventFile in $EventFileGroup.Group.FullName) {
+            foreach ($EventFile in $EventFileGroup.Group.FullName) {
                 $Content = Get-Content $EventFile -Encoding UTF8 | Where-Object { $_ -notmatch '^\s*#requires' -and $_ -notmatch '^\s*#(?!>)' }
                 if (($content | Select-String -SimpleMatch "Wait-Debugger" -AllMatches | Measure-Object).Count -gt 0) {
                     "Use of 'Wait-Debugger' command found in script:{0}. This must be removed before building the module" -f $EventFile.Name | Write-Error -ErrorAction Stop
@@ -363,7 +366,7 @@ Task Build -depends Test {
     }
 }
 
-Task TestAssemblies -depends Build {
+Task TestAssemblies -Depends Build {
 
     try {
 
@@ -399,16 +402,16 @@ Task TestAssemblies -depends Build {
 }
 
 
-Task ImportModule -depends Build {
+Task ImportModule -Depends Build {
 
     try {
 
         $LatestOmadaWebPSVersion = Get-GalleryModuleVersion -ModuleName "OmadaWeb.PS"
 
-        if(!(Get-Module -Name "OmadaWeb.PS" -ListAvailable)) {
+        if (!(Get-Module -Name "OmadaWeb.PS" -ListAvailable)) {
             Install-Module -Name "OmadaWeb.PS" -Scope CurrentUser -Force -MinimumVersion $LatestOmadaWebPSVersion
         }
-        elseif(Get-Module -Name "OmadaWeb.PS" -ListAvailable -ErrorAction SilentlyContinue | Where-Object { $_.Version -lt $LatestOmadaWebPSVersion }) {
+        elseif (Get-Module -Name "OmadaWeb.PS" -ListAvailable -ErrorAction SilentlyContinue | Where-Object { $_.Version -lt $LatestOmadaWebPSVersion }) {
             Update-Module -Name "OmadaWeb.PS" -Scope CurrentUser -Force -RequiredVersion $LatestOmadaWebPSVersion
         }
         "Import OmadaWeb.PS module" | Write-Host
@@ -420,21 +423,21 @@ Task ImportModule -depends Build {
         $Test = Import-Module "$OutputDir\$ModuleName.psd1" -Force -PassThru
         if ($Test) {
             "Module loaded successfully" | Write-Verbose
-            try{
+            try {
                 Remove-Module -Name $Test.Name -Force
             }
-            catch{}
-            try{
+            catch {}
+            try {
                 Remove-Module -Name "OmadaWeb.PS" -Force
             }
-            catch{}
+            catch {}
         }
         else {
             "Module failed to load" | Write-Error -ErrorAction Stop
-            try{
-                Remove-Module -name $Test.Name -Force
+            try {
+                Remove-Module -Name $Test.Name -Force
             }
-            catch{}
+            catch {}
         }
     }
     catch {
@@ -443,6 +446,6 @@ Task ImportModule -depends Build {
     }
 }
 
-Task Deploy -depends TestAssemblies {
+Task Deploy -Depends TestAssemblies {
 
 }
