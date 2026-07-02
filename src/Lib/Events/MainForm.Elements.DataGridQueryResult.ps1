@@ -71,7 +71,7 @@ $Script:DataGridQueryResultMenuItemSaveAs.Add_Click({
 $Script:DataGridQueryResultMenuItemSaveSelectedAs.Add_Click({
         try {
             $_ | Show-EventInfo
-            Save-QueryResultToFile -QueryResult (Get-DataGridSelectedQueryResult)
+            Save-QueryResultToFile -QueryResult (Get-DataGridSelectedQueryResult) -IsSelection
         }
         catch {
             $_.Exception.Message | Write-LogOutput -LogType ERROR -ErrorObject $_
