@@ -540,6 +540,40 @@
                                                                                                                                                 </Trigger>
                                                                                                                                         </ControlTemplate.Triggers>
                                                                                                                                 </ControlTemplate>
+                                                                                                                                <ControlTemplate x:Key="DataGridQueryResultFlatMenuItemWithSubmenu" TargetType="MenuItem">
+                                                                                                                                        <Border x:Name="Border" Background="Transparent" Padding="12,8">
+                                                                                                                                                <Grid>
+                                                                                                                                                        <Grid.ColumnDefinitions>
+                                                                                                                                                                <ColumnDefinition Width="18"/>
+                                                                                                                                                                <ColumnDefinition Width="12"/>
+                                                                                                                                                                <ColumnDefinition Width="*"/>
+                                                                                                                                                                <ColumnDefinition Width="16"/>
+                                                                                                                                                                <ColumnDefinition Width="Auto"/>
+                                                                                                                                                                <ColumnDefinition Width="16"/>
+                                                                                                                                                        </Grid.ColumnDefinitions>
+                                                                                                                                                        <ContentPresenter Grid.Column="0" ContentSource="Icon" VerticalAlignment="Center" HorizontalAlignment="Center"/>
+                                                                                                                                                        <ContentPresenter Grid.Column="2" ContentSource="Header" RecognizesAccessKey="True" VerticalAlignment="Center"/>
+                                                                                                                                                        <TextBlock Grid.Column="4" Text="{TemplateBinding InputGestureText}" VerticalAlignment="Center" Foreground="{TemplateBinding Foreground}" Opacity="0.75"/>
+                                                                                                                                                        <TextBlock Grid.Column="5" Text="&#xE76C;" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets" FontSize="10" VerticalAlignment="Center" HorizontalAlignment="Center" Foreground="{TemplateBinding Foreground}"/>
+                                                                                                                                                        <Popup x:Name="SubmenuPopup" Placement="Right" HorizontalOffset="-4" VerticalOffset="-8" IsOpen="{TemplateBinding IsSubmenuOpen}" AllowsTransparency="True" Focusable="False" PopupAnimation="Fade">
+                                                                                                                                                                <Border x:Name="SubmenuBorder" Background="White" BorderBrush="#E5E7EB" BorderThickness="1" CornerRadius="6" Padding="4">
+                                                                                                                                                                        <Border.Effect>
+                                                                                                                                                                                <DropShadowEffect Color="#000000" Opacity="0.15" BlurRadius="12" ShadowDepth="2"/>
+                                                                                                                                                                        </Border.Effect>
+                                                                                                                                                                        <ItemsPresenter KeyboardNavigation.DirectionalNavigation="Cycle" Grid.IsSharedSizeScope="True"/>
+                                                                                                                                                                </Border>
+                                                                                                                                                        </Popup>
+                                                                                                                                                </Grid>
+                                                                                                                                        </Border>
+                                                                                                                                        <ControlTemplate.Triggers>
+                                                                                                                                                <Trigger Property="IsHighlighted" Value="True">
+                                                                                                                                                        <Setter TargetName="Border" Property="Background" Value="#F1F5F9"/>
+                                                                                                                                                </Trigger>
+                                                                                                                                                <Trigger Property="IsEnabled" Value="False">
+                                                                                                                                                        <Setter Property="Opacity" Value="0.5"/>
+                                                                                                                                                </Trigger>
+                                                                                                                                        </ControlTemplate.Triggers>
+                                                                                                                                </ControlTemplate>
                                                                                                                                 <Style TargetType="Separator">
                                                                                                                                         <Setter Property="Template">
                                                                                                                                                 <Setter.Value>
@@ -559,6 +593,18 @@
                                                                                                                                 <MenuItem.Icon>
                                                                                                                                         <TextBlock FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets" FontSize="14" Text="&#xE8C8;" Foreground="#4B5563"/>
                                                                                                                                 </MenuItem.Icon>
+                                                                                                                        </MenuItem>
+                                                                                                                        <MenuItem x:Name="DataGridQueryResultMenuItemCopyAs" Header="Copy As..." Template="{StaticResource DataGridQueryResultFlatMenuItemWithSubmenu}">
+                                                                                                                                <MenuItem x:Name="DataGridQueryResultMenuItemCopyAsSqlArray" Header="Sql Array" InputGestureText="Ctrl+Shift+S" Template="{StaticResource DataGridQueryResultFlatMenuItem}">
+                                                                                                                                        <MenuItem.Icon>
+                                                                                                                                                <TextBlock FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets" FontSize="14" Text="&#xEA37;" Foreground="#4B5563"/>
+                                                                                                                                        </MenuItem.Icon>
+                                                                                                                                </MenuItem>
+                                                                                                                                <MenuItem x:Name="DataGridQueryResultMenuItemCopyAsPowerShellArray" Header="PowerShell Array" InputGestureText="Ctrl+Shift+P" Template="{StaticResource DataGridQueryResultFlatMenuItem}">
+                                                                                                                                        <MenuItem.Icon>
+                                                                                                                                                <TextBlock FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets" FontSize="14" Text="&#xE756;" Foreground="#4B5563"/>
+                                                                                                                                        </MenuItem.Icon>
+                                                                                                                                </MenuItem>
                                                                                                                         </MenuItem>
                                                                                                                         <MenuItem x:Name="DataGridQueryResultMenuItemSelectAll" Header="Select All" InputGestureText="Ctrl+A" Template="{StaticResource DataGridQueryResultFlatMenuItem}">
                                                                                                                                 <MenuItem.Icon>

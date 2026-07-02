@@ -11,8 +11,7 @@ $Script:MainForm.Elements.DataGridQueryResult.ContextMenu.Add_Opened({
 $Script:DataGridQueryResultMenuItemCopy.Add_Click({
         try {
             $_ | Show-EventInfo
-            $Script:MainForm.Elements.DataGridQueryResult.ClipboardCopyMode = [System.Windows.Controls.DataGridClipboardCopyMode]::ExcludeHeader
-            [System.Windows.Input.ApplicationCommands]::Copy.Execute($null, $Script:MainForm.Elements.DataGridQueryResult)
+            Copy-DataGridToClipboard
         }
         catch {
             $_.Exception.Message | Write-LogOutput -LogType ERROR -ErrorObject $_
@@ -22,9 +21,27 @@ $Script:DataGridQueryResultMenuItemCopy.Add_Click({
 $Script:DataGridQueryResultMenuItemCopyWithHeader.Add_Click({
         try {
             $_ | Show-EventInfo
-            $Script:MainForm.Elements.DataGridQueryResult.ClipboardCopyMode = [System.Windows.Controls.DataGridClipboardCopyMode]::IncludeHeader
-            [System.Windows.Input.ApplicationCommands]::Copy.Execute($null, $Script:MainForm.Elements.DataGridQueryResult)
-            $Script:MainForm.Elements.DataGridQueryResult.ClipboardCopyMode = [System.Windows.Controls.DataGridClipboardCopyMode]::ExcludeHeader
+            Copy-DataGridToClipboard -IncludeHeader
+        }
+        catch {
+            $_.Exception.Message | Write-LogOutput -LogType ERROR -ErrorObject $_
+        }
+    })
+
+$Script:DataGridQueryResultMenuItemCopyAsSqlArray.Add_Click({
+        try {
+            $_ | Show-EventInfo
+            Copy-DataGridToClipboard -OutputFormat "SqlArray"
+        }
+        catch {
+            $_.Exception.Message | Write-LogOutput -LogType ERROR -ErrorObject $_
+        }
+    })
+
+$Script:DataGridQueryResultMenuItemCopyAsPowerShellArray.Add_Click({
+        try {
+            $_ | Show-EventInfo
+            Copy-DataGridToClipboard -OutputFormat "PowerShellArray"
         }
         catch {
             $_.Exception.Message | Write-LogOutput -LogType ERROR -ErrorObject $_
@@ -63,18 +80,23 @@ $Script:MainForm.Elements.DataGridQueryResult.Add_PreviewKeyDown({
             $ShiftPressed = [System.Windows.Input.Keyboard]::Modifiers -band [System.Windows.Input.ModifierKeys]::Shift
 
             if ($EventArguments.Key -eq [System.Windows.Input.Key]::C -and $ControlPressed -and $ShiftPressed) {
-                "Ctrl+Shift+C key intercepted at DataGrid level - copying values only" | Write-LogOutput -LogType VERBOSE
-
-                $Script:MainForm.Elements.DataGridQueryResult.ClipboardCopyMode = [System.Windows.Controls.DataGridClipboardCopyMode]::IncludeHeader
-                [System.Windows.Input.ApplicationCommands]::Copy.Execute($null, $Script:MainForm.Elements.DataGridQueryResult)
+                "Ctrl+Shift+C key intercepted at DataGrid level - copying values with headers" | Write-LogOutput -LogType VERBOSE
+                $Script:DataGridQueryResultMenuItemCopyWithHeader.RaiseEvent([System.Windows.RoutedEventArgs]::new([System.Windows.Controls.MenuItem]::ClickEvent))
                 $EventArguments.Handled = $true
             }
-            elseif ($EventArguments.Key -eq [System.Windows.Input.Key]::C -and $ControlPressed) {
-                "Ctrl+C key intercepted at DataGrid level - copying values with headers" | Write-LogOutput -LogType VERBOSE
-
-                $Script:MainForm.Elements.DataGridQueryResult.ClipboardCopyMode = [System.Windows.Controls.DataGridClipboardCopyMode]::ExcludeHeader
-                [System.Windows.Input.ApplicationCommands]::Copy.Execute($null, $Script:MainForm.Elements.DataGridQueryResult)
-                $Script:MainForm.Elements.DataGridQueryResult.ClipboardCopyMode = [System.Windows.Controls.DataGridClipboardCopyMode]::IncludeHeader
+            elseif ($EventArguments.Key -eq [System.Windows.Input.Key]::C -and $ControlPressed -and -not $ShiftPressed) {
+                "Ctrl+C key intercepted at DataGrid level - copying values only" | Write-LogOutput -LogType VERBOSE
+                $Script:DataGridQueryResultMenuItemCopy.RaiseEvent([System.Windows.RoutedEventArgs]::new([System.Windows.Controls.MenuItem]::ClickEvent))
+                $EventArguments.Handled = $true
+            }
+            elseif ($EventArguments.Key -eq [System.Windows.Input.Key]::P -and $ControlPressed -and $ShiftPressed) {
+                "Ctrl+Shift+P key intercepted at DataGrid level - copying values only as PowerShell array" | Write-LogOutput -LogType VERBOSE
+                $Script:DataGridQueryResultMenuItemCopyAsPowerShellArray.RaiseEvent([System.Windows.RoutedEventArgs]::new([System.Windows.Controls.MenuItem]::ClickEvent))
+                $EventArguments.Handled = $true
+            }
+            elseif ($EventArguments.Key -eq [System.Windows.Input.Key]::S -and $ControlPressed -and $ShiftPressed) {
+                "Ctrl+Shift+S key intercepted at DataGrid level - copying values only as Sql array" | Write-LogOutput -LogType VERBOSE
+                $Script:DataGridQueryResultMenuItemCopyAsSqlArray.RaiseEvent([System.Windows.RoutedEventArgs]::new([System.Windows.Controls.MenuItem]::ClickEvent))
                 $EventArguments.Handled = $true
             }
         }

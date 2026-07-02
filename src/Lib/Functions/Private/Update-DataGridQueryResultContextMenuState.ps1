@@ -16,4 +16,8 @@ function Update-DataGridQueryResultContextMenuState {
     if ($null -ne $Script:DataGridQueryResultMenuItemSaveAs) {
         $Script:DataGridQueryResultMenuItemSaveAs.IsEnabled = $HasRows
     }
+
+    if ($null -ne $Script:DataGridQueryResultMenuItemCopyAs) {
+        $Script:DataGridQueryResultMenuItemCopyAs.IsEnabled = $HasRows
+    }
 }

@@ -16,6 +16,9 @@ function Initialize-UiComponents {
     #Initialize UI DataGridQueryResult context menu items
     $Script:DataGridQueryResultMenuItemCopy = $null
     $Script:DataGridQueryResultMenuItemCopyWithHeader = $null
+    $Script:DataGridQueryResultMenuItemCopyAs = $null
+    $Script:DataGridQueryResultMenuItemCopyAsSqlArray = $null
+    $Script:DataGridQueryResultMenuItemCopyAsPowerShellArray = $null
     $Script:DataGridQueryResultMenuItemSelectAll = $null
     $Script:DataGridQueryResultMenuItemSaveAs = $null
 
@@ -23,6 +26,12 @@ function Initialize-UiComponents {
 
     $Script:DataGridQueryResultMenuItemCopy = $MenuItems[0]
     $Script:DataGridQueryResultMenuItemCopyWithHeader = $MenuItems[1]
-    $Script:DataGridQueryResultMenuItemSelectAll = $MenuItems[2]
-    $Script:DataGridQueryResultMenuItemSaveAs = $MenuItems[3]
+    $Script:DataGridQueryResultMenuItemCopyAs = $MenuItems[2]
+    $Script:DataGridQueryResultMenuItemSelectAll = $MenuItems[3]
+    $Script:DataGridQueryResultMenuItemSaveAs = $MenuItems[4]
+
+    $CopyAsMenuItems = @($Script:DataGridQueryResultMenuItemCopyAs.Items | Where-Object { $_ -is [System.Windows.Controls.MenuItem] })
+
+    $Script:DataGridQueryResultMenuItemCopyAsSqlArray = $CopyAsMenuItems[0]
+    $Script:DataGridQueryResultMenuItemCopyAsPowerShellArray = $CopyAsMenuItems[1]
 }
