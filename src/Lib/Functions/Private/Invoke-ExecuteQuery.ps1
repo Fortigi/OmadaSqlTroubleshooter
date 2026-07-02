@@ -63,6 +63,8 @@ function Invoke-ExecuteQuery {
                         $Private:TempQueryDoId = $null
                     }
 
+                    $Script:DataGridQueryResultColumnSelectionAnchor = $null
+
                     if ($null -ne $Script:RunTimeData.QueryResult -and ($Script:RunTimeData.QueryResult.d.Rows | Measure-Object).Count -le 0) {
                         "Query did not return any results!" | Write-LogOutput -LogType WARNING
                         $Script:MainForm.Elements.TextBlockStatusBarRows | Set-TextBlockText -Text "0 rows"

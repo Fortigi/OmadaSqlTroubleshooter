@@ -37,6 +37,9 @@ $Script:MainForm.Definition.Add_PreviewKeyDown({
         try {
             $_ | Show-EventInfo
 
+            $ControlPressed = [System.Windows.Input.Keyboard]::Modifiers -band [System.Windows.Input.ModifierKeys]::Control
+            $ShiftPressed = [System.Windows.Input.Keyboard]::Modifiers -band [System.Windows.Input.ModifierKeys]::Shift
+
             if ($EventArgs.Key -eq [System.Windows.Input.Key]::F5) {
                 # When the WebView2 (Monaco editor) has focus, let Monaco handle F5 via postMessage
                 # so it can include selection information for "execute selection" behaviour.
@@ -53,8 +56,7 @@ $Script:MainForm.Definition.Add_PreviewKeyDown({
                     $Script:MainForm.Elements.ButtonExecuteQuery.RaiseEvent([System.Windows.RoutedEventArgs]::new([System.Windows.Controls.Primitives.ButtonBase]::ClickEvent))
                 }
             }
-
-            elseif ($EventArgs.Key -eq [System.Windows.Input.Key]::S -and ([System.Windows.Input.Keyboard]::Modifiers -band [System.Windows.Input.ModifierKeys]::Control)) {
+            elseif ($EventArgs.Key -eq [System.Windows.Input.Key]::S -and $ControlPressed -and -not $ShiftPressed) {
                 "Ctrl+S key intercepted at MainForm level" | Write-LogOutput -LogType VERBOSE
 
                 $EventArgs.Handled = $true
@@ -62,8 +64,7 @@ $Script:MainForm.Definition.Add_PreviewKeyDown({
                 "Triggering Save Query from Ctrl+S key press (MainForm)" | Write-LogOutput -LogType VERBOSE
                 $Script:MainForm.Elements.ButtonSaveQuery.RaiseEvent([System.Windows.RoutedEventArgs]::new([System.Windows.Controls.Primitives.ButtonBase]::ClickEvent))
             }
-
-            elseif ($EventArgs.Key -eq [System.Windows.Input.Key]::C -and ([System.Windows.Input.Keyboard]::Modifiers -band [System.Windows.Input.ModifierKeys]::Control)) {
+            elseif ($EventArgs.Key -eq [System.Windows.Input.Key]::C -and $ControlPressed -and -not $ShiftPressed) {
                 # Allow Ctrl+C to pass through to DataGrid - do NOT handle it here
                 "Ctrl+C detected at MainForm level - allowing to pass through to focused control" | Write-LogOutput -LogType VERBOSE
                 # Do not set $EventArgs.Handled = $true for Ctrl+C
@@ -120,7 +121,7 @@ $Script:MainForm.Definition.Add_Loaded({
             if (-not (Test-Path $Script:WebView2UserProfilePath -PathType Container)) { New-Item -ItemType Directory -Force -Path $Script:WebView2UserProfilePath | Out-Null }
 
             $Script:Webview.Object.EnsureCoreWebView2Async($Script:Webview.Environment).GetAwaiter().OnCompleted({
-                "EnsureCoreWebView2Async OnCompleted script" | Write-LogOutput -LogType DEBUG
+                    "EnsureCoreWebView2Async OnCompleted script" | Write-LogOutput -LogType DEBUG
                     if ($null -eq $Script:Webview.Object.CoreWebView2) {
                         $Script:MainForm.Definition.Dispatcher.Invoke([System.Action] {
                                 $Message = "WebView2 environment initialization failed. If this system does not have the Webview2 Runtime installed, please download the fixed version from https://developer.microsoft.com/en-us/microsoft-edge/webview2/ and extract the cab file to folder '{0}'" -f $Script:Webview.EdgeWebview2RuntimePath

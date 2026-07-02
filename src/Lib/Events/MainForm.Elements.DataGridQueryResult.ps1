@@ -11,8 +11,7 @@ $Script:MainForm.Elements.DataGridQueryResult.ContextMenu.Add_Opened({
 $Script:DataGridQueryResultMenuItemCopy.Add_Click({
         try {
             $_ | Show-EventInfo
-            $Script:MainForm.Elements.DataGridQueryResult.ClipboardCopyMode = [System.Windows.Controls.DataGridClipboardCopyMode]::ExcludeHeader
-            [System.Windows.Input.ApplicationCommands]::Copy.Execute($null, $Script:MainForm.Elements.DataGridQueryResult)
+            Copy-DataGridToClipboard
         }
         catch {
             $_.Exception.Message | Write-LogOutput -LogType ERROR -ErrorObject $_
@@ -22,9 +21,27 @@ $Script:DataGridQueryResultMenuItemCopy.Add_Click({
 $Script:DataGridQueryResultMenuItemCopyWithHeader.Add_Click({
         try {
             $_ | Show-EventInfo
-            $Script:MainForm.Elements.DataGridQueryResult.ClipboardCopyMode = [System.Windows.Controls.DataGridClipboardCopyMode]::IncludeHeader
-            [System.Windows.Input.ApplicationCommands]::Copy.Execute($null, $Script:MainForm.Elements.DataGridQueryResult)
-            $Script:MainForm.Elements.DataGridQueryResult.ClipboardCopyMode = [System.Windows.Controls.DataGridClipboardCopyMode]::ExcludeHeader
+            Copy-DataGridToClipboard -IncludeHeader
+        }
+        catch {
+            $_.Exception.Message | Write-LogOutput -LogType ERROR -ErrorObject $_
+        }
+    })
+
+$Script:DataGridQueryResultMenuItemCopyAsSqlArray.Add_Click({
+        try {
+            $_ | Show-EventInfo
+            Copy-DataGridToClipboard -OutputFormat "SqlArray"
+        }
+        catch {
+            $_.Exception.Message | Write-LogOutput -LogType ERROR -ErrorObject $_
+        }
+    })
+
+$Script:DataGridQueryResultMenuItemCopyAsPowerShellArray.Add_Click({
+        try {
+            $_ | Show-EventInfo
+            Copy-DataGridToClipboard -OutputFormat "PowerShellArray"
         }
         catch {
             $_.Exception.Message | Write-LogOutput -LogType ERROR -ErrorObject $_
@@ -51,6 +68,28 @@ $Script:DataGridQueryResultMenuItemSaveAs.Add_Click({
         }
     })
 
+$Script:DataGridQueryResultMenuItemSaveSelectedAs.Add_Click({
+        try {
+            $_ | Show-EventInfo
+            Save-QueryResultToFile -QueryResult (Get-DataGridSelectedQueryResult) -IsSelection
+        }
+        catch {
+            $_.Exception.Message | Write-LogOutput -LogType ERROR -ErrorObject $_
+        }
+    })
+
+$Script:DataGridQueryResultMenuItemViewSelected.Add_Click({
+        try {
+            $_ | Show-EventInfo
+            $SelectedQueryResult = Get-DataGridSelectedQueryResult
+            $ColumnOrder = @($SelectedQueryResult.d.rows | Select-Object -First 1 | ForEach-Object { $_.PSObject.Properties.Name })
+            Show-QueryResultGridView -Rows $SelectedQueryResult.d.rows -Title ("{0} - {1} (Selection)" -f $Form.Text, $Script:AppConfig.CurrentSqlQuery.FullName) -ColumnOrder $ColumnOrder
+        }
+        catch {
+            $_.Exception.Message | Write-LogOutput -LogType ERROR -ErrorObject $_
+        }
+    })
+
 $Script:MainForm.Elements.DataGridQueryResult.Add_PreviewKeyDown({
         param(
             $EventSender,
@@ -63,18 +102,23 @@ $Script:MainForm.Elements.DataGridQueryResult.Add_PreviewKeyDown({
             $ShiftPressed = [System.Windows.Input.Keyboard]::Modifiers -band [System.Windows.Input.ModifierKeys]::Shift
 
             if ($EventArguments.Key -eq [System.Windows.Input.Key]::C -and $ControlPressed -and $ShiftPressed) {
-                "Ctrl+Shift+C key intercepted at DataGrid level - copying values only" | Write-LogOutput -LogType VERBOSE
-
-                $Script:MainForm.Elements.DataGridQueryResult.ClipboardCopyMode = [System.Windows.Controls.DataGridClipboardCopyMode]::IncludeHeader
-                [System.Windows.Input.ApplicationCommands]::Copy.Execute($null, $Script:MainForm.Elements.DataGridQueryResult)
+                "Ctrl+Shift+C key intercepted at DataGrid level - copying values with headers" | Write-LogOutput -LogType VERBOSE
+                $Script:DataGridQueryResultMenuItemCopyWithHeader.RaiseEvent([System.Windows.RoutedEventArgs]::new([System.Windows.Controls.MenuItem]::ClickEvent))
                 $EventArguments.Handled = $true
             }
-            elseif ($EventArguments.Key -eq [System.Windows.Input.Key]::C -and $ControlPressed) {
-                "Ctrl+C key intercepted at DataGrid level - copying values with headers" | Write-LogOutput -LogType VERBOSE
-
-                $Script:MainForm.Elements.DataGridQueryResult.ClipboardCopyMode = [System.Windows.Controls.DataGridClipboardCopyMode]::ExcludeHeader
-                [System.Windows.Input.ApplicationCommands]::Copy.Execute($null, $Script:MainForm.Elements.DataGridQueryResult)
-                $Script:MainForm.Elements.DataGridQueryResult.ClipboardCopyMode = [System.Windows.Controls.DataGridClipboardCopyMode]::IncludeHeader
+            elseif ($EventArguments.Key -eq [System.Windows.Input.Key]::C -and $ControlPressed -and -not $ShiftPressed) {
+                "Ctrl+C key intercepted at DataGrid level - copying values only" | Write-LogOutput -LogType VERBOSE
+                $Script:DataGridQueryResultMenuItemCopy.RaiseEvent([System.Windows.RoutedEventArgs]::new([System.Windows.Controls.MenuItem]::ClickEvent))
+                $EventArguments.Handled = $true
+            }
+            elseif ($EventArguments.Key -eq [System.Windows.Input.Key]::P -and $ControlPressed -and $ShiftPressed) {
+                "Ctrl+Shift+P key intercepted at DataGrid level - copying values only as PowerShell array" | Write-LogOutput -LogType VERBOSE
+                $Script:DataGridQueryResultMenuItemCopyAsPowerShellArray.RaiseEvent([System.Windows.RoutedEventArgs]::new([System.Windows.Controls.MenuItem]::ClickEvent))
+                $EventArguments.Handled = $true
+            }
+            elseif ($EventArguments.Key -eq [System.Windows.Input.Key]::S -and $ControlPressed -and $ShiftPressed) {
+                "Ctrl+Shift+S key intercepted at DataGrid level - copying values only as Sql array" | Write-LogOutput -LogType VERBOSE
+                $Script:DataGridQueryResultMenuItemCopyAsSqlArray.RaiseEvent([System.Windows.RoutedEventArgs]::new([System.Windows.Controls.MenuItem]::ClickEvent))
                 $EventArguments.Handled = $true
             }
         }
@@ -82,6 +126,45 @@ $Script:MainForm.Elements.DataGridQueryResult.Add_PreviewKeyDown({
             $_.Exception.Message | Write-LogOutput -LogType ERROR -ErrorObject $_
         }
     })
+
+$Script:MainForm.Elements.DataGridQueryResult.AddHandler(
+    [System.Windows.UIElement]::PreviewMouseLeftButtonDownEvent,
+    [System.Windows.Input.MouseButtonEventHandler] {
+        param(
+            $EventSender,
+            $EventArguments
+        )
+        try {
+            if ($EventArguments.OriginalSource -is [System.Windows.Controls.Primitives.Thumb]) {
+                return
+            }
+
+            $VisualElement = $EventArguments.OriginalSource
+            $ColumnHeader = $null
+            while ($null -ne $VisualElement) {
+                if ($VisualElement -is [System.Windows.Controls.Primitives.DataGridColumnHeader]) {
+                    $ColumnHeader = $VisualElement
+                    break
+                }
+                $VisualElement = [System.Windows.Media.VisualTreeHelper]::GetParent($VisualElement)
+            }
+
+            if ($null -eq $ColumnHeader -or $null -eq $ColumnHeader.Column) {
+                return
+            }
+
+            $_ | Show-EventInfo
+
+            $ControlPressed = [bool]([System.Windows.Input.Keyboard]::Modifiers -band [System.Windows.Input.ModifierKeys]::Control)
+            $ShiftPressed = [bool]([System.Windows.Input.Keyboard]::Modifiers -band [System.Windows.Input.ModifierKeys]::Shift)
+
+            Select-DataGridColumnCells -DataGrid $Script:MainForm.Elements.DataGridQueryResult -Column $ColumnHeader.Column -ControlPressed $ControlPressed -ShiftPressed $ShiftPressed
+        }
+        catch {
+            $_.Exception.Message | Write-LogOutput -LogType ERROR -ErrorObject $_
+        }
+    }
+)
 
 $Script:MainForm.Elements.DataGridQueryResult.Add_AutoGeneratingColumn({
         param(

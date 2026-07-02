@@ -25,7 +25,8 @@ OmadaSqlTroubleshooter is a PowerShell Module that contains an interactive deskt
 
 #### Results & Export
 - View results in a PowerShell GridView
-- Context menu for quick copy, select and save
+- Context menu for quick copy, select all and save
+- Select cells, columns, rows and copy to clipboard
 - Export results to JSON, CSV, PowerShell CliXml or plain text
 
 #### Authentication
@@ -49,6 +50,8 @@ OmadaSqlTroubleshooter is a PowerShell Module that contains an interactive deskt
 | `Ctrl + S` | Save current query in Omada |
 | `Ctrl + C` (result pane) | Copy selected cell(s) to clipboard |
 | `Ctrl + Shift + C` (result pane) | Copy selected cell(s) including headers to clipboard |
+| `Ctrl + Shift + S` (result pane) | Copy selected cell(s) formatted as array for direct use in a Sql query to clipboard |
+| `Ctrl + Shift + P` (result pane) | Copy selected cell(s) formatted as array for direct use in a PowerShell query to clipboard |
 
 This application leverages the permissions of the user that is logged in. The application uses the built-in OData endpoint (C_P_SQLTROUBLESHOOTING) for the SQL Troubleshooter and the Omada Enterprise Server API.
 
