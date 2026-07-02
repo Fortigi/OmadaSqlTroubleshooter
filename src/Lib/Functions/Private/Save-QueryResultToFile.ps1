@@ -94,16 +94,16 @@ function Save-QueryResultToFile {
             $SaveFileDisplayName = "Output"
         }
 
-        $SelectionSuffix = ""
-        if ($IsSelection) {
-            $SelectionSuffix = "_Selection"
-        }
+        $SelectionSuffix = if ($IsSelection) { "_Selection" } else { "" }
 
-        $SaveFileDialog.FileName = "SqlQuery_{0}_{1}_{2}_{3}_Output{4}{5}" -f $Script:AppConfig.CurrentSqlQuery.DoId, $SaveFileDisplayName, $Script:AppConfig.CurrentDataConnection.DisplayName, [system.uri]::New($Script:AppConfig.BaseUrl).Host, $($SaveFileDialogFilterList.[int32]$($Script:AppConfig.LastExtensionIndex))['Extension'].Replace("*", ""),$SelectionSuffix
+        $FilterIndex = if ($null -ne $Script:AppConfig.LastExtensionIndex -and $Script:AppConfig.LastExtensionIndex -gt 0) { [int]$Script:AppConfig.LastExtensionIndex } else { [int]$DefaultFilterIndex }
+        $SelectedExtension = $SaveFileDialogFilterList[$FilterIndex].Extension.Replace("*", "")
+
+        $SaveFileDialog.FileName = "SqlQuery_{0}_{1}_{2}_{3}_Output{4}{5}" -f $Script:AppConfig.CurrentSqlQuery.DoId, $SaveFileDisplayName, $Script:AppConfig.CurrentDataConnection.DisplayName, [system.uri]::New($Script:AppConfig.BaseUrl).Host, $SelectionSuffix, $SelectedExtension
         $ExistingFiles = Get-ChildItem -Path $SaveFileDialog.InitialDirectory -Filter $SaveFileDialog.FileName -File -ErrorAction SilentlyContinue
         $Count = 1
         while ($null -ne $ExistingFiles -and $ExistingFiles.Count -gt 0) {
-            $SaveFileDialog.FileName = "SqlQuery_{0}_{1}_{2}_{3}_Output({4}){5}" -f $Script:AppConfig.CurrentSqlQuery.DoId, $SaveFileDisplayName, $Script:AppConfig.CurrentDataConnection.DisplayName, [system.uri]::New($Script:AppConfig.BaseUrl).Host, $Count, $($SaveFileDialogFilterList.[int32]$($Script:AppConfig.LastExtensionIndex))['Extension'].Replace("*", "")
+            $SaveFileDialog.FileName = "SqlQuery_{0}_{1}_{2}_{3}_Output({4}){5}{6}" -f $Script:AppConfig.CurrentSqlQuery.DoId, $SaveFileDisplayName, $Script:AppConfig.CurrentDataConnection.DisplayName, [system.uri]::New($Script:AppConfig.BaseUrl).Host, $Count, $SelectionSuffix, $SelectedExtension
             $ExistingFiles = Get-ChildItem -Path $SaveFileDialog.InitialDirectory -Filter $SaveFileDialog.FileName -File -ErrorAction SilentlyContinue
             $Count++
         }
