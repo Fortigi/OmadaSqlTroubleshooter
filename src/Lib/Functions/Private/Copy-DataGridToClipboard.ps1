@@ -95,8 +95,10 @@ function Copy-DataGridToClipboard {
                     $FormattedText = "@({0})" -f $FormattedText
                 }
                 else {
-                    $FormattedText = $CellValues -join "`", `r`n`""
-                    $FormattedText = '@("{0}")' -f $FormattedText
+                    $EscapedValues = $CellValues | ForEach-Object { ($_ -replace "'", "''") }
+                    $FormattedText = $EscapedValues | ForEach-Object { "'{0}'" -f $_ }
+                    $FormattedText = $FormattedText -join ",`r`n    "
+                    $FormattedText = "@(`r`n    {0}`r`n)" -f $FormattedText
                 }
             }
             default {
