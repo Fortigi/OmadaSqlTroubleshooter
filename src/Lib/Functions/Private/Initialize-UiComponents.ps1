@@ -34,4 +34,7 @@ function Initialize-UiComponents {
 
     $Script:DataGridQueryResultMenuItemCopyAsSqlArray = $CopyAsMenuItems[0]
     $Script:DataGridQueryResultMenuItemCopyAsPowerShellArray = $CopyAsMenuItems[1]
+
+    #Initialize UI DataGridQueryResult column selection anchor
+    $Script:DataGridQueryResultColumnSelectionAnchor = $null
 }

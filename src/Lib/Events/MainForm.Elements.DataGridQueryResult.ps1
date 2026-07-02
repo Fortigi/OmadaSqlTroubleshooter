@@ -105,6 +105,45 @@ $Script:MainForm.Elements.DataGridQueryResult.Add_PreviewKeyDown({
         }
     })
 
+$Script:MainForm.Elements.DataGridQueryResult.AddHandler(
+    [System.Windows.UIElement]::PreviewMouseLeftButtonDownEvent,
+    [System.Windows.Input.MouseButtonEventHandler] {
+        param(
+            $EventSender,
+            $EventArguments
+        )
+        try {
+            if ($EventArguments.OriginalSource -is [System.Windows.Controls.Primitives.Thumb]) {
+                return
+            }
+
+            $VisualElement = $EventArguments.OriginalSource
+            $ColumnHeader = $null
+            while ($null -ne $VisualElement) {
+                if ($VisualElement -is [System.Windows.Controls.Primitives.DataGridColumnHeader]) {
+                    $ColumnHeader = $VisualElement
+                    break
+                }
+                $VisualElement = [System.Windows.Media.VisualTreeHelper]::GetParent($VisualElement)
+            }
+
+            if ($null -eq $ColumnHeader -or $null -eq $ColumnHeader.Column) {
+                return
+            }
+
+            $_ | Show-EventInfo
+
+            $ControlPressed = [bool]([System.Windows.Input.Keyboard]::Modifiers -band [System.Windows.Input.ModifierKeys]::Control)
+            $ShiftPressed = [bool]([System.Windows.Input.Keyboard]::Modifiers -band [System.Windows.Input.ModifierKeys]::Shift)
+
+            Select-DataGridColumnCells -DataGrid $Script:MainForm.Elements.DataGridQueryResult -Column $ColumnHeader.Column -ControlPressed $ControlPressed -ShiftPressed $ShiftPressed
+        }
+        catch {
+            $_.Exception.Message | Write-LogOutput -LogType ERROR -ErrorObject $_
+        }
+    }
+)
+
 $Script:MainForm.Elements.DataGridQueryResult.Add_AutoGeneratingColumn({
         param(
             $EventSender,
