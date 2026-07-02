@@ -617,6 +617,16 @@
                                                                                                                                         <TextBlock FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets" FontSize="14" Text="&#xE74E;" Foreground="#4B5563"/>
                                                                                                                                 </MenuItem.Icon>
                                                                                                                         </MenuItem>
+                                                                                                                        <MenuItem x:Name="DataGridQueryResultMenuItemSaveSelectedAs" Header="Save Selected As..." Template="{StaticResource DataGridQueryResultFlatMenuItem}">
+                                                                                                                                <MenuItem.Icon>
+                                                                                                                                        <TextBlock FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets" FontSize="14" Text="&#xE74E;" Foreground="#4B5563"/>
+                                                                                                                                </MenuItem.Icon>
+                                                                                                                        </MenuItem>
+                                                                                                                        <MenuItem x:Name="DataGridQueryResultMenuItemViewSelected" Header="View Selected" Template="{StaticResource DataGridQueryResultFlatMenuItem}">
+                                                                                                                                <MenuItem.Icon>
+                                                                                                                                        <TextBlock FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets" FontSize="14" Text="&#xE890;" Foreground="#4B5563"/>
+                                                                                                                                </MenuItem.Icon>
+                                                                                                                        </MenuItem>
                                                                                                                 </ContextMenu>
                                                                                                         </DataGrid.ContextMenu>
                                                                                                 </DataGrid>

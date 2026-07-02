@@ -68,6 +68,27 @@ $Script:DataGridQueryResultMenuItemSaveAs.Add_Click({
         }
     })
 
+$Script:DataGridQueryResultMenuItemSaveSelectedAs.Add_Click({
+        try {
+            $_ | Show-EventInfo
+            Save-QueryResultToFile -QueryResult (Get-DataGridSelectedQueryResult)
+        }
+        catch {
+            $_.Exception.Message | Write-LogOutput -LogType ERROR -ErrorObject $_
+        }
+    })
+
+$Script:DataGridQueryResultMenuItemViewSelected.Add_Click({
+        try {
+            $_ | Show-EventInfo
+            $SelectedQueryResult = Get-DataGridSelectedQueryResult
+            Show-QueryResultGridView -Rows $SelectedQueryResult.d.rows -Title ("{0} - {1} (Selection)" -f $Form.Text, $Script:AppConfig.CurrentSqlQuery.FullName)
+        }
+        catch {
+            $_.Exception.Message | Write-LogOutput -LogType ERROR -ErrorObject $_
+        }
+    })
+
 $Script:MainForm.Elements.DataGridQueryResult.Add_PreviewKeyDown({
         param(
             $EventSender,

@@ -21,6 +21,8 @@ function Initialize-UiComponents {
     $Script:DataGridQueryResultMenuItemCopyAsPowerShellArray = $null
     $Script:DataGridQueryResultMenuItemSelectAll = $null
     $Script:DataGridQueryResultMenuItemSaveAs = $null
+    $Script:DataGridQueryResultMenuItemSaveSelectedAs = $null
+    $Script:DataGridQueryResultMenuItemViewSelected = $null
 
     $MenuItems = @($Script:MainForm.Elements.DataGridQueryResult.ContextMenu.Items | Where-Object { $_ -is [System.Windows.Controls.MenuItem] })
 
@@ -29,6 +31,8 @@ function Initialize-UiComponents {
     $Script:DataGridQueryResultMenuItemCopyAs = $MenuItems[2]
     $Script:DataGridQueryResultMenuItemSelectAll = $MenuItems[3]
     $Script:DataGridQueryResultMenuItemSaveAs = $MenuItems[4]
+    $Script:DataGridQueryResultMenuItemSaveSelectedAs = $MenuItems[5]
+    $Script:DataGridQueryResultMenuItemViewSelected = $MenuItems[6]
 
     $CopyAsMenuItems = @($Script:DataGridQueryResultMenuItemCopyAs.Items | Where-Object { $_ -is [System.Windows.Controls.MenuItem] })
 
