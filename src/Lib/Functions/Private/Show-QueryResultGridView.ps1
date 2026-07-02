@@ -14,8 +14,15 @@ function Show-QueryResultGridView {
     .PARAMETER Title
         The window title for the Out-GridView popup.
 
+    .PARAMETER ColumnOrder
+        Optional column header names, in the order they should be displayed. The JSON sanitize round-trip does
+        not preserve property order (it rebuilds objects through an unordered Hashtable), so without this the
+        columns Out-GridView shows can end up in a different order than the DataGrid. When provided, the
+        sanitized rows are piped through Select-Object to restore the intended order without needing to change
+        how the sanitize step itself works.
+
     .EXAMPLE
-        Show-QueryResultGridView -Rows $Script:RunTimeData.QueryResult.d.rows -Title "My Query"
+        Show-QueryResultGridView -Rows $Script:RunTimeData.QueryResult.d.rows -Title "My Query" -ColumnOrder @("UID", "Number")
 
     .NOTES
     #>
@@ -26,8 +33,14 @@ function Show-QueryResultGridView {
         [AllowEmptyCollection()]
         [object[]]$Rows,
         [parameter(Mandatory = $true)]
-        [string]$Title
+        [string]$Title,
+        [string[]]$ColumnOrder
     )
 
-    $Rows | ConvertTo-Json -Depth 10 | Invoke-SanitizeJsonKeys | ConvertFrom-Json -Depth 10 | Out-GridView -Title $Title
+    $SanitizedRows = $Rows | ConvertTo-Json -Depth 10 | Invoke-SanitizeJsonKeys | ConvertFrom-Json -Depth 10
+    if ($null -ne $ColumnOrder -and $ColumnOrder.Count -gt 0) {
+        $SanitizedRows = $SanitizedRows | Select-Object -Property $ColumnOrder
+    }
+
+    $SanitizedRows | Out-GridView -Title $Title
 }

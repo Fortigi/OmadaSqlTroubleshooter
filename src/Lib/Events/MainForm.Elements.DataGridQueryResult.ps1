@@ -82,7 +82,8 @@ $Script:DataGridQueryResultMenuItemViewSelected.Add_Click({
         try {
             $_ | Show-EventInfo
             $SelectedQueryResult = Get-DataGridSelectedQueryResult
-            Show-QueryResultGridView -Rows $SelectedQueryResult.d.rows -Title ("{0} - {1} (Selection)" -f $Form.Text, $Script:AppConfig.CurrentSqlQuery.FullName)
+            $ColumnOrder = @($SelectedQueryResult.d.rows | Select-Object -First 1 | ForEach-Object { $_.PSObject.Properties.Name })
+            Show-QueryResultGridView -Rows $SelectedQueryResult.d.rows -Title ("{0} - {1} (Selection)" -f $Form.Text, $Script:AppConfig.CurrentSqlQuery.FullName) -ColumnOrder $ColumnOrder
         }
         catch {
             $_.Exception.Message | Write-LogOutput -LogType ERROR -ErrorObject $_
