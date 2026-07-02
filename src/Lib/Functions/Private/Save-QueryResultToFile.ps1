@@ -103,7 +103,7 @@ function Save-QueryResultToFile {
         $ExistingFiles = Get-ChildItem -Path $SaveFileDialog.InitialDirectory -Filter $SaveFileDialog.FileName -File -ErrorAction SilentlyContinue
         $Count = 1
         while ($null -ne $ExistingFiles -and $ExistingFiles.Count -gt 0) {
-            $SaveFileDialog.FileName = "SqlQuery_{0}_{1}_{2}_{3}_Output({4}){5}{6}" -f $Script:AppConfig.CurrentSqlQuery.DoId, $SaveFileDisplayName, $Script:AppConfig.CurrentDataConnection.DisplayName, [system.uri]::New($Script:AppConfig.BaseUrl).Host, $Count, $SelectionSuffix, $SelectedExtension
+            $SaveFileDialog.FileName = "SqlQuery_{0}_{1}_{2}_{3}_Output{4}({5}){6}" -f $Script:AppConfig.CurrentSqlQuery.DoId, $SaveFileDisplayName, $Script:AppConfig.CurrentDataConnection.DisplayName, [system.uri]::New($Script:AppConfig.BaseUrl).Host, $SelectionSuffix, $Count, $SelectedExtension
             $ExistingFiles = Get-ChildItem -Path $SaveFileDialog.InitialDirectory -Filter $SaveFileDialog.FileName -File -ErrorAction SilentlyContinue
             $Count++
         }
