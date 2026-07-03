@@ -121,7 +121,7 @@ jobs:
             -SystemDefaultWorkingDirectory '${{ github.workspace }}' `
             -PsGalleryKey '${{ secrets.PSGALLERY_API_KEY }}' `
             -BuildPath 'OmadaSqlTroubleshooter' `
-            -Prerelease 'nightly'
+            -Prerelease 'nightly${{ github.run_number }}'
 
       - name: Pack NuGet package
         shell: pwsh
