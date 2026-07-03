@@ -26,10 +26,11 @@ try {
         }
 
         # PSGallery requires exactly 3-part version for pre-release packages (SemVer).
-        # Convert YYYY.M.D.N → YYYY.MMDD.N so the version stays unique and date-sortable.
+        # Drop the 4th part (run number) — it is already encoded in the Prerelease string
+        # (e.g. 'nightly15'), giving a final version like 2026.7.3-nightly15.
         $Parts = ($ManifestData = Import-PowerShellDataFile -Path $Manifest.FullName).ModuleVersion -split '\.'
         if ($Parts.Count -eq 4) {
-            $ThreePartVersion = '{0}.{1}.{2}' -f $Parts[0], ($Parts[1].PadLeft(2,'0') + $Parts[2].PadLeft(2,'0')), $Parts[3]
+            $ThreePartVersion = '{0}.{1}.{2}' -f $Parts[0], $Parts[1], $Parts[2]
             "Converting version $($ManifestData.ModuleVersion) to 3-part prerelease version $ThreePartVersion" | Write-Host
             Update-ModuleManifest -Path $Manifest.FullName -ModuleVersion $ThreePartVersion -Prerelease $Prerelease
         }
