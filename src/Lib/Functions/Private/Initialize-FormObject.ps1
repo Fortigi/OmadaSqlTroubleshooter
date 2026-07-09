@@ -30,20 +30,25 @@ function Initialize-FormObject {
         $Reader = (New-Object System.Xml.XmlNodeReader $Xaml)
         $Form = [Windows.Markup.XamlReader]::Load($Reader)
         "Create form: {0}" -f $Form.Name | Write-LogOutput -LogType DEBUG
-        $Form.Icon = Get-Icon -Type Wpf
 
-        if ($AppendVersion) {
-            "Set form title to: {0}" -f $Form.Title | Write-LogOutput -LogType DEBUG
-            if ($Script:RunTimeConfig.ApplicationVersion -eq "Development") {
-                $Form.Title = "{0} (Development Version)" -f $Form.Title
-            }
-            else {
-                $Form.Title = "{0} v{1}" -f $Form.Title, $Script:RunTimeConfig.ApplicationVersion
+        # Icon and AppendVersion/Title are Window-only concepts - loading a non-Window root
+        # (e.g. the per-tab UserControl fragment) must not attempt to set them.
+        if ($Form -is [System.Windows.Window]) {
+            $Form.Icon = Get-Icon -Type Wpf
+
+            if ($AppendVersion) {
+                "Set form title to: {0}" -f $Form.Title | Write-LogOutput -LogType DEBUG
+                if ($Script:RunTimeConfig.ApplicationVersion -eq "Development") {
+                    $Form.Title = "{0} (Development Version)" -f $Form.Title
+                }
+                else {
+                    $Form.Title = "{0} v{1}" -f $Form.Title, $Script:RunTimeConfig.ApplicationVersion
+                }
             }
         }
 
         $Elements = @()
-        $ElementNames = @( "AccessText", "Button", "CheckBox", "ComboBox", "ComboBoxItem", "DataGrid", "Image", "Label", "PasswordBox", "RadioButton", "RichTextBox", "TextBlock", "TextBox", "TreeViewSqlSchema", "WebView2")
+        $ElementNames = @( "AccessText", "Button", "CheckBox", "ComboBox", "ComboBoxItem", "DataGrid", "Image", "Label", "PasswordBox", "RadioButton", "RichTextBox", "TabControl", "TextBlock", "TextBox", "TreeViewSqlSchema", "WebView2")
         foreach ($ElementName in $ElementNames) {
             "Find element type: {0}" -f $ElementName | Write-LogOutput -LogType DEBUG
             $Xaml.DocumentElement.SelectNodes("//default:$ElementName", $NamespaceManager) | ForEach-Object {

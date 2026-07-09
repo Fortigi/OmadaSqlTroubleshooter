@@ -41,51 +41,16 @@ function Initialize-OmadaSqlTroubleShooter {
         Add-ReflectionAssembly -Object $Script:WebView2WinFormsPath
         Add-ReflectionAssembly -Object $Script:WebView2WpfPath
 
+        # Per-tab state ($RunTimeData/$WebView/$AppConfig/$ConnectionStatus/$Task/$MainForm.Elements)
+        # now lives on each entry in $Script:Tabs and is repointed onto these same global names by
+        # Set-ActiveTabContext, one tab at a time - see New-TabSession.ps1 for the per-tab shape
+        # that used to be built here as a single, global instance.
         $Script:AppConfig = $null
-        $Script:RunTimeData = [PSCustomObject]@{
-            RestMethodParam                = @{
-                Uri                   = $null
-                Method                = "GET"
-                AuthenticationType    = $null
-                UseWebView2           = $null
-                EntraApplicationIdUri = $null
-                EntraIdTenantId       = $null
-                ForceAuthentication   = $false
-                InPrivate             = $false
-            }
-            AuthenticationRetryCount       = 0
-            QuerySaved                     = $false
-            Password                       = $null
-            QueryText                      = $null
-            SqlQueryObject                 = $null
-            QueryResult                    = $null
-            HistoryResult                  = $null
-            CurrentQueryText               = $null
-            CurrentSqlQuery                = [PSCustomObject]@{
-                DoId        = $null
-                DisplayName = $null
-                FullName    = $null
-            }
-            StopWatch                      = $null
-            QueryListCache                 = @{
-                QueryList   = $null
-                LastRefresh = Get-Date
-                TTL         = 300
-            }
-            DataobjdlgAspxAttributeMapping = [PSCustomObject]@{
-                SqlQueryDoId      = "c-13"
-                SqlQueryCreatedBy = "c-2"
-                SqlQueryChangedBy = "c-4"
-            }
-            SkipRetryRequest               = $false
-            SelectionText                  = $null
-        }
-        $Script:WebView = @{
-            Object                  = $null
-            Environment             = $null
-            EdgeWebview2RuntimePath = $null
-            UserDataFolder          = $null
-        }
+        $Script:AppGlobalConfig = $null
+        $Script:Tabs = [System.Collections.Generic.List[PSCustomObject]]::new()
+        $Script:ActiveTabId = $null
+        $Script:InteractiveLoginInProgress = $false
+        $Script:SharedWebViewEnvironment = $null
 
         [Windows.Forms.Application]::EnableVisualStyles()
 

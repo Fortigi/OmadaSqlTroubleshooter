@@ -13,6 +13,7 @@ $Script:MainForm.Definition.Add_Closing({
         try {
             $_ | Show-EventInfo
             $Script:MainForm.State = "Closing"
+            Save-TabSessions
             Save-FormMeasurements
             if (Test-LogFormIsVisible) {
                 $Script:LogForm.Definition.Close()
@@ -79,7 +80,7 @@ $Script:MainForm.Definition.Add_Loaded({
         try {
             $_ | Show-EventInfo
 
-            if ($Script:AppConfig.LogFormOpen) {
+            if ($Script:AppGlobalConfig.LogFormOpen) {
                 Open-LogForm
             }
 
@@ -96,125 +97,17 @@ $Script:MainForm.Definition.Add_Loaded({
                 $Script:MainForm.Definition.Height = [Int]::Abs($Size.Split("x")[1])
             }
 
-            if ($null -eq $Script:Webview.Object) {
-                "Failed to find WebView2 control." | Write-LogOutput -LogType ERROR
-                # [System.Windows.MessageBox]::Show("Failed to find WebView2 control.", "Error", [System.Windows.MessageBoxButton]::OK, [System.Windows.MessageBoxImage]::Error) | Out-Null
-                return
-            }
+            # Per-tab WebView2 setup (runtime resolution, shared CoreWebView2Environment, Monaco
+            # load, keyboard shortcuts, web-message handling) now happens once per tab inside
+            # New-TabSession -> Initialize-WebViewForTab, not once globally here. Restore-TabSessions
+            # creates the initial tab(s) - from persisted state, migrated legacy config, or a
+            # single fresh tab on first-ever run.
+            Restore-TabSessions
 
-            $Script:Webview.UserDataFolder = Join-Path $Env:TEMP -ChildPath "OmadaSqlTroubleshooter"
-            if (-not (Test-Path -Path $Script:Webview.UserDataFolder)) {
-                New-Item -Path $Script:Webview.UserDataFolder -ItemType Directory | Out-Null
-            }
-
-            $Script:Webview.EdgeWebview2RuntimePath = Join-Path $Script:RunTimeConfig.ModuleFolder -ChildPath "bin\Webview2Runtime"
-            if (!(Test-Path ($Script:WebView.EdgeWebview2RuntimePath ) -PathType Container)) {
-                $Script:Webview.EdgeWebview2RuntimePath = Join-Path ([System.Environment]::GetFolderPath([System.Environment+SpecialFolder]::LocalApplicationData)) -ChildPath "OmadaSqlTroubleShooter\bin\Webview2Runtime"
-            }
-            if ((Test-Path -Path $Script:Webview.EdgeWebview2RuntimePath -PathType Container) -and (Test-Path -Path (Join-Path $Script:Webview.EdgeWebview2RuntimePath -ChildPath "msedgewebview2.exe") -PathType Leaf)) {
-                $Script:Webview.Environment = [Microsoft.Web.WebView2.Core.CoreWebView2Environment]::CreateAsync($Script:Webview.EdgeWebview2RuntimePath, $Script:Webview.UserDataFolder).GetAwaiter().GetResult()
-            }
-            else {
-                $Script:Webview.Environment = [Microsoft.Web.WebView2.Core.CoreWebView2Environment]::CreateAsync($null, $Script:Webview.UserDataFolder).GetAwaiter().GetResult()
-            }
-
-            if (-not (Test-Path $Script:WebView2UserProfilePath -PathType Container)) { New-Item -ItemType Directory -Force -Path $Script:WebView2UserProfilePath | Out-Null }
-
-            $Script:Webview.Object.EnsureCoreWebView2Async($Script:Webview.Environment).GetAwaiter().OnCompleted({
-                    "EnsureCoreWebView2Async OnCompleted script" | Write-LogOutput -LogType DEBUG
-                    if ($null -eq $Script:Webview.Object.CoreWebView2) {
-                        $Script:MainForm.Definition.Dispatcher.Invoke([System.Action] {
-                                $Message = "WebView2 environment initialization failed. If this system does not have the Webview2 Runtime installed, please download the fixed version from https://developer.microsoft.com/en-us/microsoft-edge/webview2/ and extract the cab file to folder '{0}'" -f $Script:Webview.EdgeWebview2RuntimePath
-                                $Message | Write-LogOutput -LogType ERROR
-                                #[System.Windows.MessageBox]::Show($Message, "Error", [System.Windows.MessageBoxButton]::OK, [System.Windows.MessageBoxImage]::Error) | Out-Null
-                            })
-                        return
-                    }
-                    $HtmlFile = Join-Path  $Script:RunTimeConfig.ModuleFolder -ChildPath "Monaco\index.html"
-                    if ([System.IO.File]::Exists($HtmlFile)) {
-                        $Script:Webview.Object.Dispatcher.Invoke([System.Action] {
-                                $Script:Webview.Object.Source = New-Object System.Uri($HtmlFile)
-                                "Webiew source set to: {0}" -f $HtmlFile | Write-LogOutput -LogType DEBUG
-                            })
-                    }
-                    else {
-                        $Script:MainForm.Definition.Dispatcher.Invoke([System.Action] {
-                                #[System.Windows.MessageBox]::Show("Monaco HTML file not found at: $HtmlPath", "Error", [System.Windows.MessageBoxButton]::OK, [System.Windows.MessageBoxImage]::Error) | Out-Null
-                                "Monaco HTML file not found at: {0}" -f $HtmlPath | Write-LogOutput -LogType ERROR
-                            })
-                    }
-                    Test-ConnectionButton
-
-                    if ($Script:AppConfig.SqlSchemaFormOpen) {
-                        Open-SqlSchemaForm
-                    }
-                    Update-QueryList
-                    Set-EditorValue
-
-                    $Script:Webview.Object.add_PreviewKeyDown({
-                            param(
-                                $EventSender,
-                                $EventArgs
-                            )
-                            try {
-                                $_ | Show-EventInfo
-
-                                if ($EventArgs.Key -eq [System.Windows.Input.Key]::S -and ([System.Windows.Input.Keyboard]::Modifiers -band [System.Windows.Input.ModifierKeys]::Control)) {
-                                    "Ctrl+S key intercepted in WebView2 (PreviewKeyDown)" | Write-LogOutput -LogType DEBUG
-
-                                    $EventArgs.Handled = $true
-
-                                    $Script:MainForm.Definition.Dispatcher.Invoke([System.Action] {
-                                            "Triggering Save Query from Ctrl+S key press" | Write-LogOutput -LogType DEBUG
-                                            $Script:MainForm.Elements.ButtonSaveQuery.RaiseEvent([System.Windows.RoutedEventArgs]::new([System.Windows.Controls.Primitives.ButtonBase]::ClickEvent))
-                                        })
-                                }
-                            }
-                            catch {
-                                $_.Exception.Message | Write-LogOutput -LogType ERROR -ErrorObject $_
-                            }
-                        })
-
-                    $Script:Webview.Object.CoreWebView2.add_WebMessageReceived({
-                            param(
-                                $EventSender,
-                                $EventArgs
-                            )
-                            try {
-                                $_ | Show-EventInfo
-                                "CoreWebView2.add_WebMessageReceived" | Write-LogOutput -LogType DEBUG
-
-                                $message = $EventArgs.TryGetWebMessageAsString()
-                                "WebView2 message received: {0}" -f $message | Write-LogOutput -LogType DEBUG
-
-                                if ($message) {
-                                    $messageObj = $message | ConvertFrom-Json -ErrorAction SilentlyContinue
-                                    if ($messageObj -and $messageObj.type -eq 'executeQuery') {
-                                        "Execute Query requested from Monaco Editor via {0}" -f $messageObj.key | Write-LogOutput -LogType DEBUG
-
-                                        $Script:MainForm.Definition.Dispatcher.Invoke([System.Action] {
-                                                $Script:MainForm.Elements.ButtonExecuteQuery.RaiseEvent([System.Windows.RoutedEventArgs]::new([System.Windows.Controls.Primitives.ButtonBase]::ClickEvent))
-                                            })
-                                    }
-                                    elseif ($messageObj -and $messageObj.type -eq 'saveQuery') {
-                                        "Save Query requested from Monaco Editor via {0}" -f $messageObj.key | Write-LogOutput -LogType DEBUG
-
-                                        $Script:MainForm.Definition.Dispatcher.Invoke([System.Action] {
-                                                $Script:MainForm.Elements.ButtonSaveQuery.RaiseEvent([System.Windows.RoutedEventArgs]::new([System.Windows.Controls.Primitives.ButtonBase]::ClickEvent))
-                                            })
-                                    }
-                                }
-                            }
-                            catch {
-                                $_.Exception.Message | Write-LogOutput -LogType ERROR -ErrorObject $_
-                            }
-                        })
-
-                    $Script:MainForm.State = "Open"
-                })
+            $Script:MainForm.State = "Open"
         }
         catch {
-            "WebView2 initialization failed: {0}" -f $_.Exception.Message | Write-LogOutput -LogType ERROR -ErrorObject $_
+            "Tab session restore failed: {0}" -f $_.Exception.Message | Write-LogOutput -LogType ERROR -ErrorObject $_
         }
     })
 

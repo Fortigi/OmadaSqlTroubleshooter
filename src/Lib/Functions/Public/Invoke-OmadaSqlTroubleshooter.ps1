@@ -1,4 +1,4 @@
-#requires -Modules @{ ModuleName="OmadaWeb.PS"; ModuleVersion="2025.10.9.1" }
+#requires -Modules @{ ModuleName="OmadaWeb.PS"; ModuleVersion="2026.07.09.9" }
 #requires -Version 7.0
 
 <#
@@ -91,6 +91,24 @@ function Invoke-OmadaSqlTroubleshooter {
     }
 
     Initialize-OmadaSqlTroubleShooter
+
+    # Snapshot the raw legacy (pre-tabs) config file, if any, before Initialize-GlobalConfigSettings
+    # reconciles the same file against the new, trimmed global-only schema - that reconciliation
+    # strips now-obsolete tab-scope properties (BaseUrl, CurrentSqlQuery, etc.) and immediately
+    # rewrites the file, so this is the one chance to read them for the one-time tab migration in
+    # Restore-TabSessions.
+    $Script:LegacyConfigForMigration = $null
+    if (Test-Path $Script:RunTimeConfig.ConfigFile.Path -PathType Leaf) {
+        try {
+            $RawLegacyConfig = Get-Content $Script:RunTimeConfig.ConfigFile.Path -Raw | ConvertFrom-Json
+            if ($RawLegacyConfig.PSObject.Properties.Match("BaseUrl").Count -gt 0 -and ![string]::IsNullOrWhiteSpace($RawLegacyConfig.BaseUrl)) {
+                $Script:LegacyConfigForMigration = $RawLegacyConfig
+            }
+        }
+        catch {
+            "Failed to read legacy config for migration: {0}" -f $_.Exception.Message | Write-LogOutput -LogType WARNING
+        }
+    }
     #endregion
 
     #region wpf
@@ -98,13 +116,7 @@ function Invoke-OmadaSqlTroubleshooter {
     "Loading Main Form Object" | Write-LogOutput -LogType DEBUG
     $Script:MainForm = Initialize-FormObject -FormPath (Join-Path $Script:RunTimeConfig.ModuleFolder -ChildPath "lib\ui\MainForm.xaml") -AppendVersion
 
-    "Initializing UI components" | Write-LogOutput -LogType DEBUG
-    Initialize-UiComponents
-
     $Script:RunTimeConfig.ApplicationTitle = $Script:MainForm.Definition.Title.ToString()
-    "Get WebView" | Write-LogOutput -LogType DEBUG
-    $Script:Webview.Object = $Script:MainForm.Definition.FindName("webView21")
-    Import-EventObjects -ClassName "WebView"
 
     #endregion
 
@@ -125,7 +137,7 @@ function Invoke-OmadaSqlTroubleshooter {
         "Application '{0}': Start initialization..." -f $Script:RunTimeConfig.ApplicationTitle | Write-Host -ForegroundColor Green
         $Script:ConnectionStatus = $false
         $Script:RunTimeConfig.ReconnectStatus = 0
-        Initialize-ConfigSettings
+        Initialize-GlobalConfigSettings
 
         Close-SplashScreenForm
     }
@@ -143,19 +155,23 @@ function Invoke-OmadaSqlTroubleshooter {
 
         [void]$Script:MainForm.Definition.ShowDialog()
         $Message = "Application '{0}': Closed, cleaning-up!" -f $Script:RunTimeConfig.ApplicationTitle
-        if (!$Script:RunTimeConfig.SavePassword) {
-            $null | Set-ConfigProperty -Property "Password"
-        }
-        elseif ($null -ne $Script:MainForm.Elements.TextBoxPassword.Password) {
-            $Script:MainForm.Elements.TextBoxPassword.Password | Set-ConfigProperty -Property "Password"
-        }
+        # Each tab's own password/connection state was already persisted (subject to its own
+        # SavePassword checkbox) by Save-TabSessions, wired into MainForm.Definition's
+        # Add_Closing - which already ran by the time ShowDialog() returns here.
         $Message | Write-Host -ForegroundColor Green
         $Message | Write-LogOutput -LogType DEBUG
         "Set-ConfigProperty" | Write-LogOutput -LogType DEBUG
         Set-ConfigProperty
         "Close Main Form" | Write-LogOutput -LogType DEBUG
         $Script:MainForm.Definition.Close() | Out-Null
-        $Script:Webview.Object.Dispose() | Out-Null
+        foreach ($Tab in $Script:Tabs) {
+            try {
+                $Tab.WebView.Object.Dispose() | Out-Null
+            }
+            catch {
+                "Failed to dispose WebView2 for tab '{0}': {1}" -f $Tab.DisplayName, $_.Exception.Message | Write-LogOutput -LogType WARNING
+            }
+        }
     }
     catch {
         $_.Exception.Message | Write-LogOutput -LogType ERROR -SkipDialog

@@ -55,8 +55,8 @@ function Save-QueryResultToFile {
         }
 
         $DefaultFilterIndex = 1
-        if ($null -ne $Script:AppConfig.LastExtensionIndex -and $Script:AppConfig.LastExtensionIndex -gt 0 -and $Script:AppConfig.LastExtensionIndex -ne $DefaultFilterIndex) {
-            $DefaultFilterIndex = $Script:AppConfig.LastExtensionIndex
+        if ($null -ne $Script:AppGlobalConfig.LastExtensionIndex -and $Script:AppGlobalConfig.LastExtensionIndex -gt 0 -and $Script:AppGlobalConfig.LastExtensionIndex -ne $DefaultFilterIndex) {
+            $DefaultFilterIndex = $Script:AppGlobalConfig.LastExtensionIndex
         }
         $SaveFileDialogFilterString = ("{0}|{1}" -f $($SaveFileDialogFilterList.[int32]$($DefaultFilterIndex))['Name'], $($SaveFileDialogFilterList.[int32]$($DefaultFilterIndex))['Extension']), (($SaveFileDialogFilterList.GetEnumerator() | Where-Object { $_.Name -ne $DefaultFilterIndex } | Sort-Object Name | ForEach-Object {
                     $Item = $_.Value
@@ -64,10 +64,10 @@ function Save-QueryResultToFile {
                 }) -join "|") -join "|"
         $SaveFileDialog.Filter = $SaveFileDialogFilterString
         $SaveFileDialog.Title = "Save Output File"
-        if (![string]::IsNullOrWhiteSpace($Script:AppConfig.LastOutputFolder)) {
-            $SaveFileDialog.InitialDirectory = $Script:AppConfig.LastOutputFolder
+        if (![string]::IsNullOrWhiteSpace($Script:AppGlobalConfig.LastOutputFolder)) {
+            $SaveFileDialog.InitialDirectory = $Script:AppGlobalConfig.LastOutputFolder
         }
-        if ([string]::IsNullOrWhiteSpace($Script:AppConfig.LastOutputFolder)) {
+        if ([string]::IsNullOrWhiteSpace($Script:AppGlobalConfig.LastOutputFolder)) {
             1 | Set-ConfigProperty -Property "LastExtensionIndex"
         }
         $DefaultExt = $SaveFileDialogFilterList.[int32]$DefaultFilterIndex.Extension
@@ -96,7 +96,7 @@ function Save-QueryResultToFile {
 
         $SelectionSuffix = if ($IsSelection) { "_Selection" } else { "" }
 
-        $FilterIndex = if ($null -ne $Script:AppConfig.LastExtensionIndex -and $Script:AppConfig.LastExtensionIndex -gt 0) { [int]$Script:AppConfig.LastExtensionIndex } else { [int]$DefaultFilterIndex }
+        $FilterIndex = if ($null -ne $Script:AppGlobalConfig.LastExtensionIndex -and $Script:AppGlobalConfig.LastExtensionIndex -gt 0) { [int]$Script:AppGlobalConfig.LastExtensionIndex } else { [int]$DefaultFilterIndex }
         $SelectedExtension = $SaveFileDialogFilterList[$FilterIndex].Extension.Replace("*", "")
 
         $SaveFileDialog.FileName = "SqlQuery_{0}_{1}_{2}_{3}_Output{4}{5}" -f $Script:AppConfig.CurrentSqlQuery.DoId, $SaveFileDisplayName, $Script:AppConfig.CurrentDataConnection.DisplayName, [system.uri]::New($Script:AppConfig.BaseUrl).Host, $SelectionSuffix, $SelectedExtension

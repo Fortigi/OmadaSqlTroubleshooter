@@ -12,7 +12,7 @@ try {
     "Loading {0} Module" -f $ModuleName | Write-Verbose
 
     $Script:ModuleVersion = "Development"
-    $MinimumOmadaWebPSVersion = "0.0"
+    $MinimumOmadaWebPSVersion = "2026.07.09.9"
     if ($MinimumOmadaWebPSVersion -ne "0.0") {
         Import-Module OmadaWeb.PS -MinimumVersion $MinimumOmadaWebPSVersion -ErrorAction Stop
         if ((Get-Module -Name OmadaWeb.PS).Version -lt [version]$MinimumOmadaWebPSVersion) {

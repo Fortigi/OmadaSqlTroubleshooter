@@ -8,7 +8,7 @@ $Script:MainForm.Elements.TextBoxPassword.Add_LostFocus({
                 if (![string]::IsNullOrWhiteSpace($Script:MainForm.Elements.TextBoxUserName.Text) -and ![string]::IsNullOrWhiteSpace($Script:MainForm.Elements.TextBoxPassword.Password)) {
                     "Create/Update credential with username {0}" -f $Script:MainForm.Elements.TextBoxUserName.Text | Write-LogOutput -LogType DEBUG
                     $Script:MainForm.Elements.TextBoxUserName.Text | Set-ConfigProperty -Property "UserName"
-                    if ($Script:RunTimeConfig.SavePassword) {
+                    if ($Script:AppConfig.SavePassword) {
                         $Script:MainForm.Elements.TextBoxPassword.Password | Set-ConfigProperty -Property "Password"
                     }
                     else {

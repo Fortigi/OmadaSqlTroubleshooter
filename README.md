@@ -79,7 +79,7 @@ Install-Module -Name OmadaSqlTroubleshooter
 This module requires:
 - Windows operating system;
 - PowerShell 7;
-- [OmadaWeb.PS PowerShell Module](https://www.powershellgallery.com/packages/omadaweb.ps) (Version 2025.12.2.1 or higher);
+- [OmadaWeb.PS PowerShell Module](https://www.powershellgallery.com/packages/omadaweb.ps) (Version 2026.07.09.9 or higher);
 - [Microsoft Edge WebView2](https://developer.microsoft.com/en-us/microsoft-edge/webview2);
 - Omada Identity Cloud with OData enabled for the C_P_SQLTROUBLESHOOTING data object type;
 - Create, Read and Modify user permissions for OData.

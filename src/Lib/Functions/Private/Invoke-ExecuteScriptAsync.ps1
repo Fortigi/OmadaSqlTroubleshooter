@@ -1,4 +1,11 @@
 function Invoke-ExecuteScriptAsync {
+    <#
+    .SYNOPSIS
+    Executes a script in the active tab's WebView2/Monaco editor and invokes a callback when
+    done. The pending task is stored on the originating tab (not a single shared global), and
+    the callback is wrapped so it always runs with that same tab's context active - even if the
+    user has switched to a different tab by the time it actually completes.
+    #>
     [CmdLetBinding()]
     param(
         $ScriptToExecute,
@@ -8,8 +15,29 @@ function Invoke-ExecuteScriptAsync {
         $Script:Tracer::WriteLine(("{0}: Function: {1} - Caller: {2}({3}) - Command: {4} - Parameters: {5}" -f $($Script:RunTimeConfig.ApplicationName), $($MyInvocation.MyCommand.Name), $($MyInvocation.ScriptName).Split("\")[-1], $($MyInvocation.ScriptLineNumber), $MyInvocation.Statement, ($PSBoundParameters | Out-String)))
         if ($null -ne $Script:Webview.Object) {
             if ($Script:Webview.Object.IsLoaded) {
-                $Script:Task = $Script:Webview.Object.CoreWebView2.ExecuteScriptAsync($ScriptToExecute)
-                $Script:Task.GetAwaiter().OnCompleted($OnCompletedScriptBlock)
+                $TabSession = Get-ActiveTabSession
+                $Task = $Script:Webview.Object.CoreWebView2.ExecuteScriptAsync($ScriptToExecute)
+                if ($null -ne $TabSession) {
+                    $TabSession.PendingTask = $Task
+                }
+                $Script:Task = $Task
+
+                $WrappedScriptBlock = {
+                    try {
+                        if ($null -ne $TabSession) {
+                            Set-ActiveTabContext -TabSession $TabSession
+                        }
+                        & $OnCompletedScriptBlock
+                    }
+                    finally {
+                        $CurrentlyActive = Get-ActiveTabSession
+                        if ($null -ne $CurrentlyActive) {
+                            Set-ActiveTabContext -TabSession $CurrentlyActive
+                        }
+                    }
+                }.GetNewClosure()
+
+                $Task.GetAwaiter().OnCompleted($WrappedScriptBlock)
             }
             else {
                 Write-LogOutput -Message "WebView2 is not loaded yet." -LogType DEBUG

@@ -53,7 +53,7 @@
         if (!$SkipTextBoxURL -and !$SkipAuthentication) {
             Set-SqlQueryFunctionState -Status $false
             "Clear Editor Value because no query is selected!" | Write-LogOutput -LogType DEBUG
-            $ScriptToExecute = "editor.setValue('');"
+            $ScriptToExecute = "window.setEditorValue('');"
             Push-ToEditor -ScriptToExecute $ScriptToExecute
         }
 

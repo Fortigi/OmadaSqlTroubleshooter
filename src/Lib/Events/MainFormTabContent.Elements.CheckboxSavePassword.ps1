@@ -3,7 +3,6 @@ $Script:MainForm.Elements.CheckboxSavePassword.Add_Checked({
             $_ | Show-EventInfo
 
             $true | Set-ConfigProperty -Property "SavePassword"
-            $Script:RunTimeConfig.SavePassword = $true
             if ($null -ne $Script:MainForm.Elements.TextBoxPassword.Password) {
                 $Script:MainForm.Elements.TextBoxPassword.Password | Set-ConfigProperty -Property "Password"
             }
@@ -17,7 +16,6 @@ $Script:MainForm.Elements.CheckboxSavePassword.Add_Unchecked({
         try {
             $_ | Show-EventInfo
             $false | Set-ConfigProperty -Property "SavePassword"
-            $Script:RunTimeConfig.SavePassword = $false
             $null | Set-ConfigProperty -Property "Password"
         }
         catch {

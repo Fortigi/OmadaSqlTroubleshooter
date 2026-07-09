@@ -55,7 +55,7 @@ function Set-SqlConnectionState {
             $Script:MainForm.Elements.TextBlockStatusBarRows | Set-TextBlockText -Text "0 rows"
             $Script:MainForm.Definition.Title = $Script:RunTimeConfig.ApplicationTitle
 
-            $ScriptToExecute = "editor.setValue('');"
+            $ScriptToExecute = "window.setEditorValue('');"
             Push-ToEditor -ScriptToExecute $ScriptToExecute
 
             # $null | Set-ConfigProperty -Property "CurrentDataConnection"
