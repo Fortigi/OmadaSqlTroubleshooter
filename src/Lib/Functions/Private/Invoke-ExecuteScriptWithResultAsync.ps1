@@ -14,7 +14,11 @@ function Invoke-ExecuteScriptWithResultAsync {
     try {
         $Script:Tracer::WriteLine(("{0}: Function: {1} - Caller: {2}({3}) - Command: {4} - Parameters: {5}" -f $($Script:RunTimeConfig.ApplicationName), $($MyInvocation.MyCommand.Name), $($MyInvocation.ScriptName).Split("\")[-1], $($MyInvocation.ScriptLineNumber), $MyInvocation.Statement, ($PSBoundParameters | Out-String)))
         if ($null -ne $Script:Webview.Object) {
-            if ($Script:Webview.Object.IsLoaded) {
+            # CoreWebView2 must be checked too, not just IsLoaded: while a tab is being torn down
+            # (e.g. Close All disposing tabs), a focus-driven editor push can land on a WebView2
+            # control that is still IsLoaded but whose CoreWebView2 has already been disposed/nulled
+            # - calling ExecuteScriptAsync on that null would throw.
+            if ($Script:Webview.Object.IsLoaded -and $null -ne $Script:Webview.Object.CoreWebView2) {
                 $TabSession = Get-ActiveTabSession
                 $Task = $Script:Webview.Object.CoreWebView2.ExecuteScriptAsync($ScriptToExecute)
                 if ($null -ne $TabSession) {
@@ -36,7 +40,7 @@ function Invoke-ExecuteScriptWithResultAsync {
                     })
             }
             else {
-                Write-LogOutput -Message "WebView2 is not loaded yet." -LogType DEBUG
+                Write-LogOutput -Message "WebView2 is not ready (not loaded or CoreWebView2 unavailable); skipping editor script." -LogType DEBUG
             }
         }
         else {
