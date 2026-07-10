@@ -3,6 +3,7 @@ BeforeAll {
     $Command = Join-Path $ParentPath -ChildPath "src\lib\functions\Private\Test-TabCapacity.ps1"
     . $Command
     $Script:Tracer = [System.Diagnostics.Trace]
+    $Script:RunTimeConfig = [PSCustomObject]@{ ApplicationName = "Test" }
 }
 
 Describe 'Test-TabCapacity' {

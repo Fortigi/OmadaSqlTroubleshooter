@@ -22,14 +22,17 @@ function Invoke-ExecuteScriptAsync {
                 }
                 $Script:Task = $Task
 
-                # Task.GetAwaiter().OnCompleted(scriptblock) continuations do not reliably
-                # preserve PowerShell's runspace/function-table context no matter which thread
-                # they're marshaled back onto afterward - calling a dot-sourced function from one
-                # can throw CommandNotFoundException with nothing able to catch it, crashing the
-                # whole process. A DispatcherTimer.Tick handler, by contrast, is invoked through
-                # the same WPF event-dispatch mechanism as every other Add_X handler in this
-                # codebase (Add_Click, Add_SelectionChanged, ...), which has always reliably
-                # resolved functions - so poll for completion instead of awaiting it directly.
+                # Neither Task.GetAwaiter().OnCompleted(scriptblock) nor DispatcherTimer.Tick
+                # reliably preserve PowerShell's [Runspace]::DefaultRunspace (a [ThreadStatic]
+                # property) for a scriptblock created via GetNewClosure() inside a function -
+                # calling a dot-sourced function from one can throw CommandNotFoundException with
+                # nothing able to catch it, crashing the whole process, even though built-in
+                # cmdlets keep resolving fine (they don't depend on DefaultRunspace the same way).
+                # Capture the runspace that's active here, where everything works, and explicitly
+                # restore it as the very first thing the deferred callback does - before touching
+                # any dot-sourced function.
+                $CapturedRunspace = [System.Management.Automation.Runspaces.Runspace]::DefaultRunspace
+
                 $PollTimer = New-Object System.Windows.Threading.DispatcherTimer
                 $PollTimer.Interval = [TimeSpan]::FromMilliseconds(50)
                 $PollTimer.Add_Tick({
@@ -37,6 +40,8 @@ function Invoke-ExecuteScriptAsync {
                             return
                         }
                         $PollTimer.Stop()
+
+                        [System.Management.Automation.Runspaces.Runspace]::DefaultRunspace = $CapturedRunspace
 
                         # Capture whichever tab is actually active AT THE MOMENT this fires (not
                         # via Get-ActiveTabSession after the fact - Set-ActiveTabContext below
