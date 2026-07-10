@@ -122,7 +122,10 @@ function Initialize-WebViewForTab {
                                 }
                                 "PreviewKeyDown on {0} for tab '{1}'" -f $KeyEventSender.GetType().Name, $HandlerTab.DisplayName | Write-LogOutput -LogType VERBOSE2
 
-                                if ($KeyEventArgs.Key -eq [System.Windows.Input.Key]::S -and ([System.Windows.Input.Keyboard]::Modifiers -band [System.Windows.Input.ModifierKeys]::Control)) {
+                                $CtrlDown = [System.Windows.Input.Keyboard]::Modifiers -band [System.Windows.Input.ModifierKeys]::Control
+                                $ShiftDown = [System.Windows.Input.Keyboard]::Modifiers -band [System.Windows.Input.ModifierKeys]::Shift
+
+                                if ($KeyEventArgs.Key -eq [System.Windows.Input.Key]::S -and $CtrlDown -and -not $ShiftDown) {
                                     "Ctrl+S key intercepted in WebView2 (PreviewKeyDown) for tab '{0}'" -f $HandlerTab.DisplayName | Write-LogOutput -LogType DEBUG
                                     $KeyEventArgs.Handled = $true
 
@@ -130,6 +133,20 @@ function Initialize-WebViewForTab {
                                             Set-ActiveTabContext -TabSession $HandlerTab
                                             "Triggering Save Query from Ctrl+S key press" | Write-LogOutput -LogType DEBUG
                                             $Script:MainForm.Elements.ButtonSaveQuery.RaiseEvent([System.Windows.RoutedEventArgs]::new([System.Windows.Controls.Primitives.ButtonBase]::ClickEvent))
+                                        })
+                                }
+                                elseif ($KeyEventArgs.Key -eq [System.Windows.Input.Key]::K -and $CtrlDown -and $ShiftDown) {
+                                    "Ctrl+Shift+K key intercepted in WebView2 - duplicate tab '{0}'" -f $HandlerTab.DisplayName | Write-LogOutput -LogType DEBUG
+                                    $KeyEventArgs.Handled = $true
+                                    $Script:MainForm.Definition.Dispatcher.Invoke([System.Action] {
+                                            Invoke-DuplicateTab -TabId $HandlerTab.Id
+                                        })
+                                }
+                                elseif ($CtrlDown -and -not $ShiftDown -and ($KeyEventArgs.Key -eq [System.Windows.Input.Key]::W -or $KeyEventArgs.Key -eq [System.Windows.Input.Key]::F4)) {
+                                    "Ctrl+W / Ctrl+F4 intercepted in WebView2 - close tab '{0}'" -f $HandlerTab.DisplayName | Write-LogOutput -LogType DEBUG
+                                    $KeyEventArgs.Handled = $true
+                                    $Script:MainForm.Definition.Dispatcher.Invoke([System.Action] {
+                                            Close-TabSession -TabId $HandlerTab.Id
                                         })
                                 }
                             }
@@ -191,6 +208,15 @@ function Initialize-WebViewForTab {
                                 "Set-EditorValue after loading html for tab '{0}'" -f $HandlerTab.DisplayName | Write-LogOutput -LogType DEBUG
                                 Set-ActiveTabContext -TabSession $HandlerTab
                                 Set-EditorValue
+
+                                # A duplicated tab carries the source tab's SQL here until its own
+                                # Monaco editor has loaded (now). Push it and clear the pending text.
+                                if (![string]::IsNullOrEmpty($HandlerTab.PendingEditorText)) {
+                                    $SafeDuplicateText = $HandlerTab.PendingEditorText -replace "\\", "\\\\" -replace "`r", "\r" -replace "`n", "\n" -replace "`t", "\t" -replace "'", "\'"
+                                    Push-ToEditor -ScriptToExecute ("window.setEditorValue('{0}');" -f $SafeDuplicateText)
+                                    $HandlerTab.PendingEditorText = $null
+                                }
+
                                 $Script:RunTimeConfig.ReconnectStatus = 3
                             }
                             catch {

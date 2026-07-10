@@ -1,0 +1,69 @@
+function Complete-DuplicateTab {
+    <#
+    .SYNOPSIS
+    Creates the duplicate tab from a source tab's connection state and editor SQL (see
+    Invoke-DuplicateTab). The query name / selected query are intentionally left blank so the copy
+    is a fresh unsaved query. The editor text is stashed on the new tab as PendingEditorText and
+    pushed into Monaco by the tab's NavigationCompleted handler once the editor has loaded.
+    #>
+    [CmdLetBinding()]
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$SourceTabId,
+        [bool]$SourceConnected,
+        [string]$EditorText
+    )
+    try {
+        $Script:Tracer::WriteLine(("{0}: Function: {1} - Caller: {2}({3}) - Command: {4} - Parameters: {5}" -f $($Script:RunTimeConfig.ApplicationName), $($MyInvocation.MyCommand.Name), $($MyInvocation.ScriptName).Split("\")[-1], $($MyInvocation.ScriptLineNumber), $MyInvocation.Statement, ($PSBoundParameters | Out-String)))
+
+        $Source = $Script:Tabs | Where-Object { $_.Id -eq $SourceTabId } | Select-Object -First 1
+        if ($null -eq $Source) {
+            "Complete-DuplicateTab: source tab '{0}' no longer exists." -f $SourceTabId | Write-LogOutput -LogType WARNING
+            return
+        }
+
+        # New-TabSession -RestoreFrom expects the password as a DPAPI-protected string (it decrypts
+        # it back for the password box), so re-encrypt the source's live plaintext password here.
+        $Password = $null
+        $SourcePassword = $Source.Elements.TextBoxPassword.Password
+        if (![string]::IsNullOrWhiteSpace($SourcePassword)) {
+            $Password = $SourcePassword | ConvertTo-SecureString -AsPlainText -Force | ConvertFrom-SecureString
+        }
+
+        $DuplicateConfig = [PSCustomObject]@{
+            Id                    = (New-Guid).Guid
+            DisplayName           = $null
+            BaseUrl               = $Source.AppConfig.BaseUrl
+            # Deliberately NOT copied - the duplicate is a new, unsaved query.
+            CurrentSqlQuery       = [PSCustomObject]@{ DoId = $null; DisplayName = $null; FullName = $null }
+            LastAuthentication    = $Source.AppConfig.LastAuthentication
+            UserName              = $Source.AppConfig.UserName
+            Password              = $Password
+            EntraApplicationIdUri = $Source.AppConfig.EntraApplicationIdUri
+            EntraIdTenantId       = $Source.AppConfig.EntraIdTenantId
+            MyCreatedQueriesOnly  = [bool]$Source.AppConfig.MyCreatedQueriesOnly
+            MyUpdatedQueriesOnly  = [bool]$Source.AppConfig.MyUpdatedQueriesOnly
+            SavePassword          = [bool]$Source.Elements.CheckboxSavePassword.IsChecked
+            IdentityUserName      = $Source.AppConfig.IdentityUserName
+            CurrentDataConnection = $Source.AppConfig.CurrentDataConnection
+        }
+
+        $NewTab = New-TabSession -RestoreFrom $DuplicateConfig -AutoConnect:$SourceConnected
+        if ($null -eq $NewTab) {
+            return
+        }
+
+        # Hand the SQL to the new tab; its NavigationCompleted handler pushes it into Monaco once
+        # the editor has loaded (pushing now would be dropped - the editor is not ready yet).
+        if (![string]::IsNullOrEmpty($EditorText)) {
+            $NewTab.PendingEditorText = $EditorText
+            $NewTab.IsDirty = $true
+            Update-TabHeaderTitle -TabSession $NewTab
+        }
+
+        "Duplicated tab '{0}' into a new tab." -f $Source.DisplayName | Write-LogOutput -LogType DEBUG
+    }
+    catch {
+        $_.Exception.Message | Write-LogOutput -LogType ERROR -ErrorObject $_
+    }
+}

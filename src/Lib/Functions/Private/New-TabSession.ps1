@@ -62,6 +62,7 @@ function New-TabSession {
             Id               = $TabId
             DisplayName      = $DisplayName
             OpenOrder        = $OpenOrder
+            PendingEditorText = $null
             IsDirty          = $false
             Form             = $Form
             Elements         = $Form.Elements
@@ -120,6 +121,7 @@ function New-TabSession {
         $TabItem = New-Object System.Windows.Controls.TabItem
         $TabItem.Header = New-TabHeaderControl -TabSession $NewTab
         $TabItem.Content = $Form.Definition
+        $TabItem.ContextMenu = New-TabContextMenu -TabSession $NewTab
         $NewTab.TabItem = $TabItem
         Update-TabHeaderTitle -TabSession $NewTab
 

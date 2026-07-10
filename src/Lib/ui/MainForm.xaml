@@ -74,6 +74,47 @@
                                 </Setter.Value>
                         </Setter>
                 </Style>
+
+                <!-- Tab right-click context menu look, matching the DataGrid result context menu
+                     (rounded white card + drop shadow, flat menu rows with icon/header/gesture).
+                     New-TabContextMenu builds the ContextMenu in code and references these. -->
+                <ControlTemplate x:Key="TabContextMenuTemplate" TargetType="ContextMenu">
+                        <Border Background="White" BorderBrush="#D9D9D9" BorderThickness="1" CornerRadius="4" Margin="6" SnapsToDevicePixels="True">
+                                <Border.Effect>
+                                        <DropShadowEffect BlurRadius="12" ShadowDepth="2" Opacity="0.18" Color="Black" />
+                                </Border.Effect>
+                                <ItemsPresenter Margin="0,4" />
+                        </Border>
+                </ControlTemplate>
+
+                <ControlTemplate x:Key="TabFlatMenuItem" TargetType="MenuItem">
+                        <Border x:Name="Border" Background="Transparent" Padding="12,8">
+                                <Grid>
+                                        <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="18" />
+                                                <ColumnDefinition Width="12" />
+                                                <ColumnDefinition Width="*" />
+                                                <ColumnDefinition Width="16" />
+                                                <ColumnDefinition Width="Auto" />
+                                        </Grid.ColumnDefinitions>
+                                        <ContentPresenter Grid.Column="0" ContentSource="Icon" VerticalAlignment="Center" HorizontalAlignment="Center" />
+                                        <ContentPresenter Grid.Column="2" ContentSource="Header" RecognizesAccessKey="True" VerticalAlignment="Center" />
+                                        <TextBlock Grid.Column="4" Text="{TemplateBinding InputGestureText}" VerticalAlignment="Center" Foreground="{TemplateBinding Foreground}" Opacity="0.75" />
+                                </Grid>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                                <Trigger Property="IsHighlighted" Value="True">
+                                        <Setter TargetName="Border" Property="Background" Value="#F1F5F9" />
+                                </Trigger>
+                                <Trigger Property="IsEnabled" Value="False">
+                                        <Setter Property="Opacity" Value="0.5" />
+                                </Trigger>
+                        </ControlTemplate.Triggers>
+                </ControlTemplate>
+
+                <ControlTemplate x:Key="TabMenuSeparatorTemplate" TargetType="Separator">
+                        <Border Height="1" Margin="12,4" Background="#E5E7EB" />
+                </ControlTemplate>
         </Window.Resources>
 
         <Grid x:Name="MainWindowGrid">

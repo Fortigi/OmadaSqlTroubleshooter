@@ -129,6 +129,22 @@ $Script:MainForm.Definition.Add_PreviewKeyDown({
                 "Ctrl+C detected at MainForm level - allowing to pass through to focused control" | Write-LogOutput -LogType VERBOSE
                 # Do not set $EventArgs.Handled = $true for Ctrl+C
             }
+            elseif ($ControlPressed -and $ShiftPressed -and $EventArgs.Key -eq [System.Windows.Input.Key]::K) {
+                "Ctrl+Shift+K intercepted at MainForm level - duplicate active tab" | Write-LogOutput -LogType VERBOSE
+                $EventArgs.Handled = $true
+                $ActiveTab = Get-ActiveTabSession
+                if ($null -ne $ActiveTab) {
+                    Invoke-DuplicateTab -TabId $ActiveTab.Id
+                }
+            }
+            elseif ($ControlPressed -and -not $ShiftPressed -and ($EventArgs.Key -eq [System.Windows.Input.Key]::W -or $EventArgs.Key -eq [System.Windows.Input.Key]::F4)) {
+                "Ctrl+W / Ctrl+F4 intercepted at MainForm level - close active tab" | Write-LogOutput -LogType VERBOSE
+                $EventArgs.Handled = $true
+                $ActiveTab = Get-ActiveTabSession
+                if ($null -ne $ActiveTab) {
+                    Close-TabSession -TabId $ActiveTab.Id
+                }
+            }
         }
         catch {
             $_.Exception.Message | Write-LogOutput -LogType ERROR -ErrorObject $_
