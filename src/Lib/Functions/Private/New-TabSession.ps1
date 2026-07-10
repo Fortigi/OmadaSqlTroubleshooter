@@ -59,6 +59,7 @@ function New-TabSession {
             TabItem          = $null
             ConnectionStatus = $false
             PendingTask      = $null
+            CurrentUrl       = $null
             AppConfig        = $(if ($null -ne $RestoreFrom) { $RestoreFrom } else { $DefaultTabConfig })
             RunTimeData      = [PSCustomObject]@{
                 RestMethodParam                = @{

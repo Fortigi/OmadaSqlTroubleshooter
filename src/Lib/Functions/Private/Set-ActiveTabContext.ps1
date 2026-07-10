@@ -2,8 +2,9 @@ function Set-ActiveTabContext {
     <#
     .SYNOPSIS
     Repoints the "current tab" globals ($Script:MainForm.Elements, $Script:RunTimeData,
-    $Script:WebView, $Script:AppConfig, $Script:ConnectionStatus, $Script:Task) to the given
-    tab session, saving scalar state back onto the outgoing tab first. This is the single
+    $Script:WebView, $Script:AppConfig, $Script:ConnectionStatus, $Script:Task,
+    $Script:CurrentUrl) to the given tab session, saving scalar state back onto the outgoing
+    tab first. This is the single
     mechanism used both for real tab switches (TabControlSessions.SelectionChanged) and for
     temporarily "stepping into" a tab from an async completion callback that may fire while a
     different tab is on screen.
@@ -21,6 +22,7 @@ function Set-ActiveTabContext {
             if ($null -ne $Outgoing) {
                 $Outgoing.ConnectionStatus = $Script:ConnectionStatus
                 $Outgoing.PendingTask = $Script:Task
+                $Outgoing.CurrentUrl = $Script:CurrentUrl
             }
         }
 
@@ -30,6 +32,7 @@ function Set-ActiveTabContext {
         $Script:AppConfig = $TabSession.AppConfig
         $Script:ConnectionStatus = $TabSession.ConnectionStatus
         $Script:Task = $TabSession.PendingTask
+        $Script:CurrentUrl = $TabSession.CurrentUrl
         $Script:ActiveTabId = $TabSession.Id
 
         Initialize-UiComponents
