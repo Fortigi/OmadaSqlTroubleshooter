@@ -114,32 +114,33 @@
         </Window.Resources>
 
         <Grid x:Name="MainWindowGrid">
-                <!-- SelectedIndex=-1 is required: with only TabItemAddNew present at load time,
-                     a TabControl otherwise auto-selects it as soon as the control materializes -
-                     well before MainForm.Definition's Add_Loaded/Restore-TabSessions runs - which
-                     fires New-TabSession reentrantly against the still-loading MainForm. -->
-                <TabControl x:Name="TabControlSessions" BorderThickness="0" Padding="0" Background="Transparent" SelectedIndex="-1">
-                        <!-- The whole frame lives here so the tabs and content share one frame: a
-                             navy (#FF293955) bar above the tabs, and the navy left/right/bottom
-                             borders (6px, same as the bar) around the selected tab's content. This
-                             is the border moved out of MainFormTabContent's MainGrid. -->
-                        <TabControl.Template>
-                                <ControlTemplate TargetType="TabControl">
-                                        <Grid>
-                                                <Grid.RowDefinitions>
-                                                        <RowDefinition Height="6" />
-                                                        <RowDefinition Height="Auto" />
-                                                        <RowDefinition Height="*" />
-                                                </Grid.RowDefinitions>
-                                                <Border Grid.Row="0" Background="#FF293955" />
-                                                <TabPanel Grid.Row="1" IsItemsHost="True" Background="Transparent" Panel.ZIndex="1" />
-                                                <Border Grid.Row="2" BorderBrush="#FF293955" BorderThickness="6,0,6,6" Background="{DynamicResource {x:Static SystemColors.ScrollBarBrushKey}}">
-                                                        <ContentPresenter ContentSource="SelectedContent" />
-                                                </Border>
-                                        </Grid>
-                                </ControlTemplate>
-                        </TabControl.Template>
-                        <TabItem x:Name="TabItemAddNew" Header="+" ToolTip="Open a new tab" />
-                </TabControl>
+                <!-- The navy (#FF293955) frame wraps the entire TabControl (tabs included): the top
+                     border is the purple bar above the tabs and the left/right/bottom borders (all
+                     6px, matching) frame the tabs and content together. This is the border moved out
+                     of MainFormTabContent's MainGrid. -->
+                <Border BorderBrush="#FF293955" BorderThickness="6" Background="{DynamicResource {x:Static SystemColors.ScrollBarBrushKey}}">
+                        <!-- SelectedIndex=-1 is required: with only TabItemAddNew present at load
+                             time, a TabControl otherwise auto-selects it as soon as the control
+                             materializes - well before MainForm.Definition's Add_Loaded/
+                             Restore-TabSessions runs - which fires New-TabSession reentrantly against
+                             the still-loading MainForm. -->
+                        <TabControl x:Name="TabControlSessions" BorderThickness="0" Padding="0" Background="Transparent" SelectedIndex="-1">
+                                <!-- Minimal template: just the tab strip and the selected content;
+                                     the navy frame is the outer Border above. -->
+                                <TabControl.Template>
+                                        <ControlTemplate TargetType="TabControl">
+                                                <Grid>
+                                                        <Grid.RowDefinitions>
+                                                                <RowDefinition Height="Auto" />
+                                                                <RowDefinition Height="*" />
+                                                        </Grid.RowDefinitions>
+                                                        <TabPanel Grid.Row="0" IsItemsHost="True" Background="Transparent" Panel.ZIndex="1" />
+                                                        <ContentPresenter Grid.Row="1" ContentSource="SelectedContent" />
+                                                </Grid>
+                                        </ControlTemplate>
+                                </TabControl.Template>
+                                <TabItem x:Name="TabItemAddNew" Header="+" ToolTip="Open a new tab" />
+                        </TabControl>
+                </Border>
         </Grid>
 </Window>
