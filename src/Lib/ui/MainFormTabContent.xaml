@@ -239,7 +239,7 @@
                                                                                 <ColumnDefinition Width="15" />
                                                                                 <ColumnDefinition Width="Auto" />
                                                                         </Grid.ColumnDefinitions>
-                                                                        <TextBlock Grid.Column="1" x:Name="TextBlockDisplayName" Text="Display name:" ToolTip="The Display Name of a a query, the display name can be changed if needed." />
+                                                                        <TextBlock Grid.Column="1" x:Name="TextBlockDisplayName" Text="Display name:" ToolTip="The Display Name of a query, the display name can be changed if needed." />
                                                                         <TextBox Grid.Column="3" x:Name="TextBoxDisplayName" IsEnabled="False" TabIndex="9" />
                                                                         <TextBlock Grid.Column="5" Text="Filter my queries:" Grid.RowSpan="5" />
                                                                         <StackPanel Grid.Column="7" Orientation="Horizontal" VerticalAlignment="Center">

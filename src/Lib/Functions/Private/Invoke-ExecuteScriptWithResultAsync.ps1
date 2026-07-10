@@ -23,21 +23,29 @@ function Invoke-ExecuteScriptWithResultAsync {
                 $Script:Task = $Task
 
                 $WrappedScriptBlock = {
-                    # Capture whichever tab is actually active AT THE MOMENT this callback fires
-                    # (not via Get-ActiveTabSession after the fact - Set-ActiveTabContext below
-                    # would have already overwritten $Script:ActiveTabId to $TabSession's by then).
-                    $PreviouslyActiveTab = Get-ActiveTabSession
-                    try {
-                        if ($null -ne $TabSession) {
-                            Set-ActiveTabContext -TabSession $TabSession
-                        }
-                        & $OnCompletedScriptBlock
-                    }
-                    finally {
-                        if ($null -ne $PreviouslyActiveTab) {
-                            Set-ActiveTabContext -TabSession $PreviouslyActiveTab
-                        }
-                    }
+                    # Task continuations can run on a raw ThreadPool thread with no PowerShell
+                    # runspace affinity, where calling a dot-sourced function throws
+                    # CommandNotFoundException with nothing to catch it, crashing the whole
+                    # process. Marshal onto the UI thread first so Get-ActiveTabSession et al.
+                    # always run somewhere they can actually be resolved.
+                    $Script:MainForm.Definition.Dispatcher.Invoke([System.Action] {
+                            # Capture whichever tab is actually active AT THE MOMENT this callback
+                            # fires (not via Get-ActiveTabSession after the fact -
+                            # Set-ActiveTabContext below would have already overwritten
+                            # $Script:ActiveTabId to $TabSession's by then).
+                            $PreviouslyActiveTab = Get-ActiveTabSession
+                            try {
+                                if ($null -ne $TabSession) {
+                                    Set-ActiveTabContext -TabSession $TabSession
+                                }
+                                & $OnCompletedScriptBlock
+                            }
+                            finally {
+                                if ($null -ne $PreviouslyActiveTab) {
+                                    Set-ActiveTabContext -TabSession $PreviouslyActiveTab
+                                }
+                            }
+                        })
                 }.GetNewClosure()
 
                 $Task.GetAwaiter().OnCompleted($WrappedScriptBlock)
