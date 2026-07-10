@@ -23,6 +23,10 @@ function Invoke-ExecuteScriptWithResultAsync {
                 $Script:Task = $Task
 
                 $WrappedScriptBlock = {
+                    # Capture whichever tab is actually active AT THE MOMENT this callback fires
+                    # (not via Get-ActiveTabSession after the fact - Set-ActiveTabContext below
+                    # would have already overwritten $Script:ActiveTabId to $TabSession's by then).
+                    $PreviouslyActiveTab = Get-ActiveTabSession
                     try {
                         if ($null -ne $TabSession) {
                             Set-ActiveTabContext -TabSession $TabSession
@@ -30,9 +34,8 @@ function Invoke-ExecuteScriptWithResultAsync {
                         & $OnCompletedScriptBlock
                     }
                     finally {
-                        $CurrentlyActive = Get-ActiveTabSession
-                        if ($null -ne $CurrentlyActive) {
-                            Set-ActiveTabContext -TabSession $CurrentlyActive
+                        if ($null -ne $PreviouslyActiveTab) {
+                            Set-ActiveTabContext -TabSession $PreviouslyActiveTab
                         }
                     }
                 }.GetNewClosure()

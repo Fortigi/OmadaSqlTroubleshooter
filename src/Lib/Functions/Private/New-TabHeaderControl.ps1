@@ -26,17 +26,19 @@ function New-TabHeaderControl {
         $CloseButton.Height = 18
         $CloseButton.Padding = New-Object System.Windows.Thickness(0)
         $CloseButton.ToolTip = "Close tab"
-        $CloseButton.Tag = $TabSession.Id
         $CloseButton.IsEnabled = $true
+        # $this is not bound to the sender in these WPF event scriptblocks, so capture
+        # $TabSession's Id directly via GetNewClosure() rather than round-tripping through
+        # a Tag property lookup on an unavailable/unbound $this.
         $CloseButton.Add_Click({
                 try {
                     $_ | Show-EventInfo
-                    Close-TabSession -TabId $This.Tag
+                    Close-TabSession -TabId $TabSession.Id
                 }
                 catch {
                     $_.Exception.Message | Write-LogOutput -LogType ERROR -ErrorObject $_
                 }
-            })
+            }.GetNewClosure())
 
         [void]$Panel.Children.Add($TitleText)
         [void]$Panel.Children.Add($CloseButton)

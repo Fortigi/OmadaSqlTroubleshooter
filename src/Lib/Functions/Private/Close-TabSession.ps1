@@ -40,7 +40,10 @@ function Close-TabSession {
             }
         }
 
-        $Script:MainForm.Elements.TabControlSessions.Items.Remove($TabToClose.TabItem)
+        # TabControlSessions must always be resolved via Get-TabControlSessions, not
+        # $Script:MainForm.Elements - the latter was just repointed to $TabToClose's own elements.
+        $TabControlSessions = Get-TabControlSessions
+        $TabControlSessions.Items.Remove($TabToClose.TabItem)
         [void]$Script:Tabs.Remove($TabToClose)
 
         if ($Script:Tabs.Count -eq 0) {
@@ -51,7 +54,7 @@ function Close-TabSession {
 
         if ($Script:ActiveTabId -eq $TabId) {
             $NextIndex = [Math]::Min($ClosingIndex, $Script:Tabs.Count - 1)
-            $Script:MainForm.Elements.TabControlSessions.SelectedItem = $Script:Tabs[$NextIndex].TabItem
+            $TabControlSessions.SelectedItem = $Script:Tabs[$NextIndex].TabItem
         }
     }
     catch {

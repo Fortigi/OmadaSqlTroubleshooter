@@ -55,7 +55,7 @@ function Restore-TabSessions {
                 if ($null -eq $ActiveTab) {
                     $ActiveTab = $RestoredTabs[0]
                 }
-                $Script:MainForm.Elements.TabControlSessions.SelectedItem = $ActiveTab.TabItem
+                (Get-TabControlSessions).SelectedItem = $ActiveTab.TabItem
                 return
             }
         }

@@ -55,6 +55,10 @@ function Initialize-WebViewForTab {
         }
 
         $TabSession.WebView.Object.EnsureCoreWebView2Async($TabSession.WebView.Environment).GetAwaiter().OnCompleted({
+                # Capture whichever tab is actually active AT THE MOMENT this callback fires (not
+                # via Get-ActiveTabSession in the finally below - Set-ActiveTabContext just below
+                # would have already overwritten $Script:ActiveTabId to $TabSession's by then).
+                $PreviouslyActiveTab = Get-ActiveTabSession
                 try {
                     Set-ActiveTabContext -TabSession $TabSession
                     "EnsureCoreWebView2Async OnCompleted script for tab '{0}'" -f $TabSession.DisplayName | Write-LogOutput -LogType DEBUG
@@ -85,13 +89,14 @@ function Initialize-WebViewForTab {
                     Set-EditorValue
 
                     $TabSession.WebView.Object.add_PreviewKeyDown({
-                            param($EventSender, $EventArgs)
+                            param($KeyEventSender, $KeyEventArgs)
                             try {
                                 $_ | Show-EventInfo
+                                "PreviewKeyDown on {0} for tab '{1}'" -f $KeyEventSender.GetType().Name, $TabSession.DisplayName | Write-LogOutput -LogType VERBOSE2
 
-                                if ($EventArgs.Key -eq [System.Windows.Input.Key]::S -and ([System.Windows.Input.Keyboard]::Modifiers -band [System.Windows.Input.ModifierKeys]::Control)) {
+                                if ($KeyEventArgs.Key -eq [System.Windows.Input.Key]::S -and ([System.Windows.Input.Keyboard]::Modifiers -band [System.Windows.Input.ModifierKeys]::Control)) {
                                     "Ctrl+S key intercepted in WebView2 (PreviewKeyDown) for tab '{0}'" -f $TabSession.DisplayName | Write-LogOutput -LogType DEBUG
-                                    $EventArgs.Handled = $true
+                                    $KeyEventArgs.Handled = $true
 
                                     $Script:MainForm.Definition.Dispatcher.Invoke([System.Action] {
                                             Set-ActiveTabContext -TabSession $TabSession
@@ -106,12 +111,12 @@ function Initialize-WebViewForTab {
                         }.GetNewClosure())
 
                     $TabSession.WebView.Object.CoreWebView2.add_WebMessageReceived({
-                            param($EventSender, $EventArgs)
+                            param($WebMessageSender, $WebMessageEventArgs)
                             try {
                                 $_ | Show-EventInfo
-                                "CoreWebView2.add_WebMessageReceived for tab '{0}'" -f $TabSession.DisplayName | Write-LogOutput -LogType DEBUG
+                                "CoreWebView2.add_WebMessageReceived on {0} for tab '{1}'" -f $WebMessageSender.GetType().Name, $TabSession.DisplayName | Write-LogOutput -LogType DEBUG
 
-                                $Message = $EventArgs.TryGetWebMessageAsString()
+                                $Message = $WebMessageEventArgs.TryGetWebMessageAsString()
                                 "WebView2 message received: {0}" -f $Message | Write-LogOutput -LogType DEBUG
 
                                 if ($Message) {
@@ -164,9 +169,8 @@ function Initialize-WebViewForTab {
                 finally {
                     # Never leave the app's "current tab" globals pointed at a tab the user is no
                     # longer looking at, just because its async WebView2 setup finished last.
-                    $CurrentlyActive = Get-ActiveTabSession
-                    if ($null -ne $CurrentlyActive) {
-                        Set-ActiveTabContext -TabSession $CurrentlyActive
+                    if ($null -ne $PreviouslyActiveTab) {
+                        Set-ActiveTabContext -TabSession $PreviouslyActiveTab
                     }
                 }
             }.GetNewClosure())

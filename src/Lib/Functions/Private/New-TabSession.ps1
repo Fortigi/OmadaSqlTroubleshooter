@@ -110,13 +110,14 @@ function New-TabSession {
         $NewTab.TabItem = $TabItem
         Update-TabHeaderTitle -TabSession $NewTab
 
-        $AddNewTabItem = $Script:MainForm.Elements.TabControlSessions.Items | Where-Object { $_.Name -eq "TabItemAddNew" }
-        $InsertIndex = $Script:MainForm.Elements.TabControlSessions.Items.IndexOf($AddNewTabItem)
+        $TabControlSessions = Get-TabControlSessions
+        $AddNewTabItem = $TabControlSessions.Items | Where-Object { $_.Name -eq "TabItemAddNew" }
+        $InsertIndex = $TabControlSessions.Items.IndexOf($AddNewTabItem)
         if ($InsertIndex -lt 0) {
-            [void]$Script:MainForm.Elements.TabControlSessions.Items.Add($TabItem)
+            [void]$TabControlSessions.Items.Add($TabItem)
         }
         else {
-            $Script:MainForm.Elements.TabControlSessions.Items.Insert($InsertIndex, $TabItem)
+            $TabControlSessions.Items.Insert($InsertIndex, $TabItem)
         }
 
         $Script:Tabs.Add($NewTab)
@@ -124,7 +125,9 @@ function New-TabSession {
         # Selecting the new TabItem fires TabControlSessions' SelectionChanged synchronously,
         # which calls Set-ActiveTabContext -TabSession $NewTab - from this point on,
         # $Script:MainForm.Elements/$Script:AppConfig/$Script:RunTimeData/etc. all refer to $NewTab.
-        $Script:MainForm.Elements.TabControlSessions.SelectedItem = $TabItem
+        # (TabControlSessions itself must always be resolved via Get-TabControlSessions, not
+        # $Script:MainForm.Elements - the latter is what's about to be repointed away from it.)
+        $TabControlSessions.SelectedItem = $TabItem
 
         Import-EventObjects -ClassName "MainFormTabContent"
 

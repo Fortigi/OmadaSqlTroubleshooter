@@ -1,4 +1,4 @@
-$Script:MainForm.Elements.TabControlSessions.Add_SelectionChanged({
+(Get-TabControlSessions).Add_SelectionChanged({
         param(
             $EventSender,
             $EventArgs
@@ -6,7 +6,7 @@ $Script:MainForm.Elements.TabControlSessions.Add_SelectionChanged({
         try {
             $_ | Show-EventInfo
 
-            $SelectedItem = $Script:MainForm.Elements.TabControlSessions.SelectedItem
+            $SelectedItem = (Get-TabControlSessions).SelectedItem
             if ($null -eq $SelectedItem) {
                 return
             }
@@ -20,7 +20,7 @@ $Script:MainForm.Elements.TabControlSessions.Add_SelectionChanged({
                     "Cannot open a new tab: capacity of {0} tabs reached." -f $MaxCapacity | Write-LogOutput -LogType WARNING
                     $CurrentTab = Get-ActiveTabSession
                     if ($null -ne $CurrentTab) {
-                        $Script:MainForm.Elements.TabControlSessions.SelectedItem = $CurrentTab.TabItem
+                        (Get-TabControlSessions).SelectedItem = $CurrentTab.TabItem
                     }
                 }
                 return
