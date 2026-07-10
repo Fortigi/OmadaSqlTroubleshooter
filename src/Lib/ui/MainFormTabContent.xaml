@@ -123,7 +123,7 @@
                 </Style>
         </UserControl.Resources>
 
-        <Grid x:Name="MainGrid" KeyboardNavigation.TabNavigation="Continue">
+        <Grid x:Name="MainGrid" KeyboardNavigation.TabNavigation="Continue" Background="{DynamicResource {x:Static SystemColors.ScrollBarBrushKey}}">
                 <Border BorderThickness="6,0,6,6" BorderBrush="#FF293955">
                         <Grid Margin="0">
                                 <Grid.RowDefinitions>
