@@ -122,8 +122,9 @@
                 </Style>
         </UserControl.Resources>
 
+        <!-- The navy frame around the content lives in MainForm.xaml's TabControl template now, so
+             the tab strip and this content share one frame; this content is frame-less. -->
         <Grid x:Name="MainGrid" KeyboardNavigation.TabNavigation="Continue" Background="{DynamicResource {x:Static SystemColors.ScrollBarBrushKey}}">
-                <Border BorderThickness="6,0,6,6" BorderBrush="#FF293955">
                         <Grid Margin="0">
                                 <Grid.RowDefinitions>
                                         <RowDefinition Height="Auto" />
@@ -662,6 +663,5 @@
                                 </StatusBar>
 
                         </Grid>
-                </Border>
         </Grid>
 </UserControl>
