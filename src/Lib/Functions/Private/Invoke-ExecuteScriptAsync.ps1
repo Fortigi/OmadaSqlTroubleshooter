@@ -40,7 +40,13 @@ function Invoke-ExecuteScriptAsync {
             }
         }
         else {
-            Write-LogOutput -Message "WebView2 is not initialized." -LogType ERROR
+            # Reaching here means the active tab's WebView2 control has not been created yet
+            # (New-TabSession calls Set-SqlConnectionState -Status $false - which clears the
+            # editor - before Initialize-WebViewForTab runs). There is no editor to push to yet;
+            # Initialize-WebViewForTab sets the editor value once WebView2 is ready. This is an
+            # expected transient during tab startup, not an error - same class as the "not loaded
+            # yet" case above.
+            Write-LogOutput -Message "WebView2 is not initialized yet; skipping editor script." -LogType DEBUG
         }
     }
     catch {

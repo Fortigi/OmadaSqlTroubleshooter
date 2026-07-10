@@ -13,9 +13,14 @@ function Initialize-WebViewForTab {
     MainForm.Definition.ps1 for why. The shared top-level timer calls Set-ActiveTabContext for
     the originating tab before invoking that scriptblock, and restores the previously-active tab
     afterward, so the enqueued logic can always assume $TabSession is the active context. The
-    nested PreviewKeyDown/WebMessageReceived/NavigationCompleted handlers still capture
-    $TabSession explicitly (via GetNewClosure()) and call Set-ActiveTabContext themselves, since
-    those genuinely are independent WPF/WebView2 events, not part of this completion.
+    completion block receives the owning tab through the enqueued completion item ($Completion.
+    TabSession) instead of capturing it, so it stays a plain scriptblock that can resolve this
+    module's private functions. The nested PreviewKeyDown/WebMessageReceived/NavigationCompleted
+    handlers are likewise plain scriptblocks (they run long after this block returns, so they
+    genuinely are independent WPF/WebView2 events); each recovers its owning tab from the event
+    sender via Get-TabSessionByWebViewSender and calls Set-ActiveTabContext itself. None of these
+    may use GetNewClosure(): a closure runs in a detached dynamic module that cannot see this
+    module's dot-sourced private functions, which throws CommandNotFoundException.
     #>
     [CmdLetBinding()]
     param(
@@ -61,13 +66,17 @@ function Initialize-WebViewForTab {
 
         $EnsureCoreWebView2Task = $TabSession.WebView.Object.EnsureCoreWebView2Async($TabSession.WebView.Environment)
 
-        # A scriptblock created inside this function (via GetNewClosure(), a Task continuation,
-        # or a DispatcherTimer created here) does not reliably resolve dot-sourced functions once
-        # invoked later by .NET's own dispatch machinery - CommandNotFoundException, uncaught.
-        # Enqueue plain data instead; the single, top-level WebViewCompletionPollTimer in
-        # MainForm.Definition.ps1 is what actually calls Set-ActiveTabContext and invokes this
-        # scriptblock, from a call frame that has always reliably resolved functions.
+        # This completion block is enqueued for the top-level WebViewCompletionPollTimer in
+        # MainForm.Definition.ps1 to invoke once EnsureCoreWebView2Async finishes. It MUST be a
+        # plain scriptblock (with a param) rather than a .GetNewClosure() block: a GetNewClosure()
+        # block runs inside a detached dynamic module whose scope does not include this module's
+        # dot-sourced private functions, so its very first Write-LogOutput call throws
+        # CommandNotFoundException and the whole Monaco setup silently fails. A plain block keeps
+        # this module's session state (private functions resolve), and the owning tab is passed in
+        # via the enqueued completion item instead of captured by reference.
         $OnCompletedScriptBlock = {
+                param($Completion)
+                $TabSession = $Completion.TabSession
                 try {
                     "EnsureCoreWebView2Async OnCompleted script for tab '{0}'" -f $TabSession.DisplayName | Write-LogOutput -LogType DEBUG
 
@@ -98,18 +107,27 @@ function Initialize-WebViewForTab {
                     Update-QueryList
                     Set-EditorValue
 
+                    # These WebView2 event handlers fire independently, long after this completion
+                    # block has returned, so they cannot capture $TabSession by reference. They are
+                    # plain scriptblocks (NOT .GetNewClosure()) so they keep this module's session
+                    # state and can resolve its private functions; each recovers its owning tab
+                    # from the event sender via Get-TabSessionByWebViewSender.
                     $TabSession.WebView.Object.add_PreviewKeyDown({
                             param($KeyEventSender, $KeyEventArgs)
                             try {
                                 $_ | Show-EventInfo
-                                "PreviewKeyDown on {0} for tab '{1}'" -f $KeyEventSender.GetType().Name, $TabSession.DisplayName | Write-LogOutput -LogType VERBOSE2
+                                $HandlerTab = Get-TabSessionByWebViewSender -Sender $KeyEventSender
+                                if ($null -eq $HandlerTab) {
+                                    return
+                                }
+                                "PreviewKeyDown on {0} for tab '{1}'" -f $KeyEventSender.GetType().Name, $HandlerTab.DisplayName | Write-LogOutput -LogType VERBOSE2
 
                                 if ($KeyEventArgs.Key -eq [System.Windows.Input.Key]::S -and ([System.Windows.Input.Keyboard]::Modifiers -band [System.Windows.Input.ModifierKeys]::Control)) {
-                                    "Ctrl+S key intercepted in WebView2 (PreviewKeyDown) for tab '{0}'" -f $TabSession.DisplayName | Write-LogOutput -LogType DEBUG
+                                    "Ctrl+S key intercepted in WebView2 (PreviewKeyDown) for tab '{0}'" -f $HandlerTab.DisplayName | Write-LogOutput -LogType DEBUG
                                     $KeyEventArgs.Handled = $true
 
                                     $Script:MainForm.Definition.Dispatcher.Invoke([System.Action] {
-                                            Set-ActiveTabContext -TabSession $TabSession
+                                            Set-ActiveTabContext -TabSession $HandlerTab
                                             "Triggering Save Query from Ctrl+S key press" | Write-LogOutput -LogType DEBUG
                                             $Script:MainForm.Elements.ButtonSaveQuery.RaiseEvent([System.Windows.RoutedEventArgs]::new([System.Windows.Controls.Primitives.ButtonBase]::ClickEvent))
                                         })
@@ -118,13 +136,17 @@ function Initialize-WebViewForTab {
                             catch {
                                 $_.Exception.Message | Write-LogOutput -LogType ERROR -ErrorObject $_
                             }
-                        }.GetNewClosure())
+                        })
 
                     $TabSession.WebView.Object.CoreWebView2.add_WebMessageReceived({
                             param($WebMessageSender, $WebMessageEventArgs)
                             try {
                                 $_ | Show-EventInfo
-                                "CoreWebView2.add_WebMessageReceived on {0} for tab '{1}'" -f $WebMessageSender.GetType().Name, $TabSession.DisplayName | Write-LogOutput -LogType DEBUG
+                                $HandlerTab = Get-TabSessionByWebViewSender -Sender $WebMessageSender
+                                if ($null -eq $HandlerTab) {
+                                    return
+                                }
+                                "CoreWebView2.add_WebMessageReceived on {0} for tab '{1}'" -f $WebMessageSender.GetType().Name, $HandlerTab.DisplayName | Write-LogOutput -LogType DEBUG
 
                                 $Message = $WebMessageEventArgs.TryGetWebMessageAsString()
                                 "WebView2 message received: {0}" -f $Message | Write-LogOutput -LogType DEBUG
@@ -134,21 +156,21 @@ function Initialize-WebViewForTab {
                                     if ($MessageObj -and $MessageObj.type -eq 'executeQuery') {
                                         "Execute Query requested from Monaco Editor via {0}" -f $MessageObj.key | Write-LogOutput -LogType DEBUG
                                         $Script:MainForm.Definition.Dispatcher.Invoke([System.Action] {
-                                                Set-ActiveTabContext -TabSession $TabSession
+                                                Set-ActiveTabContext -TabSession $HandlerTab
                                                 $Script:MainForm.Elements.ButtonExecuteQuery.RaiseEvent([System.Windows.RoutedEventArgs]::new([System.Windows.Controls.Primitives.ButtonBase]::ClickEvent))
                                             })
                                     }
                                     elseif ($MessageObj -and $MessageObj.type -eq 'saveQuery') {
                                         "Save Query requested from Monaco Editor via {0}" -f $MessageObj.key | Write-LogOutput -LogType DEBUG
                                         $Script:MainForm.Definition.Dispatcher.Invoke([System.Action] {
-                                                Set-ActiveTabContext -TabSession $TabSession
+                                                Set-ActiveTabContext -TabSession $HandlerTab
                                                 $Script:MainForm.Elements.ButtonSaveQuery.RaiseEvent([System.Windows.RoutedEventArgs]::new([System.Windows.Controls.Primitives.ButtonBase]::ClickEvent))
                                             })
                                     }
                                     elseif ($MessageObj -and $MessageObj.type -eq 'contentChanged') {
                                         $Script:MainForm.Definition.Dispatcher.Invoke([System.Action] {
-                                                $TabSession.IsDirty = $true
-                                                Update-TabHeaderTitle -TabSession $TabSession
+                                                $HandlerTab.IsDirty = $true
+                                                Update-TabHeaderTitle -TabSession $HandlerTab
                                             })
                                     }
                                 }
@@ -156,27 +178,32 @@ function Initialize-WebViewForTab {
                             catch {
                                 $_.Exception.Message | Write-LogOutput -LogType ERROR -ErrorObject $_
                             }
-                        }.GetNewClosure())
+                        })
 
                     $TabSession.WebView.Object.add_NavigationCompleted({
+                            param($NavigationSender)
                             try {
                                 $_ | Show-EventInfo
-                                "Set-EditorValue after loading html for tab '{0}'" -f $TabSession.DisplayName | Write-LogOutput -LogType DEBUG
-                                Set-ActiveTabContext -TabSession $TabSession
+                                $HandlerTab = Get-TabSessionByWebViewSender -Sender $NavigationSender
+                                if ($null -eq $HandlerTab) {
+                                    return
+                                }
+                                "Set-EditorValue after loading html for tab '{0}'" -f $HandlerTab.DisplayName | Write-LogOutput -LogType DEBUG
+                                Set-ActiveTabContext -TabSession $HandlerTab
                                 Set-EditorValue
                                 $Script:RunTimeConfig.ReconnectStatus = 3
                             }
                             catch {
                                 $_.Exception.Message | Write-LogOutput -LogType ERROR -ErrorObject $_
                             }
-                        }.GetNewClosure())
+                        })
 
                     "WebView2 for tab '{0}' initialized" -f $TabSession.DisplayName | Write-LogOutput -LogType DEBUG
                 }
                 catch {
                     "WebView2 initialization failed for tab '{0}': {1}" -f $TabSession.DisplayName, $_.Exception.Message | Write-LogOutput -LogType ERROR -ErrorObject $_
                 }
-            }.GetNewClosure()
+            }
 
         $Script:PendingWebViewCompletions.Add([PSCustomObject]@{
                 Task                   = $EnsureCoreWebView2Task

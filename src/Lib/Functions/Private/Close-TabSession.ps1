@@ -29,70 +29,43 @@ function Close-TabSession {
         Set-ActiveTabContext -TabSession $TabToClose
 
         # Everything that actually tears the tab down - disposing WebView2, removing it from the
-        # TabControl/$Script:Tabs, and deciding which tab becomes active next - is captured here
-        # so it can run either immediately (no unsaved changes / Discard) or deferred until an
-        # in-flight save completes (see below).
-        $FinishClose = {
-            $ClosingIndex = $Script:Tabs.IndexOf($TabToClose)
-
-            if ($null -ne $TabToClose.WebView.Object) {
-                try {
-                    $TabToClose.WebView.Object.Dispose()
-                }
-                catch {
-                    "Failed to dispose WebView2 for tab '{0}': {1}" -f $TabToClose.DisplayName, $_.Exception.Message | Write-LogOutput -LogType WARNING
-                }
-            }
-
-            # TabControlSessions must always be resolved via Get-TabControlSessions, not
-            # $Script:MainForm.Elements - the latter was just repointed to $TabToClose's own elements.
-            $TabControlSessions = Get-TabControlSessions
-            $TabControlSessions.Items.Remove($TabToClose.TabItem)
-            [void]$Script:Tabs.Remove($TabToClose)
-
-            if ($Script:Tabs.Count -eq 0) {
-                "Last tab closed; opening a fresh one." | Write-LogOutput -LogType DEBUG
-                New-TabSession | Out-Null
-                return
-            }
-
-            if ($WasActiveTab) {
-                $NextIndex = [Math]::Min($ClosingIndex, $Script:Tabs.Count - 1)
-                $TabControlSessions.SelectedItem = $Script:Tabs[$NextIndex].TabItem
-            }
-            elseif ($null -ne $PreviouslyActiveTab) {
-                # The tab that was actually on screen is untouched by this close - the TabControl's
-                # own selection never moved, so just restore the globals Set-ActiveTabContext
-                # repointed onto $TabToClose above, without disturbing that selection.
-                Set-ActiveTabContext -TabSession $PreviouslyActiveTab
-            }
-        }.GetNewClosure()
+        # TabControl/$Script:Tabs, and deciding which tab becomes active next - lives in the named
+        # function Complete-TabClose so it can run either immediately (no unsaved changes /
+        # Discard) or deferred until an in-flight save completes (see below), without a closure.
 
         if ($TabToClose.IsDirty) {
             $Choice = Open-ChoiceForm -Title "Unsaved changes" -Message ("Save changes to '{0}' before closing?" -f $TabToClose.DisplayName) -LeftButtonText "Save" -RightButtonText "Discard" -LeftButtonReturnValue 1 -RightButtonReturnValue 2
             if ($Choice -eq 1) {
                 # Invoke-SaveEditorValue is asynchronous (it queues a WebView2 script and returns
                 # immediately) - disposing/removing the tab right after calling it would race the
-                # save and can lose the user's changes. Defer $FinishClose until that same save
+                # save and can lose the user's changes. Defer the teardown until that same save
                 # Task completes by enqueuing onto the same $Script:PendingWebViewCompletions
                 # queue Invoke-SaveEditorValue's own completion uses - entries are processed in
-                # the order they were added, so $FinishClose only runs after the save itself has
-                # finished. TabSession is left $null here since $FinishClose already decides the
-                # correct active tab itself; the top-level poll timer must not also try to.
+                # the order they were added, so Complete-TabClose only runs after the save itself
+                # has finished. TabSession is left $null here since Complete-TabClose already
+                # decides the correct active tab itself; the top-level poll timer must not also
+                # try to. The teardown state travels on the completion item and is read back out
+                # by a plain (non-closure) block so it can resolve this module's private functions.
                 Invoke-SaveEditorValue
                 $SaveTask = $TabToClose.PendingTask
                 if ($null -ne $SaveTask) {
                     $Script:PendingWebViewCompletions.Add([PSCustomObject]@{
                             Task                   = $SaveTask
                             TabSession             = $null
-                            OnCompletedScriptBlock = $FinishClose
+                            TabToClose             = $TabToClose
+                            WasActiveTab           = $WasActiveTab
+                            PreviouslyActiveTab    = $PreviouslyActiveTab
+                            OnCompletedScriptBlock = {
+                                param($Completion)
+                                Complete-TabClose -TabToClose $Completion.TabToClose -WasActiveTab $Completion.WasActiveTab -PreviouslyActiveTab $Completion.PreviouslyActiveTab
+                            }
                         })
                     return
                 }
             }
         }
 
-        & $FinishClose
+        Complete-TabClose -TabToClose $TabToClose -WasActiveTab $WasActiveTab -PreviouslyActiveTab $PreviouslyActiveTab
     }
     catch {
         $_.Exception.Message | Write-LogOutput -LogType ERROR -ErrorObject $_

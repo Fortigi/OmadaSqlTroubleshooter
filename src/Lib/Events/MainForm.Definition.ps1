@@ -1,14 +1,13 @@
-# Every scriptblock ever proven to reliably resolve dot-sourced functions in this app is a
-# top-level statement in one of these Lib/Events files - never one created inside a regular
-# PowerShell function (a real `function Name { param(...) ... }` block, as opposed to a plain
-# scriptblock). WebView2/Monaco's async completions (Task.GetAwaiter().OnCompleted, a
-# DispatcherTimer created inside Initialize-WebViewForTab/Invoke-ExecuteScriptAsync) kept
-# throwing CommandNotFoundException for dot-sourced functions no matter which .NET dispatch
-# mechanism was used, because the deferred scriptblock itself was created inside a function
-# call frame. This single, genuinely top-level timer is the one place that work is now actually
-# invoked from; Invoke-ExecuteScriptAsync/Invoke-ExecuteScriptWithResultAsync/
-# Initialize-WebViewForTab only ever enqueue an item here instead of creating their own deferred
-# scriptblock.
+# WebView2/Monaco's async completions kept throwing CommandNotFoundException for dot-sourced
+# functions. The actual cause was .GetNewClosure(): a closure runs inside a detached dynamic
+# module whose scope does not include this module's private (non-exported) functions, so any
+# call to Write-LogOutput/Set-EditorValue/etc. from a closure fails - no matter which .NET
+# dispatch mechanism invokes it. A PLAIN scriptblock (no GetNewClosure), by contrast, keeps this
+# module's session state and resolves private functions fine, even when created inside a function
+# and invoked later by .NET. So the rule is: deferred/event scriptblocks must be plain blocks and
+# receive their per-tab state via a parameter (or recover it from the event sender), never via
+# GetNewClosure. This single top-level timer drains the completion queue; each enqueued
+# OnCompletedScriptBlock is a plain block invoked with its $Pending item as the argument.
 $Script:PendingWebViewCompletions = [System.Collections.Generic.List[object]]::new()
 
 $Script:WebViewCompletionPollTimer = New-Object System.Windows.Threading.DispatcherTimer
@@ -19,24 +18,27 @@ $Script:WebViewCompletionPollTimer.Add_Tick({
             foreach ($Pending in $Completed) {
                 [void]$Script:PendingWebViewCompletions.Remove($Pending)
 
-                # Every step here - Get-ActiveTabSession, Set-ActiveTabContext, and finally
-                # invoking the enqueued OnCompletedScriptBlock - runs directly from this
-                # top-level Tick handler's own call frame, not from inside a wrapper scriptblock
-                # created by whichever function enqueued the work. Only OnCompletedScriptBlock
-                # itself (the tab-specific logic, e.g. Initialize-WebViewForTab's Monaco setup)
-                # was necessarily created inside a function via GetNewClosure() - everything
-                # that needs to reliably resolve Get-ActiveTabSession/Set-ActiveTabContext
-                # happens here instead.
+                # Get-ActiveTabSession/Set-ActiveTabContext and the enqueued OnCompletedScriptBlock
+                # all run from this top-level Tick handler's frame. The OnCompletedScriptBlock is a
+                # plain block (never a GetNewClosure block), so it too resolves this module's
+                # private functions - it just needs its per-tab state handed to it, which is why
+                # $Pending is passed as its argument below.
                 #
                 # A $null TabSession means the caller's own OnCompletedScriptBlock manages the
                 # active-tab context itself (e.g. Close-TabSession deciding which tab becomes
                 # active after teardown) - auto-repointing/restoring around it here would just
                 # stomp on that decision, so skip it entirely in that case.
+                # The completion block is invoked with the whole $Pending item as its argument so
+                # it can be a plain scriptblock that reads its owning tab (and any other captured
+                # data) from $Pending instead of a .GetNewClosure() block - the latter runs in a
+                # detached dynamic module that cannot resolve this app's dot-sourced private
+                # functions (CommandNotFoundException). Plain blocks without a param() simply
+                # ignore the argument.
                 if ($null -ne $Pending.TabSession) {
                     $PreviouslyActiveTab = Get-ActiveTabSession
                     try {
                         Set-ActiveTabContext -TabSession $Pending.TabSession
-                        & $Pending.OnCompletedScriptBlock
+                        & $Pending.OnCompletedScriptBlock $Pending
                     }
                     finally {
                         if ($null -ne $PreviouslyActiveTab) {
@@ -45,7 +47,7 @@ $Script:WebViewCompletionPollTimer.Add_Tick({
                     }
                 }
                 else {
-                    & $Pending.OnCompletedScriptBlock
+                    & $Pending.OnCompletedScriptBlock $Pending
                 }
             }
         }
