@@ -80,6 +80,13 @@ $Script:MainForm.Definition.Add_Loaded({
         try {
             $_ | Show-EventInfo
 
+            # Flip to "Open" before anything else in this handler runs: TabControlSessions'
+            # SelectionChanged guards on this state to reject the reentrant selection WPF fires
+            # for TabItemAddNew as soon as the control materializes (before Loaded even starts) -
+            # but Restore-TabSessions below still needs to run with State already "Open", since it
+            # selects each restored TabItem synchronously through that same SelectionChanged handler.
+            $Script:MainForm.State = "Open"
+
             if ($Script:AppGlobalConfig.LogFormOpen) {
                 Open-LogForm
             }
@@ -103,8 +110,6 @@ $Script:MainForm.Definition.Add_Loaded({
             # creates the initial tab(s) - from persisted state, migrated legacy config, or a
             # single fresh tab on first-ever run.
             Restore-TabSessions
-
-            $Script:MainForm.State = "Open"
         }
         catch {
             "Tab session restore failed: {0}" -f $_.Exception.Message | Write-LogOutput -LogType ERROR -ErrorObject $_

@@ -51,7 +51,10 @@ function Initialize-FormObject {
         $ElementNames = @( "AccessText", "Button", "CheckBox", "ComboBox", "ComboBoxItem", "DataGrid", "Image", "Label", "PasswordBox", "RadioButton", "RichTextBox", "TabControl", "TextBlock", "TextBox", "TreeViewSqlSchema", "WebView2")
         foreach ($ElementName in $ElementNames) {
             "Find element type: {0}" -f $ElementName | Write-LogOutput -LogType DEBUG
-            $Xaml.DocumentElement.SelectNodes("//default:$ElementName", $NamespaceManager) | ForEach-Object {
+            # WebView2 is declared under the Wpf clr-namespace prefix (Microsoft.Web.WebView2.Wpf),
+            # not the default presentation namespace every other element type here lives in.
+            $NamespacePrefix = if ($ElementName -eq "WebView2") { "Wpf" } else { "default" }
+            $Xaml.DocumentElement.SelectNodes("//${NamespacePrefix}:$ElementName", $NamespaceManager) | ForEach-Object {
                 $_.Name | Select-Object -Unique | ForEach-Object {
                     if (![string]::IsNullOrWhiteSpace($_) -and $null -ne $Form.FindName($_)) {
                         "Add element type: {0}" -f $_ | Write-LogOutput -LogType DEBUG

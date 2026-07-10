@@ -6,6 +6,15 @@
         try {
             $_ | Show-EventInfo
 
+            # WPF's TabControl re-selects its first item (TabItemAddNew) as soon as the control
+            # materializes - even with SelectedIndex="-1" in XAML - which happens before
+            # MainForm.Definition's Add_Loaded runs. Reject that reentrant firing: it would call
+            # New-TabSession against a MainForm that is still mid-construction and crash the
+            # dispatcher. $Script:MainForm.State only becomes "Open" once Add_Loaded starts.
+            if ($Script:MainForm.State -ne "Open") {
+                return
+            }
+
             $SelectedItem = (Get-TabControlSessions).SelectedItem
             if ($null -eq $SelectedItem) {
                 return
