@@ -1,8 +1,8 @@
 function Close-TabSession {
     <#
     .SYNOPSIS
-    Closes a tab. Prompts to save first if the tab has unsaved query changes. Never leaves the
-    application with zero tabs - closing the last remaining tab immediately opens a fresh one.
+    Closes a tab. Prompts to save first if the tab has unsaved query changes. Closing the last
+    remaining tab leaves only the "+" add tab - no tab is auto-opened.
     #>
     [CmdLetBinding()]
     param(
