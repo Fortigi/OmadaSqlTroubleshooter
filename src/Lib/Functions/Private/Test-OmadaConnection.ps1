@@ -29,7 +29,7 @@ function Test-OmadaConnection {
             # per tab in New-TabSession), not the process-global $Script:RunTimeConfig one, which
             # was uninitialized and let one tab's failures suppress or amplify another's.
             $Script:RunTimeData.AuthenticationRetryCount++
-            if ($Script:RunTimeData.AuthenticationRetryCount -le 1 -and $_.Exception.Response.StatusCode -eq 401) {
+            if ($Script:RunTimeData.AuthenticationRetryCount -le 1 -and $_.Exception.Response?.StatusCode -eq 401) {
                 $Script:RunTimeData.RestMethodParam.ForceAuthentication = $true
                 return Test-OmadaConnection
             }
