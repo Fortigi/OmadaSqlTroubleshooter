@@ -18,6 +18,12 @@ function Close-TabSession {
             return
         }
 
+        # Capture whichever tab is actually active before repointing context onto the tab being
+        # closed - closing a background tab (e.g. via its own header's close button) must not
+        # silently switch the user away from whatever tab they're actually looking at.
+        $PreviouslyActiveTab = Get-ActiveTabSession
+        $WasActiveTab = ($null -ne $PreviouslyActiveTab -and $PreviouslyActiveTab.Id -eq $TabId)
+
         # Operate against the tab being closed, so IsDirty/Save act on its own state
         # regardless of which tab happens to be active right now.
         Set-ActiveTabContext -TabSession $TabToClose
@@ -52,9 +58,15 @@ function Close-TabSession {
             return
         }
 
-        if ($Script:ActiveTabId -eq $TabId) {
+        if ($WasActiveTab) {
             $NextIndex = [Math]::Min($ClosingIndex, $Script:Tabs.Count - 1)
             $TabControlSessions.SelectedItem = $Script:Tabs[$NextIndex].TabItem
+        }
+        elseif ($null -ne $PreviouslyActiveTab) {
+            # The tab that was actually on screen is untouched by this close - the TabControl's
+            # own selection never moved, so just restore the globals Set-ActiveTabContext
+            # repointed onto $TabToClose above, without disturbing that selection.
+            Set-ActiveTabContext -TabSession $PreviouslyActiveTab
         }
     }
     catch {
