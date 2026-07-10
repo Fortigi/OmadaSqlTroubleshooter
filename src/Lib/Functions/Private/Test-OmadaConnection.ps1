@@ -5,6 +5,14 @@ function Test-OmadaConnection {
     try {
         "Test connection" | Write-LogOutput -LogType DEBUG
         try {
+            # Key the OmadaWeb.PS session by connection identity rather than the unique tab id, so
+            # tabs with the same tenant/auth/credentials share one authenticated session (a second
+            # matching tab connects without its own login prompt).
+            $ConnectionIdentity = Get-TabConnectionIdentity -TabSession (Get-ActiveTabSession)
+            if ($null -ne $ConnectionIdentity -and ![string]::IsNullOrWhiteSpace($ConnectionIdentity.Key)) {
+                $Script:RunTimeData.RestMethodParam.SessionKey = $ConnectionIdentity.Key
+            }
+
             $Script:RunTimeData.RestMethodParam.Uri = "{0}/odata/dataobjects/C_P_SQLTROUBLESHOOTING" -f $Script:AppConfig.BaseUrl
             $Script:RunTimeData.RestMethodParam.Body = $null
             $Script:RunTimeData.RestMethodParam.Method = "GET"

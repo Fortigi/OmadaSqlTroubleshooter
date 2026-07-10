@@ -34,6 +34,9 @@ $Script:MainForm.Elements.ButtonConnect.Add_Click({
                     if ($Script:ConnectionStatus) {
                         Update-QueryList -ForceRefresh
                         Update-DataConnectionList
+                        # Auto-connect every other tab that shares this connection identity, reusing
+                        # this tab's session (no second login).
+                        Sync-MatchingTabConnections -SourceTabId $Script:ActiveTabId -Connect $true
                     }
                 }
                 finally {
@@ -53,7 +56,10 @@ $Script:MainForm.Elements.ButtonConnect.Add_Click({
                 }
             }
             else {
+                $DisconnectingTabId = $Script:ActiveTabId
                 Set-SqlConnectionState -Status $false
+                # Disconnect every other tab that shares this connection identity too.
+                Sync-MatchingTabConnections -SourceTabId $DisconnectingTabId -Connect $false
             }
         }
         catch {
