@@ -7,10 +7,15 @@ function Initialize-WebViewForTab {
     once in MainForm.Definition.ps1's Add_Loaded, so it can run once per tab instead.
 
     .NOTES
-    Every closure below explicitly captures $TabSession (via GetNewClosure()) and calls
-    Set-ActiveTabContext at the top - these callbacks are asynchronous and may fire well after
-    the user has switched to a different tab, so they must never rely on whichever tab happens
-    to be "current" when they actually run.
+    The EnsureCoreWebView2Async completion logic is enqueued onto
+    $Script:PendingWebViewCompletions rather than run from a scriptblock created in this
+    function's own call frame - see the WebViewCompletionPollTimer comment in
+    MainForm.Definition.ps1 for why. The shared top-level timer calls Set-ActiveTabContext for
+    the originating tab before invoking that scriptblock, and restores the previously-active tab
+    afterward, so the enqueued logic can always assume $TabSession is the active context. The
+    nested PreviewKeyDown/WebMessageReceived/NavigationCompleted handlers still capture
+    $TabSession explicitly (via GetNewClosure()) and call Set-ActiveTabContext themselves, since
+    those genuinely are independent WPF/WebView2 events, not part of this completion.
     #>
     [CmdLetBinding()]
     param(
@@ -56,32 +61,14 @@ function Initialize-WebViewForTab {
 
         $EnsureCoreWebView2Task = $TabSession.WebView.Object.EnsureCoreWebView2Async($TabSession.WebView.Environment)
 
-        # Neither Task.GetAwaiter().OnCompleted(scriptblock) nor DispatcherTimer.Tick reliably
-        # preserve PowerShell's [Runspace]::DefaultRunspace (a [ThreadStatic] property) for a
-        # scriptblock created via GetNewClosure() inside a function - calling a dot-sourced
-        # function from one can throw CommandNotFoundException with nothing able to catch it,
-        # crashing the whole process, even though built-in cmdlets keep resolving fine (they
-        # don't depend on DefaultRunspace the same way). Capture the runspace that's active here,
-        # where everything works, and explicitly restore it as the very first thing the deferred
-        # callback does - before touching any dot-sourced function.
-        $CapturedRunspace = [System.Management.Automation.Runspaces.Runspace]::DefaultRunspace
-
-        $PollTimer = New-Object System.Windows.Threading.DispatcherTimer
-        $PollTimer.Interval = [TimeSpan]::FromMilliseconds(50)
-        $PollTimer.Add_Tick({
-                if (-not $EnsureCoreWebView2Task.IsCompleted) {
-                    return
-                }
-                $PollTimer.Stop()
-
-                [System.Management.Automation.Runspaces.Runspace]::DefaultRunspace = $CapturedRunspace
-
-                # Capture whichever tab is actually active AT THE MOMENT this fires (not via
-                # Get-ActiveTabSession in the finally below - Set-ActiveTabContext just below
-                # would have already overwritten $Script:ActiveTabId to $TabSession's by then).
-                $PreviouslyActiveTab = Get-ActiveTabSession
+        # A scriptblock created inside this function (via GetNewClosure(), a Task continuation,
+        # or a DispatcherTimer created here) does not reliably resolve dot-sourced functions once
+        # invoked later by .NET's own dispatch machinery - CommandNotFoundException, uncaught.
+        # Enqueue plain data instead; the single, top-level WebViewCompletionPollTimer in
+        # MainForm.Definition.ps1 is what actually calls Set-ActiveTabContext and invokes this
+        # scriptblock, from a call frame that has always reliably resolved functions.
+        $OnCompletedScriptBlock = {
                 try {
-                    Set-ActiveTabContext -TabSession $TabSession
                     "EnsureCoreWebView2Async OnCompleted script for tab '{0}'" -f $TabSession.DisplayName | Write-LogOutput -LogType DEBUG
 
                     if ($null -eq $TabSession.WebView.Object.CoreWebView2) {
@@ -187,15 +174,13 @@ function Initialize-WebViewForTab {
                 catch {
                     "WebView2 initialization failed for tab '{0}': {1}" -f $TabSession.DisplayName, $_.Exception.Message | Write-LogOutput -LogType ERROR -ErrorObject $_
                 }
-                finally {
-                    # Never leave the app's "current tab" globals pointed at a tab the user is no
-                    # longer looking at, just because its async WebView2 setup finished last.
-                    if ($null -ne $PreviouslyActiveTab) {
-                        Set-ActiveTabContext -TabSession $PreviouslyActiveTab
-                    }
-                }
-            }.GetNewClosure())
-        $PollTimer.Start()
+            }.GetNewClosure()
+
+        $Script:PendingWebViewCompletions.Add([PSCustomObject]@{
+                Task                   = $EnsureCoreWebView2Task
+                TabSession             = $TabSession
+                OnCompletedScriptBlock = $OnCompletedScriptBlock
+            })
     }
     catch {
         "WebView2 initialization failed for tab '{0}': {1}" -f $TabSession.DisplayName, $_.Exception.Message | Write-LogOutput -LogType ERROR -ErrorObject $_

@@ -22,45 +22,18 @@ function Invoke-ExecuteScriptWithResultAsync {
                 }
                 $Script:Task = $Task
 
-                # Neither Task.GetAwaiter().OnCompleted(scriptblock) nor DispatcherTimer.Tick
-                # reliably preserve PowerShell's [Runspace]::DefaultRunspace (a [ThreadStatic]
-                # property) for a scriptblock created via GetNewClosure() inside a function -
-                # calling a dot-sourced function from one can throw CommandNotFoundException with
-                # nothing able to catch it, crashing the whole process, even though built-in
-                # cmdlets keep resolving fine (they don't depend on DefaultRunspace the same way).
-                # Capture the runspace that's active here, where everything works, and explicitly
-                # restore it as the very first thing the deferred callback does - before touching
-                # any dot-sourced function.
-                $CapturedRunspace = [System.Management.Automation.Runspaces.Runspace]::DefaultRunspace
-
-                $PollTimer = New-Object System.Windows.Threading.DispatcherTimer
-                $PollTimer.Interval = [TimeSpan]::FromMilliseconds(50)
-                $PollTimer.Add_Tick({
-                        if (-not $Task.IsCompleted) {
-                            return
-                        }
-                        $PollTimer.Stop()
-
-                        [System.Management.Automation.Runspaces.Runspace]::DefaultRunspace = $CapturedRunspace
-
-                        # Capture whichever tab is actually active AT THE MOMENT this fires (not
-                        # via Get-ActiveTabSession after the fact - Set-ActiveTabContext below
-                        # would have already overwritten $Script:ActiveTabId to $TabSession's by
-                        # then).
-                        $PreviouslyActiveTab = Get-ActiveTabSession
-                        try {
-                            if ($null -ne $TabSession) {
-                                Set-ActiveTabContext -TabSession $TabSession
-                            }
-                            & $OnCompletedScriptBlock
-                        }
-                        finally {
-                            if ($null -ne $PreviouslyActiveTab) {
-                                Set-ActiveTabContext -TabSession $PreviouslyActiveTab
-                            }
-                        }
-                    }.GetNewClosure())
-                $PollTimer.Start()
+                # A scriptblock created inside this function (via GetNewClosure(), a Task
+                # continuation, or a DispatcherTimer created here) does not reliably resolve
+                # dot-sourced functions once invoked later by .NET's own dispatch machinery -
+                # CommandNotFoundException, uncaught. Enqueue plain data instead; the single,
+                # top-level WebViewCompletionPollTimer in MainForm.Definition.ps1 is what
+                # actually calls Set-ActiveTabContext and invokes $OnCompletedScriptBlock, from a
+                # call frame that has always reliably resolved functions.
+                $Script:PendingWebViewCompletions.Add([PSCustomObject]@{
+                        Task                   = $Task
+                        TabSession             = $TabSession
+                        OnCompletedScriptBlock = $OnCompletedScriptBlock
+                    })
             }
             else {
                 Write-LogOutput -Message "WebView2 is not loaded yet." -LogType DEBUG

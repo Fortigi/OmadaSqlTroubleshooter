@@ -1,3 +1,52 @@
+# Every scriptblock ever proven to reliably resolve dot-sourced functions in this app is a
+# top-level statement in one of these Lib/Events files - never one created inside a regular
+# PowerShell function (a real `function Name { param(...) ... }` block, as opposed to a plain
+# scriptblock). WebView2/Monaco's async completions (Task.GetAwaiter().OnCompleted, a
+# DispatcherTimer created inside Initialize-WebViewForTab/Invoke-ExecuteScriptAsync) kept
+# throwing CommandNotFoundException for dot-sourced functions no matter which .NET dispatch
+# mechanism was used, because the deferred scriptblock itself was created inside a function
+# call frame. This single, genuinely top-level timer is the one place that work is now actually
+# invoked from; Invoke-ExecuteScriptAsync/Invoke-ExecuteScriptWithResultAsync/
+# Initialize-WebViewForTab only ever enqueue an item here instead of creating their own deferred
+# scriptblock.
+$Script:PendingWebViewCompletions = [System.Collections.Generic.List[object]]::new()
+
+$Script:WebViewCompletionPollTimer = New-Object System.Windows.Threading.DispatcherTimer
+$Script:WebViewCompletionPollTimer.Interval = [TimeSpan]::FromMilliseconds(50)
+$Script:WebViewCompletionPollTimer.Add_Tick({
+        try {
+            $Completed = @($Script:PendingWebViewCompletions | Where-Object { $_.Task.IsCompleted })
+            foreach ($Pending in $Completed) {
+                [void]$Script:PendingWebViewCompletions.Remove($Pending)
+
+                # Every step here - Get-ActiveTabSession, Set-ActiveTabContext, and finally
+                # invoking the enqueued OnCompletedScriptBlock - runs directly from this
+                # top-level Tick handler's own call frame, not from inside a wrapper scriptblock
+                # created by whichever function enqueued the work. Only OnCompletedScriptBlock
+                # itself (the tab-specific logic, e.g. Initialize-WebViewForTab's Monaco setup)
+                # was necessarily created inside a function via GetNewClosure() - everything
+                # that needs to reliably resolve Get-ActiveTabSession/Set-ActiveTabContext
+                # happens here instead.
+                $PreviouslyActiveTab = Get-ActiveTabSession
+                try {
+                    if ($null -ne $Pending.TabSession) {
+                        Set-ActiveTabContext -TabSession $Pending.TabSession
+                    }
+                    & $Pending.OnCompletedScriptBlock
+                }
+                finally {
+                    if ($null -ne $PreviouslyActiveTab) {
+                        Set-ActiveTabContext -TabSession $PreviouslyActiveTab
+                    }
+                }
+            }
+        }
+        catch {
+            $_.Exception.Message | Write-LogOutput -LogType ERROR -ErrorObject $_
+        }
+    })
+$Script:WebViewCompletionPollTimer.Start()
+
 $Script:MainForm.Definition.Add_Closed({
         try {
             $_ | Show-EventInfo
