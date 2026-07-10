@@ -43,7 +43,8 @@ Describe 'ConvertTo-TabSessionConfig' {
         $Result.CurrentDataConnection.DoId | Should -Be 7
         $Result.CurrentDataConnection.DisplayName | Should -Be "Production"
         $Result.CurrentDataConnection.FullName | Should -Be "Production (7)"
-        [guid]::TryParse($Result.Id, [ref]([guid]::Empty)) | Should -Be $true
+        $ParsedGuid = [guid]::Empty
+        [guid]::TryParse($Result.Id, [ref]$ParsedGuid) | Should -Be $true
     }
 
     It 'should default DisplayName to Get-DefaultTabDisplayName when blank' {
@@ -61,7 +62,8 @@ Describe 'ConvertTo-TabSessionConfig' {
         $Result.BaseUrl | Should -BeNullOrEmpty
         $Result.CurrentSqlQuery.DoId | Should -BeNullOrEmpty
         $Result.DisplayName | Should -Match '^SqlQuery_\d{14}$'
-        [guid]::TryParse($Result.Id, [ref]([guid]::Empty)) | Should -Be $true
+        $ParsedGuid = [guid]::Empty
+        [guid]::TryParse($Result.Id, [ref]$ParsedGuid) | Should -Be $true
     }
 
     It 'should coerce missing MyCreatedQueriesOnly/MyUpdatedQueriesOnly/SavePassword to false' {
