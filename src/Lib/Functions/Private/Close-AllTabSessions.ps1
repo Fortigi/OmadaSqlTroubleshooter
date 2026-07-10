@@ -1,9 +1,9 @@
 function Close-AllTabSessions {
     <#
     .SYNOPSIS
-    Closes every open tab. Because the app never allows zero tabs, closing the final tab opens a
-    fresh empty one - so "Close All" effectively resets down to a single blank tab. Each tab is
-    routed through Close-TabSession, so tabs with unsaved changes still get their save prompt.
+    Closes every open tab. Closing the final tab leaves only the "+" add tab, with no tab active -
+    it is not auto-reopened. Each tab is routed through Close-TabSession, so tabs with unsaved
+    changes still get their save prompt.
     #>
     [CmdLetBinding()]
     param()

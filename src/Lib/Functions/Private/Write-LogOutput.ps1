@@ -173,7 +173,7 @@ function Write-LogOutput {
                     else {
                         $LogMessage.Text | Write-Host -ForegroundColor $LogMessage.Color
                     }
-                    [System.Windows.MessageBox]::Show((Limit-MessageBoxText -Text $LogMessageDialog.Text), $LogMessageDialog.Title, [System.Windows.Forms.MessageBoxButtons]::OK, $MessageBoxImage) | Out-Null
+                    [System.Windows.MessageBox]::Show((Limit-MessageBoxText -Text $LogMessageDialog.Text), $LogMessageDialog.Title, [System.Windows.MessageBoxButton]::OK, $MessageBoxImage) | Out-Null
                 }
             }
             finally {
