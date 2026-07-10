@@ -122,6 +122,44 @@ function New-TabSession {
         $TabItem.Header = New-TabHeaderControl -TabSession $NewTab
         $TabItem.Content = $Form.Definition
         $TabItem.ContextMenu = New-TabContextMenu -TabSession $NewTab
+        # Tag carries the tab id so the drag-reorder handlers (plain scriptblocks, no GetNewClosure)
+        # can identify source/target tabs from their senders.
+        $TabItem.Tag = $NewTab.Id
+        $TabItem.AllowDrop = $true
+        $TabItem.Add_PreviewMouseLeftButtonDown({
+                param($DragSender, $DragArgs)
+                $Script:TabDragStartPoint = $DragArgs.GetPosition($null)
+                $Script:TabDragArmed = $true
+            })
+        $TabItem.Add_PreviewMouseMove({
+                param($DragSender, $DragArgs)
+                try {
+                    if ($DragArgs.LeftButton -eq [System.Windows.Input.MouseButtonState]::Pressed -and $Script:TabDragArmed) {
+                        $Position = $DragArgs.GetPosition($null)
+                        $DeltaX = [Math]::Abs($Position.X - $Script:TabDragStartPoint.X)
+                        $DeltaY = [Math]::Abs($Position.Y - $Script:TabDragStartPoint.Y)
+                        if ($DeltaX -gt [System.Windows.SystemParameters]::MinimumHorizontalDragDistance -or $DeltaY -gt [System.Windows.SystemParameters]::MinimumVerticalDragDistance) {
+                            $Script:TabDragArmed = $false
+                            [void][System.Windows.DragDrop]::DoDragDrop($DragSender, $DragSender.Tag, [System.Windows.DragDropEffects]::Move)
+                        }
+                    }
+                }
+                catch {
+                    $_.Exception.Message | Write-LogOutput -LogType ERROR -ErrorObject $_
+                }
+            })
+        $TabItem.Add_Drop({
+                param($DropSender, $DropArgs)
+                try {
+                    $DraggedId = $DropArgs.Data.GetData([string])
+                    if (![string]::IsNullOrWhiteSpace($DraggedId)) {
+                        Move-TabSession -DraggedTabId $DraggedId -TargetTabId $DropSender.Tag
+                    }
+                }
+                catch {
+                    $_.Exception.Message | Write-LogOutput -LogType ERROR -ErrorObject $_
+                }
+            })
         $NewTab.TabItem = $TabItem
         Update-TabHeaderTitle -TabSession $NewTab
 
