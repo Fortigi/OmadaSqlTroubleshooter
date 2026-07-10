@@ -31,6 +31,12 @@ function Sync-MatchingTabConnections {
             return
         }
 
+        # A duplicated tab is made independent: connecting or disconnecting it must never affect the
+        # tab it was duplicated from (or any other tab), so it neither propagates nor receives sync.
+        if ($Source.IndependentConnection) {
+            return
+        }
+
         $SourceIdentity = Get-TabConnectionIdentity -TabSession $Source
         if ($null -eq $SourceIdentity -or $SourceIdentity.IsEmpty) {
             # A blank tab has nothing to share/auto-connect.
@@ -39,6 +45,10 @@ function Sync-MatchingTabConnections {
 
         $ReturnTab = Get-ActiveTabSession
         foreach ($Tab in @($Script:Tabs | Where-Object { $_.Id -ne $SourceTabId })) {
+            # Never auto-connect/disconnect an independent (duplicated) tab from another tab's change.
+            if ($Tab.IndependentConnection) {
+                continue
+            }
             $Identity = Get-TabConnectionIdentity -TabSession $Tab
             if ($null -eq $Identity -or $Identity.Key -ne $SourceIdentity.Key) {
                 continue

@@ -64,6 +64,9 @@ function New-TabSession {
             OpenOrder        = $OpenOrder
             PendingEditorText = $null
             PendingDisplayName = $null
+            # Duplicated tabs set this true so their connect/disconnect never propagates to (or from)
+            # the tab they were duplicated from via Sync-MatchingTabConnections.
+            IndependentConnection = $false
             IsDirty          = $false
             Form             = $Form
             Elements         = $Form.Elements

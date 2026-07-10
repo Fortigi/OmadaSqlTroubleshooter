@@ -53,6 +53,10 @@ function Complete-DuplicateTab {
             return
         }
 
+        # The duplicate is independent from its source: disconnecting (or connecting) it must not
+        # cascade to the tab it was duplicated from via Sync-MatchingTabConnections.
+        $NewTab.IndependentConnection = $true
+
         # Put the duplicate's own tab name (Query{#}) into its Display name field, made unique
         # against the existing saved queries so it never clashes with one already in the query list
         # (if "Query7" exists, the next free "Query{#}" is used). The source tab shares the same
