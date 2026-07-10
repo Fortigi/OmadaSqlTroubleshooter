@@ -85,6 +85,8 @@ function Invoke-OmadaSqlTroubleshooter {
         ReconnectStatus    = 0
         SavePassword       = $false
         InstanceGuid       = $(([System.Guid]::NewGuid()).ToString('N'))
+        ResetRequested     = $Reset.IsPresent -or $false
+        NoReconnect        = $NoReconnect.IsPresent -or $false
     }
     Get-ChildItem -Path (Join-Path $Script:RunTimeConfig.ModuleFolder -ChildPath "Lib\Functions") -Filter *.ps1 | Where-Object { $_.Name -notlike "_*.ps1" } | ForEach-Object {
         . $_.FullName
@@ -97,8 +99,11 @@ function Invoke-OmadaSqlTroubleshooter {
     # strips now-obsolete tab-scope properties (BaseUrl, CurrentSqlQuery, etc.) and immediately
     # rewrites the file, so this is the one chance to read them for the one-time tab migration in
     # Restore-TabSessions.
+    # -Reset means "start completely clean": skip the one-time legacy migration entirely so a
+    # stale pre-tabs config can never seed a restored tab (Restore-TabSessions also drops the
+    # persisted tabs store and suppresses the reconnect prompt when ResetRequested is set).
     $Script:LegacyConfigForMigration = $null
-    if (Test-Path $Script:RunTimeConfig.ConfigFile.Path -PathType Leaf) {
+    if (-not $Reset -and (Test-Path $Script:RunTimeConfig.ConfigFile.Path -PathType Leaf)) {
         try {
             $RawLegacyConfig = Get-Content $Script:RunTimeConfig.ConfigFile.Path -Raw | ConvertFrom-Json
             if ($RawLegacyConfig.PSObject.Properties.Match("BaseUrl").Count -gt 0 -and ![string]::IsNullOrWhiteSpace($RawLegacyConfig.BaseUrl)) {
@@ -153,7 +158,7 @@ function Invoke-OmadaSqlTroubleshooter {
         "Application '{0}': Start initialization..." -f $Script:RunTimeConfig.ApplicationTitle | Write-Host -ForegroundColor Green
         $Script:ConnectionStatus = $false
         $Script:RunTimeConfig.ReconnectStatus = 0
-        Initialize-GlobalConfigSettings
+        Initialize-GlobalConfigSettings -Reset:$Reset
 
         Close-SplashScreenForm
     }

@@ -10,18 +10,28 @@ function Test-OmadaConnection {
             $Script:RunTimeData.RestMethodParam.Method = "GET"
             $null = Invoke-OmadaPSWebRequestWrapper
             $Script:RunTimeData.RestMethodParam.ForceAuthentication = $false
-            $Script:RunTimeConfig.AuthenticationRetryCount = 0
+            $Script:RunTimeData.AuthenticationRetryCount = 0
             return $true
         }
         catch {
-            $Script:RunTimeConfig.AuthenticationRetryCount++
-            if ($Script:RunTimeConfig.AuthenticationRetryCount -le 1 -and $_.Exception.Response.StatusCode -eq 401) {
+            # OmadaWeb.PS already retries the underlying request internally (3x) before this catch
+            # is reached, so this app must add at most ONE forced re-authentication for a stale
+            # cached session (401) and then give up - otherwise the login popup loops forever.
+            # The counter MUST be the per-tab $Script:RunTimeData.AuthenticationRetryCount (created
+            # per tab in New-TabSession), not the process-global $Script:RunTimeConfig one, which
+            # was uninitialized and let one tab's failures suppress or amplify another's.
+            $Script:RunTimeData.AuthenticationRetryCount++
+            if ($Script:RunTimeData.AuthenticationRetryCount -le 1 -and $_.Exception.Response.StatusCode -eq 401) {
                 $Script:RunTimeData.RestMethodParam.ForceAuthentication = $true
                 return Test-OmadaConnection
             }
 
             "Connection failed with error: {0}! Please check your settings." -f $_.Exception.Message | Write-LogOutput -LogType ERROR -ErrorObject $_
-            $Script:RunTimeData.RestMethodParam.ForceAuthentication = $true
+            # Give up cleanly: reset this tab's retry budget and do NOT re-arm ForceAuthentication,
+            # so the next explicit Connect click starts one clean attempt instead of immediately
+            # forcing another interactive login (which is what made the retries "never stop").
+            $Script:RunTimeData.AuthenticationRetryCount = 0
+            $Script:RunTimeData.RestMethodParam.ForceAuthentication = $false
             Set-SqlConnectionState -Status $false
             return $false
         }

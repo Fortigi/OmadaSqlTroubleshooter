@@ -14,6 +14,23 @@ function Restore-TabSessions {
         $MaxCapacity = if ($null -ne $Script:AppGlobalConfig -and $Script:AppGlobalConfig.TabCapacity -gt 0) { $Script:AppGlobalConfig.TabCapacity } else { 8 }
         $TabsPath = Join-Path $Script:RunTimeConfig.AppDataFolder -ChildPath "config\tabs.clixml"
 
+        # -Reset: discard the persisted tab store outright and open a single fresh tab, with no
+        # restore and no reconnect prompt. Without this, -Reset would still re-open every saved tab
+        # and ask to reconnect them (the bug being fixed).
+        if ($Script:RunTimeConfig.ResetRequested) {
+            "Reset requested; discarding persisted tab sessions and starting fresh." | Write-LogOutput -LogType DEBUG
+            if (Test-Path $TabsPath -PathType Leaf) {
+                try {
+                    Get-Item $TabsPath | Remove-Item -Force
+                }
+                catch {
+                    "Failed to remove persisted tab sessions during reset: {0}" -f $_.Exception.Message | Write-LogOutput -LogType WARNING
+                }
+            }
+            New-TabSession | Out-Null
+            return
+        }
+
         $Persisted = $null
         if (Test-Path $TabsPath -PathType Leaf) {
             try {
@@ -32,7 +49,7 @@ function Restore-TabSessions {
 
             $AutoConnect = $false
             $NonEmptyTabs = @($TabsToRestore | Where-Object { ![string]::IsNullOrWhiteSpace($_.BaseUrl) })
-            if ($NonEmptyTabs.Count -gt 0) {
+            if ($NonEmptyTabs.Count -gt 0 -and -not $Script:RunTimeConfig.NoReconnect) {
                 $Choice = Open-ChoiceForm -Title "Reconnect?" -Message ("Reconnect all {0} saved tab(s) using their existing connection settings?" -f $NonEmptyTabs.Count) -LeftButtonReturnValue 2 -RightButtonReturnValue 1
                 $AutoConnect = ($Choice -eq 2)
             }
@@ -63,8 +80,12 @@ function Restore-TabSessions {
         if ($null -ne $Script:LegacyConfigForMigration) {
             "Migrating legacy single-session config into tab 1." | Write-LogOutput -LogType DEBUG
             $MigratedConfig = ConvertTo-TabSessionConfig -LegacyAppConfig $Script:LegacyConfigForMigration
-            $Choice = Open-ChoiceForm -Title "Reconnect?" -Message ("Reconnect to '{0}' using existing connection settings?" -f $MigratedConfig.BaseUrl) -LeftButtonReturnValue 2 -RightButtonReturnValue 1
-            $NewTab = New-TabSession -RestoreFrom $MigratedConfig -AutoConnect:($Choice -eq 2)
+            $MigrateAutoConnect = $false
+            if (-not $Script:RunTimeConfig.NoReconnect) {
+                $Choice = Open-ChoiceForm -Title "Reconnect?" -Message ("Reconnect to '{0}' using existing connection settings?" -f $MigratedConfig.BaseUrl) -LeftButtonReturnValue 2 -RightButtonReturnValue 1
+                $MigrateAutoConnect = ($Choice -eq 2)
+            }
+            $NewTab = New-TabSession -RestoreFrom $MigratedConfig -AutoConnect:$MigrateAutoConnect
             if ($null -ne $NewTab) {
                 Save-TabSessions
                 return
