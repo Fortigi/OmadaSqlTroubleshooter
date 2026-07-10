@@ -54,25 +54,26 @@ function Initialize-WebViewForTab {
             New-Item -ItemType Directory -Force -Path $Script:WebView2UserProfilePath | Out-Null
         }
 
-        # Captured as a plain local (not $Script:-scoped) so GetNewClosure() below bakes in the
-        # actual Dispatcher object - a $Script: reference would instead be a dynamic-scope lookup
-        # that resolves to $null on the foreign thread this continuation can run on, before
-        # Dispatcher.Invoke ever gets a chance to marshal back to the UI thread.
-        $CapturedDispatcher = $Script:MainForm.Definition.Dispatcher
+        $EnsureCoreWebView2Task = $TabSession.WebView.Object.EnsureCoreWebView2Async($TabSession.WebView.Environment)
 
-        $TabSession.WebView.Object.EnsureCoreWebView2Async($TabSession.WebView.Environment).GetAwaiter().OnCompleted({
-                # EnsureCoreWebView2Async's Task continuation can run on a raw ThreadPool thread
-                # with no PowerShell runspace affinity, where calling a dot-sourced function
-                # throws CommandNotFoundException with nothing to catch it, crashing the whole
-                # process. Marshal onto the UI thread first so Get-ActiveTabSession et al. always
-                # run somewhere they can actually be resolved. BeginInvoke (not the blocking
-                # Invoke) - Invoke pumps the Windows message queue while it waits, and if that
-                # pump re-enters PowerShell (e.g. a WPF Loaded handler firing mid-pump), the
-                # engine throws PipelineStoppedException because it can't safely nest like that.
-                # Nothing here needs to block synchronously anyway.
-                $CapturedDispatcher.BeginInvoke([System.Action] {
-                # Capture whichever tab is actually active AT THE MOMENT this callback fires (not
-                # via Get-ActiveTabSession in the finally below - Set-ActiveTabContext just below
+        # Task.GetAwaiter().OnCompleted(scriptblock) continuations do not reliably preserve
+        # PowerShell's runspace/function-table context no matter which thread they're marshaled
+        # back onto afterward - calling a dot-sourced function from one can throw
+        # CommandNotFoundException with nothing able to catch it, crashing the whole process. A
+        # DispatcherTimer.Tick handler, by contrast, is invoked through the same WPF event-dispatch
+        # mechanism as every other Add_X handler in this codebase (Add_Click, Add_SelectionChanged,
+        # ...), which has always reliably resolved functions - so poll for completion instead of
+        # awaiting it directly.
+        $PollTimer = New-Object System.Windows.Threading.DispatcherTimer
+        $PollTimer.Interval = [TimeSpan]::FromMilliseconds(50)
+        $PollTimer.Add_Tick({
+                if (-not $EnsureCoreWebView2Task.IsCompleted) {
+                    return
+                }
+                $PollTimer.Stop()
+
+                # Capture whichever tab is actually active AT THE MOMENT this fires (not via
+                # Get-ActiveTabSession in the finally below - Set-ActiveTabContext just below
                 # would have already overwritten $Script:ActiveTabId to $TabSession's by then).
                 $PreviouslyActiveTab = Get-ActiveTabSession
                 try {
@@ -189,8 +190,8 @@ function Initialize-WebViewForTab {
                         Set-ActiveTabContext -TabSession $PreviouslyActiveTab
                     }
                 }
-                })
             }.GetNewClosure())
+        $PollTimer.Start()
     }
     catch {
         "WebView2 initialization failed for tab '{0}': {1}" -f $TabSession.DisplayName, $_.Exception.Message | Write-LogOutput -LogType ERROR -ErrorObject $_

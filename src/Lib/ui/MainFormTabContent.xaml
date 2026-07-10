@@ -460,7 +460,7 @@
                                                 <Grid.RowDefinitions>
                                                         <RowDefinition Height="*" />
                                                 </Grid.RowDefinitions>
-                                                <Border Grid.Row="2" BorderThickness="0" Background="White">
+                                                <Border BorderThickness="0" Background="White">
                                                         <Wpf:WebView2 x:Name="webView21" VerticalAlignment="Stretch" HorizontalAlignment="Stretch" MinHeight="200" />
                                                 </Border>
                                         </Grid>
