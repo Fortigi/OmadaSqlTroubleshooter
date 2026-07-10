@@ -88,9 +88,6 @@ function Invoke-OmadaSqlTroubleshooter {
         ResetRequested     = $Reset.IsPresent -or $false
         NoReconnect        = $NoReconnect.IsPresent -or $false
     }
-    Get-ChildItem -Path (Join-Path $Script:RunTimeConfig.ModuleFolder -ChildPath "Lib\Functions") -Filter *.ps1 | Where-Object { $_.Name -notlike "_*.ps1" } | ForEach-Object {
-        . $_.FullName
-    }
 
     Initialize-OmadaSqlTroubleShooter
 
