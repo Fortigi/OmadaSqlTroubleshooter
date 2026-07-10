@@ -74,6 +74,10 @@ function Complete-DuplicateTab {
         }
         $UniqueQueryName = Get-UniqueQueryName -ExistingNames $ExistingQueryNames -StartNumber $NewTab.OpenOrder
         $NewTab.Elements.TextBoxDisplayName.Text = $UniqueQueryName
+        # Also re-apply it once the tab has finished loading/connecting: a connected duplicate runs
+        # Update-QueryList during auto-connect, which clears the Display name field, so the tab's
+        # NavigationCompleted handler restores it from PendingDisplayName as the final step.
+        $NewTab.PendingDisplayName = $UniqueQueryName
 
         # Hand the SQL to the new tab; its NavigationCompleted handler pushes it into Monaco once
         # the editor has loaded (pushing now would be dropped - the editor is not ready yet).

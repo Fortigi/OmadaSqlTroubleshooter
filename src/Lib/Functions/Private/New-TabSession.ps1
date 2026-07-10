@@ -63,6 +63,7 @@ function New-TabSession {
             DisplayName      = $DisplayName
             OpenOrder        = $OpenOrder
             PendingEditorText = $null
+            PendingDisplayName = $null
             IsDirty          = $false
             Form             = $Form
             Elements         = $Form.Elements

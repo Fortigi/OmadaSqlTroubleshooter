@@ -217,6 +217,13 @@ function Initialize-WebViewForTab {
                                     $HandlerTab.PendingEditorText = $null
                                 }
 
+                                # Restore a duplicated tab's Display name as the final step (an
+                                # auto-connect's Update-QueryList may have cleared it in the meantime).
+                                if (![string]::IsNullOrEmpty($HandlerTab.PendingDisplayName)) {
+                                    $HandlerTab.Elements.TextBoxDisplayName.Text = $HandlerTab.PendingDisplayName
+                                    $HandlerTab.PendingDisplayName = $null
+                                }
+
                                 $Script:RunTimeConfig.ReconnectStatus = 3
                             }
                             catch {
