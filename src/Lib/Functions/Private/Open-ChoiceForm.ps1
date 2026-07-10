@@ -36,7 +36,15 @@ function Open-ChoiceForm {
 
         $Script:DialogResult = $null
 
-        $Script:ChoiceForm.Definition.ShowDialog() | Out-Null
+        # See Suspend-WebViewCompletionPolling.ps1 - ShowDialog() pumps this thread's messages
+        # while blocked, which could let the WebView2 completion poll timer fire reentrantly.
+        Suspend-WebViewCompletionPolling
+        try {
+            $Script:ChoiceForm.Definition.ShowDialog() | Out-Null
+        }
+        finally {
+            Resume-WebViewCompletionPolling
+        }
         return $Script:DialogResult
     }
     catch {

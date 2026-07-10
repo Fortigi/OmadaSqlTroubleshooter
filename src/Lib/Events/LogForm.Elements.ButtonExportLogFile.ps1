@@ -7,7 +7,16 @@ $Script:LogForm.Elements.ButtonExportLogFile.Add_Click({
         "Dialog Title: {0}" -f $SaveFileDialog.Title | Write-LogOutput -LogType DEBUG
         $SaveFileDialog.FileName = "OmadaSqlTroubleShooter.log"
         "Dialog Initial FileName: {0}" -f $SaveFileDialog.FileName | Write-LogOutput -LogType DEBUG
-        if ($SaveFileDialog.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
+        # See Suspend-WebViewCompletionPolling.ps1 - ShowDialog() pumps this thread's messages
+        # while blocked, which could let the WebView2 completion poll timer fire reentrantly.
+        Suspend-WebViewCompletionPolling
+        try {
+            $DialogResult = $SaveFileDialog.ShowDialog()
+        }
+        finally {
+            Resume-WebViewCompletionPolling
+        }
+        if ($DialogResult -eq [System.Windows.Forms.DialogResult]::OK) {
             if ($null -eq $SaveFileDialog.FileName) {
                 return
             }

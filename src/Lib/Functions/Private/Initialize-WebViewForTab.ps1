@@ -71,25 +71,27 @@ function Initialize-WebViewForTab {
                 try {
                     "EnsureCoreWebView2Async OnCompleted script for tab '{0}'" -f $TabSession.DisplayName | Write-LogOutput -LogType DEBUG
 
+                    # This scriptblock only ever runs invoked from the top-level
+                    # WebViewCompletionPollTimer's Tick handler in MainForm.Definition.ps1, which
+                    # is itself always on the UI thread (DispatcherTimer.Tick fires on the thread
+                    # of the Dispatcher it belongs to) - wrapping these UI mutations in
+                    # Dispatcher.Invoke would be redundant and would only add another needless
+                    # reentrancy window (a Dispatcher.Invoke also pumps this thread's messages
+                    # while it blocks, same risk class as the modal-dialog reentrancy documented
+                    # in Suspend-WebViewCompletionPolling.ps1).
                     if ($null -eq $TabSession.WebView.Object.CoreWebView2) {
-                        $Script:MainForm.Definition.Dispatcher.Invoke([System.Action] {
-                                $Message = "WebView2 environment initialization failed. If this system does not have the Webview2 Runtime installed, please download the fixed version from https://developer.microsoft.com/en-us/microsoft-edge/webview2/ and extract the cab file to folder '{0}'" -f $TabSession.WebView.EdgeWebview2RuntimePath
-                                $Message | Write-LogOutput -LogType ERROR
-                            })
+                        $Message = "WebView2 environment initialization failed. If this system does not have the Webview2 Runtime installed, please download the fixed version from https://developer.microsoft.com/en-us/microsoft-edge/webview2/ and extract the cab file to folder '{0}'" -f $TabSession.WebView.EdgeWebview2RuntimePath
+                        $Message | Write-LogOutput -LogType ERROR
                         return
                     }
 
                     $HtmlFile = Join-Path $Script:RunTimeConfig.ModuleFolder -ChildPath "Monaco\index.html"
                     if ([System.IO.File]::Exists($HtmlFile)) {
-                        $TabSession.WebView.Object.Dispatcher.Invoke([System.Action] {
-                                $TabSession.WebView.Object.Source = New-Object System.Uri($HtmlFile)
-                                "WebView source set to: {0}" -f $HtmlFile | Write-LogOutput -LogType DEBUG
-                            })
+                        $TabSession.WebView.Object.Source = New-Object System.Uri($HtmlFile)
+                        "WebView source set to: {0}" -f $HtmlFile | Write-LogOutput -LogType DEBUG
                     }
                     else {
-                        $Script:MainForm.Definition.Dispatcher.Invoke([System.Action] {
-                                "Monaco HTML file not found at: {0}" -f $HtmlFile | Write-LogOutput -LogType ERROR
-                            })
+                        "Monaco HTML file not found at: {0}" -f $HtmlFile | Write-LogOutput -LogType ERROR
                     }
 
                     Test-ConnectionButton

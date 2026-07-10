@@ -108,7 +108,16 @@ function Save-QueryResultToFile {
             $Count++
         }
 
-        if ($SaveFileDialog.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
+        # See Suspend-WebViewCompletionPolling.ps1 - ShowDialog() pumps this thread's messages
+        # while blocked, which could let the WebView2 completion poll timer fire reentrantly.
+        Suspend-WebViewCompletionPolling
+        try {
+            $SaveFileDialogResult = $SaveFileDialog.ShowDialog()
+        }
+        finally {
+            Resume-WebViewCompletionPolling
+        }
+        if ($SaveFileDialogResult -eq [System.Windows.Forms.DialogResult]::OK) {
             $Script:RunTimeConfig.OutputFileName = $SaveFileDialog.FileName
             "Save outputfile: {0}" -f $Script:RunTimeConfig.OutputFileName | Write-LogOutput
 

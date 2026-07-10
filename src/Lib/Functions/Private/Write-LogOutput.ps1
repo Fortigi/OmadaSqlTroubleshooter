@@ -149,25 +149,35 @@ function Write-LogOutput {
             $LogMessage.Text | Write-Verbose
         }
         if ($LogMessageDialog.Show -and !$SkipDialog) {
-            if ($null -ne $Script:MainForm -and $null -ne $Script:MainForm.Definition -and $Script:MainForm.Definition.IsVisible) {
-                $TrimmedText = Limit-MessageBoxText -Text $LogMessageDialog.Text
-                [System.Windows.Forms.MessageBox]::Show($TrimmedText, $LogMessageDialog.Title, [System.Windows.Forms.MessageBoxButtons]::OK, $LogMessageDialog.Icon)
-                Restore-MainFormFocus
-            }
-            else {
-                $MessageBoxImage = [System.Windows.MessageBoxImage]::Information
-                if ($LogMessage.ShowWarning) {
-                    $LogMessage.Text | Write-Warning
-                    $MessageBoxImage = [System.Windows.MessageBoxImage]::Warning
-                }
-                elseif ($LogMessage.ShowError) {
-                    $LogMessage.Text, $LogMessage.CallStack -join ", `n" | Write-Error
-                    $MessageBoxImage = [System.Windows.MessageBoxImage]::Error
+            # A blocking dialog pumps this thread's messages while it's up, which can let
+            # $Script:WebViewCompletionPollTimer's Tick fire reentrantly nested inside it -
+            # suspend it for the duration so that can't happen (see
+            # Suspend-WebViewCompletionPolling.ps1 for why).
+            Suspend-WebViewCompletionPolling
+            try {
+                if ($null -ne $Script:MainForm -and $null -ne $Script:MainForm.Definition -and $Script:MainForm.Definition.IsVisible) {
+                    $TrimmedText = Limit-MessageBoxText -Text $LogMessageDialog.Text
+                    [System.Windows.Forms.MessageBox]::Show($TrimmedText, $LogMessageDialog.Title, [System.Windows.Forms.MessageBoxButtons]::OK, $LogMessageDialog.Icon)
+                    Restore-MainFormFocus
                 }
                 else {
-                    $LogMessage.Text | Write-Host -ForegroundColor $LogMessage.Color
+                    $MessageBoxImage = [System.Windows.MessageBoxImage]::Information
+                    if ($LogMessage.ShowWarning) {
+                        $LogMessage.Text | Write-Warning
+                        $MessageBoxImage = [System.Windows.MessageBoxImage]::Warning
+                    }
+                    elseif ($LogMessage.ShowError) {
+                        $LogMessage.Text, $LogMessage.CallStack -join ", `n" | Write-Error
+                        $MessageBoxImage = [System.Windows.MessageBoxImage]::Error
+                    }
+                    else {
+                        $LogMessage.Text | Write-Host -ForegroundColor $LogMessage.Color
+                    }
+                    [System.Windows.MessageBox]::Show((Limit-MessageBoxText -Text $LogMessageDialog.Text), $LogMessageDialog.Title, [System.Windows.Forms.MessageBoxButtons]::OK, $MessageBoxImage) | Out-Null
                 }
-                [System.Windows.MessageBox]::Show((Limit-MessageBoxText -Text $LogMessageDialog.Text), $LogMessageDialog.Title, [System.Windows.Forms.MessageBoxButtons]::OK, $MessageBoxImage) | Out-Null
+            }
+            finally {
+                Resume-WebViewCompletionPolling
             }
         }
         if ($LogMessage.ShowError) {

@@ -14,12 +14,21 @@ $Script:SqlHistoryForm.Elements.ButtonRestoreQuery.Add_Click({
                 return
             }
 
-            $Result = [System.Windows.MessageBox]::Show(
-                "Are you sure you want to restore this query version?`n`nChanged by: $($SelectedItem.ChangedBy)`nChange date: $($SelectedItem.ChangeDate.ToString('yyyy-MM-dd HH:mm:ss'))",
-                "Confirm Query Restore",
-                [System.Windows.MessageBoxButton]::YesNo,
-                [System.Windows.MessageBoxImage]::Question
-            )
+            # See Suspend-WebViewCompletionPolling.ps1 - MessageBox.Show() pumps this thread's
+            # messages while blocked, which could let the WebView2 completion poll timer fire
+            # reentrantly.
+            Suspend-WebViewCompletionPolling
+            try {
+                $Result = [System.Windows.MessageBox]::Show(
+                    "Are you sure you want to restore this query version?`n`nChanged by: $($SelectedItem.ChangedBy)`nChange date: $($SelectedItem.ChangeDate.ToString('yyyy-MM-dd HH:mm:ss'))",
+                    "Confirm Query Restore",
+                    [System.Windows.MessageBoxButton]::YesNo,
+                    [System.Windows.MessageBoxImage]::Question
+                )
+            }
+            finally {
+                Resume-WebViewCompletionPolling
+            }
 
             if ($Result -eq [System.Windows.MessageBoxResult]::Yes) {
                 try {
