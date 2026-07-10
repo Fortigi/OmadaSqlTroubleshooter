@@ -30,6 +30,12 @@ $Script:MainForm.Elements.ComboBoxSelectDataConnection.Add_SelectionChanged({
                     Get-SqlSchemaObject
                 }
             }
+
+            # The selected data connection is the "<Connection>" part of the tab header.
+            $ActiveTab = Get-ActiveTabSession
+            if ($null -ne $ActiveTab) {
+                Update-TabHeaderTitle -TabSession $ActiveTab
+            }
         }
         catch {
             $_.Exception.Message | Write-LogOutput -LogType ERROR -ErrorObject $_

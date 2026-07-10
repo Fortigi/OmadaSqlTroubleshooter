@@ -1,8 +1,17 @@
 function Update-TabHeaderTitle {
     <#
     .SYNOPSIS
-    Refreshes a tab's header text to "<DisplayName>" or "<DisplayName>*" when the tab has
-    unsaved query changes.
+    Refreshes a tab's header text from its current state.
+
+    .DESCRIPTION
+    Builds the header as:
+      <Tabname>[*] - <Connection> - <tenant base uri>   when the tab is connected
+      <Tabname>[*] - No connection                       when it is not
+    where <Tabname> comes from Get-TabName, "*" is appended when the tab has unsaved query
+    changes, <Connection> is the selected data connection (omitted when empty), and
+    <tenant base uri> is the tenant authority (omitted when empty). Reads from the tab's own
+    Elements/AppConfig so it is correct for any tab; the connected flag uses the live global
+    for the active tab and the tab's stored flag otherwise.
     #>
     [CmdLetBinding()]
     param(
@@ -12,9 +21,55 @@ function Update-TabHeaderTitle {
     try {
         $Script:Tracer::WriteLine(("{0}: Function: {1} - Caller: {2}({3}) - Command: {4} - Parameters: {5}" -f $($Script:RunTimeConfig.ApplicationName), $($MyInvocation.MyCommand.Name), $($MyInvocation.ScriptName).Split("\")[-1], $($MyInvocation.ScriptLineNumber), $MyInvocation.Statement, ($PSBoundParameters | Out-String)))
 
-        $Title = if ($TabSession.IsDirty) { "{0}*" -f $TabSession.DisplayName } else { $TabSession.DisplayName }
+        $BaseName = Get-TabName -TabSession $TabSession
+        $TabSession.DisplayName = $BaseName
+
+        $Name = if ($TabSession.IsDirty) { "{0}*" -f $BaseName } else { $BaseName }
+
+        # The active tab's connected state lives on the live global; other tabs carry their own
+        # stored flag (kept in sync by Set-ActiveTabContext / Set-SqlConnectionState).
+        $Connected = if ($TabSession.Id -eq $Script:ActiveTabId) { [bool]$Script:ConnectionStatus } else { [bool]$TabSession.ConnectionStatus }
+
+        if ($Connected) {
+            $Parts = [System.Collections.Generic.List[string]]::new()
+            $Parts.Add($Name)
+
+            $Connection = $null
+            if ($null -ne $TabSession.Elements.ComboBoxSelectDataConnection.SelectedItem) {
+                $Connection = $TabSession.Elements.ComboBoxSelectDataConnection.SelectedItem.Content
+            }
+            if ([string]::IsNullOrWhiteSpace($Connection) -and $null -ne $TabSession.AppConfig.CurrentDataConnection) {
+                $Connection = $TabSession.AppConfig.CurrentDataConnection.DisplayName
+            }
+            if (![string]::IsNullOrWhiteSpace($Connection)) {
+                $Connection = $Connection.ToString().Trim()
+                if ($Connection -ne "-" -and $Connection -ne "- 0") {
+                    $Parts.Add($Connection)
+                }
+            }
+
+            $Tenant = $null
+            if (![string]::IsNullOrWhiteSpace($TabSession.AppConfig.BaseUrl)) {
+                try {
+                    $Tenant = ([System.Uri]::new($TabSession.AppConfig.BaseUrl)).Authority
+                }
+                catch {
+                    $Tenant = $TabSession.AppConfig.BaseUrl
+                }
+            }
+            if (![string]::IsNullOrWhiteSpace($Tenant)) {
+                $Parts.Add($Tenant.Trim())
+            }
+
+            $Title = $Parts -join " - "
+        }
+        else {
+            $Title = "{0} - No connection" -f $Name
+        }
+
+        # Header content is a Grid (see New-TabHeaderControl): child 0 is the title TextBlock.
         $TabSession.TabItem.Header.Children[0].Text = $Title
-        $TabSession.TabItem.ToolTip = $TabSession.DisplayName
+        $TabSession.TabItem.ToolTip = $Title
     }
     catch {
         $_.Exception.Message | Write-LogOutput -LogType ERROR -ErrorObject $_

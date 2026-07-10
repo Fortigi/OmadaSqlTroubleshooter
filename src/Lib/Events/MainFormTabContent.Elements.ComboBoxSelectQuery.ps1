@@ -38,6 +38,11 @@ $Script:MainForm.Elements.ComboBoxSelectQuery.Add_SelectionChanged({
                 #Set-EditorBackground
             }
 
+            # Selecting a query changes the tab's base name (rule 1 in Get-TabName).
+            $ActiveTab = Get-ActiveTabSession
+            if ($null -ne $ActiveTab) {
+                Update-TabHeaderTitle -TabSession $ActiveTab
+            }
         }
         catch {
             if ($_.Exception.Response.StatusCode -eq "NotFound") {

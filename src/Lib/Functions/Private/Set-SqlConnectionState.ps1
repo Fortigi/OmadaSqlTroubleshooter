@@ -62,6 +62,15 @@ function Set-SqlConnectionState {
             # $null | Set-ConfigProperty -Property "CurrentSqlQuery"
             $Script:ConnectionStatus = $false
         }
+
+        # Keep the active tab's stored connection flag and header in sync with the change just made
+        # (the header switches between "<name> - <connection> - <tenant>" and "<name> - No
+        # connection").
+        $ActiveTab = Get-ActiveTabSession
+        if ($null -ne $ActiveTab) {
+            $ActiveTab.ConnectionStatus = $Script:ConnectionStatus
+            Update-TabHeaderTitle -TabSession $ActiveTab
+        }
     }
     catch {
         $_.Exception.Message | Write-LogOutput -LogType ERROR -ErrorObject $_

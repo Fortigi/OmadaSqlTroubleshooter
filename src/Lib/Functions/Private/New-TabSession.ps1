@@ -28,6 +28,14 @@ function New-TabSession {
         $TabId = if ($null -ne $RestoreFrom -and ![string]::IsNullOrWhiteSpace($RestoreFrom.Id)) { $RestoreFrom.Id } else { (New-Guid).Guid }
         $DisplayName = if ($null -ne $RestoreFrom -and ![string]::IsNullOrWhiteSpace($RestoreFrom.DisplayName)) { $RestoreFrom.DisplayName } else { Get-DefaultTabDisplayName }
 
+        # Monotonic open-order counter drives the "Query{#}" fallback name (first opened tab =
+        # Query1). It only ever increments, so closing/reopening tabs never reuses a number.
+        if ($null -eq $Script:TabOpenCounter) {
+            $Script:TabOpenCounter = 0
+        }
+        $Script:TabOpenCounter++
+        $OpenOrder = $Script:TabOpenCounter
+
         $XamlPath = Join-Path $Script:RunTimeConfig.ModuleFolder -ChildPath "lib\ui\MainFormTabContent.xaml"
         # Initialize-FormObject's -Xaml path builds an XmlNamespaceManager off $Xaml.NameTable,
         # which only exists on an [xml] document - a plain string here fails with "constructor
@@ -53,6 +61,7 @@ function New-TabSession {
         $NewTab = [PSCustomObject]@{
             Id               = $TabId
             DisplayName      = $DisplayName
+            OpenOrder        = $OpenOrder
             IsDirty          = $false
             Form             = $Form
             Elements         = $Form.Elements
