@@ -21,28 +21,32 @@ function ConvertTo-TabSessionConfig {
             $DisplayName = Get-DefaultTabDisplayName
         }
 
+        # Plain dot-access is deliberate here, not an oversight: this codebase never enables
+        # Set-StrictMode, so reading a property off $LegacyAppConfig (or off a $null
+        # sub-property, e.g. a missing CurrentSqlQuery) already safely evaluates to $null
+        # rather than throwing - no ?. null-conditional needed.
         return [PSCustomObject]@{
             Id                    = (New-Guid).Guid
             DisplayName           = $DisplayName
-            BaseUrl               = $LegacyAppConfig?.BaseUrl
+            BaseUrl               = $LegacyAppConfig.BaseUrl
             CurrentSqlQuery       = [PSCustomObject]@{
-                DoId        = $LegacyAppConfig?.CurrentSqlQuery?.DoId
-                DisplayName = $LegacyAppConfig?.CurrentSqlQuery?.DisplayName
-                FullName    = $LegacyAppConfig?.CurrentSqlQuery?.FullName
+                DoId        = $LegacyAppConfig.CurrentSqlQuery.DoId
+                DisplayName = $LegacyAppConfig.CurrentSqlQuery.DisplayName
+                FullName    = $LegacyAppConfig.CurrentSqlQuery.FullName
             }
-            LastAuthentication    = $LegacyAppConfig?.LastAuthentication
-            UserName              = $LegacyAppConfig?.UserName
-            Password              = $LegacyAppConfig?.Password
-            EntraApplicationIdUri = $LegacyAppConfig?.EntraApplicationIdUri
-            EntraIdTenantId       = $LegacyAppConfig?.EntraIdTenantId
-            MyCreatedQueriesOnly  = [bool]$LegacyAppConfig?.MyCreatedQueriesOnly
-            MyUpdatedQueriesOnly  = [bool]$LegacyAppConfig?.MyUpdatedQueriesOnly
-            SavePassword          = [bool]$LegacyAppConfig?.SavePassword
-            IdentityUserName      = $LegacyAppConfig?.IdentityUserName
+            LastAuthentication    = $LegacyAppConfig.LastAuthentication
+            UserName              = $LegacyAppConfig.UserName
+            Password              = $LegacyAppConfig.Password
+            EntraApplicationIdUri = $LegacyAppConfig.EntraApplicationIdUri
+            EntraIdTenantId       = $LegacyAppConfig.EntraIdTenantId
+            MyCreatedQueriesOnly  = [bool]$LegacyAppConfig.MyCreatedQueriesOnly
+            MyUpdatedQueriesOnly  = [bool]$LegacyAppConfig.MyUpdatedQueriesOnly
+            SavePassword          = [bool]$LegacyAppConfig.SavePassword
+            IdentityUserName      = $LegacyAppConfig.IdentityUserName
             CurrentDataConnection = [PSCustomObject]@{
-                DoId        = $LegacyAppConfig?.CurrentDataConnection?.DoId
-                DisplayName = $LegacyAppConfig?.CurrentDataConnection?.DisplayName
-                FullName    = $LegacyAppConfig?.CurrentDataConnection?.FullName
+                DoId        = $LegacyAppConfig.CurrentDataConnection.DoId
+                DisplayName = $LegacyAppConfig.CurrentDataConnection.DisplayName
+                FullName    = $LegacyAppConfig.CurrentDataConnection.FullName
             }
         }
     }
