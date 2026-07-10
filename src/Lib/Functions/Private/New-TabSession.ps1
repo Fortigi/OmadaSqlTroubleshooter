@@ -127,8 +127,7 @@ function New-TabSession {
         $TabItem.Tag = $NewTab.Id
         $TabItem.AllowDrop = $true
         $TabItem.Add_PreviewMouseLeftButtonDown({
-                param($DragSender, $DragArgs)
-                $Script:TabDragStartPoint = $DragArgs.GetPosition($null)
+                $Script:TabDragStartPoint = $_.GetPosition($null)
                 $Script:TabDragArmed = $true
             })
         $TabItem.Add_PreviewMouseMove({

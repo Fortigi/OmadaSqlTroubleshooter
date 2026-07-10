@@ -101,7 +101,6 @@ function New-TabContextMenu {
             }
 
         $CloseAllItem = & $BuildItem "Close All" $null ([char]0xE8BB) {
-                param($ClickSender)
                 try {
                     $_ | Show-EventInfo
                     Close-AllTabSessions
