@@ -118,6 +118,22 @@ function Invoke-OmadaSqlTroubleshooter {
 
     $Script:RunTimeConfig.ApplicationTitle = $Script:MainForm.Definition.Title.ToString()
 
+    # Global safety net: without this, any exception that reaches the dispatcher's message loop
+    # unhandled - from a WPF event handler, a Task continuation marshaled via Dispatcher.Invoke/
+    # BeginInvoke, or PowerShell's own reentrancy limits when a handler fires while another is
+    # already running - terminates the entire process with no chance to see what happened. Log
+    # it and keep the app alive instead of a hard crash.
+    [System.Windows.Threading.Dispatcher]::CurrentDispatcher.add_UnhandledException({
+            param($EventSender, $EventArgs)
+            try {
+                "Unhandled dispatcher exception: {0}" -f $EventArgs.Exception.Message | Write-LogOutput -LogType ERROR -ErrorObject $EventArgs.Exception
+            }
+            catch {
+                # Write-LogOutput itself failing here must not prevent marking the exception handled.
+            }
+            $EventArgs.Handled = $true
+        })
+
     #endregion
 
     #region events

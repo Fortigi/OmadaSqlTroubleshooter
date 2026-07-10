@@ -15,6 +15,15 @@
                 return
             }
 
+            # Selector.SelectionChanged bubbles: a ComboBox changing selection anywhere inside a
+            # tab's own content re-fires this same handler with $EventArgs.OriginalSource pointing
+            # at that ComboBox, not the TabControl. Without this check, every such unrelated
+            # selection change would redundantly re-run Set-ActiveTabContext/Initialize-
+            # UiComponents against the already-active tab.
+            if ($EventArgs.OriginalSource -ne (Get-TabControlSessions)) {
+                return
+            }
+
             $SelectedItem = (Get-TabControlSessions).SelectedItem
             if ($null -eq $SelectedItem) {
                 return
