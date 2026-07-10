@@ -69,6 +69,29 @@ catch {
     "Failed to set the single-row tab panel: {0}" -f $_.Exception.Message | Write-LogOutput -LogType WARNING
 }
 
+# The "+" add tab opens a new tab ONLY on an explicit click. Handling it here (and marking the
+# event Handled so "+" is never actually selected) is what keeps a new tab from appearing whenever
+# WPF selects "+" for a non-user reason - window activation/focus, relayout, or a tab close moving
+# the selection. Wired in code because TabItemAddNew is not exposed via $Script:MainForm.Elements.
+try {
+    $AddNewTabItem = (Get-TabControlSessions).Items | Where-Object { $_.Name -eq "TabItemAddNew" } | Select-Object -First 1
+    if ($null -ne $AddNewTabItem) {
+        $AddNewTabItem.Add_PreviewMouseLeftButtonDown({
+                param($AddTabSender, $AddTabArgs)
+                try {
+                    $AddTabArgs.Handled = $true
+                    New-EmptyTabSession | Out-Null
+                }
+                catch {
+                    $_.Exception.Message | Write-LogOutput -LogType ERROR -ErrorObject $_
+                }
+            })
+    }
+}
+catch {
+    "Failed to wire the '+' add-tab click handler: {0}" -f $_.Exception.Message | Write-LogOutput -LogType WARNING
+}
+
 $Script:MainForm.Definition.Add_Closed({
         try {
             $_ | Show-EventInfo
@@ -149,18 +172,13 @@ $Script:MainForm.Definition.Add_PreviewKeyDown({
                     Invoke-DuplicateTab -TabId $ActiveTab.Id
                 }
             }
-            elseif ($ControlPressed -and $ShiftPressed -and $EventArgs.Key -eq [System.Windows.Input.Key]::T) {
-                "Ctrl+Shift+T intercepted at MainForm level - duplicate active tab without query" | Write-LogOutput -LogType VERBOSE
+            elseif ($ControlPressed -and -not $ShiftPressed -and $EventArgs.Key -eq [System.Windows.Input.Key]::T) {
+                "Ctrl+T intercepted at MainForm level - duplicate active tab without query" | Write-LogOutput -LogType VERBOSE
                 $EventArgs.Handled = $true
                 $ActiveTab = Get-ActiveTabSession
                 if ($null -ne $ActiveTab) {
                     Invoke-DuplicateTab -TabId $ActiveTab.Id -WithoutQuery
                 }
-            }
-            elseif ($ControlPressed -and -not $ShiftPressed -and $EventArgs.Key -eq [System.Windows.Input.Key]::T) {
-                "Ctrl+T intercepted at MainForm level - open a new empty tab" | Write-LogOutput -LogType VERBOSE
-                $EventArgs.Handled = $true
-                New-EmptyTabSession | Out-Null
             }
             elseif ($ControlPressed -and -not $ShiftPressed -and ($EventArgs.Key -eq [System.Windows.Input.Key]::W -or $EventArgs.Key -eq [System.Windows.Input.Key]::F4)) {
                 "Ctrl+W / Ctrl+F4 intercepted at MainForm level - close active tab" | Write-LogOutput -LogType VERBOSE

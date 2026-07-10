@@ -30,23 +30,19 @@
             }
 
             if ($SelectedItem.Name -eq "TabItemAddNew") {
-                # A tab close moves the selection off the closing tab; if that transiently lands on
-                # the "+" tab we must NOT open a new tab (that was the "closing re-opens a query"
-                # bug). Complete-TabClose sets this guard for the duration of a close.
-                if ($Script:SuppressAddNewTab) {
-                    return
-                }
-
-                $MaxCapacity = if ($null -ne $Script:AppGlobalConfig -and $Script:AppGlobalConfig.TabCapacity -gt 0) { $Script:AppGlobalConfig.TabCapacity } else { 8 }
-                if (Test-TabCapacity -CurrentCount $Script:Tabs.Count -MaxCapacity $MaxCapacity) {
-                    New-TabSession | Out-Null
+                # The "+" tab is not a real tab, and a selection change must NEVER create one:
+                # WPF selects "+" for all sorts of non-user reasons (window activation/focus,
+                # relayout, a tab close moving the selection), and creating a tab for each of those
+                # caused new tabs to appear on refocus / on teardown. New tabs are opened ONLY by an
+                # explicit click on "+" (its PreviewMouseLeftButtonDown handler in MainForm.
+                # Definition). Here, just steer the selection back onto a real tab so "+" is never
+                # left selected.
+                $CurrentTab = Get-ActiveTabSession
+                if ($null -ne $CurrentTab -and $null -ne $CurrentTab.TabItem) {
+                    (Get-TabControlSessions).SelectedItem = $CurrentTab.TabItem
                 }
                 else {
-                    "Cannot open a new tab: capacity of {0} tabs reached." -f $MaxCapacity | Write-LogOutput -LogType WARNING
-                    $CurrentTab = Get-ActiveTabSession
-                    if ($null -ne $CurrentTab) {
-                        (Get-TabControlSessions).SelectedItem = $CurrentTab.TabItem
-                    }
+                    (Get-TabControlSessions).SelectedIndex = -1
                 }
                 return
             }

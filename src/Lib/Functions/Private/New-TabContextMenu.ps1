@@ -78,7 +78,7 @@ function New-TabContextMenu {
                 }
             }
 
-        $DuplicateWithoutQueryItem = & $BuildItem "Duplicate Tab without Query" "Ctrl+Shift+T" ([char]0xE8C8) {
+        $DuplicateWithoutQueryItem = & $BuildItem "Duplicate Tab without Query" "Ctrl+T" ([char]0xE8C8) {
                 param($ClickSender)
                 try {
                     $_ | Show-EventInfo
@@ -89,7 +89,7 @@ function New-TabContextMenu {
                 }
             }
 
-        $NewTabItem = & $BuildItem "New Tab" "Ctrl+T" ([char]0xE710) {
+        $NewTabItem = & $BuildItem "New Tab" $null ([char]0xE710) {
                 try {
                     $_ | Show-EventInfo
                     New-EmptyTabSession

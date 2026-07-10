@@ -142,18 +142,11 @@ function Initialize-WebViewForTab {
                                             Invoke-DuplicateTab -TabId $HandlerTab.Id
                                         })
                                 }
-                                elseif ($KeyEventArgs.Key -eq [System.Windows.Input.Key]::T -and $CtrlDown -and $ShiftDown) {
-                                    "Ctrl+Shift+T key intercepted in WebView2 - duplicate tab without query '{0}'" -f $HandlerTab.DisplayName | Write-LogOutput -LogType DEBUG
+                                elseif ($KeyEventArgs.Key -eq [System.Windows.Input.Key]::T -and $CtrlDown -and -not $ShiftDown) {
+                                    "Ctrl+T key intercepted in WebView2 - duplicate tab without query '{0}'" -f $HandlerTab.DisplayName | Write-LogOutput -LogType DEBUG
                                     $KeyEventArgs.Handled = $true
                                     $Script:MainForm.Definition.Dispatcher.Invoke([System.Action] {
                                             Invoke-DuplicateTab -TabId $HandlerTab.Id -WithoutQuery
-                                        })
-                                }
-                                elseif ($KeyEventArgs.Key -eq [System.Windows.Input.Key]::T -and $CtrlDown -and -not $ShiftDown) {
-                                    "Ctrl+T key intercepted in WebView2 - open a new empty tab" | Write-LogOutput -LogType DEBUG
-                                    $KeyEventArgs.Handled = $true
-                                    $Script:MainForm.Definition.Dispatcher.Invoke([System.Action] {
-                                            New-EmptyTabSession | Out-Null
                                         })
                                 }
                                 elseif ($CtrlDown -and -not $ShiftDown -and ($KeyEventArgs.Key -eq [System.Windows.Input.Key]::W -or $KeyEventArgs.Key -eq [System.Windows.Input.Key]::F4)) {
