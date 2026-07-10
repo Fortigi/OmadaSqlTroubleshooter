@@ -27,17 +27,25 @@ $Script:WebViewCompletionPollTimer.Add_Tick({
                 # was necessarily created inside a function via GetNewClosure() - everything
                 # that needs to reliably resolve Get-ActiveTabSession/Set-ActiveTabContext
                 # happens here instead.
-                $PreviouslyActiveTab = Get-ActiveTabSession
-                try {
-                    if ($null -ne $Pending.TabSession) {
+                #
+                # A $null TabSession means the caller's own OnCompletedScriptBlock manages the
+                # active-tab context itself (e.g. Close-TabSession deciding which tab becomes
+                # active after teardown) - auto-repointing/restoring around it here would just
+                # stomp on that decision, so skip it entirely in that case.
+                if ($null -ne $Pending.TabSession) {
+                    $PreviouslyActiveTab = Get-ActiveTabSession
+                    try {
                         Set-ActiveTabContext -TabSession $Pending.TabSession
+                        & $Pending.OnCompletedScriptBlock
                     }
-                    & $Pending.OnCompletedScriptBlock
+                    finally {
+                        if ($null -ne $PreviouslyActiveTab) {
+                            Set-ActiveTabContext -TabSession $PreviouslyActiveTab
+                        }
+                    }
                 }
-                finally {
-                    if ($null -ne $PreviouslyActiveTab) {
-                        Set-ActiveTabContext -TabSession $PreviouslyActiveTab
-                    }
+                else {
+                    & $Pending.OnCompletedScriptBlock
                 }
             }
         }
