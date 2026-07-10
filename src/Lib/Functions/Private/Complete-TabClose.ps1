@@ -2,8 +2,8 @@ function Complete-TabClose {
     <#
     .SYNOPSIS
     Tears down a tab whose close was requested: disposes its WebView2, removes it from the
-    TabControl and $Script:Tabs, and decides which tab becomes active next (never leaving the app
-    with zero tabs).
+    TabControl and $Script:Tabs, and selects a surviving tab. Closing the last tab leaves only the
+    "+" add tab (no tab is auto-opened).
 
     .DESCRIPTION
     Extracted from Close-TabSession so it can be invoked two ways without a closure: directly (no
@@ -36,24 +36,49 @@ function Complete-TabClose {
         # TabControlSessions must always be resolved via Get-TabControlSessions, not
         # $Script:MainForm.Elements - the latter was just repointed to $TabToClose's own elements.
         $TabControlSessions = Get-TabControlSessions
-        $TabControlSessions.Items.Remove($TabToClose.TabItem)
-        [void]$Script:Tabs.Remove($TabToClose)
+        $RemainingTabs = @($Script:Tabs | Where-Object { $_.Id -ne $TabToClose.Id })
 
-        if ($Script:Tabs.Count -eq 0) {
-            "Last tab closed; opening a fresh one." | Write-LogOutput -LogType DEBUG
-            New-TabSession | Out-Null
-            return
-        }
+        # Move the selection to a surviving tab (or to nothing, when this is the last tab) BEFORE
+        # removing the closing tab. Removing the currently-selected TabItem would otherwise make
+        # WPF auto-select the adjacent "+" tab, whose SelectionChanged handler opens a brand-new
+        # tab - the bug where closing a tab spuriously re-opened a query. SuppressAddNewTab is a
+        # belt-and-suspenders guard for that same handler during this whole operation.
+        $Script:SuppressAddNewTab = $true
+        try {
+            if ($RemainingTabs.Count -eq 0) {
+                # Last tab closed: leave only the "+" add tab, nothing selected/active.
+                $TabControlSessions.SelectedItem = $null
+            }
+            elseif ($WasActiveTab) {
+                $NextIndex = [Math]::Min($ClosingIndex, $RemainingTabs.Count - 1)
+                $TabControlSessions.SelectedItem = $RemainingTabs[$NextIndex].TabItem
+            }
 
-        if ($WasActiveTab) {
-            $NextIndex = [Math]::Min($ClosingIndex, $Script:Tabs.Count - 1)
-            $TabControlSessions.SelectedItem = $Script:Tabs[$NextIndex].TabItem
+            $TabControlSessions.Items.Remove($TabToClose.TabItem)
+            [void]$Script:Tabs.Remove($TabToClose)
+
+            if ($RemainingTabs.Count -eq 0) {
+                # Removing the last tab makes WPF auto-select the "+" tab; force it back to no
+                # selection so a later click on "+" still registers a selection change and opens a
+                # new tab (a click on an already-selected "+" would be a no-op).
+                $TabControlSessions.SelectedIndex = -1
+                # No active tab remains - clear the active id so nothing treats the just-closed tab
+                # as still active.
+                $Script:ActiveTabId = $null
+                # Disposing every tab's WebView2 tears down the shared CoreWebView2 environment, so
+                # the next tab's EnsureCoreWebView2Async would fail against the now-stale one. No tab
+                # is left using it, so drop the reference - Initialize-WebViewForTab creates a fresh
+                # environment for the next tab.
+                $Script:SharedWebViewEnvironment = $null
+            }
+            elseif (-not $WasActiveTab -and $null -ne $PreviouslyActiveTab) {
+                # The on-screen tab is untouched by closing a background tab; just re-sync the
+                # globals Set-ActiveTabContext repointed onto $TabToClose earlier.
+                Set-ActiveTabContext -TabSession $PreviouslyActiveTab
+            }
         }
-        elseif ($null -ne $PreviouslyActiveTab) {
-            # The tab that was actually on screen is untouched by this close - the TabControl's
-            # own selection never moved, so just restore the globals Set-ActiveTabContext
-            # repointed onto $TabToClose earlier, without disturbing that selection.
-            Set-ActiveTabContext -TabSession $PreviouslyActiveTab
+        finally {
+            $Script:SuppressAddNewTab = $false
         }
     }
     catch {

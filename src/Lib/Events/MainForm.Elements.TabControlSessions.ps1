@@ -30,6 +30,13 @@
             }
 
             if ($SelectedItem.Name -eq "TabItemAddNew") {
+                # A tab close moves the selection off the closing tab; if that transiently lands on
+                # the "+" tab we must NOT open a new tab (that was the "closing re-opens a query"
+                # bug). Complete-TabClose sets this guard for the duration of a close.
+                if ($Script:SuppressAddNewTab) {
+                    return
+                }
+
                 $MaxCapacity = if ($null -ne $Script:AppGlobalConfig -and $Script:AppGlobalConfig.TabCapacity -gt 0) { $Script:AppGlobalConfig.TabCapacity } else { 8 }
                 if (Test-TabCapacity -CurrentCount $Script:Tabs.Count -MaxCapacity $MaxCapacity) {
                     New-TabSession | Out-Null
