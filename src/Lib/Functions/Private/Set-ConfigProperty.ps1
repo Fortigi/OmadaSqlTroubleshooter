@@ -200,6 +200,17 @@ function Set-ConfigProperty {
                 # Tab-scope config lives only in memory here; Save-TabSessions persists every
                 # tab's config to the encrypted Clixml store once, at application shutdown.
                 $Script:AppConfig = $Config
+
+                # $Config was rebuilt via a ConvertTo/From-Json round-trip above, so it's a new
+                # object, not the same reference $TabSession.AppConfig already holds. Without
+                # updating that reference too, the next Set-ActiveTabContext call (any routine
+                # tab switch, or an async completion restoring context) would read the tab's own
+                # stale AppConfig and silently revert this change - and Save-TabSessions reads
+                # straight from $Tab.AppConfig, so it would persist the stale value as well.
+                $ActiveTab = Get-ActiveTabSession
+                if ($null -ne $ActiveTab) {
+                    $ActiveTab.AppConfig = $Config
+                }
             }
             else {
                 "Store config object to {0}. Contents`r`n{1}`r`n" -f ($Script:RunTimeConfig.ConfigFile.Path), ($Config | ConvertTo-Json) | Write-LogOutput -LogType VERBOSE2

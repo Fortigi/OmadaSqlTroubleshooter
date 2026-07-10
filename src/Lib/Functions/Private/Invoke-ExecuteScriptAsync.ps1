@@ -34,8 +34,12 @@ function Invoke-ExecuteScriptAsync {
                     # runspace affinity, where calling a dot-sourced function throws
                     # CommandNotFoundException with nothing to catch it, crashing the whole
                     # process. Marshal onto the UI thread first so Get-ActiveTabSession et al.
-                    # always run somewhere they can actually be resolved.
-                    $CapturedDispatcher.Invoke([System.Action] {
+                    # always run somewhere they can actually be resolved. BeginInvoke (not the
+                    # blocking Invoke) - Invoke pumps the Windows message queue while it waits,
+                    # and if that pump re-enters PowerShell (e.g. a WPF Loaded handler firing
+                    # mid-pump), the engine throws PipelineStoppedException because it can't
+                    # safely nest like that. Nothing here needs to block synchronously anyway.
+                    $CapturedDispatcher.BeginInvoke([System.Action] {
                             # Capture whichever tab is actually active AT THE MOMENT this callback
                             # fires (not via Get-ActiveTabSession after the fact -
                             # Set-ActiveTabContext below would have already overwritten
