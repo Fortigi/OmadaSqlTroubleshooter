@@ -204,7 +204,9 @@ function Set-ConfigProperty {
             else {
                 "Store config object to {0}. Contents`r`n{1}`r`n" -f ($Script:RunTimeConfig.ConfigFile.Path), ($Config | ConvertTo-Json) | Write-LogOutput -LogType VERBOSE2
                 $Success = $false
+                $Count = 0
                 do {
+                    $Count++
                     try {
                         if (!$Success) {
                             $Config | ConvertTo-Json | Set-Content ($Script:RunTimeConfig.ConfigFile.Path) -Force
