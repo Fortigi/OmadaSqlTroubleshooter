@@ -22,13 +22,20 @@ function Invoke-ExecuteScriptAsync {
                 }
                 $Script:Task = $Task
 
+                # Captured as a plain local (not $Script:-scoped) so GetNewClosure() below bakes
+                # in the actual Dispatcher object - a $Script: reference would instead be a
+                # dynamic-scope lookup that resolves to $null on the foreign thread this
+                # continuation can run on, before Dispatcher.Invoke ever gets a chance to marshal
+                # back to the UI thread.
+                $CapturedDispatcher = $Script:MainForm.Definition.Dispatcher
+
                 $WrappedScriptBlock = {
                     # Task continuations can run on a raw ThreadPool thread with no PowerShell
                     # runspace affinity, where calling a dot-sourced function throws
                     # CommandNotFoundException with nothing to catch it, crashing the whole
                     # process. Marshal onto the UI thread first so Get-ActiveTabSession et al.
                     # always run somewhere they can actually be resolved.
-                    $Script:MainForm.Definition.Dispatcher.Invoke([System.Action] {
+                    $CapturedDispatcher.Invoke([System.Action] {
                             # Capture whichever tab is actually active AT THE MOMENT this callback
                             # fires (not via Get-ActiveTabSession after the fact -
                             # Set-ActiveTabContext below would have already overwritten
