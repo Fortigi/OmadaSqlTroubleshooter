@@ -13,7 +13,11 @@
         </Window.Style>
 
         <Grid x:Name="MainWindowGrid">
-                <TabControl x:Name="TabControlSessions" BorderThickness="0" Padding="0">
+                <!-- SelectedIndex=-1 is required: with only TabItemAddNew present at load time,
+                     a TabControl otherwise auto-selects it as soon as the control materializes -
+                     well before MainForm.Definition's Add_Loaded/Restore-TabSessions runs - which
+                     fires New-TabSession reentrantly against the still-loading MainForm. -->
+                <TabControl x:Name="TabControlSessions" BorderThickness="0" Padding="0" SelectedIndex="-1">
                         <TabItem x:Name="TabItemAddNew" Header="+" ToolTip="Open a new tab" />
                 </TabControl>
         </Grid>

@@ -29,7 +29,10 @@ function New-TabSession {
         $DisplayName = if ($null -ne $RestoreFrom -and ![string]::IsNullOrWhiteSpace($RestoreFrom.DisplayName)) { $RestoreFrom.DisplayName } else { Get-DefaultTabDisplayName }
 
         $XamlPath = Join-Path $Script:RunTimeConfig.ModuleFolder -ChildPath "lib\ui\MainFormTabContent.xaml"
-        $Xaml = Get-Content -Path $XamlPath -Raw
+        # Initialize-FormObject's -Xaml path builds an XmlNamespaceManager off $Xaml.NameTable,
+        # which only exists on an [xml] document - a plain string here fails with "constructor
+        # not found" for XmlNamespaceManager.
+        [xml]$Xaml = Get-Content -Path $XamlPath -Raw
         $Form = Initialize-FormObject -Xaml $Xaml
 
         $DefaultTabConfig = [PSCustomObject]@{
