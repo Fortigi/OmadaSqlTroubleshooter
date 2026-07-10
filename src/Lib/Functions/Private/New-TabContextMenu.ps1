@@ -78,6 +78,27 @@ function New-TabContextMenu {
                 }
             }
 
+        $DuplicateWithoutQueryItem = & $BuildItem "Duplicate Tab without Query" "Ctrl+Shift+T" ([char]0xE8C8) {
+                param($ClickSender)
+                try {
+                    $_ | Show-EventInfo
+                    Invoke-DuplicateTab -TabId $ClickSender.Tag -WithoutQuery
+                }
+                catch {
+                    $_.Exception.Message | Write-LogOutput -LogType ERROR -ErrorObject $_
+                }
+            }
+
+        $NewTabItem = & $BuildItem "New Tab" "Ctrl+T" ([char]0xE710) {
+                try {
+                    $_ | Show-EventInfo
+                    New-EmptyTabSession
+                }
+                catch {
+                    $_.Exception.Message | Write-LogOutput -LogType ERROR -ErrorObject $_
+                }
+            }
+
         $CloseItem = & $BuildItem "Close" "Ctrl+W" ([char]0xE8BB) {
                 param($ClickSender)
                 try {
@@ -115,8 +136,10 @@ function New-TabContextMenu {
             $Separator.Template = $SeparatorTemplate
         }
 
-        [void]$Menu.Items.Add($SaveItem)
+        [void]$Menu.Items.Add($NewTabItem)
         [void]$Menu.Items.Add($DuplicateItem)
+        [void]$Menu.Items.Add($DuplicateWithoutQueryItem)
+        [void]$Menu.Items.Add($SaveItem)
         [void]$Menu.Items.Add($Separator)
         [void]$Menu.Items.Add($CloseItem)
         [void]$Menu.Items.Add($CloseOthersItem)

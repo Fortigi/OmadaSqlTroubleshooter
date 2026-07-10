@@ -19,7 +19,11 @@ function New-TabHeaderControl {
         $Script:Tracer::WriteLine(("{0}: Function: {1} - Caller: {2}({3}) - Command: {4} - Parameters: {5}" -f $($Script:RunTimeConfig.ApplicationName), $($MyInvocation.MyCommand.Name), $($MyInvocation.ScriptName).Split("\")[-1], $($MyInvocation.ScriptLineNumber), $MyInvocation.Statement, ("TabSession={0} ({1})" -f $TabSession.Id, $TabSession.DisplayName)))
 
         $Grid = New-Object System.Windows.Controls.Grid
-        $Grid.MinWidth = 168
+        # MaxWidth caps a tab's natural width; the single-row ShrinkingTabPanel shrinks tabs below
+        # this (down to a floor) when there are too many to fit on one row, and the title's
+        # CharacterEllipsis trimming truncates the text as the tab narrows.
+        $Grid.MinWidth = 40
+        $Grid.MaxWidth = 240
         $Grid.Height = 22
 
         $TitleColumn = New-Object System.Windows.Controls.ColumnDefinition

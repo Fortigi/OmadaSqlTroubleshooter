@@ -57,6 +57,18 @@ $Script:WebViewCompletionPollTimer.Add_Tick({
     })
 $Script:WebViewCompletionPollTimer.Start()
 
+# Host the session tabs in the single-row ShrinkingTabPanel (defined in
+# Initialize-OmadaSqlTroubleShooter) so they shrink to fit on one row - with ellipsised text -
+# instead of wrapping onto a second row. Set here in code because the type is added at runtime and
+# so cannot be referenced from the XAML namespace.
+try {
+    $TabStripPanelFactory = New-Object System.Windows.FrameworkElementFactory([Fortigi.ShrinkingTabPanel])
+    $Script:MainForm.Elements.TabControlSessions.ItemsPanel = New-Object System.Windows.Controls.ItemsPanelTemplate($TabStripPanelFactory)
+}
+catch {
+    "Failed to set the single-row tab panel: {0}" -f $_.Exception.Message | Write-LogOutput -LogType WARNING
+}
+
 $Script:MainForm.Definition.Add_Closed({
         try {
             $_ | Show-EventInfo
@@ -136,6 +148,19 @@ $Script:MainForm.Definition.Add_PreviewKeyDown({
                 if ($null -ne $ActiveTab) {
                     Invoke-DuplicateTab -TabId $ActiveTab.Id
                 }
+            }
+            elseif ($ControlPressed -and $ShiftPressed -and $EventArgs.Key -eq [System.Windows.Input.Key]::T) {
+                "Ctrl+Shift+T intercepted at MainForm level - duplicate active tab without query" | Write-LogOutput -LogType VERBOSE
+                $EventArgs.Handled = $true
+                $ActiveTab = Get-ActiveTabSession
+                if ($null -ne $ActiveTab) {
+                    Invoke-DuplicateTab -TabId $ActiveTab.Id -WithoutQuery
+                }
+            }
+            elseif ($ControlPressed -and -not $ShiftPressed -and $EventArgs.Key -eq [System.Windows.Input.Key]::T) {
+                "Ctrl+T intercepted at MainForm level - open a new empty tab" | Write-LogOutput -LogType VERBOSE
+                $EventArgs.Handled = $true
+                New-EmptyTabSession | Out-Null
             }
             elseif ($ControlPressed -and -not $ShiftPressed -and ($EventArgs.Key -eq [System.Windows.Input.Key]::W -or $EventArgs.Key -eq [System.Windows.Input.Key]::F4)) {
                 "Ctrl+W / Ctrl+F4 intercepted at MainForm level - close active tab" | Write-LogOutput -LogType VERBOSE

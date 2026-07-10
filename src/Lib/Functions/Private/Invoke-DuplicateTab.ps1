@@ -14,7 +14,10 @@ function Invoke-DuplicateTab {
     [CmdLetBinding()]
     param(
         [Parameter(Mandatory = $true)]
-        [string]$TabId
+        [string]$TabId,
+        # Duplicate the connection state but NOT the editor SQL (the "Duplicate Tab without Query"
+        # command) - the new tab starts with an empty editor.
+        [switch]$WithoutQuery
     )
     try {
         $Script:Tracer::WriteLine(("{0}: Function: {1} - Caller: {2}({3}) - Command: {4} - Parameters: {5}" -f $($Script:RunTimeConfig.ApplicationName), $($MyInvocation.MyCommand.Name), $($MyInvocation.ScriptName).Split("\")[-1], $($MyInvocation.ScriptLineNumber), $MyInvocation.Statement, ($PSBoundParameters | Out-String)))
@@ -28,7 +31,7 @@ function Invoke-DuplicateTab {
         $SourceConnected = if ($Source.Id -eq $Script:ActiveTabId) { [bool]$Script:ConnectionStatus } else { [bool]$Source.ConnectionStatus }
 
         $SourceWeb = $Source.WebView.Object
-        if ($null -ne $SourceWeb -and $SourceWeb.IsLoaded -and $null -ne $SourceWeb.CoreWebView2) {
+        if (-not $WithoutQuery -and $null -ne $SourceWeb -and $SourceWeb.IsLoaded -and $null -ne $SourceWeb.CoreWebView2) {
             $Task = $SourceWeb.CoreWebView2.ExecuteScriptAsync("editor.getValue();")
             $Script:PendingWebViewCompletions.Add([PSCustomObject]@{
                     Task                   = $Task
@@ -56,7 +59,8 @@ function Invoke-DuplicateTab {
                 })
         }
         else {
-            # No editor available to read; still duplicate the connection state with an empty editor.
+            # -WithoutQuery, or no editor available to read: duplicate the connection state with an
+            # empty editor.
             Complete-DuplicateTab -SourceTabId $TabId -SourceConnected $SourceConnected -EditorText ""
         }
     }
