@@ -53,15 +53,37 @@ function Complete-DuplicateTab {
             return
         }
 
+        # Put the duplicate's own tab name (Query{#}) into its Display name field, made unique
+        # against the existing saved queries so it never clashes with one already in the query list
+        # (if "Query7" exists, the next free "Query{#}" is used). The source tab shares the same
+        # connection, so its loaded query list is the right set to check against.
+        $ExistingQueryNames = @()
+        try {
+            foreach ($QueryEntry in @($Source.RunTimeData.QueryListCache.QueryList)) {
+                if ($QueryEntry -is [System.Collections.IDictionary]) {
+                    foreach ($QueryDisplayName in $QueryEntry.Values) {
+                        if (![string]::IsNullOrWhiteSpace($QueryDisplayName)) {
+                            $ExistingQueryNames += $QueryDisplayName.ToString()
+                        }
+                    }
+                }
+            }
+        }
+        catch {
+            $_.Exception.Message | Write-LogOutput -LogType WARNING
+        }
+        $UniqueQueryName = Get-UniqueQueryName -ExistingNames $ExistingQueryNames -StartNumber $NewTab.OpenOrder
+        $NewTab.Elements.TextBoxDisplayName.Text = $UniqueQueryName
+
         # Hand the SQL to the new tab; its NavigationCompleted handler pushes it into Monaco once
         # the editor has loaded (pushing now would be dropped - the editor is not ready yet).
         if (![string]::IsNullOrEmpty($EditorText)) {
             $NewTab.PendingEditorText = $EditorText
             $NewTab.IsDirty = $true
-            Update-TabHeaderTitle -TabSession $NewTab
         }
+        Update-TabHeaderTitle -TabSession $NewTab
 
-        "Duplicated tab '{0}' into a new tab." -f $Source.DisplayName | Write-LogOutput -LogType DEBUG
+        "Duplicated tab '{0}' into a new tab named '{1}'." -f $Source.DisplayName, $UniqueQueryName | Write-LogOutput -LogType DEBUG
     }
     catch {
         $_.Exception.Message | Write-LogOutput -LogType ERROR -ErrorObject $_
