@@ -1,10 +1,12 @@
 function Save-TabSessions {
     <#
     .SYNOPSIS
-    Persists every open tab's connection/query state to an encrypted Clixml file (Export-Clixml
-    natively round-trips [SecureString] via DPAPI, so the file is not human-readable plaintext -
-    matching how the existing single Password field, and OmadaWeb.PS's own cookie cache, are
-    already protected). Called once, from MainForm.Definition's Add_Closing.
+    Persists every open tab's connection/query state to a Clixml file. The Password field is
+    DPAPI-encrypted before it ever reaches this object (ConvertTo-SecureString | ConvertFrom-
+    SecureString), so the file holds a DPAPI-protected string, not plaintext or a live
+    [SecureString] - matching how the existing single Password field, and OmadaWeb.PS's own
+    cookie cache, are already protected. Import-Clixml reads it back as that same encrypted
+    string, not a [SecureString]. Called once, from MainForm.Definition's Add_Closing.
     #>
     [CmdLetBinding()]
     param()

@@ -12,7 +12,7 @@ function Close-TabSession {
     try {
         $Script:Tracer::WriteLine(("{0}: Function: {1} - Caller: {2}({3}) - Command: {4} - Parameters: {5}" -f $($Script:RunTimeConfig.ApplicationName), $($MyInvocation.MyCommand.Name), $($MyInvocation.ScriptName).Split("\")[-1], $($MyInvocation.ScriptLineNumber), $MyInvocation.Statement, ($PSBoundParameters | Out-String)))
 
-        $TabToClose = $Script:Tabs | Where-Object { $_.Id -eq $TabId }
+        $TabToClose = $Script:Tabs | Where-Object { $_.Id -eq $TabId } | Select-Object -First 1
         if ($null -eq $TabToClose) {
             "Close-TabSession: tab '{0}' not found." -f $TabId | Write-LogOutput -LogType WARNING
             return

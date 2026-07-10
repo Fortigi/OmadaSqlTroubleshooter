@@ -14,7 +14,7 @@
   },
   {
     "Name": "LogFormOpen",
-    "Type": "String"
+    "Type": "Bool"
   },
   {
     "Name": "SqlSchemaFormOpen",

@@ -18,7 +18,7 @@ function Set-ActiveTabContext {
         $Script:Tracer::WriteLine(("{0}: Function: {1} - Caller: {2}({3}) - Command: {4} - Parameters: {5}" -f $($Script:RunTimeConfig.ApplicationName), $($MyInvocation.MyCommand.Name), $($MyInvocation.ScriptName).Split("\")[-1], $($MyInvocation.ScriptLineNumber), $MyInvocation.Statement, ($PSBoundParameters | Out-String)))
 
         if ($null -ne $Script:ActiveTabId -and $Script:ActiveTabId -ne $TabSession.Id) {
-            $Outgoing = $Script:Tabs | Where-Object { $_.Id -eq $Script:ActiveTabId }
+            $Outgoing = $Script:Tabs | Where-Object { $_.Id -eq $Script:ActiveTabId } | Select-Object -First 1
             if ($null -ne $Outgoing) {
                 $Outgoing.ConnectionStatus = $Script:ConnectionStatus
                 $Outgoing.PendingTask = $Script:Task
