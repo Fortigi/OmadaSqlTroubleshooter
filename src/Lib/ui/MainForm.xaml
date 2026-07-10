@@ -41,24 +41,20 @@
                         </Setter>
                 </Style>
 
-                <!-- SSMS-style session tabs: muted when inactive, light with a blue accent bar on
-                     top when active (blue = the app frame colour #FF293955). Implicit style so both
-                     the session tabs and the "+" add tab pick it up automatically. -->
+                <!-- Session tabs: square (no rounded corners), muted blue-grey when inactive, and
+                     the status-bar yellow (Khaki) when active. Implicit style so both the session
+                     tabs and the "+" add tab pick it up automatically. -->
                 <Style TargetType="TabItem">
                         <Setter Property="Foreground" Value="#FF404040" />
                         <Setter Property="Template">
                                 <Setter.Value>
                                         <ControlTemplate TargetType="TabItem">
-                                                <Border x:Name="TabBorder" Margin="0,2,2,0" Background="#FFD6DBE0" BorderBrush="#FFB8C0C9" BorderThickness="1,1,1,0" CornerRadius="5,5,0,0" SnapsToDevicePixels="True">
-                                                        <Border x:Name="AccentBorder" BorderBrush="Transparent" BorderThickness="0,2,0,0" CornerRadius="5,5,0,0">
-                                                                <ContentPresenter x:Name="ContentSite" ContentSource="Header" Margin="10,3,8,4" VerticalAlignment="Center" HorizontalAlignment="Left" />
-                                                        </Border>
+                                                <Border x:Name="TabBorder" Margin="0,0,2,0" Background="#FFD6DBE0" BorderBrush="#FF8A97A6" BorderThickness="1,1,1,0" CornerRadius="0" SnapsToDevicePixels="True">
+                                                        <ContentPresenter x:Name="ContentSite" ContentSource="Header" Margin="10,3,8,4" VerticalAlignment="Center" HorizontalAlignment="Left" />
                                                 </Border>
                                                 <ControlTemplate.Triggers>
                                                         <Trigger Property="IsSelected" Value="True">
-                                                                <Setter TargetName="TabBorder" Property="Background" Value="#FFF4F5F7" />
-                                                                <Setter TargetName="TabBorder" Property="Margin" Value="0,0,2,0" />
-                                                                <Setter TargetName="AccentBorder" Property="BorderBrush" Value="#FF293955" />
+                                                                <Setter TargetName="TabBorder" Property="Background" Value="Khaki" />
                                                                 <Setter Property="Panel.ZIndex" Value="1" />
                                                                 <Setter Property="Foreground" Value="#FF1F1F1F" />
                                                         </Trigger>
@@ -118,11 +114,18 @@
         </Window.Resources>
 
         <Grid x:Name="MainWindowGrid">
+                <Grid.RowDefinitions>
+                        <!-- Navy bar above the tabs, same colour and thickness (6px) as the content's
+                             vertical frame borders (#FF293955). -->
+                        <RowDefinition Height="6" />
+                        <RowDefinition Height="*" />
+                </Grid.RowDefinitions>
+                <Border Grid.Row="0" Background="#FF293955" />
                 <!-- SelectedIndex=-1 is required: with only TabItemAddNew present at load time,
                      a TabControl otherwise auto-selects it as soon as the control materializes -
                      well before MainForm.Definition's Add_Loaded/Restore-TabSessions runs - which
                      fires New-TabSession reentrantly against the still-loading MainForm. -->
-                <TabControl x:Name="TabControlSessions" BorderThickness="0" Padding="0" Background="Transparent" SelectedIndex="-1">
+                <TabControl x:Name="TabControlSessions" Grid.Row="1" BorderThickness="0" Padding="0" Background="Transparent" SelectedIndex="-1">
                         <TabItem x:Name="TabItemAddNew" Header="+" ToolTip="Open a new tab" />
                 </TabControl>
         </Grid>
