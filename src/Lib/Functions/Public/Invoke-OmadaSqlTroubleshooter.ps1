@@ -124,14 +124,14 @@ function Invoke-OmadaSqlTroubleshooter {
     # already running - terminates the entire process with no chance to see what happened. Log
     # it and keep the app alive instead of a hard crash.
     [System.Windows.Threading.Dispatcher]::CurrentDispatcher.add_UnhandledException({
-            param($EventSender, $EventArgs)
+            param($DispatcherExceptionSender, $DispatcherExceptionEventArgs)
             try {
-                "Unhandled dispatcher exception: {0}" -f $EventArgs.Exception.Message | Write-LogOutput -LogType ERROR -ErrorObject $EventArgs.Exception
+                "Unhandled dispatcher exception on {0}: {1}" -f $DispatcherExceptionSender.GetType().Name, $DispatcherExceptionEventArgs.Exception.Message | Write-LogOutput -LogType ERROR -ErrorObject $DispatcherExceptionEventArgs.Exception
             }
             catch {
                 # Write-LogOutput itself failing here must not prevent marking the exception handled.
             }
-            $EventArgs.Handled = $true
+            $DispatcherExceptionEventArgs.Handled = $true
         })
 
     #endregion
