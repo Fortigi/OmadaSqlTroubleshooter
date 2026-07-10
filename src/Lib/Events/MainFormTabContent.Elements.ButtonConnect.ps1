@@ -34,9 +34,6 @@ $Script:MainForm.Elements.ButtonConnect.Add_Click({
                     if ($Script:ConnectionStatus) {
                         Update-QueryList -ForceRefresh
                         Update-DataConnectionList
-                        # Auto-connect every other tab that shares this connection identity, reusing
-                        # this tab's session (no second login).
-                        Sync-MatchingTabConnections -SourceTabId $Script:ActiveTabId -Connect $true
                     }
                 }
                 finally {
@@ -56,10 +53,11 @@ $Script:MainForm.Elements.ButtonConnect.Add_Click({
                 }
             }
             else {
-                $DisconnectingTabId = $Script:ActiveTabId
+                # Each tab connects/disconnects on its own. Tabs that share a connection pool
+                # (tenant + authentication + credentials, via the shared SessionKey set in
+                # Test-OmadaConnection) reuse one another's live Omada session while connected, but
+                # disconnecting one only disconnects that tab - the others stay connected.
                 Set-SqlConnectionState -Status $false
-                # Disconnect every other tab that shares this connection identity too.
-                Sync-MatchingTabConnections -SourceTabId $DisconnectingTabId -Connect $false
             }
         }
         catch {
