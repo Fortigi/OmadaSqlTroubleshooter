@@ -50,11 +50,13 @@ function Get-TabConnectionIdentity {
             $Sha.Dispose()
         }
 
+        # Password is folded into $Key (below) but deliberately left out of the returned object -
+        # the only caller (Test-OmadaConnection) needs just .Key, and not returning the plaintext
+        # password avoids it ever being logged/serialized by some future caller.
         return [PSCustomObject]@{
             BaseUrl  = $BaseUrl
             Auth     = $Auth
             UserName = $UserName
-            Password = $Password
             AppIdUri = $AppIdUri
             TenantId = $TenantId
             IsEmpty  = $IsEmpty

@@ -2,8 +2,8 @@ function New-EmptyTabSession {
     <#
     .SYNOPSIS
     Opens a new empty tab if the configured tab capacity allows it, otherwise warns. Shared by the
-    "New Tab" context-menu item and the Ctrl+T shortcut (the same capacity check the "+" add tab
-    applies).
+    "+" add-tab click and the tab context menu's "New Tab" item (Ctrl+T is bound to duplicating the
+    active tab without its query instead - see Invoke-DuplicateTab).
     #>
     [CmdLetBinding()]
     param()
