@@ -63,7 +63,7 @@ $Script:WebViewCompletionPollTimer.Start()
 # so cannot be referenced from the XAML namespace.
 try {
     $TabStripPanelFactory = New-Object System.Windows.FrameworkElementFactory([Fortigi.ShrinkingTabPanel])
-    $Script:MainForm.Elements.TabControlSessions.ItemsPanel = New-Object System.Windows.Controls.ItemsPanelTemplate($TabStripPanelFactory)
+    (Get-TabControlSessions).ItemsPanel = New-Object System.Windows.Controls.ItemsPanelTemplate($TabStripPanelFactory)
 }
 catch {
     "Failed to set the single-row tab panel: {0}" -f $_.Exception.Message | Write-LogOutput -LogType WARNING
