@@ -230,6 +230,11 @@ function New-TabSession {
         Set-OmadaUrl
 
         if ($AutoConnect -and (Test-OmadaConnection)) {
+            # Populate the full data connection dropdown for this tab. Auto-connect (restore /
+            # duplicate) otherwise skipped this - unlike the interactive Connect button - so the
+            # dropdown only ever showed the single current connection set by Set-DataConnection below.
+            Update-DataConnectionList -NotShowPopupWindow
+
             if (![string]::IsNullOrWhiteSpace($Script:AppConfig.CurrentSqlQuery.DoId)) {
                 $ComboBoxSelectQueryItem = $Script:MainForm.Elements.ComboBoxSelectQuery.Items | Where-Object { $_.Content -like "*$($Script:AppConfig.CurrentSqlQuery.DoId)" }
                 if ($null -eq $ComboBoxSelectQueryItem) {

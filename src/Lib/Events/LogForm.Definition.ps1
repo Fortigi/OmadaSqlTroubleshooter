@@ -21,7 +21,7 @@ $Script:LogForm.Definition.Add_Loaded({
                 }
                 $Script:LogForm.PositionManager.Synchronizing = $false
             }, [System.Windows.Threading.DispatcherPriority]::Render)
-        $Script:MainForm.Elements.ButtonShowLog.IsEnabled = $false
+        Set-ShowLogButtonEnabled -Enabled $false
         $Script:TextBoxLog.Text = $Script:RunTimeConfig.Logging.AppLogObject
         $Script:LogForm.PositionManager.PositionOffSetLeft = [Int]::Abs($Script:LogForm.Definition.Left) - [Int]::Abs($Script:MainForm.Definition.Left)
         "PositionManagerLogForm PositionOffSetLeft: {0}" -f $Script:LogForm.PositionManager.PositionOffSetLeft | Write-LogOutput -LogType DEBUG
@@ -44,7 +44,7 @@ $Script:LogForm.Definition.Add_Closing({
 $Script:LogForm.Definition.Add_Closed({
         $_ | Show-EventInfo
         $Script:LogForm.State = "Closed"
-        $Script:MainForm.Elements.ButtonShowLog.IsEnabled = $true
+        Set-ShowLogButtonEnabled -Enabled $true
         Restore-MainFormFocus
     })
 

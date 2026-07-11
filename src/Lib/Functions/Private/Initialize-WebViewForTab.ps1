@@ -186,7 +186,7 @@ function Initialize-WebViewForTab {
                                 }
                                 "CoreWebView2.add_WebMessageReceived on {0} for tab '{1}'" -f $WebMessageSender.GetType().Name, $HandlerTab.DisplayName | Write-LogOutput -LogType DEBUG
 
-                                $Message = $WebMessageEventArgs.TryGetWebMessageAsString()
+                                $Message = Get-WebViewMessageString -MessageEventArgs $WebMessageEventArgs
                                 "WebView2 message received: {0}" -f $Message | Write-LogOutput -LogType DEBUG
 
                                 if ($Message) {
