@@ -8,7 +8,9 @@ function Set-DataConnection {
             $ComboBoxDataConnectionItem.Content = $Script:AppConfig.CurrentDataConnection.FullName
             $Script:MainForm.Elements.ComboBoxSelectDataConnection.Items.Add($ComboBoxDataConnectionItem) | Out-Null
         }
-        $Script:MainForm.Elements.ComboBoxSelectDataConnection.SelectedValue = $Script:MainForm.Elements.ComboBoxSelectDataConnection.Items | Where-Object { $_.Content -eq $Script:AppConfig.CurrentDataConnection.FullName }
+        # SelectedItem (not SelectedValue) - Update-DataConnectionList (the proven-working path)
+        # and Update-TabHeaderTitle both read SelectedItem directly.
+        $Script:MainForm.Elements.ComboBoxSelectDataConnection.SelectedItem = $Script:MainForm.Elements.ComboBoxSelectDataConnection.Items | Where-Object { $_.Content -eq $Script:AppConfig.CurrentDataConnection.FullName }
         $Script:MainForm.Elements.TextBlockStatusBarDatabaseName.Text = $Script:AppConfig.CurrentDataConnection.DisplayName
     }
     catch {

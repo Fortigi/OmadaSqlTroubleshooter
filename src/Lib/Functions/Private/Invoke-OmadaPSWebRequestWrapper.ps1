@@ -3,6 +3,17 @@ function Invoke-OmadaPSWebRequestWrapper {
     param()
 
     $Script:Tracer::WriteLine(("{0}: Function: {1} - Caller: {2}({3}) - Command: {4} - Parameters: {5}" -f $($Script:RunTimeConfig.ApplicationName), $($MyInvocation.MyCommand.Name), $($MyInvocation.ScriptName).Split("\")[-1], $($MyInvocation.ScriptLineNumber), $MyInvocation.Statement, ($PSBoundParameters | Out-String)))
+
+    # Invoke-OmadaRestMethod (OmadaWeb.PS) can show its own interactive WebView2/Browser login
+    # popup when authentication is needed - a modal window this app does not own, but which pumps
+    # this thread's messages while blocked exactly like our own dialogs (see
+    # Suspend-WebViewCompletionPolling.ps1). Without suspending here, the WebViewCompletionPollTimer
+    # can fire reentrantly during that popup and process a DIFFERENT tab's WebView2 completion,
+    # repointing $Script:MainForm.Elements/$Script:AppConfig/etc. mid-call - corrupting which tab's
+    # UI this function's own status updates (and any Set-SqlConnectionState a caller makes right
+    # after it returns) end up applying to. This is the single choke point every Omada REST call in
+    # this app goes through, so suspending here covers all of them.
+    Suspend-WebViewCompletionPolling
     try {
         if (!$Script:RunTimeData.SkipRetryRequest) {
             $Private:Parameters = $Script:RunTimeData.RestMethodParam
@@ -56,5 +67,8 @@ function Invoke-OmadaPSWebRequestWrapper {
             # $Message | Write-Error -ErrorAction Stop -TargetObject $_
             $_
         }
+    }
+    finally {
+        Resume-WebViewCompletionPolling
     }
 }

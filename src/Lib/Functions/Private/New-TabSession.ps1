@@ -230,7 +230,15 @@ function New-TabSession {
         }
 
         if (![string]::IsNullOrWhiteSpace($Script:AppConfig.LastAuthentication)) {
-            $Script:MainForm.Elements.ComboBoxSelectAuthenticationOption.SelectedValue = $Script:MainForm.Elements.ComboBoxSelectAuthenticationOption.Items | Where-Object { $_.Content -eq $Script:AppConfig.LastAuthentication }
+            # SelectedItem (not SelectedValue) - Test-ConnectionSettings reads SelectedItem
+            # directly to decide the authentication option for Test-ShouldConnect. Leaving this as
+            # SelectedValue meant that check saw a null AuthenticationOption after a restored/
+            # auto-connected tab's auth genuinely succeeded, so Test-ShouldConnect incorrectly
+            # returned false and Set-SqlConnectionState -Status $false ran right after - re-enabling
+            # the connection fields and leaving the Connect button showing "Connect" even though the
+            # tab was actually authenticated (query list/editor worked because that runs off the
+            # separate, already-successful Test-OmadaConnection result).
+            $Script:MainForm.Elements.ComboBoxSelectAuthenticationOption.SelectedItem = $Script:MainForm.Elements.ComboBoxSelectAuthenticationOption.Items | Where-Object { $_.Content -eq $Script:AppConfig.LastAuthentication }
         }
 
         if (![string]::IsNullOrWhiteSpace($Script:AppConfig.UserName)) {
@@ -285,7 +293,10 @@ function New-TabSession {
                     $Script:RunTimeData.CurrentSqlQuery.DisplayName = $Script:AppConfig.CurrentSqlQuery.DisplayName
                     $Script:MainForm.Elements.TextBoxDisplayName.Text = $Script:RunTimeData.CurrentSqlQuery.DisplayName
                 }
-                $Script:MainForm.Elements.ComboBoxSelectQuery.SelectedValue = $ComboBoxSelectQueryItem
+                # SelectedItem (not SelectedValue) - Set-EditorValue's own guard checks SelectedItem
+                # directly, and Update-QueryList (the proven-working path, e.g. from clicking
+                # Refresh) also sets SelectedItem for exactly this reason.
+                $Script:MainForm.Elements.ComboBoxSelectQuery.SelectedItem = $ComboBoxSelectQueryItem
             }
 
             if (![string]::IsNullOrWhiteSpace($Script:AppConfig.CurrentDataConnection.FullName)) {
