@@ -34,10 +34,28 @@ OmadaSqlTroubleshooter is a PowerShell Module that contains an interactive deskt
 - **Browser** — browser-based via Selenium
 - **OAuth** — OAuth2 / Entra ID
 
+#### Tabs & Multiple Connections
+- Work with multiple queries and connections side by side, each in its own tab
+- Every tab is an independent workspace with its own connection settings, query editor and results
+- **Add a tab** — click the **+** button next to the tabs, or use the tab **New Tab** context menu
+- **Duplicate a tab** — copy a tab's connection and query into a new, unsaved tab (**Duplicate Tab**), or copy only the connection without the query (**Duplicate Tab without Query**)
+- **Close tabs** — close a single tab (its **✕** button or context menu), **Close All But This**, or **Close All**
+- **Reorder tabs** — drag a tab to a new position
+- Tabs shrink to fit on a single row; long names are truncated with an ellipsis (…)
+- New and duplicated tabs are auto-named `Query{#}`, kept unique against your saved queries; the name is pre-filled into the Display name field so a duplicate can be saved with a single click
+- A query Display name cannot be empty when saving
+
+##### Shared connections (connection pools)
+Tabs that share the same connection form a **connection pool**, identified by the combination of **tenant URL + authentication method + credentials**:
+- When a tab connects, every tab in the same pool shares that active connection — no repeated sign-in
+- Disconnecting one tab disconnects only that tab; the others in the pool stay connected
+- A new tab whose connection settings match an already-connected pool reuses that pool's connection
+- A new tab whose settings match no connected pool creates a new pool of its own
+
 #### Connectivity & State
 - Auto-complete connection URL (e.g. `tenantname` → `https://tenantname.omada.cloud`)
 - Select query or connection from a dropdown while typing
-- Automatic persistence of connection, query and layout between sessions
+- Automatic persistence of connections, queries, tabs and layout between sessions
 - Option to store credentials; WebView2/Browser with Entra ID can auto-fill them
 - Detailed logging to log window and console
 
@@ -48,6 +66,11 @@ OmadaSqlTroubleshooter is a PowerShell Module that contains an interactive deskt
 | `F5` | Execute query |
 | `Enter` (in connection field) | Initiate connection |
 | `Ctrl + S` | Save current query in Omada |
+| `Ctrl + Shift + K` | Duplicate the current tab (connection and query) |
+| `Ctrl + T` | Duplicate the current tab without the query editor contents |
+| `Ctrl + W` / `Ctrl + F4` | Close the current tab |
+| `Ctrl + Tab` | Switch to the next tab (wraps from the last tab to the first) |
+| `Ctrl + Shift + Tab` | Switch to the previous tab (wraps from the first tab to the last) |
 | `Ctrl + C` (result pane) | Copy selected cell(s) to clipboard |
 | `Ctrl + Shift + C` (result pane) | Copy selected cell(s) including headers to clipboard |
 | `Ctrl + Shift + S` (result pane) | Copy selected cell(s) formatted as array for direct use in a Sql query to clipboard |
