@@ -230,6 +230,18 @@ function Initialize-WebViewForTab {
                                 Set-ActiveTabContext -TabSession $HandlerTab
                                 Set-EditorValue
 
+                                # Only clear NeedsEditorSync if this tab was genuinely the selected/
+                                # visible one when the push above happened. Navigation can complete
+                                # while this tab is backgrounded (e.g. a still-restoring tab further
+                                # down Restore-TabSessions' loop, or one that lost the selection to the
+                                # persisted active tab) - the push does not reliably show up once the
+                                # tab is later selected on its own, so leave the flag set for
+                                # TabControlSessions' SelectionChanged handler to force one fresh push
+                                # then, when the tab is actually shown.
+                                if ((Get-TabControlSessions).SelectedItem -eq $HandlerTab.TabItem) {
+                                    $HandlerTab.NeedsEditorSync = $false
+                                }
+
                                 # A duplicated tab carries the source tab's SQL here until its own
                                 # Monaco editor has loaded (now). Push it and clear the pending text.
                                 if (![string]::IsNullOrEmpty($HandlerTab.PendingEditorText)) {

@@ -64,6 +64,15 @@ function New-TabSession {
             OpenOrder        = $OpenOrder
             PendingEditorText = $null
             PendingDisplayName = $null
+            # A restored/auto-connected tab's first Set-EditorValue push (from
+            # Initialize-WebViewForTab's NavigationCompleted handler) can run while this tab is
+            # backgrounded - a later tab in the same restore loop, or the persisted active tab, is
+            # what actually ends up selected. That push does not reliably show up once the tab is
+            # later selected on its own. NeedsEditorSync stays true until a Set-EditorValue push
+            # happens while this tab is genuinely the selected one (see Initialize-WebViewForTab.ps1
+            # and MainForm.Elements.TabControlSessions.ps1), so the tab-switch handler knows to force
+            # exactly one fresh push the first time the user actually looks at this tab.
+            NeedsEditorSync  = $true
             IsDirty          = $false
             Form             = $Form
             Elements         = $Form.Elements

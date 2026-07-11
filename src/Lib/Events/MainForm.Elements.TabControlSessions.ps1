@@ -52,6 +52,16 @@
             $TabSession = $Script:Tabs | Where-Object { $_.TabItem -eq $SelectedItem } | Select-Object -First 1
             if ($null -ne $TabSession) {
                 Set-ActiveTabContext -TabSession $TabSession
+
+                # This tab's first Set-EditorValue push (from Initialize-WebViewForTab's
+                # NavigationCompleted handler, e.g. during startup restore or auto-connect) ran
+                # while it was still backgrounded and did not reliably show up - force exactly one
+                # fresh push now that the tab is genuinely selected/visible. See NeedsEditorSync's
+                # definition in New-TabSession.ps1.
+                if ($TabSession.NeedsEditorSync) {
+                    $TabSession.NeedsEditorSync = $false
+                    Set-EditorValue
+                }
             }
         }
         catch {
