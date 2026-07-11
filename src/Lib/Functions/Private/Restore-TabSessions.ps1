@@ -57,7 +57,12 @@ function Restore-TabSessions {
             $RestoredTabs = [System.Collections.Generic.List[PSCustomObject]]::new()
             foreach ($TabConfig in $TabsToRestore) {
                 try {
-                    $NewTab = New-TabSession -RestoreFrom $TabConfig -AutoConnect:$AutoConnect
+                    # $AutoConnect reflects one "reconnect all?" answer for the whole batch, but a
+                    # tab with no BaseUrl configured has nothing to reconnect to - passing it through
+                    # unconditionally would make Test-OmadaConnection run against an empty/invalid
+                    # URL for every blank tab, producing avoidable startup errors.
+                    $TabAutoConnect = $AutoConnect -and ![string]::IsNullOrWhiteSpace($TabConfig.BaseUrl)
+                    $NewTab = New-TabSession -RestoreFrom $TabConfig -AutoConnect:$TabAutoConnect
                     if ($null -ne $NewTab) {
                         $RestoredTabs.Add($NewTab)
                     }
