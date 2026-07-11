@@ -11,7 +11,11 @@ function Complete-DuplicateTab {
         [Parameter(Mandatory = $true)]
         [string]$SourceTabId,
         [bool]$SourceConnected,
-        [string]$EditorText
+        [string]$EditorText,
+        # When set (duplicate *including* the query), the copy is named after the source query with
+        # the next free number (Get-IncrementedQueryName). When not set (Duplicate Tab without
+        # Query), the copy uses the "Query{#}" scheme (Get-UniqueQueryName).
+        [switch]$UseSourceName
     )
     try {
         $Script:Tracer::WriteLine(("{0}: Function: {1} - Caller: {2}({3}) - Command: {4} - Parameters: {5}" -f $($Script:RunTimeConfig.ApplicationName), $($MyInvocation.MyCommand.Name), $($MyInvocation.ScriptName).Split("\")[-1], $($MyInvocation.ScriptLineNumber), $MyInvocation.Statement, ($PSBoundParameters | Out-String)))
@@ -53,10 +57,11 @@ function Complete-DuplicateTab {
             return
         }
 
-        # Put the duplicate's own tab name (Query{#}) into its Display name field, made unique
-        # against the existing saved queries so it never clashes with one already in the query list
-        # (if "Query7" exists, the next free "Query{#}" is used). The source tab shares the same
-        # connection, so its loaded query list is the right set to check against.
+        # Put the duplicate's name into its Display name field, made unique against the existing
+        # saved queries so it never clashes with one already in the query list. The source tab
+        # shares the same connection, so its loaded query list is the right set to check against.
+        # For a duplicate *with* the query, base the name on the source query and bump the trailing
+        # number ("Users" -> "Users1"); otherwise fall back to the "Query{#}" scheme.
         $ExistingQueryNames = @()
         try {
             foreach ($QueryEntry in @($Source.RunTimeData.QueryListCache.QueryList)) {
@@ -72,7 +77,17 @@ function Complete-DuplicateTab {
         catch {
             $_.Exception.Message | Write-LogOutput -LogType WARNING
         }
-        $UniqueQueryName = Get-UniqueQueryName -ExistingNames $ExistingQueryNames -StartNumber $NewTab.OpenOrder
+
+        if ($UseSourceName) {
+            $SourceName = $Source.Elements.TextBoxDisplayName.Text
+            if ([string]::IsNullOrWhiteSpace($SourceName)) {
+                $SourceName = $Source.DisplayName
+            }
+            $UniqueQueryName = Get-IncrementedQueryName -BaseName $SourceName -ExistingNames $ExistingQueryNames
+        }
+        else {
+            $UniqueQueryName = Get-UniqueQueryName -ExistingNames $ExistingQueryNames -StartNumber $NewTab.OpenOrder
+        }
         $NewTab.Elements.TextBoxDisplayName.Text = $UniqueQueryName
         # Also re-apply it once the tab has finished loading/connecting: a connected duplicate runs
         # Update-QueryList during auto-connect, which clears the Display name field, so the tab's

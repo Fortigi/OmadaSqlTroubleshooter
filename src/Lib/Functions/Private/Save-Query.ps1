@@ -66,6 +66,10 @@ function Save-Query {
                     $ComboBoxSelectQueryItem = New-Object System.Windows.Controls.ComboBoxItem
                     $ComboBoxSelectQueryItem.Content = $Script:AppConfig.CurrentSqlQuery.FullName
                     $Script:MainForm.Elements.ComboBoxSelectQuery.Items.Add($ComboBoxSelectQueryItem) | Out-Null
+
+                    # Make the new query show up in every other connected tab that shares this
+                    # connection pool (and refresh this tab's own query cache with it).
+                    Add-QueryToConnectedPoolTabs -DoId $private:Result.Id -DisplayName $private:Result.Name -FullName $Script:AppConfig.CurrentSqlQuery.FullName
                 }
                 else {
                     "New display name, Current: {0}, New: {1}" -f $Script:RunTimeData.CurrentSqlQuery.DisplayName, $private:Result.DisplayName | Write-LogOutput -LogType VERBOSE

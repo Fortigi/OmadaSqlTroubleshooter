@@ -38,6 +38,7 @@ function Invoke-DuplicateTab {
                     TabSession             = $null
                     DuplicateSourceId      = $TabId
                     DuplicateConnected     = $SourceConnected
+                    DuplicateUseSourceName = (-not $WithoutQuery)
                     DuplicateTask          = $Task
                     OnCompletedScriptBlock = {
                         param($Completion)
@@ -54,14 +55,15 @@ function Invoke-DuplicateTab {
                         catch {
                             $_.Exception.Message | Write-LogOutput -LogType WARNING
                         }
-                        Complete-DuplicateTab -SourceTabId $Completion.DuplicateSourceId -SourceConnected ([bool]$Completion.DuplicateConnected) -EditorText $EditorText
+                        Complete-DuplicateTab -SourceTabId $Completion.DuplicateSourceId -SourceConnected ([bool]$Completion.DuplicateConnected) -EditorText $EditorText -UseSourceName:([bool]$Completion.DuplicateUseSourceName)
                     }
                 })
         }
         else {
             # -WithoutQuery, or no editor available to read: duplicate the connection state with an
-            # empty editor.
-            Complete-DuplicateTab -SourceTabId $TabId -SourceConnected $SourceConnected -EditorText ""
+            # empty editor. Still honour the "with query" naming when this is only the no-editor
+            # fallback of a normal (query-including) duplicate.
+            Complete-DuplicateTab -SourceTabId $TabId -SourceConnected $SourceConnected -EditorText "" -UseSourceName:(-not $WithoutQuery)
         }
     }
     catch {
