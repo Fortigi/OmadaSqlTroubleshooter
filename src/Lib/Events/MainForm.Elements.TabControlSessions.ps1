@@ -47,7 +47,9 @@
                 return
             }
 
-            $TabSession = $Script:Tabs | Where-Object { $_.TabItem -eq $SelectedItem }
+            # -First 1 guarantees a single object (or $null) rather than a collection, matching
+            # Get-ActiveTabSession's own convention for this exact pattern.
+            $TabSession = $Script:Tabs | Where-Object { $_.TabItem -eq $SelectedItem } | Select-Object -First 1
             if ($null -ne $TabSession) {
                 Set-ActiveTabContext -TabSession $TabSession
             }
