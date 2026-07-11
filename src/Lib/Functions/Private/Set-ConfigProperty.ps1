@@ -108,7 +108,13 @@ function Set-ConfigProperty {
                         try {
                             $Config = Get-Content ($Script:RunTimeConfig.ConfigFile.Path) | ConvertFrom-Json
                             $CurrentProperties = $Config | Get-Member -MemberType NoteProperty
-                            $CurrentProperties | ForEach-Object {
+
+                            # Loop the SCHEMA (not $CurrentProperties) so a property newly added to
+                            # the schema but absent from an older, already-persisted config file -
+                            # e.g. TabCapacity - gets its schema default added here. Add-ConfigProperty
+                            # itself skips anything already present in $CurrentProperties, so this is
+                            # additive only; it never touches an existing value.
+                            $Script:ConfigProperties | ForEach-Object {
                                 Add-ConfigProperty -Property $_
                             }
                         }
