@@ -22,6 +22,18 @@ Task TestBuildOnly -Depends Analyze, Test, Build
 Task Pipeline -Depends Analyze, Test, Build
 Task DeployOnly -Depends Build, Deploy
 
+# End-to-end suite: launches the REAL app against a fully mocked Omada backend and drives every
+# scenario unattended. Deliberately NOT part of default/Pipeline/TestBuildOnly - it needs the local
+# GUI runtime (STA, WebView2, OmadaWeb.PS) and so is a local-only lane. Run: ./build/build.ps1 -Task E2E
+Task E2E {
+    $E2ELauncher = Join-Path $TestSource -ChildPath 'e2e\Invoke-E2ESuite.ps1'
+    "Running end-to-end suite (real app, mocked backend)..." | Write-Host -ForegroundColor Cyan
+    & pwsh -NoProfile -File $E2ELauncher
+    if ($LASTEXITCODE -ne 0) {
+        throw "End-to-end suite failed (exit $LASTEXITCODE). See buildoutput\E2EResults.xml."
+    }
+}
+
 
 function Get-GalleryModuleVersion {
     [CmdLetBinding()]

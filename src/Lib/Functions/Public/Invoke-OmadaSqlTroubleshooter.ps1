@@ -65,7 +65,7 @@ function Invoke-OmadaSqlTroubleshooter {
         ScriptName         = "OmadaSqlTroubleshooter"
         ApplicationTitle   = ""
         ModuleFolder       = Split-Path (Get-Module OmadaSqlTroubleShooter).Path
-        AppDataFolder      = Join-Path ([System.Environment]::GetFolderPath([System.Environment+SpecialFolder]::ApplicationData)) -ChildPath $ApplicationName
+        AppDataFolder      = if (![string]::IsNullOrWhiteSpace($env:OMADASQL_E2E_APPDATA)) { $env:OMADASQL_E2E_APPDATA } else { Join-Path ([System.Environment]::GetFolderPath([System.Environment+SpecialFolder]::ApplicationData)) -ChildPath $ApplicationName }
         Logging            = [PSCustomObject]@{
             LogToConsole        = $LogToConsole.IsPresent -or $false
             LogLevel            = $null
@@ -170,6 +170,62 @@ function Invoke-OmadaSqlTroubleshooter {
         $Message | Write-Host -ForegroundColor Green
         $Message | Write-LogOutput -LogType DEBUG
         "Loading Main form with settings:`r`n{0}" -f ($Script:AppConfig | ConvertTo-Json) | Write-LogOutput -LogType DEBUG
+
+        # End-to-end automation hook. Inert during normal use; only active when OMADASQL_E2E_SCRIPT is
+        # set (by the local E2E harness). Once the window is loaded and the dispatcher goes idle (so the
+        # first tab exists), dot-source the automation script - which installs script:-scoped mocks and
+        # drives the app - then close. A watchdog force-closes and writes a failing report if the
+        # automation never runs or hangs, so the harness process can never wait forever.
+        if (![string]::IsNullOrWhiteSpace($env:OMADASQL_E2E_SCRIPT)) {
+            $Script:E2EWatchdog = New-Object System.Windows.Threading.DispatcherTimer
+            $Script:E2EWatchdog.Interval = [TimeSpan]::FromSeconds(90)
+            $Script:E2EWatchdog.Add_Tick({
+                    try {
+                        $Script:E2EWatchdog.Stop()
+                        if (![string]::IsNullOrWhiteSpace($env:OMADASQL_E2E_RESULTS)) {
+                            '<testsuites><testsuite name="E2E" tests="1" failures="1"><testcase classname="E2E" name="watchdog"><failure message="E2E watchdog fired: automation did not complete"/></testcase></testsuite></testsuites>' | Set-Content -Path $env:OMADASQL_E2E_RESULTS -Encoding UTF8
+                            New-Item -Path ("{0}.done" -f $env:OMADASQL_E2E_RESULTS) -ItemType File -Force | Out-Null
+                        }
+                    }
+                    catch {
+                        $_.Exception.Message | Write-Host -ForegroundColor Red
+                    }
+                    finally {
+                        try {
+                            $Script:MainForm.Definition.Close()
+                        }
+                        catch {
+                            $_.Exception.Message | Write-Host -ForegroundColor Red
+                        }
+                    }
+                })
+            $Script:E2EWatchdog.Start()
+
+            $Script:MainForm.Definition.Dispatcher.BeginInvoke(
+                [System.Windows.Threading.DispatcherPriority]::ApplicationIdle,
+                [action]{
+                    try {
+                        . $env:OMADASQL_E2E_SCRIPT
+                    }
+                    catch {
+                        "E2E automation failed: {0}" -f $_.Exception.Message | Write-Host -ForegroundColor Red
+                    }
+                    finally {
+                        try {
+                            $Script:E2EWatchdog.Stop()
+                        }
+                        catch {
+                            $_.Exception.Message | Write-Host -ForegroundColor Red
+                        }
+                        try {
+                            $Script:MainForm.Definition.Close()
+                        }
+                        catch {
+                            $_.Exception.Message | Write-Host -ForegroundColor Red
+                        }
+                    }
+                }) | Out-Null
+        }
 
         [void]$Script:MainForm.Definition.ShowDialog()
         $Message = "Application '{0}': Closed, cleaning-up!" -f $Script:RunTimeConfig.ApplicationTitle
