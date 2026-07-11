@@ -8,8 +8,14 @@ function Test-OmadaConnection {
             # Key the OmadaWeb.PS session by connection identity rather than the unique tab id, so
             # tabs with the same tenant/auth/credentials share one authenticated session (a second
             # matching tab connects without its own login prompt).
+            # Get-TabConnectionIdentity's Key is a SHA256 hash and is never empty/whitespace even
+            # when every identity field is blank, so checking only Key would always overwrite the
+            # tab's own default SessionKey (its TabId, set in New-TabSession) - including for tabs
+            # with no configured identity, which would then spuriously share a session bucket with
+            # every other unconfigured tab. Gate on IsEmpty, which is computed specifically to
+            # distinguish that case, so sharing only happens when there's an actual identity to share.
             $ConnectionIdentity = Get-TabConnectionIdentity -TabSession (Get-ActiveTabSession)
-            if ($null -ne $ConnectionIdentity -and ![string]::IsNullOrWhiteSpace($ConnectionIdentity.Key)) {
+            if ($null -ne $ConnectionIdentity -and !$ConnectionIdentity.IsEmpty -and ![string]::IsNullOrWhiteSpace($ConnectionIdentity.Key)) {
                 $Script:RunTimeData.RestMethodParam.SessionKey = $ConnectionIdentity.Key
             }
 

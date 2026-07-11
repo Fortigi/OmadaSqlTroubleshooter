@@ -35,7 +35,10 @@ $Script:SqlHistoryForm.Elements.ButtonRestoreQuery.Add_Click({
 
                     if ($null -ne $Script:Webview.Object.CoreWebView2) {
 
-                        $ScriptToExecute = "editor.setValue('{0}');" -f ($SelectedItem.OldValue -replace "`n", "\n" -replace "`r", "\r" -replace "`t", "\t" -replace "'", "\'")
+                        # window.setEditorValue (not editor.setValue directly) so Monaco's
+                        # __suppressDirty contract holds - restoring a history version is a
+                        # programmatic load, not a genuine user edit, and must not mark the tab dirty.
+                        $ScriptToExecute = "window.setEditorValue('{0}');" -f ($SelectedItem.OldValue -replace "`n", "\n" -replace "`r", "\r" -replace "`t", "\t" -replace "'", "\'")
                         Push-ToEditor -ScriptToExecute $ScriptToExecute
                         $Script:RunTimeData.CurrentQueryText = $SelectedItem.OldValue
                         "Query restored to editor!" | Write-LogOutput
