@@ -144,6 +144,28 @@ function New-TabSession {
                 param($DragSender, $DragArgs)
                 try {
                     if ($DragArgs.LeftButton -eq [System.Windows.Input.MouseButtonState]::Pressed -and $Script:TabDragArmed) {
+                        # The tab CONTENT is a visual descendant of the TabItem, so this handler also
+                        # fires for mouse moves inside a field. Only drag when the gesture is on the
+                        # tab HEADER - walk the visual tree up from the element under the pointer to
+                        # the TabItem's Header; if we reach the TabItem first it is content, so bail
+                        # and let the field handle the drag as a normal text selection.
+                        $Node = $DragArgs.OriginalSource
+                        $Header = $DragSender.Header
+                        $OnHeader = $false
+                        while ($null -ne $Node) {
+                            if ($Node -eq $Header) {
+                                $OnHeader = $true
+                                break
+                            }
+                            if ($Node -eq $DragSender -or ($Node -isnot [System.Windows.Media.Visual] -and $Node -isnot [System.Windows.Media.Media3D.Visual3D])) {
+                                break
+                            }
+                            $Node = [System.Windows.Media.VisualTreeHelper]::GetParent($Node)
+                        }
+                        if (-not $OnHeader) {
+                            return
+                        }
+
                         $Position = $DragArgs.GetPosition($null)
                         $DeltaX = [Math]::Abs($Position.X - $Script:TabDragStartPoint.X)
                         $DeltaY = [Math]::Abs($Position.Y - $Script:TabDragStartPoint.Y)
