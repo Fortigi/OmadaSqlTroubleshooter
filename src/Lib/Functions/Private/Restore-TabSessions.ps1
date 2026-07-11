@@ -54,21 +54,38 @@ function Restore-TabSessions {
                 $AutoConnect = ($Choice -eq 2)
             }
 
+            # Reconnecting the saved tabs blocks the UI thread for a while; show the same style of
+            # popup used elsewhere so startup does not look hung.
+            $RestoreDataPopup = $null
+            if ($AutoConnect) {
+                $RestoreDataPopup = Show-PopupWindow -Message "Retrieving data, please wait..."
+                if ($null -ne $RestoreDataPopup) {
+                    $RestoreDataPopup.Dispatcher.Invoke([System.Action] {}, [System.Windows.Threading.DispatcherPriority]::Render) | Out-Null
+                }
+            }
+
             $RestoredTabs = [System.Collections.Generic.List[PSCustomObject]]::new()
-            foreach ($TabConfig in $TabsToRestore) {
-                try {
-                    # $AutoConnect reflects one "reconnect all?" answer for the whole batch, but a
-                    # tab with no BaseUrl configured has nothing to reconnect to - passing it through
-                    # unconditionally would make Test-OmadaConnection run against an empty/invalid
-                    # URL for every blank tab, producing avoidable startup errors.
-                    $TabAutoConnect = $AutoConnect -and ![string]::IsNullOrWhiteSpace($TabConfig.BaseUrl)
-                    $NewTab = New-TabSession -RestoreFrom $TabConfig -AutoConnect:$TabAutoConnect
-                    if ($null -ne $NewTab) {
-                        $RestoredTabs.Add($NewTab)
+            try {
+                foreach ($TabConfig in $TabsToRestore) {
+                    try {
+                        # $AutoConnect reflects one "reconnect all?" answer for the whole batch, but a
+                        # tab with no BaseUrl configured has nothing to reconnect to - passing it through
+                        # unconditionally would make Test-OmadaConnection run against an empty/invalid
+                        # URL for every blank tab, producing avoidable startup errors.
+                        $TabAutoConnect = $AutoConnect -and ![string]::IsNullOrWhiteSpace($TabConfig.BaseUrl)
+                        $NewTab = New-TabSession -RestoreFrom $TabConfig -AutoConnect:$TabAutoConnect
+                        if ($null -ne $NewTab) {
+                            $RestoredTabs.Add($NewTab)
+                        }
+                    }
+                    catch {
+                        "Failed to restore tab '{0}': {1}" -f $TabConfig.DisplayName, $_.Exception.Message | Write-LogOutput -LogType ERROR -ErrorObject $_
                     }
                 }
-                catch {
-                    "Failed to restore tab '{0}': {1}" -f $TabConfig.DisplayName, $_.Exception.Message | Write-LogOutput -LogType ERROR -ErrorObject $_
+            }
+            finally {
+                if ($null -ne $RestoreDataPopup) {
+                    $RestoreDataPopup.Close()
                 }
             }
 

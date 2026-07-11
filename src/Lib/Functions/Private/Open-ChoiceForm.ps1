@@ -34,6 +34,12 @@ function Open-ChoiceForm {
 
         Import-EventObjects -ClassName "ChoiceForm"
 
+        # Own the dialog to the main window (when it is already up) so it opens in front of it and
+        # takes focus, rather than appearing behind during startup.
+        if ($null -ne $Script:MainForm -and $null -ne $Script:MainForm.Definition -and $Script:MainForm.Definition.IsVisible) {
+            $Script:ChoiceForm.Definition.Owner = $Script:MainForm.Definition
+        }
+
         $Script:DialogResult = $null
 
         # See Suspend-WebViewCompletionPolling.ps1 - ShowDialog() pumps this thread's messages

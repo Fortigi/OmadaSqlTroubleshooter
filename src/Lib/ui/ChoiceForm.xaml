@@ -56,9 +56,11 @@
                    HorizontalAlignment="Center">
             <Button x:Name="LeftButton"
                    Content="Yes"
+                   IsDefault="True"
                    Style="{StaticResource LeftButtonStyle}"/>
             <Button x:Name="RightButton"
                    Content="No"
+                   IsCancel="True"
                    Style="{StaticResource RightButtonStyle}"/>
         </StackPanel>
     </Grid>

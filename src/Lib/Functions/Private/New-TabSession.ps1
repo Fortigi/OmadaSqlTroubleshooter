@@ -140,9 +140,32 @@ function New-TabSession {
                         $DeltaY = [Math]::Abs($Position.Y - $Script:TabDragStartPoint.Y)
                         if ($DeltaX -gt [System.Windows.SystemParameters]::MinimumHorizontalDragDistance -or $DeltaY -gt [System.Windows.SystemParameters]::MinimumVerticalDragDistance) {
                             $Script:TabDragArmed = $false
-                            [void][System.Windows.DragDrop]::DoDragDrop($DragSender, $DragSender.Tag, [System.Windows.DragDropEffects]::Move)
+                            # Carry the tab id under a private format, NOT as plain text. A raw string
+                            # would be a droppable text payload that any TextBox (or the app at large)
+                            # accepts and pastes on release - dropping the tab's GUID into fields. Only
+                            # the tab Drop/DragOver handlers below recognise "OmadaTabDragId".
+                            $DragData = New-Object System.Windows.DataObject
+                            $DragData.SetData("OmadaTabDragId", [string]$DragSender.Tag)
+                            [void][System.Windows.DragDrop]::DoDragDrop($DragSender, $DragData, [System.Windows.DragDropEffects]::Move)
                         }
                     }
+                }
+                catch {
+                    $_.Exception.Message | Write-LogOutput -LogType ERROR -ErrorObject $_
+                }
+            })
+        $TabItem.Add_DragOver({
+                try {
+                    # Only a tab drag (our private format) may be dropped on a tab; anything else shows
+                    # "no drop" so, e.g., text dragged from elsewhere cannot land on the tab strip.
+                    $DragOverArgs = $_
+                    if ($DragOverArgs.Data.GetDataPresent("OmadaTabDragId")) {
+                        $DragOverArgs.Effects = [System.Windows.DragDropEffects]::Move
+                    }
+                    else {
+                        $DragOverArgs.Effects = [System.Windows.DragDropEffects]::None
+                    }
+                    $DragOverArgs.Handled = $true
                 }
                 catch {
                     $_.Exception.Message | Write-LogOutput -LogType ERROR -ErrorObject $_
@@ -151,9 +174,11 @@ function New-TabSession {
         $TabItem.Add_Drop({
                 param($DropSender, $DropArgs)
                 try {
-                    $DraggedId = $DropArgs.Data.GetData([string])
-                    if (![string]::IsNullOrWhiteSpace($DraggedId)) {
-                        Move-TabSession -DraggedTabId $DraggedId -TargetTabId $DropSender.Tag
+                    if ($DropArgs.Data.GetDataPresent("OmadaTabDragId")) {
+                        $DraggedId = $DropArgs.Data.GetData("OmadaTabDragId")
+                        if (![string]::IsNullOrWhiteSpace($DraggedId)) {
+                            Move-TabSession -DraggedTabId $DraggedId -TargetTabId $DropSender.Tag
+                        }
                     }
                 }
                 catch {
@@ -230,6 +255,13 @@ function New-TabSession {
         Set-OmadaUrl
 
         if ($AutoConnect -and (Test-OmadaConnection)) {
+            # Mirror the interactive Connect button (which sets ReconnectStatus = 2 before
+            # connecting): Test-ConnectionSettings below treats ReconnectStatus -le 1 as "force
+            # disconnected", so without this a successful reconnect is torn down again - leaving the
+            # restored tab authenticated under the hood but shown as disconnected, with an empty
+            # editor and nothing selected.
+            $Script:RunTimeConfig.ReconnectStatus = 2
+
             # Populate the full data connection dropdown for this tab. Auto-connect (restore /
             # duplicate) otherwise skipped this - unlike the interactive Connect button - so the
             # dropdown only ever showed the single current connection set by Set-DataConnection below.
