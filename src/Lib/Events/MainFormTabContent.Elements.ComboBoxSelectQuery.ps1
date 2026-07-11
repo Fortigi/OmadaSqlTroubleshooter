@@ -2,6 +2,17 @@ $Script:MainForm.Elements.ComboBoxSelectQuery.Add_DropDownOpened({
         try {
             $_ | Show-EventInfo
 
+            # Test-ConnectionRequirements only checks whether the URL/credential fields are filled
+            # in, not whether the last connection attempt actually succeeded - those fields stay
+            # populated after a failed authentication, so without this check, simply opening this
+            # dropdown (something a user is likely to do repeatedly while troubleshooting a failed
+            # connection) would keep calling Update-QueryList and re-hitting the server/re-triggering
+            # authentication even though it is already known to have failed.
+            if (-not $Script:ConnectionStatus) {
+                "Not connected; skipping query list refresh." | Write-LogOutput -LogType DEBUG
+                return
+            }
+
             # if (($Script:MainForm.Elements.ComboBoxSelectQuery.Items | Measure-Object).Count -lt 1) {
             #     "Update query list" | Write-LogOutput -LogType DEBUG
             #     Update-QueryList
