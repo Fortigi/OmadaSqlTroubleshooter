@@ -40,37 +40,9 @@ function Select-AdjacentTab {
         (Get-TabControlSessions).SelectedItem = $Script:Tabs[$NewIndex].TabItem
 
         # Setting SelectedItem raises SelectionChanged synchronously, so the newly selected tab is
-        # already the active tab here. Defer the focus move to Background priority so it runs after
-        # the tab content has been made visible/laid out. The scriptblock captures no locals (it
-        # re-derives the active tab) so it stays a plain scriptblock that can resolve module state.
-        $Script:MainForm.Definition.Dispatcher.BeginInvoke(
-            [System.Windows.Threading.DispatcherPriority]::Background,
-            [System.Action] {
-                try {
-                    $ActiveTab = Get-ActiveTabSession
-                    if ($null -eq $ActiveTab) {
-                        return
-                    }
-
-                    $WebViewObject = $ActiveTab.WebView.Object
-                    if ($null -ne $WebViewObject) {
-                        [void]$WebViewObject.Focus()
-                        if ($WebViewObject.IsLoaded -and $null -ne $WebViewObject.CoreWebView2) {
-                            $WebViewObject.CoreWebView2.ExecuteScriptAsync("if (window.editor) { editor.focus(); }") | Out-Null
-                        }
-                        "Moved keyboard focus to the editor of tab '{0}' after tab switch." -f $ActiveTab.DisplayName | Write-LogOutput -LogType DEBUG
-                    }
-                    elseif ($null -ne $ActiveTab.TabItem) {
-                        # No editor yet (e.g. a brand new empty tab): focus the TabItem so the
-                        # window-level PreviewKeyDown keeps catching the next Ctrl+Tab.
-                        [void]$ActiveTab.TabItem.Focus()
-                    }
-                }
-                catch {
-                    $_.Exception.Message | Write-LogOutput -LogType VERBOSE
-                }
-            }
-        ) | Out-Null
+        # already the active tab. Move keyboard focus into it so the next Ctrl+Tab is not swallowed
+        # by the now-hidden WebView2 (see Set-ActiveTabEditorFocus).
+        Set-ActiveTabEditorFocus
     }
     catch {
         $_.Exception.Message | Write-LogOutput -LogType ERROR -ErrorObject $_

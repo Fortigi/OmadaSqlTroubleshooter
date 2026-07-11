@@ -80,6 +80,14 @@ function Complete-TabClose {
         finally {
             $Script:SuppressAddNewTab = $false
         }
+
+        # When the active tab was closed and a survivor took over, move keyboard focus onto that
+        # survivor. Closing from the editor (Ctrl+W / Ctrl+F4) disposes the closing tab's WebView2
+        # while it still held OS keyboard focus, so without this every following shortcut would reach
+        # no handler. Closing a background tab leaves the on-screen tab (and its focus) untouched.
+        if ($WasActiveTab -and $Script:Tabs.Count -gt 0 -and $null -ne $Script:ActiveTabId) {
+            Set-ActiveTabEditorFocus
+        }
     }
     catch {
         $_.Exception.Message | Write-LogOutput -LogType ERROR -ErrorObject $_

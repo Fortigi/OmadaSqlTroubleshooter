@@ -102,6 +102,11 @@ function Complete-DuplicateTab {
         }
         Update-TabHeaderTitle -TabSession $NewTab
 
+        # The duplicate is now the active tab. Move keyboard focus onto it so, when the duplicate was
+        # triggered from the editor via Ctrl+Shift+K / Ctrl+T, focus does not stay stuck on the
+        # source tab's now-hidden WebView2 (which would freeze every following shortcut).
+        Set-ActiveTabEditorFocus
+
         "Duplicated tab '{0}' into a new tab named '{1}'." -f $Source.DisplayName, $UniqueQueryName | Write-LogOutput -LogType DEBUG
     }
     catch {
