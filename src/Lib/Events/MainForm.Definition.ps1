@@ -151,6 +151,17 @@ $Script:MainForm.Definition.Add_PreviewKeyDown({
                     $Script:MainForm.Elements.ButtonExecuteQuery.RaiseEvent([System.Windows.RoutedEventArgs]::new([System.Windows.Controls.Primitives.ButtonBase]::ClickEvent))
                 }
             }
+            elseif ($ControlPressed -and $EventArgs.Key -eq [System.Windows.Input.Key]::Tab) {
+                $EventArgs.Handled = $true
+                if ($ShiftPressed) {
+                    "Ctrl+Shift+Tab intercepted at MainForm level - select previous tab" | Write-LogOutput -LogType VERBOSE
+                    Select-AdjacentTab -Direction Previous
+                }
+                else {
+                    "Ctrl+Tab intercepted at MainForm level - select next tab" | Write-LogOutput -LogType VERBOSE
+                    Select-AdjacentTab -Direction Next
+                }
+            }
             elseif ($EventArgs.Key -eq [System.Windows.Input.Key]::S -and $ControlPressed -and -not $ShiftPressed) {
                 "Ctrl+S key intercepted at MainForm level" | Write-LogOutput -LogType VERBOSE
 

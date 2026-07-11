@@ -149,6 +149,20 @@ function Initialize-WebViewForTab {
                                             Invoke-DuplicateTab -TabId $HandlerTab.Id -WithoutQuery
                                         })
                                 }
+                                elseif ($KeyEventArgs.Key -eq [System.Windows.Input.Key]::Tab -and $CtrlDown) {
+                                    "Ctrl+Tab / Ctrl+Shift+Tab intercepted in WebView2 - cycle tabs" | Write-LogOutput -LogType DEBUG
+                                    $KeyEventArgs.Handled = $true
+                                    if ($ShiftDown) {
+                                        $Script:MainForm.Definition.Dispatcher.Invoke([System.Action] {
+                                                Select-AdjacentTab -Direction Previous
+                                            })
+                                    }
+                                    else {
+                                        $Script:MainForm.Definition.Dispatcher.Invoke([System.Action] {
+                                                Select-AdjacentTab -Direction Next
+                                            })
+                                    }
+                                }
                                 elseif ($CtrlDown -and -not $ShiftDown -and ($KeyEventArgs.Key -eq [System.Windows.Input.Key]::W -or $KeyEventArgs.Key -eq [System.Windows.Input.Key]::F4)) {
                                     "Ctrl+W / Ctrl+F4 intercepted in WebView2 - close tab '{0}'" -f $HandlerTab.DisplayName | Write-LogOutput -LogType DEBUG
                                     $KeyEventArgs.Handled = $true
