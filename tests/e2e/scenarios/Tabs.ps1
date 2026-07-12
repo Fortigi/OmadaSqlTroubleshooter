@@ -65,6 +65,23 @@ E2ESuite -Name "CloseTab" -Body {
         E2EAssertTrue ($null -ne (Get-ActiveTabSession)) "a surviving tab should be active after a close"
     }
 
+    E2ECase -Name "choosing Save on a dirty tab that cannot save aborts the close (no data loss)" -Body {
+        Reset-E2ETabsToOne
+        New-EmptyTabSession | Out-Null
+        $DirtyTab = Get-ActiveTabSession
+        $DirtyTab.IsDirty = $true
+        $BeforeCount = $Script:Tabs.Count
+
+        # The mocked editor never enqueues a real save Task (no rendered WebView2), so choosing "Save"
+        # must NOT close the tab and lose the unsaved changes.
+        $script:E2EChoiceReturn = 1   # "Save"
+        Close-TabSession -TabId $DirtyTab.Id
+
+        E2EAssertEqual $BeforeCount $Script:Tabs.Count "a dirty tab must NOT be closed when Save is chosen but no save task can be created"
+
+        $DirtyTab.IsDirty = $false   # clean up so later resets can collapse tabs
+    }
+
     E2ECase -Name "Close All leaves no session tabs and does not crash" -Body {
         Reset-E2ETabsToOne
         New-EmptyTabSession | Out-Null

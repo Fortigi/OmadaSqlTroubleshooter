@@ -62,6 +62,17 @@ function Close-TabSession {
                         })
                     return
                 }
+
+                # The user asked to save, but no save Task could be enqueued (e.g. the editor's
+                # WebView2 is not ready). Closing now would run Complete-TabClose and silently lose
+                # the unsaved changes - abort the close instead, and restore the tab the user was
+                # actually looking at (Set-ActiveTabContext above repointed context onto the closing
+                # tab).
+                "Cannot save '{0}' right now (editor not ready); aborting close to avoid losing changes." -f $TabToClose.DisplayName | Write-LogOutput -LogType WARNING
+                if ($null -ne $PreviouslyActiveTab) {
+                    Set-ActiveTabContext -TabSession $PreviouslyActiveTab
+                }
+                return
             }
         }
 

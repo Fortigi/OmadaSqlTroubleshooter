@@ -53,7 +53,11 @@ function Add-QueryToConnectedPoolTabs {
             if ($null -eq $Tab.RunTimeData.QueryListCache.QueryList) {
                 $Tab.RunTimeData.QueryListCache.QueryList = @()
             }
-            $AlreadyCached = @($Tab.RunTimeData.QueryListCache.QueryList | Where-Object { $_ -is [System.Collections.IDictionary] -and $_.Keys -contains $DoId }).Count -gt 0
+            # Compare keys as strings: Update-QueryList stores the DoId key with its native type
+            # (often [int]), while $DoId here is a string, so a raw -contains would miss numeric keys
+            # and keep re-adding the same query - breaking idempotence.
+            $DoIdString = [string]$DoId
+            $AlreadyCached = @($Tab.RunTimeData.QueryListCache.QueryList | Where-Object { $_ -is [System.Collections.IDictionary] -and (@($_.Keys | ForEach-Object { [string]$_ }) -contains $DoIdString) }).Count -gt 0
             if (-not $AlreadyCached) {
                 $Tab.RunTimeData.QueryListCache.QueryList += @{ $DoId = $DisplayName }
             }

@@ -9,8 +9,9 @@ function Set-DataConnection {
             $Script:MainForm.Elements.ComboBoxSelectDataConnection.Items.Add($ComboBoxDataConnectionItem) | Out-Null
         }
         # SelectedItem (not SelectedValue) - Update-DataConnectionList (the proven-working path)
-        # and Update-TabHeaderTitle both read SelectedItem directly.
-        $Script:MainForm.Elements.ComboBoxSelectDataConnection.SelectedItem = $Script:MainForm.Elements.ComboBoxSelectDataConnection.Items | Where-Object { $_.Content -eq $Script:AppConfig.CurrentDataConnection.FullName }
+        # and Update-TabHeaderTitle both read SelectedItem directly. -First 1 guarantees a single
+        # item (WPF SelectedItem must not be assigned a multi-item Where-Object enumeration).
+        $Script:MainForm.Elements.ComboBoxSelectDataConnection.SelectedItem = $Script:MainForm.Elements.ComboBoxSelectDataConnection.Items | Where-Object { $_.Content -eq $Script:AppConfig.CurrentDataConnection.FullName } | Select-Object -First 1
         $Script:MainForm.Elements.TextBlockStatusBarDatabaseName.Text = $Script:AppConfig.CurrentDataConnection.DisplayName
     }
     catch {
