@@ -236,7 +236,19 @@ function New-TabSession {
         # $Script:MainForm.Elements/$Script:AppConfig/$Script:RunTimeData/etc. all refer to $NewTab.
         # (TabControlSessions itself must always be resolved via Get-TabControlSessions, not
         # $Script:MainForm.Elements - the latter is what's about to be repointed away from it.)
-        $TabControlSessions.SelectedItem = $TabItem
+        # Selecting the new tab fires TabControlSessions' SelectionChanged synchronously (activating
+        # it). Suppress the NeedsEditorSync editor re-push during THIS transient creation-time
+        # selection: the tab's Monaco is not realized yet, so a push now is lost AND would wrongly
+        # clear NeedsEditorSync - which is exactly what left background restored tabs blank until
+        # Refresh. Keeping the flag true means the first REAL user selection re-pushes the query once
+        # the editor exists.
+        $Script:SuppressEditorSync = $true
+        try {
+            $TabControlSessions.SelectedItem = $TabItem
+        }
+        finally {
+            $Script:SuppressEditorSync = $false
+        }
 
         Import-EventObjects -ClassName "MainFormTabContent"
 

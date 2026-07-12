@@ -84,6 +84,37 @@ function script:New-E2EConnectedTab {
     return (Get-ActiveTabSession)
 }
 
+function script:Invoke-E2EFlushDispatcher {
+    # Run all pending Background-and-higher dispatcher work (e.g. a deferred editor re-push) to
+    # completion, synchronously, so a scenario can assert on its effect.
+    $Script:MainForm.Definition.Dispatcher.Invoke([System.Action] {}, [System.Windows.Threading.DispatcherPriority]::Background)
+}
+
+function script:New-E2ERestoredTab {
+    param(
+        [string]$DisplayName = "Restored",
+        [string]$Url = "https://tenant.omada.cloud",
+        [string]$Auth = "Browser"
+    )
+    $RestoredConfig = [pscustomobject]@{
+        Id                    = ([guid]::NewGuid().Guid)
+        DisplayName           = $DisplayName
+        BaseUrl               = $Url
+        CurrentSqlQuery       = [pscustomobject]@{ DoId = 100; DisplayName = "TestQuery"; FullName = "TestQuery - 100" }
+        LastAuthentication    = $Auth
+        UserName              = $null
+        Password              = $null
+        EntraApplicationIdUri = $null
+        EntraIdTenantId       = $null
+        MyCreatedQueriesOnly  = $false
+        MyUpdatedQueriesOnly  = $false
+        SavePassword          = $false
+        IdentityUserName      = $null
+        CurrentDataConnection = [pscustomobject]@{ DoId = 42; DisplayName = "OISES"; FullName = "OISES - 42" }
+    }
+    return (New-TabSession -RestoreFrom $RestoredConfig -AutoConnect)
+}
+
 function script:Reset-E2ETabsToOne {
     # Collapse to a single, disconnected tab so tab-count-sensitive scenarios start from a known state.
     if ($Script:Tabs.Count -eq 0) {

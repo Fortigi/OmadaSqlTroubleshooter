@@ -41,6 +41,28 @@ E2ESuite -Name "PoolQuerySharing" -Body {
     }
 }
 
+E2ESuite -Name "BackgroundTabEditor" -Body {
+    E2ECase -Name "a background restored tab reloads its query into the editor when first selected" -Body {
+        Reset-E2ETabsToOne
+
+        # Two restored + auto-connected tabs, as on startup with 2+ saved sessions. The last one is
+        # active; the first is a background tab whose Monaco was never realized.
+        $BackgroundTab = New-E2ERestoredTab -DisplayName "Restored1"
+        $ActiveTab = New-E2ERestoredTab -DisplayName "Restored2"
+
+        E2EAssertEqual $ActiveTab.Id $Script:ActiveTabId "the last restored tab should be the active tab"
+        E2EAssertTrue ($BackgroundTab.NeedsEditorSync) "a background restored tab must still need an editor sync after restore (the flag must NOT be consumed at creation, or its query never re-loads on selection)"
+
+        # Selecting the background tab for the first time must reload its query into the editor.
+        $script:E2ECalls.Clear()
+        (Get-TabControlSessions).SelectedItem = $BackgroundTab.TabItem
+        Invoke-E2EFlushDispatcher
+
+        E2EAssertTrue (-not $BackgroundTab.NeedsEditorSync) "selecting the background tab should consume its NeedsEditorSync flag"
+        E2EAssertTrue ((Get-E2ECallCount -MethodLike "GET" -UriLike "*C_P_SQLTROUBLESHOOTING(*") -ge 1) "selecting the background tab should reload its query into the editor (Set-EditorValue -> Get-SqlQueryObject)"
+    }
+}
+
 E2ESuite -Name "RestoreReconnect" -Body {
     E2ECase -Name "an auto-connected restored tab returns connected with its lists and query selected" -Body {
         Reset-E2ETabsToOne

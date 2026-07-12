@@ -58,9 +58,18 @@
                 # while it was still backgrounded and did not reliably show up - force exactly one
                 # fresh push now that the tab is genuinely selected/visible. See NeedsEditorSync's
                 # definition in New-TabSession.ps1.
-                if ($TabSession.NeedsEditorSync) {
+                #
+                # SuppressEditorSync is set only during a tab's own creation-time selection (New-
+                # TabSession), when the editor is not realized yet: pushing then is lost and would
+                # consume the flag prematurely, leaving a background restored tab blank until Refresh.
+                # The push is deferred to Background priority so it runs after the tab's content has
+                # been realized (its WebView2 IsLoaded) - a synchronous push here is skipped as "not
+                # loaded" and never reaches the editor.
+                if ($TabSession.NeedsEditorSync -and -not $Script:SuppressEditorSync) {
                     $TabSession.NeedsEditorSync = $false
-                    Set-EditorValue
+                    $Script:MainForm.Definition.Dispatcher.BeginInvoke(
+                        [System.Windows.Threading.DispatcherPriority]::Background,
+                        [System.Action] { Set-EditorValue }) | Out-Null
                 }
             }
         }
