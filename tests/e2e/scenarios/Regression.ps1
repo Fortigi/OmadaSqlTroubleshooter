@@ -21,6 +21,62 @@ E2ESuite -Name "SchemaCache" -Body {
     }
 }
 
+E2ESuite -Name "SchemaWindowTabSwitch" -Body {
+    E2ECase -Name "switching to another connected tab refreshes the open schema window to that tab's database" -Body {
+        Reset-E2ETabsToOne
+        Set-E2EConnectionFields
+        Invoke-E2EConnect
+        $TabA = Get-ActiveTabSession   # tab A on the default data connection (OISES - 42)
+
+        # Tab B in the same pool but pointed at a DIFFERENT data connection (OtherDB - 43). Set it
+        # through the same config path the ComboBox handler uses, so it is deterministic. Both tabs
+        # are created BEFORE the window is shown - creating a tab re-activates the main window and
+        # would hide an already-shown owned window.
+        $TabB = New-E2EConnectedTab
+        "OtherDB - 43" | Set-ConfigProperty -Property "CurrentDataConnection"
+        E2EAssertTrue ([string]$TabB.AppConfig.CurrentDataConnection.DoId -eq "43") "tab B should be pointed at the OtherDB (43) data connection"
+
+        # Open a real, VISIBLE schema window (tab B is active) so Test-SqlSchemaFormIsVisible is true.
+        $Script:SqlSchemaForm = [pscustomobject]@{
+            Definition      = (New-Object System.Windows.Window)
+            PositionManager = [pscustomobject]@{ Synchronizing = $false }
+            State           = "Open"
+        }
+        $Script:SqlSchemaForm.Definition.Width = 200
+        $Script:SqlSchemaForm.Definition.Height = 200
+        $Script:SqlSchemaForm.Definition.ShowInTaskbar = $false
+        $Script:SqlSchemaForm.Definition.ShowActivated = $false
+        # Owner ties it to the (modal ShowDialog) main window so it can actually become visible.
+        $Script:SqlSchemaForm.Definition.Owner = $Script:MainForm.Definition
+        $Script:TreeViewSqlSchema = New-Object System.Windows.Controls.TreeView
+        $Script:SqlSchemaForm.Definition.Content = $Script:TreeViewSqlSchema
+        $Script:SqlSchemaForm.Definition.Show()
+        # Render-priority flush so IsVisible actually flips before the scenario relies on it.
+        $Script:MainForm.Definition.Dispatcher.Invoke([System.Action] {}, [System.Windows.Threading.DispatcherPriority]::Render)
+
+        try {
+            E2EAssertTrue (Test-SqlSchemaFormIsVisible) "the mock schema window should be visible for the test"
+            Get-SqlSchemaObject
+            E2EAssertTrue ($Script:SqlSchemaForm.Definition.Title -like "*OtherDB*") "the schema window should first show tab B's database (OtherDB)"
+
+            # Switch to tab A: the schema window must follow it to OISES. This is the discriminating
+            # assertion - without the fix the window stays on tab B's OtherDB.
+            (Get-TabControlSessions).SelectedItem = $TabA.TabItem
+            $TitleAfterA = $Script:SqlSchemaForm.Definition.Title
+            E2EAssertTrue ($TitleAfterA -like "*OISES*") ("switching to tab A must refresh the schema window to tab A's database (OISES); actual='{0}', visible='{1}'" -f $TitleAfterA, (Test-SqlSchemaFormIsVisible))
+
+            # And switching back to tab B follows it to OtherDB.
+            (Get-TabControlSessions).SelectedItem = $TabB.TabItem
+            E2EAssertTrue ($Script:SqlSchemaForm.Definition.Title -like "*OtherDB*") "switching to tab B must refresh the schema window to tab B's database (OtherDB)"
+        }
+        finally {
+            $Script:SqlSchemaForm.Definition.Close()
+            $Script:SqlSchemaForm = $null
+            $Script:TreeViewSqlSchema = $null
+        }
+    }
+}
+
 E2ESuite -Name "PoolQuerySharing" -Body {
     E2ECase -Name "connected tabs sharing a pool reuse one session key and see each other's new queries" -Body {
         Reset-E2ETabsToOne

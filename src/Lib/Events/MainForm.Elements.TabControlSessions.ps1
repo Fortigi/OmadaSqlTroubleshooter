@@ -71,6 +71,14 @@
                         [System.Windows.Threading.DispatcherPriority]::Background,
                         [System.Action] { Set-EditorValue }) | Out-Null
                 }
+
+                # If the SQL schema window is open, refresh it to the newly-active tab's schema -
+                # otherwise it keeps showing the previously-selected tab's database. Get-SqlSchemaObject
+                # reuses the per-pool + per-database cache, so a schema that was already retrieved is
+                # shown again without another round-trip (mirrors ComboBoxSelectDataConnection).
+                if (Test-SqlSchemaFormIsVisible) {
+                    Get-SqlSchemaObject
+                }
             }
         }
         catch {
