@@ -21,12 +21,7 @@ function Show-EventInfo {
         }
         elseif ($Item -is [System.Windows.Input.KeyEventArgs]) {
             # KeyEventArgs derives from RoutedEventArgs, so this branch must precede the generic
-            # RoutedEventArgs one below. A held key auto-repeats PreviewKeyDown/KeyDown many times a
-            # second, which floods the log with identical lines - log only the initial press and the
-            # release (KeyUp is never a repeat), skipping every auto-repeat in between.
-            if ($Item.IsRepeat) {
-                return
-            }
+            # RoutedEventArgs one below.
             $PressedKey = if ($Item.Key -eq [System.Windows.Input.Key]::System) { $Item.SystemKey } else { $Item.Key }
 
             # Security: only record keys that form a shortcut. Logging every keystroke would let a
@@ -35,7 +30,20 @@ function Show-EventInfo {
                 return
             }
 
-            $KeyAction = if ($null -ne $Item.RoutedEvent -and $Item.RoutedEvent.Name -like "*Up") { "released" } else { "pressed" }
+            # De-duplicate so a held key logs as exactly one press + one release. A held key
+            # auto-repeats, and each physical key also arrives twice (window-level PreviewKeyDown and
+            # the WebView2 control's own event). WebView2 drops the auto-repeat flag, so IsRepeat is
+            # unreliable - track the down/up state instead (see Resolve-KeyLogAction).
+            if ($null -eq $Script:KeyLogState) {
+                $Script:KeyLogState = [System.Collections.Generic.HashSet[string]]::new()
+            }
+
+            $IsRelease = ($null -ne $Item.RoutedEvent -and $Item.RoutedEvent.Name -like "*Up")
+            $KeyAction = Resolve-KeyLogAction -KeyName ([string]$PressedKey) -IsRelease $IsRelease -State $Script:KeyLogState
+            if ($null -eq $KeyAction) {
+                return
+            }
+
             "Key {0}: '{1}', Modifiers: '{2}', Event: '{3}', Source: '{4}'" -f $KeyAction, $PressedKey, [System.Windows.Input.Keyboard]::Modifiers, $Item.RoutedEvent.Name, $CallStack[1].Location | Write-LogOutput -LogType $LogType
         }
         elseif ($Item -is [System.Windows.RoutedEventArgs]) {
