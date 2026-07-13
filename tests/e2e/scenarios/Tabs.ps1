@@ -78,6 +78,25 @@ E2ESuite -Name "DisconnectContext" -Body {
     }
 }
 
+E2ESuite -Name "TabRename" -Body {
+    E2ECase -Name "renaming a tab records a DEBUG trace of the old and new name" -Body {
+        Reset-E2ETabsToOne
+        $Tab = Get-ActiveTabSession
+
+        # Make the Display name field drive the tab name (no query selected -> Get-TabName rule 2),
+        # then establish a starting name.
+        $Tab.Elements.ComboBoxSelectQuery.SelectedItem = $null
+        $Tab.Elements.ComboBoxSelectQuery.Text = ""
+        $Tab.Elements.TextBoxDisplayName.Text = "RenameStart"
+
+        Clear-E2ELog
+        $Tab.Elements.TextBoxDisplayName.Text = "RenameEnd"
+
+        $Renamed = Get-E2ELogMessages -LogType DEBUG -MessageLike "*Tab renamed from 'RenameStart' to 'RenameEnd'*"
+        E2EAssertTrue ($Renamed.Count -ge 1) "renaming a tab should log a 'Tab renamed from ... to ...' DEBUG trace"
+    }
+}
+
 E2ESuite -Name "CloseTab" -Body {
     E2ECase -Name "closing the active tab selects a surviving tab" -Body {
         Reset-E2ETabsToOne

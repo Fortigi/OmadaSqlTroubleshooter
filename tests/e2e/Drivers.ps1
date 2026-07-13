@@ -143,3 +143,18 @@ function script:Get-E2ECallCount {
             ($null -eq $DataType -or $_.DataType -eq $DataType)
         }).Count
 }
+
+function script:Clear-E2ELog {
+    $script:E2ELogMessages.Clear()
+}
+
+function script:Get-E2ELogMessages {
+    param(
+        [string]$MessageLike = "*",
+        [string]$LogType = $null   # untyped default so a $null keeps all types
+    )
+    return @($script:E2ELogMessages | Where-Object {
+            $_.Message -like $MessageLike -and
+            ([string]::IsNullOrEmpty($LogType) -or $_.LogType -eq $LogType)
+        })
+}

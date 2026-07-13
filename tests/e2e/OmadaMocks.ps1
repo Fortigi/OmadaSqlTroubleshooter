@@ -85,6 +85,10 @@ function script:Show-PopupWindow {
 # ERROR/WARNING/FATAL (unless -SkipDialog) which would deadlock the dispatcher during an unattended
 # run. This override echoes those to the console and never shows a dialog. Assertions - not dialogs -
 # are how the harness detects failures.
+# Records every log message (type + text) so scenarios can assert on trace output (e.g. the tab
+# rename trace). Cleared per scenario via Clear-E2ELog.
+$script:E2ELogMessages = [System.Collections.Generic.List[object]]::new()
+
 function script:Write-LogOutput {
     [CmdLetBinding()]
     param(
@@ -96,6 +100,7 @@ function script:Write-LogOutput {
         [switch]$SkipDialog
     )
     process {
+        $script:E2ELogMessages.Add([PSCustomObject]@{ LogType = $LogType; Message = $Message })
         if ($LogType -in @("ERROR", "WARNING", "FATAL")) {
             "[{0}] {1}" -f $LogType, $Message | Write-Host -ForegroundColor DarkYellow
         }

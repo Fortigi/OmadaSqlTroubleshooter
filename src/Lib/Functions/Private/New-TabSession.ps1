@@ -62,6 +62,9 @@ function New-TabSession {
             Id               = $TabId
             DisplayName      = $DisplayName
             OpenOrder        = $OpenOrder
+            # Set true after the first Update-TabHeaderTitle paint so a rename is only logged for
+            # genuine post-creation name changes, not the initial default-to-derived assignment.
+            HeaderInitialized = $false
             PendingEditorText = $null
             PendingDisplayName = $null
             # A restored/auto-connected tab's first Set-EditorValue push (from

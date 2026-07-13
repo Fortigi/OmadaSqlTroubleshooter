@@ -120,7 +120,10 @@ function Initialize-WebViewForTab {
                                 if ($null -eq $HandlerTab) {
                                     return
                                 }
-                                "PreviewKeyDown on {0} for tab '{1}'" -f $KeyEventSender.GetType().Name, $HandlerTab.DisplayName | Write-LogOutput -LogType VERBOSE2
+                                # Skip auto-repeats so a held key is not logged over and over.
+                                if (-not $KeyEventArgs.IsRepeat) {
+                                    "PreviewKeyDown on {0} for tab '{1}'" -f $KeyEventSender.GetType().Name, $HandlerTab.DisplayName | Write-LogOutput -LogType VERBOSE2
+                                }
 
                                 $CtrlDown = [System.Windows.Input.Keyboard]::Modifiers -band [System.Windows.Input.ModifierKeys]::Control
                                 $ShiftDown = [System.Windows.Input.Keyboard]::Modifiers -band [System.Windows.Input.ModifierKeys]::Shift
@@ -170,6 +173,19 @@ function Initialize-WebViewForTab {
                                             Close-TabSession -TabId $HandlerTab.Id
                                         })
                                 }
+                            }
+                            catch {
+                                $_.Exception.Message | Write-LogOutput -LogType ERROR -ErrorObject $_
+                            }
+                        })
+
+                    # Log key releases inside the editor (Show-EventInfo -> "Key released: ...") so a
+                    # held key traces as one press + one release rather than a flood of auto-repeats.
+                    # Logging only - no shortcut logic here, so it cannot affect the PreviewKeyDown
+                    # handling above.
+                    $TabSession.WebView.Object.add_PreviewKeyUp({
+                            try {
+                                $_ | Show-EventInfo
                             }
                             catch {
                                 $_.Exception.Message | Write-LogOutput -LogType ERROR -ErrorObject $_

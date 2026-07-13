@@ -205,6 +205,18 @@ $Script:MainForm.Definition.Add_PreviewKeyDown({
         }
     })
 
+# Log key releases (Show-EventInfo -> "Key released: ...") so a held key is traced as one press and
+# one release instead of a flood of auto-repeat PreviewKeyDown lines. Logging only - no shortcut
+# logic lives here, so it cannot affect any existing key handling.
+$Script:MainForm.Definition.Add_PreviewKeyUp({
+        try {
+            $_ | Show-EventInfo
+        }
+        catch {
+            $_.Exception.Message | Write-LogOutput -LogType ERROR -ErrorObject $_
+        }
+    })
+
 $Script:MainForm.Definition.Add_Loaded({
         try {
             $_ | Show-EventInfo

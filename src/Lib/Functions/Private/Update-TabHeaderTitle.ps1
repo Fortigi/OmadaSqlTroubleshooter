@@ -24,7 +24,17 @@ function Update-TabHeaderTitle {
         $Script:Tracer::WriteLine(("{0}: Function: {1} - Caller: {2}({3}) - Command: {4} - Parameters: {5}" -f $($Script:RunTimeConfig.ApplicationName), $($MyInvocation.MyCommand.Name), $($MyInvocation.ScriptName).Split("\")[-1], $($MyInvocation.ScriptLineNumber), $MyInvocation.Statement, ("TabSession={0} ({1})" -f $TabSession.Id, $TabSession.DisplayName)))
 
         $BaseName = Get-TabName -TabSession $TabSession
+
+        # Trace genuine renames so the log shows when (and how) a tab's name changed. Guarded by
+        # HeaderInitialized so the very first header paint (default name -> derived name at tab
+        # creation) is not reported as a rename.
+        $PreviousName = $TabSession.DisplayName
+        if ($TabSession.HeaderInitialized -and ![string]::IsNullOrWhiteSpace($PreviousName) -and $PreviousName -ne $BaseName) {
+            "Tab renamed from '{0}' to '{1}' (Id: {2})" -f $PreviousName, $BaseName, $TabSession.Id | Write-LogOutput -LogType DEBUG
+        }
+
         $TabSession.DisplayName = $BaseName
+        $TabSession.HeaderInitialized = $true
 
         $Name = if ($TabSession.IsDirty) { "{0}*" -f $BaseName } else { $BaseName }
 
