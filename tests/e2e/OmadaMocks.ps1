@@ -74,10 +74,15 @@ function script:Open-ChoiceForm {
     return $LeftButtonReturnValue
 }
 
+$script:E2EPopupMessages = [System.Collections.Generic.List[string]]::new()
+
 function script:Show-PopupWindow {
     param(
         $Message
     )
+    # Record the message so scenarios can assert which popups were shown (e.g. the first-open
+    # "Opening tab..." popup), but return $null so nothing enters a nested WPF message pump.
+    $script:E2EPopupMessages.Add([string]$Message)
     return $null
 }
 

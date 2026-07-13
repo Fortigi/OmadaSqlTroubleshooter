@@ -88,6 +88,43 @@ E2ESuite -Name "LazyTabLoading" -Body {
         E2EAssertTrue ($Header -like "CustomerReport*") "a deferred restored tab shows its saved display name in the header"
         E2EAssertTrue (-not ($Header -like "*Query*")) "a deferred restored tab is not shown as Query#"
     }
+
+    E2ECase -Name "opening a deferred tab the first time shows the 'opening' popup, not on later selections" -Body {
+        Reset-E2ETabsToOne
+        Set-E2EConnectionFields
+        Invoke-E2EConnect
+        $ActiveTab = Get-ActiveTabSession
+        $Deferred = New-E2EDeferredTab -DisplayName "LazyOpen"
+
+        # First open (switch away, then to it): the opening popup is shown.
+        (Get-TabControlSessions).SelectedItem = $ActiveTab.TabItem
+        Clear-E2EPopups
+        (Get-TabControlSessions).SelectedItem = $Deferred.TabItem
+        Invoke-E2EFlushDispatcher
+        E2EAssertTrue ((Get-E2EPopups -MessageLike "Opening tab*").Count -ge 1) "opening a deferred tab the first time shows the opening popup"
+
+        # Selecting it again does not (already materialized).
+        (Get-TabControlSessions).SelectedItem = $ActiveTab.TabItem
+        Clear-E2EPopups
+        (Get-TabControlSessions).SelectedItem = $Deferred.TabItem
+        Invoke-E2EFlushDispatcher
+        E2EAssertEqual 0 (Get-E2EPopups -MessageLike "Opening tab*").Count "re-selecting an already-opened tab does not show the opening popup"
+    }
+}
+
+E2ESuite -Name "TabDisconnectedStyle" -Body {
+    E2ECase -Name "a disconnected tab's name is italic; a connected tab's is upright" -Body {
+        Reset-E2ETabsToOne
+        $Tab = Get-ActiveTabSession
+        E2EAssertTrue ($Tab.TabItem.Header.Children[0].FontStyle -eq [System.Windows.FontStyles]::Italic) "a disconnected tab's name is shown in italics"
+
+        Set-E2EConnectionFields
+        Invoke-E2EConnect
+        E2EAssertTrue ($Tab.TabItem.Header.Children[0].FontStyle -eq [System.Windows.FontStyles]::Normal) "a connected tab's name is upright (not italic)"
+
+        Invoke-E2EConnect   # disconnect again
+        E2EAssertTrue ($Tab.TabItem.Header.Children[0].FontStyle -eq [System.Windows.FontStyles]::Italic) "the name returns to italics after disconnecting"
+    }
 }
 
 E2ESuite -Name "TabTitleFormat" -Body {

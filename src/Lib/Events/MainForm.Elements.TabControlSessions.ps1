@@ -70,7 +70,22 @@
                 # Restore-TabSessions; every other tab materializes here the first time it is viewed.
                 # Complete-TabMaterialization is idempotent.
                 if (-not $Script:SuppressEditorSync -and -not $TabSession.IsMaterialized) {
-                    Complete-TabMaterialization -TabSession $TabSession
+                    # First time this restored/deferred tab is opened this session: building its editor
+                    # and reconnecting takes a moment, so show a popup explaining the wait. Complete-
+                    # TabMaterialization only runs once per tab (its IsMaterialized guard), so this
+                    # popup only ever appears the first time each tab is opened.
+                    $OpeningPopup = Show-PopupWindow -Message ("Opening tab '{0}', please wait..." -f $TabSession.DisplayName)
+                    if ($null -ne $OpeningPopup) {
+                        $OpeningPopup.Dispatcher.Invoke([System.Action] {}, [System.Windows.Threading.DispatcherPriority]::Render) | Out-Null
+                    }
+                    try {
+                        Complete-TabMaterialization -TabSession $TabSession
+                    }
+                    finally {
+                        if ($null -ne $OpeningPopup) {
+                            $OpeningPopup.Close()
+                        }
+                    }
                 }
 
                 # This tab's first Set-EditorValue push (from Initialize-WebViewForTab's

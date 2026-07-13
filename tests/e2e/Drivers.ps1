@@ -171,6 +171,17 @@ function script:Get-E2ECallCount {
         }).Count
 }
 
+function script:Clear-E2EPopups {
+    $script:E2EPopupMessages.Clear()
+}
+
+function script:Get-E2EPopups {
+    param(
+        [string]$MessageLike = "*"
+    )
+    return @($script:E2EPopupMessages | Where-Object { $_ -like $MessageLike })
+}
+
 function script:Clear-E2ELog {
     $script:E2ELogMessages.Clear()
 }

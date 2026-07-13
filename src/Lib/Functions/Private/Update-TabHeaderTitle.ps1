@@ -88,6 +88,9 @@ function Update-TabHeaderTitle {
 
         # Header content is a Grid (see New-TabHeaderControl): child 0 is the title TextBlock.
         $TabSession.TabItem.Header.Children[0].Text = $Title
+        # Show a disconnected tab's name in italics so it is easy to tell at a glance which tabs are
+        # not connected; a connected tab uses the normal upright font.
+        $TabSession.TabItem.Header.Children[0].FontStyle = if ($Connected) { [System.Windows.FontStyles]::Normal } else { [System.Windows.FontStyles]::Italic }
         $TabSession.TabItem.ToolTip = $Title
 
         # The application window title mirrors the active tab; refresh it whenever the active tab's
