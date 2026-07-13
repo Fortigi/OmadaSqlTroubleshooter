@@ -177,6 +177,49 @@ E2ESuite -Name "TabRename" -Body {
 }
 
 E2ESuite -Name "CloseTab" -Body {
+    E2ECase -Name "closing the active tab selects the previous (left) tab" -Body {
+        Reset-E2ETabsToOne
+        $TabA = Get-ActiveTabSession
+        New-EmptyTabSession | Out-Null
+        $TabB = Get-ActiveTabSession
+        New-EmptyTabSession | Out-Null
+        $TabC = Get-ActiveTabSession
+
+        # tabs [A, B, C], C active -> closing C returns to B (the previous tab).
+        Close-TabSession -TabId $TabC.Id
+        E2EAssertEqual $TabB.Id (Get-ActiveTabSession).Id "closing the active last tab should select the previous tab"
+
+        # [A, B], B active -> closing B returns to A.
+        Close-TabSession -TabId $TabB.Id
+        E2EAssertEqual $TabA.Id (Get-ActiveTabSession).Id "closing again should select the previous tab"
+    }
+
+    E2ECase -Name "closing a middle active tab selects the previous (left) tab, not the next" -Body {
+        Reset-E2ETabsToOne
+        $TabA = Get-ActiveTabSession
+        New-EmptyTabSession | Out-Null
+        New-EmptyTabSession | Out-Null
+        $TabB = $Script:Tabs[1]
+        (Get-TabControlSessions).SelectedItem = $TabB.TabItem   # activate the MIDDLE tab
+
+        Close-TabSession -TabId $TabB.Id
+        E2EAssertEqual $TabA.Id (Get-ActiveTabSession).Id "closing a middle tab should select the previous (left) tab, not the next"
+    }
+
+    E2ECase -Name "closing a never-viewed lazy tab does not error" -Body {
+        Reset-E2ETabsToOne
+        Set-E2EConnectionFields
+        Invoke-E2EConnect
+        $Active = Get-ActiveTabSession
+        $Deferred = New-E2EDeferredTab -DisplayName "LazyClose"   # becomes active, no WebView2
+        E2EAssertTrue ($null -eq $Deferred.WebView.Object) "the deferred tab has no WebView2 to dispose"
+
+        $BeforeCount = $Script:Tabs.Count
+        Close-TabSession -TabId $Deferred.Id
+        E2EAssertEqual ($BeforeCount - 1) $Script:Tabs.Count "closing a lazy tab removes it without error"
+        E2EAssertEqual $Active.Id (Get-ActiveTabSession).Id "closing the lazy tab returns to the previous tab"
+    }
+
     E2ECase -Name "closing the active tab selects a surviving tab" -Body {
         Reset-E2ETabsToOne
         New-EmptyTabSession | Out-Null

@@ -50,7 +50,10 @@ function Complete-TabClose {
                 $TabControlSessions.SelectedItem = $null
             }
             elseif ($WasActiveTab) {
-                $NextIndex = [Math]::Min($ClosingIndex, $RemainingTabs.Count - 1)
+                # Select the PREVIOUS (left) tab when the active tab is closed - e.g. closing a
+                # just-opened tab returns to the tab that was there before it. When the closed tab was
+                # the first one there is no previous, so fall back to the new first tab.
+                $NextIndex = [Math]::Min([Math]::Max($ClosingIndex - 1, 0), $RemainingTabs.Count - 1)
                 $TabControlSessions.SelectedItem = $RemainingTabs[$NextIndex].TabItem
             }
 

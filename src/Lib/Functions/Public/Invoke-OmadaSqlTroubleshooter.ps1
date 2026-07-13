@@ -240,7 +240,11 @@ function Invoke-OmadaSqlTroubleshooter {
         $Script:MainForm.Definition.Close() | Out-Null
         foreach ($Tab in $Script:Tabs) {
             try {
-                $Tab.WebView.Object.Dispose() | Out-Null
+                # A lazily-restored tab that was never viewed has no WebView2 yet (Object is $null) -
+                # skip it rather than calling Dispose() on null (matches Complete-TabClose's guard).
+                if ($null -ne $Tab.WebView -and $null -ne $Tab.WebView.Object) {
+                    $Tab.WebView.Object.Dispose() | Out-Null
+                }
             }
             catch {
                 "Failed to dispose WebView2 for tab '{0}': {1}" -f $Tab.DisplayName, $_.Exception.Message | Write-LogOutput -LogType WARNING
