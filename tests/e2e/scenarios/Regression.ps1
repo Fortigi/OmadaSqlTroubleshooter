@@ -41,6 +41,25 @@ E2ESuite -Name "PoolQuerySharing" -Body {
     }
 }
 
+E2ESuite -Name "TmpQueryInstanceGuid" -Body {
+    E2ECase -Name "creating a temporary query reuses the stable InstanceGuid (no regeneration)" -Body {
+        Reset-E2ETabsToOne
+        Set-E2EConnectionFields
+        Invoke-E2EConnect
+
+        $GuidBefore = $Script:RunTimeConfig.InstanceGuid
+        $script:E2ECalls.Clear()
+
+        New-TemporarySqlQueryObject -QueryText "SELECT 1 FROM SomeTable" | Out-Null
+
+        E2EAssertEqual $GuidBefore $Script:RunTimeConfig.InstanceGuid "InstanceGuid must NOT change when a temp query is created (it is shared across tabs / runs)"
+
+        $CreateCall = $script:E2ECalls | Where-Object { $_.Method -eq "POST" -and $_.Uri -like "*odata/dataobjects/C_P_SQLTROUBLESHOOTING" } | Select-Object -First 1
+        E2EAssertTrue ($null -ne $CreateCall) "a create POST for the temp query should have been issued"
+        E2EAssertEqual ("TMP_{0}" -f $GuidBefore) ([string]$CreateCall.Body["NAME"]) "the temp query name must use the stable TMP_<InstanceGuid>"
+    }
+}
+
 E2ESuite -Name "BackgroundTabEditor" -Body {
     E2ECase -Name "a background restored tab reloads its query into the editor when first selected" -Body {
         Reset-E2ETabsToOne

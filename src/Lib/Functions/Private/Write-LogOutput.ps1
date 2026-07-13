@@ -36,9 +36,25 @@ function Write-LogOutput {
         catch {
             $CalledFrom = $null
         }
+        # Prefix every entry with the tab it originated from. Log lines emitted while a tab is active
+        # carry that tab's Display name; lines emitted with no active tab (startup, shell/main-window
+        # operations) are labelled "Main".
+        $TabContext = "Main"
+        try {
+            if (![string]::IsNullOrWhiteSpace($Script:ActiveTabId)) {
+                $ActiveLogTab = $Script:Tabs | Where-Object { $_.Id -eq $Script:ActiveTabId } | Select-Object -First 1
+                if ($null -ne $ActiveLogTab -and ![string]::IsNullOrWhiteSpace($ActiveLogTab.DisplayName)) {
+                    $TabContext = $ActiveLogTab.DisplayName
+                }
+            }
+        }
+        catch {
+            $TabContext = "Main"
+        }
+
         $LogMessage = @{
             #VERBOSE2 length = 8
-            Text        = "{0} - {1}{2}- {3}: {4}" -f $DateTime, $LogType, ((0..(8 - $LogType.Length) | ForEach-Object { ' ' }) -join ''), $CalledFrom, $Message
+            Text        = "{0} - {1}{2}- {3} - {4}: {5}" -f $DateTime, $LogType, ((0..(8 - $LogType.Length) | ForEach-Object { ' ' }) -join ''), $TabContext, $CalledFrom, $Message
             CallStack   = ($PSCallStack | Select-Object -Skip 1 -SkipLast 1 | Select-Object Location -ExpandProperty Location) -join "`n"
             Show        = $false
             ShowWarning = $false

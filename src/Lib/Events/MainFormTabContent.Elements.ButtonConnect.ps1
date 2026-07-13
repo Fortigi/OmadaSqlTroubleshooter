@@ -1,6 +1,17 @@
 $Script:MainForm.Elements.ButtonConnect.Add_Click({
+        param($ClickSender, $ClickArgs)
         try {
             $_ | Show-EventInfo
+
+            # This handler acts on the ambient active-tab context ($Script:MainForm.Elements, etc.),
+            # which an async event can leave pointing at a different (background) tab. Re-activate the
+            # tab whose OWN Connect button was clicked so Connect/Disconnect always acts on the visible
+            # tab the user clicked - otherwise the disconnect updates an off-screen tab and the visible
+            # tab looks stuck "Connected" (the "cannot disconnect" bug).
+            $OwningConnectTab = $Script:Tabs | Where-Object { $_.Elements.ButtonConnect -eq $ClickSender } | Select-Object -First 1
+            if ($null -ne $OwningConnectTab -and $OwningConnectTab.Id -ne $Script:ActiveTabId) {
+                Set-ActiveTabContext -TabSession $OwningConnectTab
+            }
 
             if ($Script:MainForm.Elements.ButtonConnectText.Text -eq "_Connect") {
                 $Script:RunTimeConfig.ReconnectStatus = 2

@@ -43,10 +43,12 @@ function New-TemporarySqlQueryObject {
             $Script:RunTimeData.RestMethodParam.Method = "PUT"
         }
         else {
-            "Temporary query object '{0}' does not exist. Creating a new one." -f $TempName | Write-LogOutput -LogType DEBUG
-            $Script:RunTimeConfig.InstanceGuid = $(([System.Guid]::NewGuid()).ToString('N'))
-            $Script:RunTimeConfig.InstanceGuid | Set-ConfigProperty -Property "InstanceGuid"
-            $TempName = "TMP_$($Script:RunTimeConfig.InstanceGuid)"
+            # Reuse the application-wide InstanceGuid (see Initialize-GlobalConfigSettings) for the
+            # new object - do NOT generate a fresh guid here. Regenerating meant every tab / every
+            # time the temp object was missing produced a brand-new TMP_<guid>, so stale temporary
+            # query objects piled up on the server instead of the single shared TMP_<InstanceGuid>
+            # being recreated and reused.
+            "Temporary query object '{0}' does not exist. Creating it." -f $TempName | Write-LogOutput -LogType DEBUG
             $Script:RunTimeData.RestMethodParam.Uri = "{0}/odata/dataobjects/C_P_SQLTROUBLESHOOTING" -f $Script:AppConfig.BaseUrl
             $Script:RunTimeData.RestMethodParam.Method = "POST"
         }

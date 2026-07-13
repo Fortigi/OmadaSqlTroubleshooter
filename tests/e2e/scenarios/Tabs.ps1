@@ -52,6 +52,32 @@ E2ESuite -Name "DuplicateTab" -Body {
     }
 }
 
+E2ESuite -Name "DisconnectContext" -Body {
+    E2ECase -Name "clicking a tab's Disconnect acts on that tab even if the active context points elsewhere" -Body {
+        Reset-E2ETabsToOne
+
+        Set-E2EConnectionFields
+        Invoke-E2EConnect
+        $TabA = Get-ActiveTabSession
+
+        $TabB = New-E2EConnectedTab   # TabB is now the active/last tab
+
+        # Simulate the bug's precondition: TabA is the visible (selected) tab, but the global active
+        # context has leaked to a background tab (TabB) - as an unrestored NavigationCompleted would.
+        (Get-TabControlSessions).SelectedItem = $TabA.TabItem
+        Set-ActiveTabContext -TabSession $TabB
+
+        E2EAssertTrue ($TabA.ConnectionStatus) "TabA should be connected before the disconnect"
+        E2EAssertTrue ($TabB.ConnectionStatus) "TabB should be connected before the disconnect"
+
+        # Click TabA's OWN Disconnect button.
+        $TabA.Elements.ButtonConnect.RaiseEvent([System.Windows.RoutedEventArgs]::new([System.Windows.Controls.Primitives.ButtonBase]::ClickEvent))
+
+        E2EAssertTrue (-not $TabA.ConnectionStatus) "clicking TabA's Disconnect must disconnect TabA (not the mis-pointed context tab)"
+        E2EAssertTrue ($TabB.ConnectionStatus) "TabB must stay connected"
+    }
+}
+
 E2ESuite -Name "CloseTab" -Body {
     E2ECase -Name "closing the active tab selects a surviving tab" -Body {
         Reset-E2ETabsToOne

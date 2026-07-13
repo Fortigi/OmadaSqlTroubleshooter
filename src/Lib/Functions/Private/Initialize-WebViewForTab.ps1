@@ -227,37 +227,55 @@ function Initialize-WebViewForTab {
                                     return
                                 }
                                 "Set-EditorValue after loading html for tab '{0}'" -f $HandlerTab.DisplayName | Write-LogOutput -LogType DEBUG
+                                $PreviouslyActiveTab = Get-ActiveTabSession
                                 Set-ActiveTabContext -TabSession $HandlerTab
-                                Set-EditorValue
+                                try {
+                                    Set-EditorValue
 
-                                # Only clear NeedsEditorSync if this tab was genuinely the selected/
-                                # visible one when the push above happened. Navigation can complete
-                                # while this tab is backgrounded (e.g. a still-restoring tab further
-                                # down Restore-TabSessions' loop, or one that lost the selection to the
-                                # persisted active tab) - the push does not reliably show up once the
-                                # tab is later selected on its own, so leave the flag set for
-                                # TabControlSessions' SelectionChanged handler to force one fresh push
-                                # then, when the tab is actually shown.
-                                if ((Get-TabControlSessions).SelectedItem -eq $HandlerTab.TabItem) {
-                                    $HandlerTab.NeedsEditorSync = $false
+                                    # Only clear NeedsEditorSync if this tab was genuinely the selected/
+                                    # visible one when the push above happened. Navigation can complete
+                                    # while this tab is backgrounded (e.g. a still-restoring tab further
+                                    # down Restore-TabSessions' loop, or one that lost the selection to the
+                                    # persisted active tab) - the push does not reliably show up once the
+                                    # tab is later selected on its own, so leave the flag set for
+                                    # TabControlSessions' SelectionChanged handler to force one fresh push
+                                    # then, when the tab is actually shown.
+                                    if ((Get-TabControlSessions).SelectedItem -eq $HandlerTab.TabItem) {
+                                        $HandlerTab.NeedsEditorSync = $false
+                                    }
+
+                                    # A duplicated tab carries the source tab's SQL here until its own
+                                    # Monaco editor has loaded (now). Push it and clear the pending text.
+                                    if (![string]::IsNullOrEmpty($HandlerTab.PendingEditorText)) {
+                                        $SafeDuplicateText = $HandlerTab.PendingEditorText -replace "\\", "\\\\" -replace "`r", "\r" -replace "`n", "\n" -replace "`t", "\t" -replace "'", "\'"
+                                        Push-ToEditor -ScriptToExecute ("window.setEditorValue('{0}');" -f $SafeDuplicateText)
+                                        $HandlerTab.PendingEditorText = $null
+                                    }
+
+                                    # Restore a duplicated tab's Display name as the final step (an
+                                    # auto-connect's Update-QueryList may have cleared it in the meantime).
+                                    if (![string]::IsNullOrEmpty($HandlerTab.PendingDisplayName)) {
+                                        $HandlerTab.Elements.TextBoxDisplayName.Text = $HandlerTab.PendingDisplayName
+                                        $HandlerTab.PendingDisplayName = $null
+                                    }
+
+                                    $Script:RunTimeConfig.ReconnectStatus = 3
                                 }
-
-                                # A duplicated tab carries the source tab's SQL here until its own
-                                # Monaco editor has loaded (now). Push it and clear the pending text.
-                                if (![string]::IsNullOrEmpty($HandlerTab.PendingEditorText)) {
-                                    $SafeDuplicateText = $HandlerTab.PendingEditorText -replace "\\", "\\\\" -replace "`r", "\r" -replace "`n", "\n" -replace "`t", "\t" -replace "'", "\'"
-                                    Push-ToEditor -ScriptToExecute ("window.setEditorValue('{0}');" -f $SafeDuplicateText)
-                                    $HandlerTab.PendingEditorText = $null
+                                finally {
+                                    # Navigation can complete for a BACKGROUND tab; do NOT leave the
+                                    # global active-tab context pointing at it. Restore the on-screen
+                                    # (selected) tab, otherwise a later Connect/Disconnect click would run
+                                    # against this background tab - its button/status/fields update
+                                    # off-screen while the visible tab appears stuck "Connected" (the
+                                    # "cannot disconnect" bug).
+                                    $VisibleTab = $Script:Tabs | Where-Object { $_.TabItem -eq (Get-TabControlSessions).SelectedItem } | Select-Object -First 1
+                                    if ($null -eq $VisibleTab) {
+                                        $VisibleTab = $PreviouslyActiveTab
+                                    }
+                                    if ($null -ne $VisibleTab -and $VisibleTab.Id -ne $HandlerTab.Id) {
+                                        Set-ActiveTabContext -TabSession $VisibleTab
+                                    }
                                 }
-
-                                # Restore a duplicated tab's Display name as the final step (an
-                                # auto-connect's Update-QueryList may have cleared it in the meantime).
-                                if (![string]::IsNullOrEmpty($HandlerTab.PendingDisplayName)) {
-                                    $HandlerTab.Elements.TextBoxDisplayName.Text = $HandlerTab.PendingDisplayName
-                                    $HandlerTab.PendingDisplayName = $null
-                                }
-
-                                $Script:RunTimeConfig.ReconnectStatus = 3
                             }
                             catch {
                                 $_.Exception.Message | Write-LogOutput -LogType ERROR -ErrorObject $_

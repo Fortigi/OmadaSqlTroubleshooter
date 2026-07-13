@@ -34,6 +34,13 @@ function Initialize-GlobalConfigSettings {
             "Config: Get InstanceGuid: {0}" -f $Script:AppGlobalConfig.InstanceGuid | Write-LogOutput -LogType DEBUG
             $Script:RunTimeConfig.InstanceGuid = $Script:AppGlobalConfig.InstanceGuid
         }
+        else {
+            # First run (or after -Reset): persist the startup InstanceGuid so the SAME one is reused
+            # on every later launch. The shared temporary query object (TMP_<InstanceGuid>) is then
+            # stable and recreated/reused instead of a new TMP_ query piling up on the server per run.
+            "Config: Persisting new InstanceGuid: {0}" -f $Script:RunTimeConfig.InstanceGuid | Write-LogOutput -LogType DEBUG
+            $Script:RunTimeConfig.InstanceGuid | Set-ConfigProperty -Property "InstanceGuid"
+        }
     }
     catch {
         $_.Exception.Message | Write-LogOutput -LogType ERROR -ErrorObject $_
