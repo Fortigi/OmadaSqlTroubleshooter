@@ -5,13 +5,14 @@ function Update-TabHeaderTitle {
 
     .DESCRIPTION
     Builds the header as:
-      <Tabname>[*] - <Connection> - <tenant base uri>   when the tab is connected
-      <Tabname>[*] - No connection                       when it is not
-    where <Tabname> comes from Get-TabName, "*" is appended when the tab has unsaved query
-    changes, <Connection> is the selected data connection (omitted when empty), and
-    <tenant base uri> is the tenant authority (omitted when empty). Reads from the tab's own
-    Elements/AppConfig so it is correct for any tab; the connected flag uses the live global
-    for the active tab and the tab's stored flag otherwise.
+      <query name>[*] - <data connection> - <tenant> [- No connection]
+    where <query name> comes from Get-TabName (without its DoId), "*" is appended when the tab has
+    unsaved query changes, <data connection> is the tab's data connection name without its DoId
+    (omitted when empty), <tenant> is the tenant authority (omitted when no URL is configured), and
+    "No connection" is appended only when the tab is not connected. Reads from the tab's own
+    Elements/AppConfig so it is correct for any tab; the connected flag uses the live global for the
+    active tab and the tab's stored flag otherwise. Also refreshes the application window title
+    (Update-ApplicationTitle) when the tab being updated is the active one.
     #>
     [CmdLetBinding()]
     param(
@@ -42,46 +43,58 @@ function Update-TabHeaderTitle {
         # stored flag (kept in sync by Set-ActiveTabContext / Set-SqlConnectionState).
         $Connected = if ($TabSession.Id -eq $Script:ActiveTabId) { [bool]$Script:ConnectionStatus } else { [bool]$TabSession.ConnectionStatus }
 
-        if ($Connected) {
-            $Parts = [System.Collections.Generic.List[string]]::new()
-            $Parts.Add($Name)
+        # Format: "<query name>[*] - <data connection> - <tenant> [- No connection]". The data
+        # connection and tenant come from the tab's own config, so they show even when the tab is not
+        # (yet) connected; the connection state is appended only when the tab is NOT connected.
+        $Parts = [System.Collections.Generic.List[string]]::new()
+        $Parts.Add($Name)
 
-            $Connection = $null
-            if ($null -ne $TabSession.Elements.ComboBoxSelectDataConnection.SelectedItem) {
-                $Connection = $TabSession.Elements.ComboBoxSelectDataConnection.SelectedItem.Content
-            }
-            if ([string]::IsNullOrWhiteSpace($Connection) -and $null -ne $TabSession.AppConfig.CurrentDataConnection) {
-                $Connection = $TabSession.AppConfig.CurrentDataConnection.DisplayName
-            }
-            if (![string]::IsNullOrWhiteSpace($Connection)) {
-                $Connection = $Connection.ToString().Trim()
-                if ($Connection -ne "-" -and $Connection -ne "- 0") {
-                    $Parts.Add($Connection)
-                }
-            }
-
-            $Tenant = $null
-            if (![string]::IsNullOrWhiteSpace($TabSession.AppConfig.BaseUrl)) {
-                try {
-                    $Tenant = ([System.Uri]::new($TabSession.AppConfig.BaseUrl)).Authority
-                }
-                catch {
-                    $Tenant = $TabSession.AppConfig.BaseUrl
-                }
-            }
-            if (![string]::IsNullOrWhiteSpace($Tenant)) {
-                $Parts.Add($Tenant.Trim())
-            }
-
-            $Title = $Parts -join " - "
+        # Data connection (database) name WITHOUT its DoId. Prefer the tab's parsed config (already
+        # id-free); fall back to the selected combo item with its trailing " - <DoId>" stripped.
+        $Connection = $null
+        if ($null -ne $TabSession.AppConfig.CurrentDataConnection) {
+            $Connection = $TabSession.AppConfig.CurrentDataConnection.DisplayName
         }
-        else {
-            $Title = "{0} - No connection" -f $Name
+        if ([string]::IsNullOrWhiteSpace($Connection) -and $null -ne $TabSession.Elements.ComboBoxSelectDataConnection.SelectedItem) {
+            $Connection = ([string]$TabSession.Elements.ComboBoxSelectDataConnection.SelectedItem.Content) -replace "\s*-\s*\d+\s*$", ""
         }
+        if (![string]::IsNullOrWhiteSpace($Connection)) {
+            $Connection = $Connection.ToString().Trim()
+            if ($Connection -ne "-" -and $Connection -ne "0" -and $Connection -ne "- 0") {
+                $Parts.Add($Connection)
+            }
+        }
+
+        # Tenant (authority) only when a URL is configured.
+        $Tenant = $null
+        if (![string]::IsNullOrWhiteSpace($TabSession.AppConfig.BaseUrl)) {
+            try {
+                $Tenant = ([System.Uri]::new($TabSession.AppConfig.BaseUrl)).Authority
+            }
+            catch {
+                $Tenant = $TabSession.AppConfig.BaseUrl
+            }
+        }
+        if (![string]::IsNullOrWhiteSpace($Tenant)) {
+            $Parts.Add($Tenant.Trim())
+        }
+
+        # Connection state ONLY when there is no connection.
+        if (-not $Connected) {
+            $Parts.Add("No connection")
+        }
+
+        $Title = $Parts -join " - "
 
         # Header content is a Grid (see New-TabHeaderControl): child 0 is the title TextBlock.
         $TabSession.TabItem.Header.Children[0].Text = $Title
         $TabSession.TabItem.ToolTip = $Title
+
+        # The application window title mirrors the active tab; refresh it whenever the active tab's
+        # header changes. This is what keeps the title bar live, not only updated on connect.
+        if ($TabSession.Id -eq $Script:ActiveTabId) {
+            Update-ApplicationTitle
+        }
     }
     catch {
         $_.Exception.Message | Write-LogOutput -LogType ERROR -ErrorObject $_

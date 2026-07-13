@@ -28,7 +28,11 @@ function Get-TabName {
             $SelectedQuery = $Elements.ComboBoxSelectQuery.Text
         }
         if (![string]::IsNullOrWhiteSpace($SelectedQuery)) {
-            return $SelectedQuery.ToString().Trim()
+            # The selected item's content is the query FullName ("<DisplayName> - <DoId>"); the tab
+            # shows the name WITHOUT its trailing DoId. The DoId is always the final " - <digits>"
+            # segment, so stripping only that is safe even for a name that itself contains
+            # " - <number>".
+            return (($SelectedQuery.ToString().Trim()) -replace "\s*-\s*\d+\s*$", "")
         }
 
         $DisplayName = $Elements.TextBoxDisplayName.Text

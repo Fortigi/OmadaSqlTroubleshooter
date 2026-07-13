@@ -80,6 +80,57 @@ E2ESuite -Name "LazyTabLoading" -Body {
     }
 }
 
+E2ESuite -Name "TabTitleFormat" -Body {
+    E2ECase -Name "tab header and window title use the new name/connection/tenant format without DoIds" -Body {
+        Reset-E2ETabsToOne
+        Set-E2EConnectionFields
+        Invoke-E2EConnect
+        $Tab = Get-ActiveTabSession
+
+        # Connected, no query selected yet: "<name> - OISES - tenant.omada.cloud" (no DoId, no state).
+        $Header = [string]$Tab.TabItem.Header.Children[0].Text
+        E2EAssertTrue ($Header -like "*OISES - tenant.omada.cloud") "a connected tab shows the data connection (no id) and tenant"
+        E2EAssertTrue (-not ($Header -like "*No connection*")) "a connected tab does not show a connection-state part"
+        E2EAssertTrue (-not ($Header -like "*- 42*")) "the data connection is shown without its DoId"
+
+        # Select a saved query -> its name shows without the trailing DoId.
+        Select-E2EQuery | Out-Null
+        $Header2 = [string]$Tab.TabItem.Header.Children[0].Text
+        E2EAssertTrue ($Header2 -like "TestQuery - *") "the query name is shown without its DoId"
+        E2EAssertTrue (-not ($Header2 -like "*100*")) "the query DoId is not shown in the header"
+
+        # The window title mirrors the active tab.
+        $Title = [string]$Script:MainForm.Definition.Title
+        E2EAssertTrue ($Title -like "*TestQuery - *") "the window title mirrors the active tab's query name"
+
+        # Unsaved changes -> a '*' marker on the query name, in both header and title.
+        $Tab.IsDirty = $true
+        Update-TabHeaderTitle -TabSession $Tab
+        E2EAssertTrue (([string]$Tab.TabItem.Header.Children[0].Text).Contains("TestQuery*")) "an unsaved tab shows the * marker in the header"
+        E2EAssertTrue (([string]$Script:MainForm.Definition.Title).Contains("TestQuery*")) "an unsaved tab shows the * marker in the window title"
+        $Tab.IsDirty = $false
+
+        # Disconnect -> 'No connection' is appended (only when there is no connection).
+        Invoke-E2EConnect
+        E2EAssertTrue (([string]$Tab.TabItem.Header.Children[0].Text) -like "*No connection") "a disconnected tab ends with 'No connection'"
+        E2EAssertTrue (([string]$Script:MainForm.Definition.Title) -like "*No connection") "the window title shows 'No connection' when the active tab is disconnected"
+    }
+
+    E2ECase -Name "the window title actively follows the active tab when switching tabs" -Body {
+        Reset-E2ETabsToOne
+        Set-E2EConnectionFields
+        Invoke-E2EConnect
+        Select-E2EQuery | Out-Null
+        $TabA = Get-ActiveTabSession   # query TestQuery selected
+
+        $TabB = New-E2EConnectedTab    # no query selected; becomes active
+        E2EAssertTrue (-not (([string]$Script:MainForm.Definition.Title) -like "*TestQuery*")) "after moving to tab B the title no longer shows tab A's query"
+
+        (Get-TabControlSessions).SelectedItem = $TabA.TabItem
+        E2EAssertTrue (([string]$Script:MainForm.Definition.Title) -like "*TestQuery*") "switching back to tab A updates the window title to tab A's query"
+    }
+}
+
 E2ESuite -Name "DisconnectContext" -Body {
     E2ECase -Name "clicking a tab's Disconnect acts on that tab even if the active context points elsewhere" -Body {
         Reset-E2ETabsToOne
