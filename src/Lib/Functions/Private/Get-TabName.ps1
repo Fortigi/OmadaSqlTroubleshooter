@@ -40,6 +40,14 @@ function Get-TabName {
             return $DisplayName.ToString().Trim()
         }
 
+        # A deferred (lazily-restored) tab has not populated its query combo or display-name field
+        # yet, so keep the name it was restored with (its saved query / display name) instead of
+        # falling back to "Query{#}" - otherwise every not-yet-viewed tab from the previous session
+        # shows as Query#, making it impossible to tell which query each one holds.
+        if (-not $TabSession.IsMaterialized -and ![string]::IsNullOrWhiteSpace($TabSession.DisplayName)) {
+            return $TabSession.DisplayName.ToString().Trim()
+        }
+
         $Order = if ($null -ne $TabSession.OpenOrder) { $TabSession.OpenOrder } else { 1 }
         return "Query{0}" -f $Order
     }

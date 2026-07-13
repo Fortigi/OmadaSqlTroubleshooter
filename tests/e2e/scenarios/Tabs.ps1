@@ -78,6 +78,16 @@ E2ESuite -Name "LazyTabLoading" -Body {
         E2EAssertTrue ($Deferred.IsMaterialized) "selecting a deferred tab for the first time should materialize it"
         E2EAssertTrue ((Get-E2ECallCount -MethodLike "GET" -UriLike "*dataobjects/C_P_SQLTROUBLESHOOTING") -ge 1) "viewing a deferred tab should fire its connect probe"
     }
+
+    E2ECase -Name "a not-yet-viewed restored tab shows its saved name, not Query#" -Body {
+        Reset-E2ETabsToOne
+        $Deferred = New-E2EDeferredTab -DisplayName "CustomerReport"
+
+        $Header = [string]$Deferred.TabItem.Header.Children[0].Text
+        E2EAssertTrue (-not $Deferred.IsMaterialized) "the restored tab is still deferred (name shown without materializing)"
+        E2EAssertTrue ($Header -like "CustomerReport*") "a deferred restored tab shows its saved display name in the header"
+        E2EAssertTrue (-not ($Header -like "*Query*")) "a deferred restored tab is not shown as Query#"
+    }
 }
 
 E2ESuite -Name "TabTitleFormat" -Body {
@@ -177,47 +187,43 @@ E2ESuite -Name "TabRename" -Body {
 }
 
 E2ESuite -Name "CloseTab" -Body {
-    E2ECase -Name "closing the active tab selects the previous (left) tab" -Body {
+    E2ECase -Name "closing a newly-opened tab returns to the tab it was opened from" -Body {
         Reset-E2ETabsToOne
         $TabA = Get-ActiveTabSession
-        New-EmptyTabSession | Out-Null
-        $TabB = Get-ActiveTabSession
-        New-EmptyTabSession | Out-Null
-        $TabC = Get-ActiveTabSession
+        New-EmptyTabSession | Out-Null   # opened from A -> becomes active
+        $TabNew = Get-ActiveTabSession
 
-        # tabs [A, B, C], C active -> closing C returns to B (the previous tab).
+        Close-TabSession -TabId $TabNew.Id
+        E2EAssertEqual $TabA.Id (Get-ActiveTabSession).Id "closing a new tab returns to the tab it was opened from"
+    }
+
+    E2ECase -Name "closing the active tab returns to the previously-active tab, not a neighbour" -Body {
+        Reset-E2ETabsToOne
+        $TabA = Get-ActiveTabSession
+        New-EmptyTabSession | Out-Null; $TabB = Get-ActiveTabSession
+        New-EmptyTabSession | Out-Null; $TabC = Get-ActiveTabSession
+
+        # Make the tab active before C be A (its non-neighbour): switch to A, then back to C.
+        (Get-TabControlSessions).SelectedItem = $TabA.TabItem
+        (Get-TabControlSessions).SelectedItem = $TabC.TabItem
+
         Close-TabSession -TabId $TabC.Id
-        E2EAssertEqual $TabB.Id (Get-ActiveTabSession).Id "closing the active last tab should select the previous tab"
-
-        # [A, B], B active -> closing B returns to A.
-        Close-TabSession -TabId $TabB.Id
-        E2EAssertEqual $TabA.Id (Get-ActiveTabSession).Id "closing again should select the previous tab"
+        E2EAssertEqual $TabA.Id (Get-ActiveTabSession).Id "closing the active tab returns to the previously-active tab (A), not the neighbour (B)"
+        $TabB | Out-Null
     }
 
-    E2ECase -Name "closing a middle active tab selects the previous (left) tab, not the next" -Body {
-        Reset-E2ETabsToOne
-        $TabA = Get-ActiveTabSession
-        New-EmptyTabSession | Out-Null
-        New-EmptyTabSession | Out-Null
-        $TabB = $Script:Tabs[1]
-        (Get-TabControlSessions).SelectedItem = $TabB.TabItem   # activate the MIDDLE tab
-
-        Close-TabSession -TabId $TabB.Id
-        E2EAssertEqual $TabA.Id (Get-ActiveTabSession).Id "closing a middle tab should select the previous (left) tab, not the next"
-    }
-
-    E2ECase -Name "closing a never-viewed lazy tab does not error" -Body {
+    E2ECase -Name "closing a never-viewed lazy tab returns to the previously-active tab without error" -Body {
         Reset-E2ETabsToOne
         Set-E2EConnectionFields
         Invoke-E2EConnect
         $Active = Get-ActiveTabSession
-        $Deferred = New-E2EDeferredTab -DisplayName "LazyClose"   # becomes active, no WebView2
+        $Deferred = New-E2EDeferredTab -DisplayName "LazyClose"   # opened from Active -> becomes active, no WebView2
         E2EAssertTrue ($null -eq $Deferred.WebView.Object) "the deferred tab has no WebView2 to dispose"
 
         $BeforeCount = $Script:Tabs.Count
         Close-TabSession -TabId $Deferred.Id
         E2EAssertEqual ($BeforeCount - 1) $Script:Tabs.Count "closing a lazy tab removes it without error"
-        E2EAssertEqual $Active.Id (Get-ActiveTabSession).Id "closing the lazy tab returns to the previous tab"
+        E2EAssertEqual $Active.Id (Get-ActiveTabSession).Id "closing the lazy tab returns to the previously-active tab"
     }
 
     E2ECase -Name "closing the active tab selects a surviving tab" -Body {

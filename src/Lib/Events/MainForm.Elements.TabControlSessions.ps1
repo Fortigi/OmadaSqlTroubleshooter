@@ -51,7 +51,17 @@
             # Get-ActiveTabSession's own convention for this exact pattern.
             $TabSession = $Script:Tabs | Where-Object { $_.TabItem -eq $SelectedItem } | Select-Object -First 1
             if ($null -ne $TabSession) {
+                # Remember the tab we are leaving so closing the current tab can switch back to it
+                # (most-recently-active), e.g. a just-opened tab returns to the tab it was opened from.
+                # This only tracks genuine selection changes - async completions repoint context via
+                # Set-ActiveTabContext without changing SelectedItem, so they never reach this handler.
+                $OutgoingTabId = $Script:ActiveTabId
+
                 Set-ActiveTabContext -TabSession $TabSession
+
+                if (![string]::IsNullOrWhiteSpace($OutgoingTabId) -and $OutgoingTabId -ne $TabSession.Id) {
+                    $Script:PreviousActiveTabId = $OutgoingTabId
+                }
 
                 # First real selection of a lazily-restored (deferred) tab: build its WebView2/Monaco
                 # editor and reconnect now. Guarded by SuppressEditorSync so the transient
