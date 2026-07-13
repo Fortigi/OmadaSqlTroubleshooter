@@ -28,6 +28,13 @@ function Show-EventInfo {
                 return
             }
             $PressedKey = if ($Item.Key -eq [System.Windows.Input.Key]::System) { $Item.SystemKey } else { $Item.Key }
+
+            # Security: only record keys that form a shortcut. Logging every keystroke would let a
+            # secret typed into a field (e.g. a password) be reconstructed from the log.
+            if (-not (Test-ShortcutKey -Key $PressedKey -Modifiers ([System.Windows.Input.Keyboard]::Modifiers))) {
+                return
+            }
+
             $KeyAction = if ($null -ne $Item.RoutedEvent -and $Item.RoutedEvent.Name -like "*Up") { "released" } else { "pressed" }
             "Key {0}: '{1}', Modifiers: '{2}', Event: '{3}', Source: '{4}'" -f $KeyAction, $PressedKey, [System.Windows.Input.Keyboard]::Modifiers, $Item.RoutedEvent.Name, $CallStack[1].Location | Write-LogOutput -LogType $LogType
         }
