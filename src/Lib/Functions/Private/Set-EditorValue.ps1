@@ -48,7 +48,7 @@ function Set-EditorValue {
     function setEditorValue() {
         if (typeof editor !== 'undefined' && editor && typeof editor.setValue === 'function') {
             try {
-                editor.setValue('$SafeQuery');
+                window.setEditorValue('$SafeQuery');
                 console.log('Editor value set successfully');
                 return true;
             } catch (e) {

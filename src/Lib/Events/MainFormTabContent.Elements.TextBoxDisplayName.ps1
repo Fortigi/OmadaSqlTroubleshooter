@@ -1,3 +1,19 @@
+$Script:MainForm.Elements.TextBoxDisplayName.Add_TextChanged({
+        try {
+            $_ | Show-EventInfo -LogType VERBOSE2
+
+            # The Display name field is rule 2 in Get-TabName, so refresh the header as it is typed
+            # (only takes effect when no query is selected).
+            $ActiveTab = Get-ActiveTabSession
+            if ($null -ne $ActiveTab) {
+                Update-TabHeaderTitle -TabSession $ActiveTab
+            }
+        }
+        catch {
+            $_.Exception.Message | Write-LogOutput -LogType ERROR -ErrorObject $_
+        }
+    })
+
 # $Script:MainForm.Elements.TextBoxDisplayName.Add_Leave({
 #         $_ | Show-EventInfo
 #         try {

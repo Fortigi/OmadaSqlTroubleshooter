@@ -30,23 +30,31 @@ function Initialize-FormObject {
         $Reader = (New-Object System.Xml.XmlNodeReader $Xaml)
         $Form = [Windows.Markup.XamlReader]::Load($Reader)
         "Create form: {0}" -f $Form.Name | Write-LogOutput -LogType DEBUG
-        $Form.Icon = Get-Icon -Type Wpf
 
-        if ($AppendVersion) {
-            "Set form title to: {0}" -f $Form.Title | Write-LogOutput -LogType DEBUG
-            if ($Script:RunTimeConfig.ApplicationVersion -eq "Development") {
-                $Form.Title = "{0} (Development Version)" -f $Form.Title
-            }
-            else {
-                $Form.Title = "{0} v{1}" -f $Form.Title, $Script:RunTimeConfig.ApplicationVersion
+        # Icon and AppendVersion/Title are Window-only concepts - loading a non-Window root
+        # (e.g. the per-tab UserControl fragment) must not attempt to set them.
+        if ($Form -is [System.Windows.Window]) {
+            $Form.Icon = Get-Icon -Type Wpf
+
+            if ($AppendVersion) {
+                "Set form title to: {0}" -f $Form.Title | Write-LogOutput -LogType DEBUG
+                if ($Script:RunTimeConfig.ApplicationVersion -eq "Development") {
+                    $Form.Title = "{0} (Development Version)" -f $Form.Title
+                }
+                else {
+                    $Form.Title = "{0} v{1}" -f $Form.Title, $Script:RunTimeConfig.ApplicationVersion
+                }
             }
         }
 
         $Elements = @()
-        $ElementNames = @( "AccessText", "Button", "CheckBox", "ComboBox", "ComboBoxItem", "DataGrid", "Image", "Label", "PasswordBox", "RadioButton", "RichTextBox", "TextBlock", "TextBox", "TreeViewSqlSchema", "WebView2")
+        $ElementNames = @( "AccessText", "Button", "CheckBox", "ComboBox", "ComboBoxItem", "DataGrid", "Image", "Label", "PasswordBox", "RadioButton", "RichTextBox", "TabControl", "TextBlock", "TextBox", "TreeViewSqlSchema", "WebView2")
         foreach ($ElementName in $ElementNames) {
             "Find element type: {0}" -f $ElementName | Write-LogOutput -LogType DEBUG
-            $Xaml.DocumentElement.SelectNodes("//default:$ElementName", $NamespaceManager) | ForEach-Object {
+            # WebView2 is declared under the Wpf clr-namespace prefix (Microsoft.Web.WebView2.Wpf),
+            # not the default presentation namespace every other element type here lives in.
+            $NamespacePrefix = if ($ElementName -eq "WebView2") { "Wpf" } else { "default" }
+            $Xaml.DocumentElement.SelectNodes("//${NamespacePrefix}:$ElementName", $NamespaceManager) | ForEach-Object {
                 $_.Name | Select-Object -Unique | ForEach-Object {
                     if (![string]::IsNullOrWhiteSpace($_) -and $null -ne $Form.FindName($_)) {
                         "Add element type: {0}" -f $_ | Write-LogOutput -LogType DEBUG

@@ -14,7 +14,16 @@ $Script:SqlHistoryForm.Elements.ButtonExportHistory.Add_Click({
             $SaveFileDialog.DefaultExt = ".json"
             $SaveFileDialog.FileName = "SQL_History_$((Get-Date).ToString('yyyyMMdd_HHmmss'))"
 
-            $Result = $SaveFileDialog.ShowDialog()
+            # See Suspend-WebViewCompletionPolling.ps1 - ShowDialog() pumps this thread's
+            # messages while blocked, which could let the WebView2 completion poll timer fire
+            # reentrantly.
+            Suspend-WebViewCompletionPolling
+            try {
+                $Result = $SaveFileDialog.ShowDialog()
+            }
+            finally {
+                Resume-WebViewCompletionPolling
+            }
 
             if ($Result -eq $true) {
                 $FilePath = $SaveFileDialog.FileName
@@ -66,12 +75,18 @@ $Script:SqlHistoryForm.Elements.ButtonExportHistory.Add_Click({
 
                 "SQL history exported to: $FilePath" | Write-LogOutput
 
-                $OpenResult = [System.Windows.MessageBox]::Show(
-                    "SQL history has been exported successfully.`n`nWould you like to open the exported file?",
-                    "Export Complete",
-                    [System.Windows.MessageBoxButton]::YesNo,
-                    [System.Windows.MessageBoxImage]::Information
-                )
+                Suspend-WebViewCompletionPolling
+                try {
+                    $OpenResult = [System.Windows.MessageBox]::Show(
+                        "SQL history has been exported successfully.`n`nWould you like to open the exported file?",
+                        "Export Complete",
+                        [System.Windows.MessageBoxButton]::YesNo,
+                        [System.Windows.MessageBoxImage]::Information
+                    )
+                }
+                finally {
+                    Resume-WebViewCompletionPolling
+                }
 
                 if ($OpenResult -eq [System.Windows.MessageBoxResult]::Yes) {
                     Start-Process $FilePath

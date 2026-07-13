@@ -35,7 +35,9 @@ function Set-SqlConnectionState {
                 }
             }
             $Script:ConnectionStatus = $true
-            $Script:MainForm.Definition.Title = "{0} - {1}" -f $Script:RunTimeConfig.ApplicationTitle, ([System.Uri]::new($Script:MainForm.Elements.TextBoxUrl.Text)).Authority
+            # The window title is refreshed from the active tab by Update-TabHeaderTitle below
+            # (-> Update-ApplicationTitle), so it stays in the new "<name> - <connection> - <tenant>"
+            # format instead of being set to the old app-title-plus-tenant string here.
             $Script:RunTimeData.RestMethodParam.ForceAuthentication = $false
         }
         else {
@@ -53,14 +55,25 @@ function Set-SqlConnectionState {
             $Script:MainForm.Elements.TextBlockStatusBarDatabaseName | Set-TextBlockText -Text "-"
             $Script:MainForm.Elements.TextBlockStatusBarQueryTime | Set-TextBlockText -Text "00:00:00.0000000"
             $Script:MainForm.Elements.TextBlockStatusBarRows | Set-TextBlockText -Text "0 rows"
-            $Script:MainForm.Definition.Title = $Script:RunTimeConfig.ApplicationTitle
+            # The window title is refreshed from the active tab by Update-TabHeaderTitle below
+            # (-> Update-ApplicationTitle); it will show "<name> - <connection> - <tenant> - No
+            # connection" rather than being reset to the bare app title here.
 
-            $ScriptToExecute = "editor.setValue('');"
+            $ScriptToExecute = "window.setEditorValue('');"
             Push-ToEditor -ScriptToExecute $ScriptToExecute
 
             # $null | Set-ConfigProperty -Property "CurrentDataConnection"
             # $null | Set-ConfigProperty -Property "CurrentSqlQuery"
             $Script:ConnectionStatus = $false
+        }
+
+        # Keep the active tab's stored connection flag and header in sync with the change just made
+        # (the header switches between "<name> - <connection> - <tenant>" and "<name> - No
+        # connection").
+        $ActiveTab = Get-ActiveTabSession
+        if ($null -ne $ActiveTab) {
+            $ActiveTab.ConnectionStatus = $Script:ConnectionStatus
+            Update-TabHeaderTitle -TabSession $ActiveTab
         }
     }
     catch {

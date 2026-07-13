@@ -34,6 +34,26 @@
                 }
             });
 
+            // Programmatic loads (restoring a saved query, clearing on disconnect) must not be
+            // reported as an unsaved change - only genuine user edits should. Callers set the
+            // editor's content via window.setEditorValue(...) instead of editor.setValue(...)
+            // directly so this distinction can be made.
+            window.__suppressDirty = false;
+            window.setEditorValue = function (value) {
+                window.__suppressDirty = true;
+                try {
+                    editor.setValue(value);
+                }
+                finally {
+                    window.__suppressDirty = false;
+                }
+            };
+            editor.onDidChangeModelContent(function () {
+                if (!window.__suppressDirty) {
+                    window.chrome.webview.postMessage({ type: 'contentChanged' });
+                }
+            });
+
             const sqlKeywords = sql.language.keywords.map(keyword => ({
                 label: keyword.toUpperCase(),
                 kind: monaco.languages.CompletionItemKind.Keyword,

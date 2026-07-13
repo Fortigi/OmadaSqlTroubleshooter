@@ -19,7 +19,14 @@ function Invoke-SaveEditorValue {
                     else {
                         $Script:RunTimeData.QueryText = $Script:RunTimeData.QueryText | ConvertFrom-Json
                     }
-                    Save-Query -NewQuery:$Script:NewQuery | Out-Null
+                    $SaveResult = Save-Query -NewQuery:$Script:NewQuery
+                    if ($null -ne $SaveResult) {
+                        $TabSession = Get-ActiveTabSession
+                        if ($null -ne $TabSession) {
+                            $TabSession.IsDirty = $false
+                            Update-TabHeaderTitle -TabSession $TabSession
+                        }
+                    }
                 }
                 elseif ($Script:Task.Status -eq "Faulted") {
                     "Task failed: {0}" -f $Script:Task.Status | Write-LogOutput -LogType ERROR

@@ -1,0 +1,80 @@
+[
+  {
+    "Name": "LastOutputFolder",
+    "Type": "String"
+  },
+  {
+    "Name": "LastExtensionIndex",
+    "Type": "Int"
+  },
+  {
+    "Name": "LogLevel",
+    "Type": "String",
+    "DefaultValue": "INFO"
+  },
+  {
+    "Name": "LogFormOpen",
+    "Type": "Bool"
+  },
+  {
+    "Name": "SqlSchemaFormOpen",
+    "Type": "Bool"
+  },
+  {
+    "Name": "SqlHistoryFormOpen",
+    "Type": "Bool"
+  },
+  {
+    "Name": "MainFormPosition",
+    "Type": "String"
+  },
+  {
+    "Name": "LogFormPosition",
+    "Type": "String"
+  },
+  {
+    "Name": "SqlSchemaFormPosition",
+    "Type": "String"
+  },
+  {
+    "Name": "SqlHistoryFormPosition",
+    "Type": "String"
+  },
+  {
+    "Name": "MainFormSize",
+    "Type": "String"
+  },
+  {
+    "Name": "LogFormSize",
+    "Type": "String"
+  },
+  {
+    "Name": "SqlSchemaFormSize",
+    "Type": "String"
+  },
+  {
+    "Name": "SqlHistoryFormSize",
+    "Type": "String"
+  },
+  {
+    "Name": "LogFormWordWrap",
+    "Type": "Bool"
+  },
+  {
+    "Name": "CheckboxConsoleLog",
+    "Type": "Bool"
+  },
+  {
+    "Name": "UseWebView2Auth",
+    "Type": "Bool"
+  },
+  {
+    "Name": "InstanceGuid",
+    "Type": "String"
+  },
+  {
+    "Name": "TabCapacity",
+    "Type": "Int",
+    "DefaultValue": 8
+  }
+]

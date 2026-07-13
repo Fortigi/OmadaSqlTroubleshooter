@@ -22,14 +22,6 @@
     ]
   },
   {
-    "Name": "LastOutputFolder",
-    "Type": "String"
-  },
-  {
-    "Name": "LastExtensionIndex",
-    "Type": "Int"
-  },
-  {
     "Name": "LastAuthentication",
     "Type": "String",
     "DefaultValue": "Browser"
@@ -49,11 +41,6 @@
   {
     "Name": "EntraIdTenantId",
     "Type": "String"
-  },
-  {
-    "Name": "LogLevel",
-    "Type": "String",
-    "DefaultValue": "INFO"
   },
   {
     "Name": "MyCreatedQueriesOnly",
@@ -88,65 +75,5 @@
         "Type": "String"
       }
     ]
-  },
-  {
-    "Name": "LogFormOpen",
-    "Type": "String"
-  },
-  {
-    "Name": "SqlSchemaFormOpen",
-    "Type": "Bool"
-  },
-  {
-    "Name": "SqlHistoryFormOpen",
-    "Type": "Bool"
-  },
-  {
-    "Name": "MainFormPosition",
-    "Type": "String"
-  },
-  {
-    "Name": "LogFormPosition",
-    "Type": "String"
-  },
-  {
-    "Name": "SqlSchemaFormPosition",
-    "Type": "String"
-  },
-  {
-    "Name": "SqlHistoryFormPosition",
-    "Type": "String"
-  },
-  {
-    "Name": "MainFormSize",
-    "Type": "String"
-  },
-  {
-    "Name": "LogFormSize",
-    "Type": "String"
-  },
-  {
-    "Name": "SqlSchemaFormSize",
-    "Type": "String"
-  },
-  {
-    "Name": "SqlHistoryFormSize",
-    "Type": "String"
-  },
-  {
-    "Name": "LogFormWordWrap",
-    "Type": "Bool"
-  },
-  {
-    "Name": "CheckboxConsoleLog",
-    "Type": "Bool"
-  },
-  {
-    "Name": "UseWebView2Auth",
-    "Type": "Bool"
-  },
-  {
-    "Name": "InstanceGuid",
-    "Type": "String"
   }
 ]

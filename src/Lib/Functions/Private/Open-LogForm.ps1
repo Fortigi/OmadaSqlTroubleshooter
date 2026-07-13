@@ -14,7 +14,7 @@ function Open-LogForm {
 
         $Script:LogForm.Definition.ShowInTaskbar = $false
         $Script:TextBoxLog = $Script:LogForm.Definition.FindName("TextBoxLog")
-        if ($Script:AppConfig.LogFormWordWrap) {
+        if ($Script:AppGlobalConfig.LogFormWordWrap) {
             $Script:TextBoxLog.TextWrapping = "WrapWithOverflow"
             $Script:LogForm.Elements.CheckboxWordWrap.IsChecked = $true
             "Word wrap is enabled" | Write-LogOutput -LogType LOG

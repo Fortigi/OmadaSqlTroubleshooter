@@ -1,3 +1,97 @@
+# WebView2/Monaco's async completions kept throwing CommandNotFoundException for dot-sourced
+# functions. The actual cause was .GetNewClosure(): a closure runs inside a detached dynamic
+# module whose scope does not include this module's private (non-exported) functions, so any
+# call to Write-LogOutput/Set-EditorValue/etc. from a closure fails - no matter which .NET
+# dispatch mechanism invokes it. A PLAIN scriptblock (no GetNewClosure), by contrast, keeps this
+# module's session state and resolves private functions fine, even when created inside a function
+# and invoked later by .NET. So the rule is: deferred/event scriptblocks must be plain blocks and
+# receive their per-tab state via a parameter (or recover it from the event sender), never via
+# GetNewClosure. This single top-level timer drains the completion queue; each enqueued
+# OnCompletedScriptBlock is a plain block invoked with its $Pending item as the argument.
+$Script:PendingWebViewCompletions = [System.Collections.Generic.List[object]]::new()
+
+$Script:WebViewCompletionPollTimer = New-Object System.Windows.Threading.DispatcherTimer
+$Script:WebViewCompletionPollTimer.Interval = [TimeSpan]::FromMilliseconds(50)
+$Script:WebViewCompletionPollTimer.Add_Tick({
+        try {
+            $Completed = @($Script:PendingWebViewCompletions | Where-Object { $_.Task.IsCompleted })
+            foreach ($Pending in $Completed) {
+                [void]$Script:PendingWebViewCompletions.Remove($Pending)
+
+                # Get-ActiveTabSession/Set-ActiveTabContext and the enqueued OnCompletedScriptBlock
+                # all run from this top-level Tick handler's frame. The OnCompletedScriptBlock is a
+                # plain block (never a GetNewClosure block), so it too resolves this module's
+                # private functions - it just needs its per-tab state handed to it, which is why
+                # $Pending is passed as its argument below.
+                #
+                # A $null TabSession means the caller's own OnCompletedScriptBlock manages the
+                # active-tab context itself (e.g. Close-TabSession deciding which tab becomes
+                # active after teardown) - auto-repointing/restoring around it here would just
+                # stomp on that decision, so skip it entirely in that case.
+                # The completion block is invoked with the whole $Pending item as its argument so
+                # it can be a plain scriptblock that reads its owning tab (and any other captured
+                # data) from $Pending instead of a .GetNewClosure() block - the latter runs in a
+                # detached dynamic module that cannot resolve this app's dot-sourced private
+                # functions (CommandNotFoundException). Plain blocks without a param() simply
+                # ignore the argument.
+                if ($null -ne $Pending.TabSession) {
+                    $PreviouslyActiveTab = Get-ActiveTabSession
+                    try {
+                        Set-ActiveTabContext -TabSession $Pending.TabSession
+                        & $Pending.OnCompletedScriptBlock $Pending
+                    }
+                    finally {
+                        if ($null -ne $PreviouslyActiveTab) {
+                            Set-ActiveTabContext -TabSession $PreviouslyActiveTab
+                        }
+                    }
+                }
+                else {
+                    & $Pending.OnCompletedScriptBlock $Pending
+                }
+            }
+        }
+        catch {
+            $_.Exception.Message | Write-LogOutput -LogType ERROR -ErrorObject $_
+        }
+    })
+$Script:WebViewCompletionPollTimer.Start()
+
+# Host the session tabs in the single-row ShrinkingTabPanel (defined in
+# Initialize-OmadaSqlTroubleShooter) so they shrink to fit on one row - with ellipsised text -
+# instead of wrapping onto a second row. Set here in code because the type is added at runtime and
+# so cannot be referenced from the XAML namespace.
+try {
+    $TabStripPanelFactory = New-Object System.Windows.FrameworkElementFactory([Fortigi.ShrinkingTabPanel])
+    (Get-TabControlSessions).ItemsPanel = New-Object System.Windows.Controls.ItemsPanelTemplate($TabStripPanelFactory)
+}
+catch {
+    "Failed to set the single-row tab panel: {0}" -f $_.Exception.Message | Write-LogOutput -LogType WARNING
+}
+
+# The "+" add tab opens a new tab ONLY on an explicit click. Handling it here (and marking the
+# event Handled so "+" is never actually selected) is what keeps a new tab from appearing whenever
+# WPF selects "+" for a non-user reason - window activation/focus, relayout, or a tab close moving
+# the selection. Wired in code because TabItemAddNew is not exposed via $Script:MainForm.Elements.
+try {
+    $AddNewTabItem = (Get-TabControlSessions).Items | Where-Object { $_.Name -eq "TabItemAddNew" } | Select-Object -First 1
+    if ($null -ne $AddNewTabItem) {
+        $AddNewTabItem.Add_PreviewMouseLeftButtonDown({
+                param($AddTabSender, $AddTabArgs)
+                try {
+                    $AddTabArgs.Handled = $true
+                    New-EmptyTabSession | Out-Null
+                }
+                catch {
+                    $_.Exception.Message | Write-LogOutput -LogType ERROR -ErrorObject $_
+                }
+            })
+    }
+}
+catch {
+    "Failed to wire the '+' add-tab click handler: {0}" -f $_.Exception.Message | Write-LogOutput -LogType WARNING
+}
+
 $Script:MainForm.Definition.Add_Closed({
         try {
             $_ | Show-EventInfo
@@ -13,6 +107,7 @@ $Script:MainForm.Definition.Add_Closing({
         try {
             $_ | Show-EventInfo
             $Script:MainForm.State = "Closing"
+            Save-TabSessions
             Save-FormMeasurements
             if (Test-LogFormIsVisible) {
                 $Script:LogForm.Definition.Close()
@@ -56,6 +151,17 @@ $Script:MainForm.Definition.Add_PreviewKeyDown({
                     $Script:MainForm.Elements.ButtonExecuteQuery.RaiseEvent([System.Windows.RoutedEventArgs]::new([System.Windows.Controls.Primitives.ButtonBase]::ClickEvent))
                 }
             }
+            elseif ($ControlPressed -and $EventArgs.Key -eq [System.Windows.Input.Key]::Tab) {
+                $EventArgs.Handled = $true
+                if ($ShiftPressed) {
+                    "Ctrl+Shift+Tab intercepted at MainForm level - select previous tab" | Write-LogOutput -LogType VERBOSE
+                    Select-AdjacentTab -Direction Previous
+                }
+                else {
+                    "Ctrl+Tab intercepted at MainForm level - select next tab" | Write-LogOutput -LogType VERBOSE
+                    Select-AdjacentTab -Direction Next
+                }
+            }
             elseif ($EventArgs.Key -eq [System.Windows.Input.Key]::S -and $ControlPressed -and -not $ShiftPressed) {
                 "Ctrl+S key intercepted at MainForm level" | Write-LogOutput -LogType VERBOSE
 
@@ -69,6 +175,42 @@ $Script:MainForm.Definition.Add_PreviewKeyDown({
                 "Ctrl+C detected at MainForm level - allowing to pass through to focused control" | Write-LogOutput -LogType VERBOSE
                 # Do not set $EventArgs.Handled = $true for Ctrl+C
             }
+            elseif ($ControlPressed -and $ShiftPressed -and $EventArgs.Key -eq [System.Windows.Input.Key]::K) {
+                "Ctrl+Shift+K intercepted at MainForm level - duplicate active tab" | Write-LogOutput -LogType VERBOSE
+                $EventArgs.Handled = $true
+                $ActiveTab = Get-ActiveTabSession
+                if ($null -ne $ActiveTab) {
+                    Invoke-DuplicateTab -TabId $ActiveTab.Id
+                }
+            }
+            elseif ($ControlPressed -and -not $ShiftPressed -and $EventArgs.Key -eq [System.Windows.Input.Key]::T) {
+                "Ctrl+T intercepted at MainForm level - duplicate active tab without query" | Write-LogOutput -LogType VERBOSE
+                $EventArgs.Handled = $true
+                $ActiveTab = Get-ActiveTabSession
+                if ($null -ne $ActiveTab) {
+                    Invoke-DuplicateTab -TabId $ActiveTab.Id -WithoutQuery
+                }
+            }
+            elseif ($ControlPressed -and -not $ShiftPressed -and ($EventArgs.Key -eq [System.Windows.Input.Key]::W -or $EventArgs.Key -eq [System.Windows.Input.Key]::F4)) {
+                "Ctrl+W / Ctrl+F4 intercepted at MainForm level - close active tab" | Write-LogOutput -LogType VERBOSE
+                $EventArgs.Handled = $true
+                $ActiveTab = Get-ActiveTabSession
+                if ($null -ne $ActiveTab) {
+                    Close-TabSession -TabId $ActiveTab.Id
+                }
+            }
+        }
+        catch {
+            $_.Exception.Message | Write-LogOutput -LogType ERROR -ErrorObject $_
+        }
+    })
+
+# Log key releases (Show-EventInfo -> "Key released: ...") so a held key is traced as one press and
+# one release instead of a flood of auto-repeat PreviewKeyDown lines. Logging only - no shortcut
+# logic lives here, so it cannot affect any existing key handling.
+$Script:MainForm.Definition.Add_PreviewKeyUp({
+        try {
+            $_ | Show-EventInfo
         }
         catch {
             $_.Exception.Message | Write-LogOutput -LogType ERROR -ErrorObject $_
@@ -79,7 +221,14 @@ $Script:MainForm.Definition.Add_Loaded({
         try {
             $_ | Show-EventInfo
 
-            if ($Script:AppConfig.LogFormOpen) {
+            # Flip to "Open" before anything else in this handler runs: TabControlSessions'
+            # SelectionChanged guards on this state to reject the reentrant selection WPF fires
+            # for TabItemAddNew as soon as the control materializes (before Loaded even starts) -
+            # but Restore-TabSessions below still needs to run with State already "Open", since it
+            # selects each restored TabItem synchronously through that same SelectionChanged handler.
+            $Script:MainForm.State = "Open"
+
+            if ($Script:AppGlobalConfig.LogFormOpen) {
                 Open-LogForm
             }
 
@@ -96,125 +245,15 @@ $Script:MainForm.Definition.Add_Loaded({
                 $Script:MainForm.Definition.Height = [Int]::Abs($Size.Split("x")[1])
             }
 
-            if ($null -eq $Script:Webview.Object) {
-                "Failed to find WebView2 control." | Write-LogOutput -LogType ERROR
-                # [System.Windows.MessageBox]::Show("Failed to find WebView2 control.", "Error", [System.Windows.MessageBoxButton]::OK, [System.Windows.MessageBoxImage]::Error) | Out-Null
-                return
-            }
-
-            $Script:Webview.UserDataFolder = Join-Path $Env:TEMP -ChildPath "OmadaSqlTroubleshooter"
-            if (-not (Test-Path -Path $Script:Webview.UserDataFolder)) {
-                New-Item -Path $Script:Webview.UserDataFolder -ItemType Directory | Out-Null
-            }
-
-            $Script:Webview.EdgeWebview2RuntimePath = Join-Path $Script:RunTimeConfig.ModuleFolder -ChildPath "bin\Webview2Runtime"
-            if (!(Test-Path ($Script:WebView.EdgeWebview2RuntimePath ) -PathType Container)) {
-                $Script:Webview.EdgeWebview2RuntimePath = Join-Path ([System.Environment]::GetFolderPath([System.Environment+SpecialFolder]::LocalApplicationData)) -ChildPath "OmadaSqlTroubleShooter\bin\Webview2Runtime"
-            }
-            if ((Test-Path -Path $Script:Webview.EdgeWebview2RuntimePath -PathType Container) -and (Test-Path -Path (Join-Path $Script:Webview.EdgeWebview2RuntimePath -ChildPath "msedgewebview2.exe") -PathType Leaf)) {
-                $Script:Webview.Environment = [Microsoft.Web.WebView2.Core.CoreWebView2Environment]::CreateAsync($Script:Webview.EdgeWebview2RuntimePath, $Script:Webview.UserDataFolder).GetAwaiter().GetResult()
-            }
-            else {
-                $Script:Webview.Environment = [Microsoft.Web.WebView2.Core.CoreWebView2Environment]::CreateAsync($null, $Script:Webview.UserDataFolder).GetAwaiter().GetResult()
-            }
-
-            if (-not (Test-Path $Script:WebView2UserProfilePath -PathType Container)) { New-Item -ItemType Directory -Force -Path $Script:WebView2UserProfilePath | Out-Null }
-
-            $Script:Webview.Object.EnsureCoreWebView2Async($Script:Webview.Environment).GetAwaiter().OnCompleted({
-                    "EnsureCoreWebView2Async OnCompleted script" | Write-LogOutput -LogType DEBUG
-                    if ($null -eq $Script:Webview.Object.CoreWebView2) {
-                        $Script:MainForm.Definition.Dispatcher.Invoke([System.Action] {
-                                $Message = "WebView2 environment initialization failed. If this system does not have the Webview2 Runtime installed, please download the fixed version from https://developer.microsoft.com/en-us/microsoft-edge/webview2/ and extract the cab file to folder '{0}'" -f $Script:Webview.EdgeWebview2RuntimePath
-                                $Message | Write-LogOutput -LogType ERROR
-                                #[System.Windows.MessageBox]::Show($Message, "Error", [System.Windows.MessageBoxButton]::OK, [System.Windows.MessageBoxImage]::Error) | Out-Null
-                            })
-                        return
-                    }
-                    $HtmlFile = Join-Path  $Script:RunTimeConfig.ModuleFolder -ChildPath "Monaco\index.html"
-                    if ([System.IO.File]::Exists($HtmlFile)) {
-                        $Script:Webview.Object.Dispatcher.Invoke([System.Action] {
-                                $Script:Webview.Object.Source = New-Object System.Uri($HtmlFile)
-                                "Webiew source set to: {0}" -f $HtmlFile | Write-LogOutput -LogType DEBUG
-                            })
-                    }
-                    else {
-                        $Script:MainForm.Definition.Dispatcher.Invoke([System.Action] {
-                                #[System.Windows.MessageBox]::Show("Monaco HTML file not found at: $HtmlPath", "Error", [System.Windows.MessageBoxButton]::OK, [System.Windows.MessageBoxImage]::Error) | Out-Null
-                                "Monaco HTML file not found at: {0}" -f $HtmlPath | Write-LogOutput -LogType ERROR
-                            })
-                    }
-                    Test-ConnectionButton
-
-                    if ($Script:AppConfig.SqlSchemaFormOpen) {
-                        Open-SqlSchemaForm
-                    }
-                    Update-QueryList
-                    Set-EditorValue
-
-                    $Script:Webview.Object.add_PreviewKeyDown({
-                            param(
-                                $EventSender,
-                                $EventArgs
-                            )
-                            try {
-                                $_ | Show-EventInfo
-
-                                if ($EventArgs.Key -eq [System.Windows.Input.Key]::S -and ([System.Windows.Input.Keyboard]::Modifiers -band [System.Windows.Input.ModifierKeys]::Control)) {
-                                    "Ctrl+S key intercepted in WebView2 (PreviewKeyDown)" | Write-LogOutput -LogType DEBUG
-
-                                    $EventArgs.Handled = $true
-
-                                    $Script:MainForm.Definition.Dispatcher.Invoke([System.Action] {
-                                            "Triggering Save Query from Ctrl+S key press" | Write-LogOutput -LogType DEBUG
-                                            $Script:MainForm.Elements.ButtonSaveQuery.RaiseEvent([System.Windows.RoutedEventArgs]::new([System.Windows.Controls.Primitives.ButtonBase]::ClickEvent))
-                                        })
-                                }
-                            }
-                            catch {
-                                $_.Exception.Message | Write-LogOutput -LogType ERROR -ErrorObject $_
-                            }
-                        })
-
-                    $Script:Webview.Object.CoreWebView2.add_WebMessageReceived({
-                            param(
-                                $EventSender,
-                                $EventArgs
-                            )
-                            try {
-                                $_ | Show-EventInfo
-                                "CoreWebView2.add_WebMessageReceived" | Write-LogOutput -LogType DEBUG
-
-                                $message = $EventArgs.TryGetWebMessageAsString()
-                                "WebView2 message received: {0}" -f $message | Write-LogOutput -LogType DEBUG
-
-                                if ($message) {
-                                    $messageObj = $message | ConvertFrom-Json -ErrorAction SilentlyContinue
-                                    if ($messageObj -and $messageObj.type -eq 'executeQuery') {
-                                        "Execute Query requested from Monaco Editor via {0}" -f $messageObj.key | Write-LogOutput -LogType DEBUG
-
-                                        $Script:MainForm.Definition.Dispatcher.Invoke([System.Action] {
-                                                $Script:MainForm.Elements.ButtonExecuteQuery.RaiseEvent([System.Windows.RoutedEventArgs]::new([System.Windows.Controls.Primitives.ButtonBase]::ClickEvent))
-                                            })
-                                    }
-                                    elseif ($messageObj -and $messageObj.type -eq 'saveQuery') {
-                                        "Save Query requested from Monaco Editor via {0}" -f $messageObj.key | Write-LogOutput -LogType DEBUG
-
-                                        $Script:MainForm.Definition.Dispatcher.Invoke([System.Action] {
-                                                $Script:MainForm.Elements.ButtonSaveQuery.RaiseEvent([System.Windows.RoutedEventArgs]::new([System.Windows.Controls.Primitives.ButtonBase]::ClickEvent))
-                                            })
-                                    }
-                                }
-                            }
-                            catch {
-                                $_.Exception.Message | Write-LogOutput -LogType ERROR -ErrorObject $_
-                            }
-                        })
-
-                    $Script:MainForm.State = "Open"
-                })
+            # Per-tab WebView2 setup (runtime resolution, shared CoreWebView2Environment, Monaco
+            # load, keyboard shortcuts, web-message handling) now happens once per tab inside
+            # New-TabSession -> Initialize-WebViewForTab, not once globally here. Restore-TabSessions
+            # creates the initial tab(s) - from persisted state, migrated legacy config, or a
+            # single fresh tab on first-ever run.
+            Restore-TabSessions
         }
         catch {
-            "WebView2 initialization failed: {0}" -f $_.Exception.Message | Write-LogOutput -LogType ERROR -ErrorObject $_
+            "Tab session restore failed: {0}" -f $_.Exception.Message | Write-LogOutput -LogType ERROR -ErrorObject $_
         }
     })
 

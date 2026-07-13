@@ -41,51 +41,83 @@ function Initialize-OmadaSqlTroubleShooter {
         Add-ReflectionAssembly -Object $Script:WebView2WinFormsPath
         Add-ReflectionAssembly -Object $Script:WebView2WpfPath
 
+        # Custom panel that hosts the session tabs in a SINGLE row: instead of wrapping onto a new
+        # row when they no longer fit (the default TabPanel behaviour), it shrinks the tabs
+        # proportionally so their text ellipsises. The narrow "+" add tab (desired width <= 48) is
+        # kept at its natural size; the real tabs shrink down to a 40px floor. Set as the
+        # TabControl's ItemsPanel in MainForm.Definition.
+        if (-not ([System.Management.Automation.PSTypeName]'Fortigi.ShrinkingTabPanel').Type) {
+            $WpfReferencedAssemblies = [System.AppDomain]::CurrentDomain.GetAssemblies() |
+                Where-Object { $_.GetName().Name -in @('PresentationCore', 'PresentationFramework', 'WindowsBase', 'System.Xaml') -and ![string]::IsNullOrEmpty($_.Location) } |
+                ForEach-Object { $_.Location } | Select-Object -Unique
+            Add-Type -ReferencedAssemblies $WpfReferencedAssemblies -TypeDefinition @"
+using System;
+using System.Windows;
+using System.Windows.Controls;
+
+namespace Fortigi {
+    public class ShrinkingTabPanel : Panel {
+        private double[] _widths;
+
+        protected override Size MeasureOverride(Size availableSize) {
+            int n = InternalChildren.Count;
+            _widths = new double[n];
+            double[] desired = new double[n];
+            double fixedWidth = 0, flexDesired = 0;
+
+            // Pass 1: each tab's natural (desired) width.
+            for (int i = 0; i < n; i++) {
+                UIElement child = InternalChildren[i];
+                child.Measure(new Size(double.PositiveInfinity, availableSize.Height));
+                desired[i] = child.DesiredSize.Width;
+                if (desired[i] <= 48) { fixedWidth += desired[i]; } else { flexDesired += desired[i]; }
+            }
+
+            double available = double.IsInfinity(availableSize.Width) ? (fixedWidth + flexDesired) : availableSize.Width;
+            double availableForFlex = Math.Max(0, available - fixedWidth);
+            double scale = (flexDesired > availableForFlex && flexDesired > 0) ? (availableForFlex / flexDesired) : 1.0;
+
+            // Pass 2: re-measure each tab at its allocated width so its content re-flows (and the
+            // title text ellipsises) instead of just being clipped. Small tabs (the "+") stay fixed;
+            // real tabs shrink down to a 40px floor.
+            double total = 0, height = 0;
+            for (int i = 0; i < n; i++) {
+                double w = (desired[i] <= 48) ? desired[i] : Math.Max(40, desired[i] * scale);
+                _widths[i] = w;
+                UIElement child = InternalChildren[i];
+                child.Measure(new Size(w, availableSize.Height));
+                if (child.DesiredSize.Height > height) { height = child.DesiredSize.Height; }
+                total += w;
+            }
+
+            double width = double.IsInfinity(availableSize.Width) ? total : availableSize.Width;
+            return new Size(width, height);
+        }
+
+        protected override Size ArrangeOverride(Size finalSize) {
+            double x = 0;
+            for (int i = 0; i < InternalChildren.Count; i++) {
+                double w = (_widths != null && i < _widths.Length) ? _widths[i] : InternalChildren[i].DesiredSize.Width;
+                InternalChildren[i].Arrange(new Rect(x, 0, w, finalSize.Height));
+                x += w;
+            }
+            return finalSize;
+        }
+    }
+}
+"@
+        }
+
+        # Per-tab state ($RunTimeData/$WebView/$AppConfig/$ConnectionStatus/$Task/$MainForm.Elements)
+        # now lives on each entry in $Script:Tabs and is repointed onto these same global names by
+        # Set-ActiveTabContext, one tab at a time - see New-TabSession.ps1 for the per-tab shape
+        # that used to be built here as a single, global instance.
         $Script:AppConfig = $null
-        $Script:RunTimeData = [PSCustomObject]@{
-            RestMethodParam                = @{
-                Uri                   = $null
-                Method                = "GET"
-                AuthenticationType    = $null
-                UseWebView2           = $null
-                EntraApplicationIdUri = $null
-                EntraIdTenantId       = $null
-                ForceAuthentication   = $false
-                InPrivate             = $false
-            }
-            AuthenticationRetryCount       = 0
-            QuerySaved                     = $false
-            Password                       = $null
-            QueryText                      = $null
-            SqlQueryObject                 = $null
-            QueryResult                    = $null
-            HistoryResult                  = $null
-            CurrentQueryText               = $null
-            CurrentSqlQuery                = [PSCustomObject]@{
-                DoId        = $null
-                DisplayName = $null
-                FullName    = $null
-            }
-            StopWatch                      = $null
-            QueryListCache                 = @{
-                QueryList   = $null
-                LastRefresh = Get-Date
-                TTL         = 300
-            }
-            DataobjdlgAspxAttributeMapping = [PSCustomObject]@{
-                SqlQueryDoId      = "c-13"
-                SqlQueryCreatedBy = "c-2"
-                SqlQueryChangedBy = "c-4"
-            }
-            SkipRetryRequest               = $false
-            SelectionText                  = $null
-        }
-        $Script:WebView = @{
-            Object                  = $null
-            Environment             = $null
-            EdgeWebview2RuntimePath = $null
-            UserDataFolder          = $null
-        }
+        $Script:AppGlobalConfig = $null
+        $Script:Tabs = [System.Collections.Generic.List[PSCustomObject]]::new()
+        $Script:ActiveTabId = $null
+        $Script:InteractiveLoginInProgress = $false
+        $Script:SharedWebViewEnvironment = $null
 
         [Windows.Forms.Application]::EnableVisualStyles()
 

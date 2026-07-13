@@ -7,8 +7,8 @@ function Get-FormSizeConfig {
     try {
 
         $Property = "{0}Size" -f $Form.Name
-        if ($null -ne $Script:AppConfig.$Property -and $Script:AppConfig.$Property -match "\d+x\d+") {
-            return $Script:AppConfig.$Property
+        if ($null -ne $Script:AppGlobalConfig.$Property -and $Script:AppGlobalConfig.$Property -match "\d+x\d+") {
+            return $Script:AppGlobalConfig.$Property
         }
         else {
             return $null

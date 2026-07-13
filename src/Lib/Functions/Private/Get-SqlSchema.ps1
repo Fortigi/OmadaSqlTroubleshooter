@@ -21,11 +21,35 @@ function Get-SqlSchemaObject {
 
             "Retrieve schema {0}" -f $Script:AppConfig.CurrentDataConnection.FullName | Write-LogOutput
 
-            $Script:RunTimeData.RestMethodParam.Body = @{
-                connectionId = $Script:AppConfig.CurrentDataConnection.DoId
+            # Share the schema across tabs that belong to the same connection pool (SessionKey) and
+            # target the same data connection (DoId): same tenant + same database => identical
+            # schema, so the first tab to fetch it populates a session-lifetime cache and every
+            # other matching connected tab reuses it without another round-trip.
+            $SchemaCacheKey = "{0}|{1}" -f $Script:RunTimeData.RestMethodParam.SessionKey, $Script:AppConfig.CurrentDataConnection.DoId
+            if ($null -eq $Script:SqlSchemaCache) {
+                $Script:SqlSchemaCache = @{}
             }
-            $Script:RunTimeData.RestMethodParam.Method = "POST"
-            $ReturnValue = Invoke-OmadaPSWebRequestWrapper
+
+            if ($Script:SqlSchemaCache.ContainsKey($SchemaCacheKey)) {
+                "Using cached SQL schema for '{0}'" -f $SchemaCacheKey | Write-LogOutput -LogType DEBUG
+                $ReturnValue = $Script:SqlSchemaCache[$SchemaCacheKey]
+            }
+            else {
+                $Script:RunTimeData.RestMethodParam.Body = @{
+                    connectionId = $Script:AppConfig.CurrentDataConnection.DoId
+                }
+                $Script:RunTimeData.RestMethodParam.Method = "POST"
+                $ReturnValue = Invoke-OmadaPSWebRequestWrapper
+
+                if ($null -ne $ReturnValue -and $ReturnValue -isnot [System.Management.Automation.ErrorRecord] -and $null -ne $ReturnValue.d) {
+                    $Script:SqlSchemaCache[$SchemaCacheKey] = $ReturnValue
+                }
+            }
+
+            if ($null -eq $ReturnValue -or $ReturnValue -is [System.Management.Automation.ErrorRecord] -or $null -eq $ReturnValue.d) {
+                "No SQL schema returned for data connection '{0}'." -f $Script:AppConfig.CurrentDataConnection.FullName | Write-LogOutput -LogType WARNING -SkipDialog
+                return $null
+            }
 
             $Script:SqlSchemaForm.Definition.Title = "Sql Schema - {0}" -f $Script:AppConfig.CurrentDataConnection.FullName
 

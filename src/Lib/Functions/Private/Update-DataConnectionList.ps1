@@ -36,22 +36,17 @@ function Update-DataConnectionList {
 
                 if ($null -ne $Private:Result) {
 
-                    # Get-SqlQueryObject -
                     $SetInitialConnection = $true
-                    $Private:Result -split "`r`n" | ForEach-Object {
-                        $Options = [regex]::Matches($Private:Result, '<option.*?value="(\d+).*?data-uid="(.*?)".*?>(.*?)</option>')
-                        foreach ($Match in $Options) {
-                            $DataConnectionDisplayName = "{0} - {1}" -f $Match.Groups[3].Value, $Match.Groups[1].Value
-                            if ($DataConnectionDisplayName -notin $Script:MainForm.Elements.ComboBoxSelectDataConnection.Items.Content) {
-                                "Add data connection {0}" -f $DataConnectionDisplayName | Write-LogOutput -LogType DEBUG
-                                $ComboBoxDataConnectionItem = New-Object System.Windows.Controls.ComboBoxItem
-                                $ComboBoxDataConnectionItem.Content = $DataConnectionDisplayName
-                                $Script:MainForm.Elements.ComboBoxSelectDataConnection.Items.Add($ComboBoxDataConnectionItem) | Out-Null
-                                if ($null -ne $SelectedDataConnection -and $SelectedDataConnection -eq $DataConnectionDisplayName) {
-                                    "Set connection {0} as selected data connection" -f $DataConnectionDisplayName | Write-LogOutput -LogType DEBUG
-                                    $Script:MainForm.Elements.ComboBoxSelectDataConnection.SelectedItem = $ComboBoxDataConnectionItem
-                                    $SetInitialConnection = $false
-                                }
+                    foreach ($DataConnectionDisplayName in (Get-DataConnectionOptionList -Html $Private:Result)) {
+                        if ($DataConnectionDisplayName -notin $Script:MainForm.Elements.ComboBoxSelectDataConnection.Items.Content) {
+                            "Add data connection {0}" -f $DataConnectionDisplayName | Write-LogOutput -LogType DEBUG
+                            $ComboBoxDataConnectionItem = New-Object System.Windows.Controls.ComboBoxItem
+                            $ComboBoxDataConnectionItem.Content = $DataConnectionDisplayName
+                            $Script:MainForm.Elements.ComboBoxSelectDataConnection.Items.Add($ComboBoxDataConnectionItem) | Out-Null
+                            if ($null -ne $SelectedDataConnection -and $SelectedDataConnection -eq $DataConnectionDisplayName) {
+                                "Set connection {0} as selected data connection" -f $DataConnectionDisplayName | Write-LogOutput -LogType DEBUG
+                                $Script:MainForm.Elements.ComboBoxSelectDataConnection.SelectedItem = $ComboBoxDataConnectionItem
+                                $SetInitialConnection = $false
                             }
                         }
                     }
