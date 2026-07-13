@@ -13,37 +13,34 @@ function Test-ShortcutKey {
       3. It is chorded with Ctrl, Alt or the Windows key.
     Bare character/navigation keys - and Shift-only combinations, which are just capitalisation -
     are NOT shortcuts, so this returns $false and keeps them out of the log.
+
+    Takes the key and active modifiers as their [System.Windows.Input.Key] / [ModifierKeys] names
+    (i.e. what .ToString() yields, such as "S", "LeftCtrl", "F5", "Control, Shift"). Working with
+    names rather than the WPF enum types keeps this testable without loading PresentationCore.
     #>
     [CmdletBinding()]
     param(
         [Parameter(Mandatory = $true)]
-        [System.Windows.Input.Key]$Key,
-        [System.Windows.Input.ModifierKeys]$Modifiers = [System.Windows.Input.ModifierKeys]::None
+        [string]$KeyName,
+        [string]$ModifierNames = ""
     )
 
     # The Ctrl/Alt/Windows modifier keys themselves are never secret input and indicate shortcut
     # usage, so they are always loggable. Shift is deliberately excluded: logging a bare Shift press
     # would leak the capitalisation pattern of whatever is being typed.
-    $ModifierKeyList = @(
-        [System.Windows.Input.Key]::LeftCtrl
-        [System.Windows.Input.Key]::RightCtrl
-        [System.Windows.Input.Key]::LeftAlt
-        [System.Windows.Input.Key]::RightAlt
-        [System.Windows.Input.Key]::LWin
-        [System.Windows.Input.Key]::RWin
-    )
-    if ($Key -in $ModifierKeyList) {
+    $ModifierKeyNames = @("LeftCtrl", "RightCtrl", "LeftAlt", "RightAlt", "LWin", "RWin")
+    if ($KeyName -in $ModifierKeyNames) {
         return $true
     }
 
-    if ($Key -ge [System.Windows.Input.Key]::F1 -and $Key -le [System.Windows.Input.Key]::F24) {
+    if ($KeyName -match "^F([1-9]|1[0-9]|2[0-4])$") {
         return $true
     }
 
     # Any other key is only a shortcut when chorded with Ctrl, Alt or Windows. Shift alone does not
-    # qualify (it is just capitalisation of ordinary typing).
-    $ShortcutModifiers = [System.Windows.Input.ModifierKeys]::Control -bor [System.Windows.Input.ModifierKeys]::Alt -bor [System.Windows.Input.ModifierKeys]::Windows
-    if (($Modifiers -band $ShortcutModifiers) -ne [System.Windows.Input.ModifierKeys]::None) {
+    # qualify (it is just capitalisation of ordinary typing). ModifierNames is the [ModifierKeys]
+    # name string, e.g. "None", "Control", "Control, Shift".
+    if ($ModifierNames -match "Control|Alt|Windows") {
         return $true
     }
 

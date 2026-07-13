@@ -31,7 +31,7 @@ function Show-EventInfo {
 
             # Security: only record keys that form a shortcut. Logging every keystroke would let a
             # secret typed into a field (e.g. a password) be reconstructed from the log.
-            if (-not (Test-ShortcutKey -Key $PressedKey -Modifiers ([System.Windows.Input.Keyboard]::Modifiers))) {
+            if (-not (Test-ShortcutKey -KeyName ([string]$PressedKey) -ModifierNames ([System.Windows.Input.Keyboard]::Modifiers.ToString()))) {
                 return
             }
 
