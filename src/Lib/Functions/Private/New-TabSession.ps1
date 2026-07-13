@@ -14,7 +14,11 @@ function New-TabSession {
     [CmdLetBinding()]
     param(
         [PSCustomObject]$RestoreFrom,
-        [switch]$AutoConnect
+        [switch]$AutoConnect,
+        # Create the tab cheaply (header + fields only) and defer the reconnect + WebView2/Monaco
+        # init until the tab is first viewed (Complete-TabMaterialization). Used by Restore-TabSessions
+        # for lazy startup; interactively-created tabs are never deferred.
+        [switch]$Deferred
     )
     try {
         $Script:Tracer::WriteLine(("{0}: Function: {1} - Caller: {2}({3}) - Command: {4} - Parameters: {5}" -f $($Script:RunTimeConfig.ApplicationName), $($MyInvocation.MyCommand.Name), $($MyInvocation.ScriptName).Split("\")[-1], $($MyInvocation.ScriptLineNumber), $MyInvocation.Statement, ($PSBoundParameters | Out-String)))
@@ -76,6 +80,11 @@ function New-TabSession {
             # and MainForm.Elements.TabControlSessions.ps1), so the tab-switch handler knows to force
             # exactly one fresh push the first time the user actually looks at this tab.
             NeedsEditorSync  = $true
+            # Lazy-load state: a -Deferred (restored) tab is created without its WebView2 or
+            # connection; Complete-TabMaterialization builds those the first time the tab is viewed.
+            # PendingAutoConnect carries the restore-time "reconnect all?" answer until then.
+            IsMaterialized     = $false
+            PendingAutoConnect = $false
             IsDirty          = $false
             Form             = $Form
             Elements         = $Form.Elements
@@ -308,45 +317,19 @@ function New-TabSession {
         Set-AuthenticationOption
         Set-OmadaUrl
 
-        if ($AutoConnect -and (Test-OmadaConnection)) {
-            # Mirror the interactive Connect button (which sets ReconnectStatus = 2 before
-            # connecting): Test-ConnectionSettings below treats ReconnectStatus -le 1 as "force
-            # disconnected", so without this a successful reconnect is torn down again - leaving the
-            # restored tab authenticated under the hood but shown as disconnected, with an empty
-            # editor and nothing selected.
-            $Script:RunTimeConfig.ReconnectStatus = 2
+        # The reconnect answer for this tab; honoured now (eager) or on first view (deferred).
+        $NewTab.PendingAutoConnect = [bool]$AutoConnect
 
-            # Populate the full data connection dropdown for this tab. Auto-connect (restore /
-            # duplicate) otherwise skipped this - unlike the interactive Connect button - so the
-            # dropdown only ever showed the single current connection set by Set-DataConnection below.
-            Update-DataConnectionList -NotShowPopupWindow
-
-            if (![string]::IsNullOrWhiteSpace($Script:AppConfig.CurrentSqlQuery.DoId)) {
-                $ComboBoxSelectQueryItem = $Script:MainForm.Elements.ComboBoxSelectQuery.Items | Where-Object { $_.Content -like "*$($Script:AppConfig.CurrentSqlQuery.DoId)" }
-                if ($null -eq $ComboBoxSelectQueryItem) {
-                    $ComboBoxSelectQueryItem = New-Object System.Windows.Controls.ComboBoxItem
-                    $ComboBoxSelectQueryItem.Content = $Script:AppConfig.CurrentSqlQuery.FullName
-                    $Script:MainForm.Elements.ComboBoxSelectQuery.Items.Add($ComboBoxSelectQueryItem) | Out-Null
-                    $Script:RunTimeData.CurrentSqlQuery.DisplayName = $Script:AppConfig.CurrentSqlQuery.DisplayName
-                    $Script:MainForm.Elements.TextBoxDisplayName.Text = $Script:RunTimeData.CurrentSqlQuery.DisplayName
-                }
-                # SelectedItem (not SelectedValue) - Set-EditorValue's own guard checks SelectedItem
-                # directly, and Update-QueryList (the proven-working path, e.g. from clicking
-                # Refresh) also sets SelectedItem for exactly this reason.
-                $Script:MainForm.Elements.ComboBoxSelectQuery.SelectedItem = $ComboBoxSelectQueryItem
-            }
-
-            if (![string]::IsNullOrWhiteSpace($Script:AppConfig.CurrentDataConnection.FullName)) {
-                Set-DataConnection
-            }
-            Test-ConnectionSettings
-            Test-ConnectionButton
-        }
-        else {
+        if ($Deferred) {
+            # Lazy tab: show the disconnected shell now and stop here. The reconnect and the
+            # WebView2/Monaco init are deferred to Complete-TabMaterialization, run the first time
+            # this tab is actually selected (see MainForm.Elements.TabControlSessions.ps1).
             Set-SqlConnectionState -Status $false
         }
-
-        Initialize-WebViewForTab -TabSession $NewTab
+        else {
+            # Interactively-created / migrated / active-restore tab: bring it fully to life now.
+            Complete-TabMaterialization -TabSession $NewTab
+        }
 
         return $NewTab
     }

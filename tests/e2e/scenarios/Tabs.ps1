@@ -52,6 +52,34 @@ E2ESuite -Name "DuplicateTab" -Body {
     }
 }
 
+E2ESuite -Name "LazyTabLoading" -Body {
+    E2ECase -Name "a deferred tab neither connects nor builds its editor until it is first viewed" -Body {
+        Reset-E2ETabsToOne
+        Set-E2EConnectionFields
+        Invoke-E2EConnect
+        $ActiveTab = Get-ActiveTabSession   # fully materialized, connected
+
+        $script:E2ECalls.Clear()
+        $Deferred = New-E2EDeferredTab -DisplayName "Lazy"
+
+        # Creating a deferred (restored) tab must not connect or build a WebView2.
+        E2EAssertTrue (-not $Deferred.IsMaterialized) "a deferred tab must not be materialized on creation"
+        E2EAssertTrue ($null -eq $Deferred.WebView.Object) "a deferred tab must not build its WebView2 on creation"
+        E2EAssertEqual 0 (Get-E2ECallCount -MethodLike "GET" -UriLike "*dataobjects/C_P_SQLTROUBLESHOOTING") "a deferred tab must not fire a connect probe until it is viewed"
+        E2EAssertTrue ($ActiveTab.IsMaterialized) "the active tab should be materialized"
+
+        # First real selection materializes it: reconnect + editor. Switch away first (the deferred
+        # tab is transiently selected at creation), then select it to fire a genuine SelectionChanged.
+        (Get-TabControlSessions).SelectedItem = $ActiveTab.TabItem
+        $script:E2ECalls.Clear()
+        (Get-TabControlSessions).SelectedItem = $Deferred.TabItem
+        Invoke-E2EFlushDispatcher
+
+        E2EAssertTrue ($Deferred.IsMaterialized) "selecting a deferred tab for the first time should materialize it"
+        E2EAssertTrue ((Get-E2ECallCount -MethodLike "GET" -UriLike "*dataobjects/C_P_SQLTROUBLESHOOTING") -ge 1) "viewing a deferred tab should fire its connect probe"
+    }
+}
+
 E2ESuite -Name "DisconnectContext" -Body {
     E2ECase -Name "clicking a tab's Disconnect acts on that tab even if the active context points elsewhere" -Body {
         Reset-E2ETabsToOne

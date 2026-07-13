@@ -115,6 +115,33 @@ function script:New-E2ERestoredTab {
     return (New-TabSession -RestoreFrom $RestoredConfig -AutoConnect)
 }
 
+function script:New-E2EDeferredTab {
+    # A lazily-restored tab: created with -Deferred so it does NOT connect or build its WebView until
+    # first viewed - exactly what Restore-TabSessions does for background tabs.
+    param(
+        [string]$DisplayName = "Deferred",
+        [string]$Url = "https://tenant.omada.cloud",
+        [string]$Auth = "Browser"
+    )
+    $RestoredConfig = [pscustomobject]@{
+        Id                    = ([guid]::NewGuid().Guid)
+        DisplayName           = $DisplayName
+        BaseUrl               = $Url
+        CurrentSqlQuery       = [pscustomobject]@{ DoId = 100; DisplayName = "TestQuery"; FullName = "TestQuery - 100" }
+        LastAuthentication    = $Auth
+        UserName              = $null
+        Password              = $null
+        EntraApplicationIdUri = $null
+        EntraIdTenantId       = $null
+        MyCreatedQueriesOnly  = $false
+        MyUpdatedQueriesOnly  = $false
+        SavePassword          = $false
+        IdentityUserName      = $null
+        CurrentDataConnection = [pscustomobject]@{ DoId = 42; DisplayName = "OISES"; FullName = "OISES - 42" }
+    }
+    return (New-TabSession -RestoreFrom $RestoredConfig -AutoConnect -Deferred)
+}
+
 function script:Reset-E2ETabsToOne {
     # Collapse to a single, disconnected tab so tab-count-sensitive scenarios start from a known state.
     if ($Script:Tabs.Count -eq 0) {

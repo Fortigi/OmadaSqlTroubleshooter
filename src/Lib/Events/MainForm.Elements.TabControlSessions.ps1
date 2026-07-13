@@ -53,6 +53,16 @@
             if ($null -ne $TabSession) {
                 Set-ActiveTabContext -TabSession $TabSession
 
+                # First real selection of a lazily-restored (deferred) tab: build its WebView2/Monaco
+                # editor and reconnect now. Guarded by SuppressEditorSync so the transient
+                # creation-time selection inside New-TabSession never triggers it (that tab's Monaco is
+                # not realized yet). The active restored tab is materialized explicitly in
+                # Restore-TabSessions; every other tab materializes here the first time it is viewed.
+                # Complete-TabMaterialization is idempotent.
+                if (-not $Script:SuppressEditorSync -and -not $TabSession.IsMaterialized) {
+                    Complete-TabMaterialization -TabSession $TabSession
+                }
+
                 # This tab's first Set-EditorValue push (from Initialize-WebViewForTab's
                 # NavigationCompleted handler, e.g. during startup restore or auto-connect) ran
                 # while it was still backgrounded and did not reliably show up - force exactly one

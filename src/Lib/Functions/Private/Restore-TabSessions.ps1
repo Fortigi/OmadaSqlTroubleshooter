@@ -54,38 +54,25 @@ function Restore-TabSessions {
                 $AutoConnect = ($Choice -eq 2)
             }
 
-            # Reconnecting the saved tabs blocks the UI thread for a while; show the same style of
-            # popup used elsewhere so startup does not look hung.
-            $RestoreDataPopup = $null
-            if ($AutoConnect) {
-                $RestoreDataPopup = Show-PopupWindow -Message "Retrieving data, please wait..."
-                if ($null -ne $RestoreDataPopup) {
-                    $RestoreDataPopup.Dispatcher.Invoke([System.Action] {}, [System.Windows.Threading.DispatcherPriority]::Render) | Out-Null
-                }
-            }
-
+            # Lazy startup: create every tab cheaply (header + fields, no WebView2, no connect). Only
+            # the active tab is materialized below; the rest reconnect + build their editor the first
+            # time they are viewed. This keeps launch fast and light with many saved tabs.
             $RestoredTabs = [System.Collections.Generic.List[PSCustomObject]]::new()
-            try {
-                foreach ($TabConfig in $TabsToRestore) {
-                    try {
-                        # $AutoConnect reflects one "reconnect all?" answer for the whole batch, but a
-                        # tab with no BaseUrl configured has nothing to reconnect to - passing it through
-                        # unconditionally would make Test-OmadaConnection run against an empty/invalid
-                        # URL for every blank tab, producing avoidable startup errors.
-                        $TabAutoConnect = $AutoConnect -and ![string]::IsNullOrWhiteSpace($TabConfig.BaseUrl)
-                        $NewTab = New-TabSession -RestoreFrom $TabConfig -AutoConnect:$TabAutoConnect
-                        if ($null -ne $NewTab) {
-                            $RestoredTabs.Add($NewTab)
-                        }
-                    }
-                    catch {
-                        "Failed to restore tab '{0}': {1}" -f $TabConfig.DisplayName, $_.Exception.Message | Write-LogOutput -LogType ERROR -ErrorObject $_
+            foreach ($TabConfig in $TabsToRestore) {
+                try {
+                    # $AutoConnect reflects one "reconnect all?" answer for the whole batch, but a
+                    # tab with no BaseUrl configured has nothing to reconnect to - passing it through
+                    # unconditionally would make Test-OmadaConnection run against an empty/invalid
+                    # URL for every blank tab, producing avoidable startup errors. The answer is
+                    # stored (PendingAutoConnect) and applied when the tab is first materialized.
+                    $TabAutoConnect = $AutoConnect -and ![string]::IsNullOrWhiteSpace($TabConfig.BaseUrl)
+                    $NewTab = New-TabSession -RestoreFrom $TabConfig -AutoConnect:$TabAutoConnect -Deferred
+                    if ($null -ne $NewTab) {
+                        $RestoredTabs.Add($NewTab)
                     }
                 }
-            }
-            finally {
-                if ($null -ne $RestoreDataPopup) {
-                    $RestoreDataPopup.Close()
+                catch {
+                    "Failed to restore tab '{0}': {1}" -f $TabConfig.DisplayName, $_.Exception.Message | Write-LogOutput -LogType ERROR -ErrorObject $_
                 }
             }
 
@@ -94,7 +81,29 @@ function Restore-TabSessions {
                 if ($null -eq $ActiveTab) {
                     $ActiveTab = $RestoredTabs[0]
                 }
-                (Get-TabControlSessions).SelectedItem = $ActiveTab.TabItem
+
+                # Materializing (reconnecting) the active tab blocks the UI thread for a bit; show the
+                # same style of popup used elsewhere so startup does not look hung. Only one tab
+                # connects now, so this wraps a single reconnect rather than all of them.
+                $RestoreDataPopup = $null
+                if ($ActiveTab.PendingAutoConnect) {
+                    $RestoreDataPopup = Show-PopupWindow -Message "Retrieving data, please wait..."
+                    if ($null -ne $RestoreDataPopup) {
+                        $RestoreDataPopup.Dispatcher.Invoke([System.Action] {}, [System.Windows.Threading.DispatcherPriority]::Render) | Out-Null
+                    }
+                }
+                try {
+                    # Selecting the active TabItem fires SelectionChanged -> Complete-TabMaterialization,
+                    # but if the active tab was the last one created it is already selected (no event),
+                    # so materialize it explicitly as well. Complete-TabMaterialization is idempotent.
+                    (Get-TabControlSessions).SelectedItem = $ActiveTab.TabItem
+                    Complete-TabMaterialization -TabSession $ActiveTab
+                }
+                finally {
+                    if ($null -ne $RestoreDataPopup) {
+                        $RestoreDataPopup.Close()
+                    }
+                }
                 return
             }
         }
