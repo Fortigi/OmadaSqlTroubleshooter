@@ -19,6 +19,25 @@ E2ESuite -Name "SchemaCache" -Body {
 
         E2EAssertEqual 1 (Get-E2ECallCount -MethodLike "POST" -UriLike "*getsqlschema*") "the schema POST should fire once; the second call is served from the pool cache"
     }
+
+    E2ECase -Name "the setSchema payload carries column names and data types for the editor" -Body {
+        Reset-E2ETabsToOne
+        Set-E2EConnectionFields
+        Invoke-E2EConnect
+
+        $Script:TreeViewSqlSchema = New-Object System.Windows.Controls.TreeView
+        $Script:SqlSchemaForm = [pscustomobject]@{ Definition = (New-Object System.Windows.Window) }
+
+        $script:E2EEditorScripts.Clear()
+        Get-SqlSchemaObject
+
+        $SetSchema = $script:E2EEditorScripts | Where-Object { $_ -like "setSchema(*" } | Select-Object -Last 1
+        E2EAssertTrue ($null -ne $SetSchema) "a setSchema(...) script should be pushed to the editor"
+        # New {n,t} column contract: names under "n", types under "t", with the fixture's types preserved.
+        E2EAssertTrue ($SetSchema -match '"n"\s*:') "the setSchema payload should use the 'n' (name) column key"
+        E2EAssertTrue ($SetSchema -match '"t"\s*:') "the setSchema payload should use the 't' (type) column key"
+        E2EAssertTrue ($SetSchema -like "*nvarchar*") "the setSchema payload should preserve column data types (e.g. nvarchar)"
+    }
 }
 
 E2ESuite -Name "SchemaWindowTabSwitch" -Body {

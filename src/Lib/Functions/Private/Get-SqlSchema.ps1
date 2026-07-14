@@ -80,7 +80,13 @@ function Get-SqlSchemaObject {
                     $TreeViewTableItem.FontSize = 14
                     $TreeViewSchemaItem.Items.Add($TreeViewTableItem) | Out-Null
 
-                    $TableObjects.Add($TableName, ($ReturnValue.d.$TableFullName | ForEach-Object { $_.Split(" ")[0] }))
+                    # Each raw entry is "ColumnName DataType"; keep both so the editor can show the
+                    # type in its completion detail. Split on the first space only, and wrap in @()
+                    # so a single-column table still serialises as a JSON array (not a lone object).
+                    $TableObjects.Add($TableName, @($ReturnValue.d.$TableFullName | ForEach-Object {
+                                $Parts = $_.Split(" ", 2)
+                                [PSCustomObject][Ordered]@{ n = $Parts[0]; t = if ($Parts.Count -gt 1) { $Parts[1] } else { "" } }
+                            }))
 
                     #$SchemaObject.$Schema | Add-Member -Name $TableName -MemberType NoteProperty -Value $TableColumns
 
