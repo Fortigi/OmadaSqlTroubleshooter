@@ -298,7 +298,7 @@
                                                                                 <ColumnDefinition Width="40" />
                                                                         </Grid.ColumnDefinitions>
                                                                         <TextBlock Grid.Column="1" x:Name="ButtonShowSqlSchemaImage" Style="{StaticResource ToolbarGlyphStyle}" Text="&#xE8FD;" />
-                                                                        <AccessText Grid.Column="3" IsHitTestVisible="False" x:Name="ButtonShowSqlSchemaText" Text="S_chema" Style="{StaticResource ButtonAccessTextStyle}" />
+                                                                        <AccessText Grid.Column="3" IsHitTestVisible="False" x:Name="ButtonShowSqlSchemaText" Text="Sche_ma" Style="{StaticResource ButtonAccessTextStyle}" />
                                                                 </Grid>
                                                         </Border>
                                                 </Button>
@@ -424,7 +424,7 @@
                                                                                 <ColumnDefinition Width="40" />
                                                                         </Grid.ColumnDefinitions>
                                                                         <TextBlock Grid.Column="1" x:Name="ButtonResetImage" Style="{StaticResource ToolbarGlyphStyle}" Text="&#xE777;" />
-                                                                        <AccessText Grid.Column="3" IsHitTestVisible="False" x:Name="ButtonResetText" Text="_Reset" Style="{StaticResource ButtonAccessTextStyle}" />
+                                                                        <AccessText Grid.Column="3" IsHitTestVisible="False" x:Name="ButtonResetText" Text="Reset" Style="{StaticResource ButtonAccessTextStyle}" />
                                                                 </Grid>
                                                         </Border>
                                                 </Button>
