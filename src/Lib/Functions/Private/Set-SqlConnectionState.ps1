@@ -17,7 +17,7 @@ function Set-SqlConnectionState {
             $Script:MainForm.Elements.TextBoxEntraIdTenantId.IsEnabled = $false
             $Script:MainForm.Elements.TextBoxUrl.IsEnabled = $false
             $Script:MainForm.Elements.TextBlockStatusBarConnectionStatus | Set-TextBlockText -Text "Connected"
-            $Script:MainForm.Elements.ButtonConnectText | Set-ButtonText -Value "_Disconnect"
+            $Script:MainForm.Elements.ButtonConnectText | Set-ButtonText -Value "Dis_connect"
             $Script:MainForm.Elements.TextBlockStatusBarUrl.Text = ([System.Uri]::new($Script:MainForm.Elements.TextBoxUrl.Text)).Authority
 
             if (($Script:MainForm.Elements.ComboBoxSelectDataConnection.Items | Measure-Object).Count -le 1 -or ($Script:MainForm.Elements.ComboBoxSelectQuery.Items | Measure-Object).Count -le 1 -and $null -ne $Script:RunTimeConfig.ReconnectStatus -and $Script:RunTimeConfig.ReconnectStatus -ge 2) {

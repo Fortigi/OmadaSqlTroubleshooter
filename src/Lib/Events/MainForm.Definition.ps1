@@ -124,6 +124,25 @@ $Script:MainForm.Definition.Add_Closing({
         }
     })
 
+# Second half of the Home/End fix (first half: the TabControl class handler in
+# Initialize-OmadaSqltroubleShooter). That handler marks Home/End handled so the TabControl cannot
+# jump to the first/last tab - but WebView2 only forwards a key to Monaco when the WPF routed event
+# returns UNhandled, so leaving it handled would stop the caret moving instead. By here the bubble
+# has passed the TabControl and it can no longer act on the key, so hand it back to the editor.
+# handledEventsToo is required: the event is handled at this point, which is exactly why we are here.
+$Script:MainForm.Definition.AddHandler(
+    [System.Windows.Input.Keyboard]::KeyDownEvent,
+    [System.Windows.Input.KeyEventHandler] {
+        param(
+            $EventSender,
+            $EventArgs
+        )
+        if ((Test-EditorNavigationKey -KeyName ([string]$EventArgs.Key)) -and $EventArgs.OriginalSource -is [Microsoft.Web.WebView2.Wpf.WebView2]) {
+            $EventArgs.Handled = $false
+        }
+    },
+    $true)
+
 $Script:MainForm.Definition.Add_PreviewKeyDown({
         param(
             $EventSender,
