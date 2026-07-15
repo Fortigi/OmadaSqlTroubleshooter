@@ -13,7 +13,6 @@
             Headers         = @{
                 "Accept" = "application/xml"
             }
-            UseBasicParsing = $true
             ConnectionTimeoutSeconds = 1
         }
         $Response = Invoke-RestMethod @Parameters
