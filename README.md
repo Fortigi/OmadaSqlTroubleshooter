@@ -24,6 +24,7 @@ OmadaSqlTroubleshooter is a PowerShell Module that contains an interactive deskt
   - Columns are suggested in `SELECT` / `WHERE` / `ON` / `GROUP BY` / `ORDER BY`, scoped to the tables referenced in the statement
   - Table aliases resolve to their columns (e.g. `FROM dbo.Person p` → `p.` completes Person's columns), and column suggestions show their data type
   - Keyword, built-in function and snippet suggestions (e.g. `SELECT … FROM`, `JOIN … ON`, `CASE WHEN`) for SQL syntax
+  - The schema is retrieved automatically on connect and when you switch database — no need to open the schema view first
 - Schema view — press **Shift + click** on a table or column to insert it into the editor
 - Filter queries while typing in the editor
 

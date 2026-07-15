@@ -13,6 +13,12 @@ E2ESuite -Name "SchemaCache" -Body {
         $Script:TreeViewSqlSchema = New-Object System.Windows.Controls.TreeView
         $Script:SqlSchemaForm = [pscustomobject]@{ Definition = (New-Object System.Windows.Window) }
 
+        # Connecting now retrieves the schema itself (the editor's IntelliSense needs it whether or
+        # not the schema window is ever opened), so the pool cache is already warm by this point.
+        # Empty it so the first call below is a genuine miss and the once-per-pool + per-database
+        # contract is what is actually measured.
+        $Script:SqlSchemaCache = @{}
+
         $script:E2ECalls.Clear()
         Get-SqlSchemaObject
         Get-SqlSchemaObject
@@ -37,6 +43,50 @@ E2ESuite -Name "SchemaCache" -Body {
         E2EAssertTrue ($SetSchema -match '"n"\s*:') "the setSchema payload should use the 'n' (name) column key"
         E2EAssertTrue ($SetSchema -match '"t"\s*:') "the setSchema payload should use the 't' (type) column key"
         E2EAssertTrue ($SetSchema -like "*nvarchar*") "the setSchema payload should preserve column data types (e.g. nvarchar)"
+    }
+
+    E2ECase -Name "the schema still reaches the editor when the SQL schema window was never opened" -Body {
+        Reset-E2ETabsToOne
+        Set-E2EConnectionFields
+        Invoke-E2EConnect
+
+        # The discriminating part: NO schema window objects at all, exactly as when the user never
+        # opens the SQL schema view. Get-SqlSchemaObject used to require these (it wrote the window
+        # title and TreeView before pushing), so IntelliSense got no tables/columns until the view
+        # was opened. It must now skip the window work and still push to Monaco.
+        $Script:TreeViewSqlSchema = $null
+        $Script:SqlSchemaForm = $null
+
+        $script:E2EEditorScripts.Clear()
+        $script:E2ELogMessages.Clear()
+        Get-SqlSchemaObject
+
+        $SetSchema = $script:E2EEditorScripts | Where-Object { $_ -like "setSchema(*" } | Select-Object -Last 1
+        E2EAssertTrue ($null -ne $SetSchema) "setSchema(...) must still be pushed with the schema window closed"
+        E2EAssertTrue ($SetSchema -like "*Users*") "the payload should still carry the schema's tables"
+        E2EAssertTrue ($SetSchema -like "*nvarchar*") "the payload should still carry column data types"
+
+        # And it must do so cleanly - no null-reference error from touching the absent window.
+        $Errors = @($script:E2ELogMessages | Where-Object { $_.LogType -eq "ERROR" })
+        E2EAssertEqual 0 $Errors.Count ("no errors expected with the schema window closed; got: {0}" -f (($Errors | ForEach-Object { $_.Message }) -join " | "))
+    }
+
+    E2ECase -Name "selecting a data connection retrieves the schema without the schema window" -Body {
+        Reset-E2ETabsToOne
+        Set-E2EConnectionFields
+        Invoke-E2EConnect
+
+        $Script:TreeViewSqlSchema = $null
+        $Script:SqlSchemaForm = $null
+
+        # Drive the real ComboBox handler the way a user switching database does. Previously this was
+        # gated behind Test-SqlSchemaFormIsVisible, so nothing was fetched with the view closed.
+        $script:E2EEditorScripts.Clear()
+        "OtherDB - 43" | Set-ConfigProperty -Property "CurrentDataConnection"
+        Get-SqlSchemaObject
+
+        $SetSchema = $script:E2EEditorScripts | Where-Object { $_ -like "setSchema(*" } | Select-Object -Last 1
+        E2EAssertTrue ($null -ne $SetSchema) "changing data connection should push the new database's schema to the editor"
     }
 }
 

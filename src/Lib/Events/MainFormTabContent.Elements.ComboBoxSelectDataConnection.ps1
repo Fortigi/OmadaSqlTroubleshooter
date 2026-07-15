@@ -26,9 +26,12 @@ $Script:MainForm.Elements.ComboBoxSelectDataConnection.Add_SelectionChanged({
                 $Script:MainForm.Elements.ComboBoxSelectDataConnection.SelectedItem.Content | Set-ConfigProperty -Property "CurrentDataConnection"
                 $Script:MainForm.Elements.TextBlockStatusBarDatabaseName | Set-TextBlockText -Text $Script:AppConfig.CurrentDataConnection.DisplayName
 
-                if (Test-SqlSchemaFormIsVisible) {
-                    Get-SqlSchemaObject
-                }
+                # Always retrieve the schema - not just when the schema window is open. The data
+                # connection determines the schema, and the editor's IntelliSense needs it to offer
+                # tables/columns for THIS database. Get-SqlSchemaObject serves the per-pool +
+                # per-database cache, so switching back to a connection already seen costs no
+                # round-trip, and it updates the schema window only when that window exists.
+                Get-SqlSchemaObject
             }
 
             # The selected data connection is the "<Connection>" part of the tab header.

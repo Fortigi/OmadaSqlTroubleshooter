@@ -51,23 +51,36 @@ function Get-SqlSchemaObject {
                 return $null
             }
 
-            $Script:SqlSchemaForm.Definition.Title = "Sql Schema - {0}" -f $Script:AppConfig.CurrentDataConnection.FullName
+            # The schema window is optional: this function also feeds the editor's IntelliSense, which
+            # must work whether or not the user ever opens the SQL schema view. Only touch the window's
+            # title/TreeView when they actually exist (they are created by Open-SqlSchemaForm) - the
+            # setSchema push below always runs.
+            $UpdateSchemaWindow = ($null -ne $Script:SqlSchemaForm -and $null -ne $Script:SqlSchemaForm.Definition -and $null -ne $Script:TreeViewSqlSchema)
+
+            if ($UpdateSchemaWindow) {
+                $Script:SqlSchemaForm.Definition.Title = "Sql Schema - {0}" -f $Script:AppConfig.CurrentDataConnection.FullName
+            }
 
             "Retrieved object {0}" -f $Script:RunTimeData.SqlQueryObject | Write-LogOutput -LogType VERBOSE
 
             $SchemaObjects = @{}
-            $Script:TreeViewSqlSchema.Items.Clear()
+            if ($UpdateSchemaWindow) {
+                $Script:TreeViewSqlSchema.Items.Clear()
+            }
+
             $Schemas = (($ReturnValue.d | Get-Member -MemberType NoteProperty).Name) | ForEach-Object { $_.Split(".", 2)[0] } | Select-Object -Unique
             foreach ($Schema in $Schemas) {
                 $Tables = $ReturnValue.d | Get-Member -MemberType NoteProperty | Where-Object { $_.Name -like ("{0}.*" -f $Schema) }
 
-                $TreeViewSchemaItem = New-Object System.Windows.Controls.TreeViewItem
-                $TreeViewSchemaItem.Header = $Schema
-                $TreeViewSchemaItem.FontSize = 14
-                $TreeViewSchemaItem.IsExpanded = $true
-                $Script:TreeViewSqlSchema.Items.Add($TreeViewSchemaItem) | Out-Null
+                $TreeViewSchemaItem = $null
+                if ($UpdateSchemaWindow) {
+                    $TreeViewSchemaItem = New-Object System.Windows.Controls.TreeViewItem
+                    $TreeViewSchemaItem.Header = $Schema
+                    $TreeViewSchemaItem.FontSize = 14
+                    $TreeViewSchemaItem.IsExpanded = $true
+                    $Script:TreeViewSqlSchema.Items.Add($TreeViewSchemaItem) | Out-Null
+                }
 
-                #$SchemaObject = @{}
                 $TableObjects = @{}
 
                 foreach ($Table in $Tables) {
@@ -75,10 +88,13 @@ function Get-SqlSchemaObject {
                     $TableFullName = $Table.Name
                     $TableName = $TableFullName.Split(".", 2)[1]
 
-                    $TreeViewTableItem = New-Object System.Windows.Controls.TreeViewItem
-                    $TreeViewTableItem.Header = $TableName
-                    $TreeViewTableItem.FontSize = 14
-                    $TreeViewSchemaItem.Items.Add($TreeViewTableItem) | Out-Null
+                    $TreeViewTableItem = $null
+                    if ($UpdateSchemaWindow) {
+                        $TreeViewTableItem = New-Object System.Windows.Controls.TreeViewItem
+                        $TreeViewTableItem.Header = $TableName
+                        $TreeViewTableItem.FontSize = 14
+                        $TreeViewSchemaItem.Items.Add($TreeViewTableItem) | Out-Null
+                    }
 
                     # Each raw entry is "ColumnName DataType"; keep both so the editor can show the
                     # type in its completion detail. Split on the first space only, and wrap in @()
@@ -88,14 +104,13 @@ function Get-SqlSchemaObject {
                                 [PSCustomObject][Ordered]@{ n = $Parts[0]; t = if ($Parts.Count -gt 1) { $Parts[1] } else { "" } }
                             }))
 
-                    #$SchemaObject.$Schema | Add-Member -Name $TableName -MemberType NoteProperty -Value $TableColumns
-
-                    foreach ($Column in $ReturnValue.d.$TableFullName) {
-                        $TreeViewColumnItem = New-Object System.Windows.Controls.TreeViewItem
-                        $TreeViewColumnItem.Header = $Column
-                        $TreeViewColumnItem.FontSize = 12
-                        $TreeViewColumnItem.Font
-                        $TreeViewTableItem.Items.Add($TreeViewColumnItem) | Out-Null
+                    if ($UpdateSchemaWindow) {
+                        foreach ($Column in $ReturnValue.d.$TableFullName) {
+                            $TreeViewColumnItem = New-Object System.Windows.Controls.TreeViewItem
+                            $TreeViewColumnItem.Header = $Column
+                            $TreeViewColumnItem.FontSize = 12
+                            $TreeViewTableItem.Items.Add($TreeViewColumnItem) | Out-Null
+                        }
                     }
                 }
                 $SchemaObjects.Add($Schema, $TableObjects)
