@@ -71,7 +71,7 @@ E2ESuite -Name "SchemaCache" -Body {
         E2EAssertEqual 0 $Errors.Count ("no errors expected with the schema window closed; got: {0}" -f (($Errors | ForEach-Object { $_.Message }) -join " | "))
     }
 
-    E2ECase -Name "selecting a data connection retrieves the schema without the schema window" -Body {
+    E2ECase -Name "picking a data connection in the ComboBox retrieves the schema without the schema window" -Body {
         Reset-E2ETabsToOne
         Set-E2EConnectionFields
         Invoke-E2EConnect
@@ -79,14 +79,19 @@ E2ESuite -Name "SchemaCache" -Body {
         $Script:TreeViewSqlSchema = $null
         $Script:SqlSchemaForm = $null
 
-        # Drive the real ComboBox handler the way a user switching database does. Previously this was
-        # gated behind Test-SqlSchemaFormIsVisible, so nothing was fetched with the view closed.
+        # Drive the real ComboBox SelectionChanged handler by selecting the item, the way a user
+        # switching database does. That handler is where the Test-SqlSchemaFormIsVisible guard used
+        # to sit, so this is the path that has to keep working with the schema view closed.
+        $ComboBoxDataConnection = $Script:MainForm.Elements.ComboBoxSelectDataConnection
+        $TargetItem = $ComboBoxDataConnection.Items | Where-Object { $_.Content -like "OtherDB*" } | Select-Object -First 1
+        E2EAssertTrue ($null -ne $TargetItem) "the OtherDB data connection option should be available to select"
+
         $script:E2EEditorScripts.Clear()
-        "OtherDB - 43" | Set-ConfigProperty -Property "CurrentDataConnection"
-        Get-SqlSchemaObject
+        $ComboBoxDataConnection.SelectedItem = $TargetItem
 
         $SetSchema = $script:E2EEditorScripts | Where-Object { $_ -like "setSchema(*" } | Select-Object -Last 1
-        E2EAssertTrue ($null -ne $SetSchema) "changing data connection should push the new database's schema to the editor"
+        E2EAssertTrue ($null -ne $SetSchema) "selecting a data connection should push that database's schema to the editor"
+        E2EAssertTrue ([string]$Script:AppConfig.CurrentDataConnection.DoId -eq "43") "the handler should have switched the active data connection to OtherDB (43)"
     }
 }
 

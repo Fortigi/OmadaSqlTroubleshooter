@@ -124,12 +124,19 @@
 
             // ---- Schema model (populated by setSchema) ------------------------------
 
-            // Normalised model: { schemaName: { tableName: [ { name, type }, ... ] } }
+            // Normalised model, keyed by the schema's own casing:
+            //   { schemaName: { tableName: [ { name, type }, ... ] } }
             let schemaModel = {};
             let schemaItems = [];   // one per schema  (kind Struct)
             let tableItems = [];    // one per table   (kind Class,  label "schema.table")
-            let columnItems = [];   // one per column  (kind Field,  label "schema.table.column")
             let allSuggestions = [...keywordItems, ...functionItems, ...snippetItems];
+
+            // T-SQL identifiers are case-insensitive, but the model above is keyed by the exact
+            // casing the server reported. These indexes map what the user typed (any casing) back to
+            // the canonical name, so "FROM DBO.Person p" still resolves "p." to Person's columns.
+            let schemaNameIndex = {};    // lower(schema) -> canonical schema
+            let tableNameIndex = {};     // lower(schema) -> { lower(table) -> canonical table }
+            let tablesByLowerName = {};  // lower(table)  -> [ { schema, table } ] (canonical)
 
             // A candidate alias that is actually one of these clause keywords is not an alias
             // (e.g. "FROM dbo.Person WHERE ..." must not treat WHERE as the table's alias).
@@ -157,10 +164,14 @@
                 schemaModel = {};
                 schemaItems = [];
                 tableItems = [];
-                columnItems = [];
+                schemaNameIndex = {};
+                tableNameIndex = {};
+                tablesByLowerName = {};
 
                 for (const schemaName in schema) {
                     schemaModel[schemaName] = {};
+                    schemaNameIndex[schemaName.toLowerCase()] = schemaName;
+                    tableNameIndex[schemaName.toLowerCase()] = {};
                     schemaItems.push({
                         label: schemaName,
                         kind: monaco.languages.CompletionItemKind.Struct,
@@ -174,23 +185,26 @@
                         const rawColumns = tables[tableName];
                         const columns = Array.isArray(rawColumns) ? rawColumns.map(normalizeColumn) : [];
                         schemaModel[schemaName][tableName] = columns;
+                        tableNameIndex[schemaName.toLowerCase()][tableName.toLowerCase()] = tableName;
+
+                        const lowerTable = tableName.toLowerCase();
+                        if (!tablesByLowerName[lowerTable]) {
+                            tablesByLowerName[lowerTable] = [];
+                        }
+                        tablesByLowerName[lowerTable].push({ schema: schemaName, table: tableName });
 
                         tableItems.push({
                             label: `${schemaName}.${tableName}`,
                             kind: monaco.languages.CompletionItemKind.Class,
-                            insertText: tableName,
+                            // Schema-qualified: this is what a FROM/JOIN position inserts, so the
+                            // statement is valid regardless of the connection's default schema. The
+                            // "schema." (DOT_TABLE) position inserts schemaName/tableName instead,
+                            // because the schema is already typed there.
+                            insertText: `${schemaName}.${tableName}`,
                             detail: 'table',
-                            sortText: `1_${schemaName}.${tableName}`
-                        });
-
-                        columns.forEach(column => {
-                            columnItems.push({
-                                label: `${schemaName}.${tableName}.${column.name}`,
-                                kind: monaco.languages.CompletionItemKind.Field,
-                                insertText: column.name,
-                                detail: column.type || 'column',
-                                sortText: `0_${column.name}`
-                            });
+                            sortText: `1_${schemaName}.${tableName}`,
+                            schemaName: schemaName,
+                            tableName: tableName
                         });
                     }
                 }
@@ -206,30 +220,53 @@
                 rebuildSchema(schema || {});
             };
 
-            function isSchema(name) {
-                return Object.prototype.hasOwnProperty.call(schemaModel, name);
+            // Map a typed schema name (any casing) onto its canonical name, or null when unknown.
+            function resolveSchemaName(name) {
+                if (!name) {
+                    return null;
+                }
+                return schemaNameIndex[String(name).toLowerCase()] || null;
             }
 
-            // Find the schema that owns a bare table name. Prefer 'dbo', else the unique owner.
-            function resolveSchemaForTable(tableName) {
-                if (schemaModel['dbo'] && schemaModel['dbo'][tableName]) {
-                    return 'dbo';
+            function isSchema(name) {
+                return resolveSchemaName(name) !== null;
+            }
+
+            // Resolve a (possibly unqualified, any-casing) table reference onto canonical
+            // { schema, table }. Returns null when the table is unknown, or when a bare name is
+            // ambiguous across schemas - callers must skip those rather than guess a schema.
+            function resolveTableRef(schemaName, tableName) {
+                if (!tableName) {
+                    return null;
                 }
-                let found = null;
-                for (const schemaName in schemaModel) {
-                    if (schemaModel[schemaName][tableName]) {
-                        if (found) { return null; } // ambiguous - owned by more than one schema
-                        found = schemaName;
+                if (schemaName) {
+                    const canonicalSchema = resolveSchemaName(schemaName);
+                    if (!canonicalSchema) {
+                        return null;
                     }
+                    const canonicalTable = tableNameIndex[canonicalSchema.toLowerCase()][String(tableName).toLowerCase()];
+                    return canonicalTable ? { schema: canonicalSchema, table: canonicalTable } : null;
                 }
-                return found;
+
+                const candidates = tablesByLowerName[String(tableName).toLowerCase()] || [];
+                if (candidates.length === 0) {
+                    return null;
+                }
+                // An unqualified name resolves to dbo when dbo owns it (SQL Server's usual default
+                // schema); otherwise only a single owner is unambiguous enough to resolve.
+                const dboOwned = candidates.filter(c => c.schema.toLowerCase() === 'dbo')[0];
+                if (dboOwned) {
+                    return dboOwned;
+                }
+                return candidates.length === 1 ? candidates[0] : null;
             }
 
             function columnsFor(schemaName, tableName) {
-                if (schemaModel[schemaName] && schemaModel[schemaName][tableName]) {
-                    return schemaModel[schemaName][tableName];
+                const ref = resolveTableRef(schemaName, tableName);
+                if (!ref) {
+                    return [];
                 }
-                return [];
+                return schemaModel[ref.schema][ref.table] || [];
             }
 
             // Parse FROM/JOIN table references from a statement into an alias map + tables in scope.
@@ -244,21 +281,26 @@
                     const table = m[2];
                     let alias = m[3];
 
-                    const schemaName = explicitSchema || resolveSchemaForTable(table) || 'dbo';
+                    // Skip anything that does not resolve to a real table (a typo, a CTE/temp table,
+                    // a half-typed "FROM schema.", or a bare name owned by several schemas). Guessing
+                    // a schema here would attach the alias to a table that does not exist.
+                    const ref = resolveTableRef(explicitSchema, table);
+                    if (!ref) {
+                        continue;
+                    }
 
                     // A trailing clause keyword is not an alias (e.g. "FROM dbo.Person WHERE ...").
                     if (alias && reservedAfterTable.has(alias.toUpperCase())) {
                         alias = null;
                     }
 
-                    const ref = { schema: schemaName, table: table };
                     if (alias) {
                         aliasMap[alias.toLowerCase()] = ref;
                     }
                     // Register the bare table name too, so "Person." works without an explicit alias.
                     aliasMap[table.toLowerCase()] = ref;
 
-                    const key = `${schemaName}.${table}`;
+                    const key = `${ref.schema}.${ref.table}`;
                     if (!seen.has(key)) {
                         seen.add(key);
                         tablesInScope.push(ref);
@@ -297,7 +339,7 @@
                         // dangling "FROM schema." otherwise gets mis-parsed as a table reference.
                         const head = parts[0];
                         if (isSchema(head)) {
-                            return { mode: 'DOT_TABLE', schema: head, tablesInScope: refs.tablesInScope };
+                            return { mode: 'DOT_TABLE', schema: resolveSchemaName(head), tablesInScope: refs.tablesInScope };
                         }
                         const ref = refs.aliasMap[head.toLowerCase()];
                         if (ref) {
@@ -307,9 +349,11 @@
                     }
                     if (parts.length >= 3) {
                         // "schema.table." - take the two segments before the trailing dot.
-                        const schemaName = parts[parts.length - 3];
-                        const tableName = parts[parts.length - 2];
-                        return { mode: 'DOT_COLUMN', schema: schemaName, table: tableName, tablesInScope: refs.tablesInScope };
+                        const ref = resolveTableRef(parts[parts.length - 3], parts[parts.length - 2]);
+                        if (!ref) {
+                            return { mode: 'NONE', tablesInScope: refs.tablesInScope };
+                        }
+                        return { mode: 'DOT_COLUMN', schema: ref.schema, table: ref.table, tablesInScope: refs.tablesInScope };
                     }
                 }
 
@@ -381,16 +425,17 @@
                         return { suggestions: withRange(cols) };
                     }
 
-                    // "schema." -> that schema's tables (shown as bare table names).
+                    // "schema." -> that schema's tables. The schema is already typed here, so both the
+                    // label and the inserted text are the bare table name.
                     if (ctx.mode === 'DOT_TABLE') {
                         const tables = tableItems
-                            .filter(t => t.label.indexOf(`${ctx.schema}.`) === 0)
+                            .filter(t => t.schemaName === ctx.schema)
                             .map(t => ({
-                                label: t.label.split('.')[1],
+                                label: t.tableName,
                                 kind: t.kind,
-                                insertText: t.insertText,
+                                insertText: t.tableName,
                                 detail: t.detail,
-                                sortText: `0_${t.label}`
+                                sortText: `0_${t.tableName}`
                             }));
                         return { suggestions: withRange(tables) };
                     }

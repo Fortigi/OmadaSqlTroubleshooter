@@ -97,11 +97,13 @@ function Get-SqlSchemaObject {
                     }
 
                     # Each raw entry is "ColumnName DataType"; keep both so the editor can show the
-                    # type in its completion detail. Split on the first space only, and wrap in @()
-                    # so a single-column table still serialises as a JSON array (not a lone object).
+                    # type in its completion detail. Split on the first run of whitespace (the type
+                    # itself may contain spaces, e.g. "nvarchar(50) NOT NULL", so keep the remainder
+                    # intact) and wrap in @() so a single-column table still serialises as a JSON
+                    # array rather than a lone object.
                     $TableObjects.Add($TableName, @($ReturnValue.d.$TableFullName | ForEach-Object {
-                                $Parts = $_.Split(" ", 2)
-                                [PSCustomObject][Ordered]@{ n = $Parts[0]; t = if ($Parts.Count -gt 1) { $Parts[1] } else { "" } }
+                                $Parts = $_.Trim() -split "\s+", 2
+                                [PSCustomObject][Ordered]@{ n = $Parts[0]; t = if ($Parts.Count -gt 1) { $Parts[1].Trim() } else { "" } }
                             }))
 
                     if ($UpdateSchemaWindow) {
