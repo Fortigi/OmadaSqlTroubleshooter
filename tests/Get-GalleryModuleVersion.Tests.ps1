@@ -12,20 +12,46 @@ Describe 'Get-GalleryModuleVersion' -Tag 'Unit' {
             @(
                 [PSCustomObject]@{
                     Properties = [PSCustomObject]@{
-                        version   = '1.0.0'
-                        Published = [PSCustomObject]@{ '#text' = (Get-Date).AddDays(-5) }
+                        version      = '1.0.0'
+                        Published    = [PSCustomObject]@{ '#text' = (Get-Date).AddDays(-5) }
+                        IsPrerelease = [PSCustomObject]@{ '#text' = 'false' }
                     }
                 }
                 [PSCustomObject]@{
                     Properties = [PSCustomObject]@{
-                        version   = '2.0.0'
-                        Published = [PSCustomObject]@{ '#text' = (Get-Date) }
+                        version      = '2.0.0'
+                        Published    = [PSCustomObject]@{ '#text' = (Get-Date) }
+                        IsPrerelease = [PSCustomObject]@{ '#text' = 'false' }
                     }
                 }
             )
         }
 
-        Get-GalleryModuleVersion -ModuleName 'OmadaWeb.PS' | Should -Be '2.0.0'
+        $Result = Get-GalleryModuleVersion -ModuleName 'OmadaWeb.PS'
+
+        $Result.Version | Should -Be '2.0.0'
+        $Result.FullVersion | Should -Be '2.0.0'
+        $Result.IsPrerelease | Should -Be 'false'
+    }
+
+    It 'Should return the prerelease suffix as part of Version and FullVersion' {
+        Mock Invoke-RestMethod {
+            @(
+                [PSCustomObject]@{
+                    Properties = [PSCustomObject]@{
+                        version      = '2.1.0-beta1'
+                        Published    = [PSCustomObject]@{ '#text' = (Get-Date) }
+                        IsPrerelease = [PSCustomObject]@{ '#text' = 'true' }
+                    }
+                }
+            )
+        }
+
+        $Result = Get-GalleryModuleVersion -ModuleName 'OmadaWeb.PS'
+
+        $Result.Version | Should -Be '2.1.0-beta1'
+        $Result.FullVersion | Should -Be '2.1.0-beta1'
+        $Result.IsPrerelease | Should -Be 'true'
     }
 
     It 'Should return $null when the gallery response is empty' {

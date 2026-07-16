@@ -113,28 +113,51 @@ try {
             if (-not $GalleryVersion) {
             }
             else {
-                if ([version]$InstalledModule.Version -lt [version]$GalleryVersion) {
-                    "The installed version {0} of '{1}' is outdated. Latest version: {2}. Execute Update-Module {1} to update to the latest version!" -f ($($InstalledModule.Version)), $ModuleName, $GalleryVersion | Write-Warning
+                $InstalledVersion = [version]$InstalledModule.Version
+                $LatestGalleryVersion = [version]$GalleryVersion.Version
+                $InstalledIsPreRelease = $InstalledModule.IsPreRelease
+                $GalleryIsPreRelease = $GalleryVersion.IsPrerelease
+
+                if ($InstalledVersion -eq $LatestGalleryVersion) {
+                    "The installed version {0} of '{1}' is up-to-date." -f ($($InstalledModule.FullVersion)), $ModuleName | Write-Verbose
                 }
-                elseif ([version]$InstalledModule.Version -eq [version]$GalleryVersion) {
-                    "The installed version {0} of '{1}' is up-to-date." -f ($($InstalledModule.Version)) , $ModuleName | Write-Verbose
+                elseif ($InstalledVersion -lt $LatestGalleryVersion) {
+                    if ($InstalledIsPreRelease -and $GalleryIsPreRelease) {
+                        "The installed version {0} of '{1}' is outdated. Latest version: {2}. Execute 'Update-Module {1} -AllowPreRelease' to update to the latest version!" -f ($($InstalledModule.FullVersion)), $ModuleName, $GalleryVersion.FullVersion | Write-Warning
+                    }
+                    elseif (-not $InstalledIsPreRelease -and $GalleryIsPreRelease) {
+                        "A prerelease version {2} of '{1}' is available on the gallery. The installed stable version {0} is not outdated for stable releases. Execute 'Update-Module {1} -AllowPreRelease' if you want to try it." -f ($($InstalledModule.FullVersion)), $ModuleName, $GalleryVersion.FullVersion | Write-Verbose
+                    }
+                    else {
+                        "The installed version {0} of '{1}' is outdated. Latest version: {2}. Execute Update-Module {1} to update to the latest version!" -f ($($InstalledModule.FullVersion)), $ModuleName, $GalleryVersion.FullVersion | Write-Warning
+                    }
                 }
                 else {
-                    "The installed version {0} of '{1}' is newer than the gallery version {2}." -f ($($InstalledModule.Version)), $ModuleName, $GalleryVersion | Write-Warning
+                    if ($InstalledIsPreRelease -and $GalleryIsPreRelease) {
+                        "The installed version {0} of '{1}' is a prerelease build newer than the latest prerelease published on the gallery ({2})." -f ($($InstalledModule.FullVersion)), $ModuleName, $GalleryVersion.FullVersion | Write-Warning
+                    }
+                    elseif ($InstalledIsPreRelease -and -not $GalleryIsPreRelease) {
+                        "The installed version {0} of '{1}' is a prerelease build newer than the latest stable gallery version {2}." -f ($($InstalledModule.FullVersion)), $ModuleName, $GalleryVersion.FullVersion | Write-Verbose
+                    }
+                    elseif (-not $InstalledIsPreRelease -and $GalleryIsPreRelease) {
+                        "The installed stable version {0} of '{1}' is newer than the prerelease version {2} currently published on the gallery." -f ($($InstalledModule.FullVersion)), $ModuleName, $GalleryVersion.FullVersion | Write-Verbose
+                    }
+                    else {
+                        "The installed version {0} of '{1}' is newer than the gallery version {2}." -f ($($InstalledModule.FullVersion)), $ModuleName, $GalleryVersion.FullVersion | Write-Warning
+                    }
                 }
             }
         }
+        }
+        catch {}
+
+        #Check shortcuts
+        Test-Shortcut
+
+        # Export all the functions
+        #Export-ModuleMember -Function @("Invoke-$ModuleName" , "Set-$ModuleNameShortcut")
 
     }
-    catch {}
-
-    #Check shortcuts
-    Test-Shortcut
-
-    # Export all the functions
-    #Export-ModuleMember -Function @("Invoke-$ModuleName" , "Set-$ModuleNameShortcut")
-
-}
-catch {
-    throw
-}
+    catch {
+        throw
+    }

@@ -11,10 +11,13 @@
 
         $Module = Get-Module -ListAvailable -Name $ModuleName | ForEach-Object { $_ | Where-Object { (Split-Path $_.Path) -eq (Split-Path $ModuleStack.ScriptName) } } | Sort-Object Version -Descending | Select-Object -First 1
         if ($Module) {
-            $ModuleInfo = @{
+            $ModuleInfo = [pscustomobject]@{
                 Name             = $Module.Name
                 Version          = $Module.Version
+                FullVersion      = "{0}-{1}" -f $Module.Version, $Module.PrivateData?.PSData?.Prerelease
                 RepositorySource = $Module.RepositorySourceLocation
+                PreRelease       = $Module.PrivateData?.PSData?.Prerelease
+                IsPreRelease     = -not [string]::IsNullOrWhiteSpace($Module.PrivateData?.PSData?.Prerelease)
             }
             return $ModuleInfo
         }
