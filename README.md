@@ -37,6 +37,8 @@ OmadaSqlTroubleshooter is a PowerShell Module that contains an interactive deskt
 #### Authentication
 - **WebView2** — browser-based via WebView2 (default)
 - **Browser** — browser-based via Selenium
+- **WebView2-InPrivate** — browser-based via WebView2 using an in-private session
+- **Browser-InPrivate** — browser-based via Selenium using an in-private session
 - **OAuth** — OAuth2 / Entra ID
 
 #### Tabs & Multiple Connections
@@ -47,8 +49,8 @@ OmadaSqlTroubleshooter is a PowerShell Module that contains an interactive deskt
 - **Close tabs** — close a single tab (its **✕** button or context menu), **Close All But This**, or **Close All**
 - **Reorder tabs** — drag a tab to a new position
 - Tabs shrink to fit on a single row; long names are truncated with an ellipsis (…)
-- New and duplicated tabs are auto-named `Query{#}`, kept unique against your saved queries; the name is pre-filled into the Display name field so a duplicate can be saved with a single click
-- A query Display name cannot be empty when saving
+- New tabs are auto-named `Query{#}` and kept unique against other saved queries. The name is pre-filled into the Display name field so a duplicate can be saved with a single click
+- Duplicated tabs are auto-named `<Source tab name>{#}` and kept unique against other saved queries. The name is pre-filled into the Display name field so a duplicate can be saved with a single click
 
 ##### Shared connections (connection pools)
 Tabs that share the same connection form a **connection pool**, identified by the combination of **tenant URL + authentication method + credentials**:
@@ -92,12 +94,32 @@ This application leverages the permissions of the user that is logged in. The ap
 > Install-Module -Name OmadaWeb.PS
 > ```
 
-## INSTALLATION
+## GET THE MODULE
 
-To install the module from the PowerShell Gallery, you can use the following command:
+### Installation
+To install the module from the PowerShell Gallery you can use the following command:
 
 ```powershell
-Install-Module -Name OmadaSqlTroubleshooter
+Install-Module -Name OmadaSqlTroubleshooter -Force
+```
+
+Want to test the newest features? Install the nightly release from the PowerShell Gallery:
+
+```powershell
+Install-Module -Name OmadaSqlTroubleshooter -AllowPrerelease -Force
+```
+
+### Updating
+During module import you will be notified when a new version is available. If this is the case you can update the module using this command:
+
+```powershell
+Update-Module -Name OmadaSqlTroubleshooter
+```
+
+If you are on a nightly built you can update using this command:
+
+```powershell
+Update-Module -Name OmadaSqlTroubleshooter -AllowPrerelease -Force
 ```
 
 ## USAGE
