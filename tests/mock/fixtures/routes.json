@@ -1,0 +1,20 @@
+{
+  "_comment": "Maps a logical route key (see Get-OmadaMockRouteKey in ../OmadaMockRouter.ps1) to the fixture file served for it, its content type and HTTP status. Refresh the referenced files via ../Update-OmadaMockFixtures notes in ../README.md (record mode) or edit them by hand. Route keys are derived from the real Omada endpoints the app calls.",
+  "routes": {
+    "probe":                    { "file": "odata.probe.json",             "contentType": "application/json; charset=utf-8", "status": 200 },
+    "querylist":                { "file": "odata.querylist.json",          "contentType": "application/json; charset=utf-8", "status": 200 },
+    "queryobject":              { "file": "odata.queryobject.json",        "contentType": "application/json; charset=utf-8", "status": 200 },
+    "namecheck":                { "file": "odata.namecheck.json",          "contentType": "application/json; charset=utf-8", "status": 200 },
+    "createquery":              { "file": "odata.createquery.json",        "contentType": "application/json; charset=utf-8", "status": 201 },
+    "updatequery":              { "file": "odata.updatequery.json",        "contentType": "application/json; charset=utf-8", "status": 200 },
+    "deletequery":              { "file": "odata.deletequery.json",        "contentType": "application/json; charset=utf-8", "status": 200 },
+    "undelete":                 { "file": "asmx.undelete.json",            "contentType": "application/json; charset=utf-8", "status": 200 },
+    "schema":                   { "file": "asmx.schema.json",              "contentType": "application/json; charset=utf-8", "status": 200 },
+    "paging.views":             { "file": "asmx.paging.views.json",        "contentType": "application/json; charset=utf-8", "status": 200 },
+    "paging.dataobjects":       { "file": "asmx.paging.dataobjects.json",  "contentType": "application/json; charset=utf-8", "status": 200 },
+    "paging.sqldataproducer":   { "file": "asmx.paging.sqldataproducer.json", "contentType": "application/json; charset=utf-8", "status": 200 },
+    "paging.dataobjecthistory": { "file": "asmx.paging.history.json",      "contentType": "application/json; charset=utf-8", "status": 200 },
+    "dataconnections":          { "file": "dataobjdlg.html",               "contentType": "text/html; charset=utf-8",        "status": 200 }
+  },
+  "fallback": { "inlineBody": "{}", "contentType": "application/json; charset=utf-8", "status": 200 }
+}

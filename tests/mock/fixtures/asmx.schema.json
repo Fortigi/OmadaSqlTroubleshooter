@@ -1,0 +1,82 @@
+{
+  "d": {
+    "adhoc.viewUserGroupAccess": [
+      "IdentityId int",
+      "IdentityName nvarchar(255)",
+      "ResourceId int",
+      "ResourceName nvarchar(255)",
+      "GrantedOn datetime"
+    ],
+    "aicb.ResourceDescription": [
+      "Id int",
+      "ResourceKey nvarchar(128)",
+      "Description nvarchar(1024)"
+    ],
+    "cag.Instance": [
+      "Id int",
+      "Name nvarchar(255)",
+      "State int",
+      "CreatedUtc datetime"
+    ],
+    "dbmaint.viewAllUIds": [
+      "UID uniqueidentifier",
+      "ObjectId int",
+      "TableName nvarchar(128)"
+    ],
+    "dbmaint.viewDuplicateUIds": [
+      "UID uniqueidentifier",
+      "Occurrences int"
+    ],
+    "dbo.tblDataObject": [
+      "Id int",
+      "UID uniqueidentifier",
+      "Number nvarchar(50)",
+      "DisplayName nvarchar(255)",
+      "CreateTime datetime",
+      "CreatedBy nvarchar(255)",
+      "ChangeTime datetime",
+      "ChangedBy nvarchar(255)",
+      "DeleteTime datetime",
+      "DeletedBy nvarchar(255)",
+      "CompleteTime datetime",
+      "AbsDuration int",
+      "Duration int",
+      "Deleted bit",
+      "ParentID int",
+      "TemplateID int"
+    ],
+    "dbo.tblAction": [
+      "Id int",
+      "DisplayName nvarchar(255)",
+      "ActionType int",
+      "Enabled bit"
+    ],
+    "dbo.tblActivity": [
+      "Id int",
+      "DisplayName nvarchar(255)",
+      "ProcessId int",
+      "State int",
+      "CreateTime datetime"
+    ],
+    "dbo.tblAccountOwnership": [
+      "Id int",
+      "AccountId int",
+      "IdentityId int",
+      "OwnershipType int"
+    ],
+    "dbo.tblAccessRequestApprovalLog": [
+      "Id int",
+      "RequestId int",
+      "ApproverId int",
+      "Decision int",
+      "DecisionTime datetime"
+    ],
+    "dbo.CommandLog": [
+      "Id int",
+      "Command nvarchar(max)",
+      "StartTime datetime",
+      "EndTime datetime",
+      "ErrorNumber int"
+    ]
+  }
+}

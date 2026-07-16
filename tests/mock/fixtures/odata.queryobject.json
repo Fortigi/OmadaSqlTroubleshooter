@@ -1,0 +1,8 @@
+{
+  "@odata.context": "https://tenant.omada.cloud/odata/dataobjects/$metadata#C_P_SQLTROUBLESHOOTING/$entity",
+  "Id": 10521,
+  "Name": "SQLTS_DataObjectOverview",
+  "DisplayName": "Data object overview",
+  "Deleted": false,
+  "C_QUERY": "SELECT TOP 10\n    o.Id,\n    o.UID,\n    o.Number,\n    o.DisplayName,\n    o.CreateTime,\n    o.CreatedBy,\n    o.ChangeTime,\n    o.ChangedBy\nFROM dbo.tblDataObject AS o\nWHERE o.Deleted = 0\nORDER BY o.CreateTime DESC;"
+}

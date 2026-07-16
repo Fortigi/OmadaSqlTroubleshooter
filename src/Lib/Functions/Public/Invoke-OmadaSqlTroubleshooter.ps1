@@ -227,6 +227,25 @@ function Invoke-OmadaSqlTroubleshooter {
                 }) | Out-Null
         }
 
+        # Mock-instance automation hook. Inert during normal use; only active when OMADASQL_MOCK_SCRIPT
+        # is set (by tests/mock/Launch-AppOnMock.ps1). Unlike the E2E hook above it installs NO watchdog
+        # and does NOT auto-close the window, so the app can be driven against the local mock server
+        # both interactively (click around, no live Omada) and unattended (the dot-sourced script drives
+        # and closes itself). It runs on the dispatcher thread inside the module session, so a
+        # "function script:Invoke-OmadaRestMethod" it installs shadows OmadaWeb.PS for every caller.
+        if (![string]::IsNullOrWhiteSpace($env:OMADASQL_MOCK_SCRIPT)) {
+            $Script:MainForm.Definition.Dispatcher.BeginInvoke(
+                [System.Windows.Threading.DispatcherPriority]::ApplicationIdle,
+                [action]{
+                    try {
+                        . $env:OMADASQL_MOCK_SCRIPT
+                    }
+                    catch {
+                        "Mock automation failed: {0}" -f $_.Exception.Message | Write-Host -ForegroundColor Red
+                    }
+                }) | Out-Null
+        }
+
         [void]$Script:MainForm.Definition.ShowDialog()
         $Message = "Application '{0}': Closed, cleaning-up!" -f $Script:RunTimeConfig.ApplicationTitle
         # Each tab's own password/connection state was already persisted (subject to its own
