@@ -54,5 +54,7 @@
     ],
     "xmlTools.xmlFormatterImplementation": "v2",
     "xmlTools.splitAttributesOnFormat": false,
-    "azureAutomation.directory.basePath": "c:\\Users\\mark"
+    "search.exclude": {
+        "./src/**": true
+    }
 }
