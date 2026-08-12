@@ -118,6 +118,13 @@ function Get-SqlSchemaObject {
                 $SchemaObjects.Add($Schema, $TableObjects)
             }
 
+            if ($UpdateSchemaWindow) {
+                # The tree was rebuilt from scratch above, so every node is visible again. Re-apply
+                # whatever the user has typed in the filter box, otherwise switching tab or data
+                # connection silently drops an active filter.
+                Update-SqlSchemaTreeFilter
+            }
+
             $SchemaObjectsJson = $SchemaObjects | ConvertTo-Json -Depth 5
 
             "Schema for Monaco editor: {0}" -f $SchemaObjectsJson | Write-LogOutput -LogType VERBOSE
