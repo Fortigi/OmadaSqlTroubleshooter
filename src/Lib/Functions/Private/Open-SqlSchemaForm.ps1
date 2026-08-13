@@ -163,6 +163,13 @@ function Open-SqlSchemaForm {
 
         $Script:SqlSchemaForm.Definition.Add_Closed({
                 $_ | Show-EventInfo
+                # Stop the pending filter debounce, so a tick can never fire against the tree of a
+                # window that is already gone.
+                if ($null -ne $Script:SqlSchemaFilterTimer) {
+                    $Script:SqlSchemaFilterTimer.Stop()
+                    $Script:SqlSchemaFilterTimer = $null
+                }
+
                 $Script:SqlSchemaForm.State = "Closed"
                 $Script:MainForm.Elements.ButtonShowSqlSchema.IsEnabled = $true
                 Restore-MainFormFocus
