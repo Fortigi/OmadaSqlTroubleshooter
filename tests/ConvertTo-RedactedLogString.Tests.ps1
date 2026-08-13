@@ -85,6 +85,15 @@ Describe 'ConvertTo-RedactedLogString' {
             $Result | Should -Not -Match ([regex]::Escape($Script:TestPassword))
         }
 
+        It 'keeps the user name even under the sensitive key name Credential' {
+            # The type rule wins over the name rule here: which account authenticated is exactly what
+            # you need to know when troubleshooting a 401, and the password never leaves the SecureString.
+            $Result = ConvertTo-RedactedLogString -InputObject @{ Credential = $Script:TestCredential }
+
+            $Result | Should -Match "serviceaccount"
+            $Result | Should -Not -Match ([regex]::Escape($Script:TestPassword))
+        }
+
         It 'masks a bare SecureString' {
             $Secure = ConvertTo-SecureString "secure-string-secret" -AsPlainText -Force
             $Result = ConvertTo-RedactedLogString -InputObject @{ Value = $Secure }
