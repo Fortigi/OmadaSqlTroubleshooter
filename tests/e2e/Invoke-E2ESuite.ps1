@@ -19,7 +19,10 @@ $ErrorActionPreference = "Stop"
 
 $E2ERoot = Split-Path -Path $PSCommandPath -Parent
 $RepoRoot = Resolve-Path (Join-Path $E2ERoot "..\..")
-$ModulePath = Join-Path $RepoRoot "src\OmadaSqlTroubleShooter.psd1"
+# Casing matters: the manifest on disk is OmadaSqlTroubleshooter.psd1 (lowercase "s" in "shooter"),
+# unlike the OmadaSqlTroubleShooter.psm1 beside it. The wrong casing only breaks on a case-sensitive
+# filesystem, so it survives local Windows runs.
+$ModulePath = Join-Path $RepoRoot "src\OmadaSqlTroubleshooter.psd1"
 $BuildOutput = Join-Path $RepoRoot "buildoutput"
 $ResultsPath = Join-Path $BuildOutput "E2EResults.xml"
 $SentinelPath = "{0}.done" -f $ResultsPath
