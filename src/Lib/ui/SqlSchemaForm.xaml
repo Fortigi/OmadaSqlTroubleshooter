@@ -16,11 +16,32 @@
             <Setter Property="Height" Value="30"/>
             <Setter Property="Width" Value="120"/>
         </Style>
+        <Style TargetType="TextBox">
+            <Setter Property="Background"
+                    Value="{DynamicResource {x:Static SystemColors.WindowBrushKey}}"/>
+            <Setter Property="FontFamily"
+                    Value="Consolas"/>
+            <Setter Property="FontSize"
+                    Value="14"/>
+            <Setter Property="VerticalContentAlignment"
+                    Value="Center"/>
+            <Setter Property="Height"
+                    Value="25"/>
+        </Style>
+        <Style TargetType="Label">
+            <Setter Property="VerticalContentAlignment"
+                    Value="Center"/>
+            <Setter Property="Height"
+                    Value="25"/>
+            <Setter Property="Width"
+                    Value="50"/>
+        </Style>
     </Window.Resources>
 
     <Grid Grid.Row="0" >
         <Grid.RowDefinitions>
             <RowDefinition Height="10"/>
+            <RowDefinition Height="Auto"/>
             <RowDefinition Height="*"/>
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="Auto"/>
@@ -32,10 +53,18 @@
             <ColumnDefinition Width="10"/>
         </Grid.ColumnDefinitions>
 
-        <Border Grid.Row="1" Grid.Column="1" BorderBrush="Gray" BorderThickness="1" Background="{DynamicResource {x:Static SystemColors.AppWorkspaceBrushKey}}">
+        <DockPanel Grid.Row="1" Grid.Column="1" LastChildFill="True" Margin="0,0,0,5">
+            <Label DockPanel.Dock="Left"
+                   Content="_Filter:"
+                   Target="{Binding ElementName=TextBoxSchemaFilter}"/>
+            <TextBox x:Name="TextBoxSchemaFilter"
+                     ToolTip="Filter schemas and tables on any part of their name. Use * and ? for explicit wildcards, for example tbl*Type. Press Esc to clear."/>
+        </DockPanel>
+
+        <Border Grid.Row="2" Grid.Column="1" BorderBrush="Gray" BorderThickness="1" Background="{DynamicResource {x:Static SystemColors.AppWorkspaceBrushKey}}">
             <TreeView x:Name="TreeViewSqlSchema" FontFamily="Consolas" VirtualizingStackPanel.IsVirtualizing="True" ScrollViewer.VerticalScrollBarVisibility="Auto" ScrollViewer.HorizontalScrollBarVisibility="Auto"></TreeView>
         </Border>
-        <StackPanel Orientation="Horizontal" Grid.Row="2" Grid.Column="1" VerticalAlignment="Center">
+        <StackPanel Orientation="Horizontal" Grid.Row="3" Grid.Column="1" VerticalAlignment="Center">
             <Grid>
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="*"/>
@@ -46,7 +75,7 @@
                 </Grid.ColumnDefinitions>
             </Grid>
         </StackPanel>
-        <StackPanel Orientation="Vertical" Grid.Row="3" Grid.Column="1" VerticalAlignment="Center">
+        <StackPanel Orientation="Vertical" Grid.Row="4" Grid.Column="1" VerticalAlignment="Center">
             <StackPanel Orientation="Horizontal">
             </StackPanel>
         </StackPanel>
