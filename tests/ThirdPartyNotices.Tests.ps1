@@ -1,7 +1,16 @@
 BeforeAll {
     $Script:ParentPath = Split-Path -Path $PSScriptRoot -Parent
     $Script:NoticesPath = Join-Path $Script:ParentPath -ChildPath "THIRD-PARTY-NOTICES.md"
-    $Script:Notices = Get-Content -Path $Script:NoticesPath -Raw -Encoding UTF8
+
+    # Read defensively. If the notices file is missing or renamed, reading it here would fail
+    # inside BeforeAll and error out every test in this file; leaving the content empty lets the
+    # "Should exist at the repository root" test report the actual problem instead.
+    $Script:Notices = if (Test-Path $Script:NoticesPath -PathType Leaf) {
+        Get-Content -Path $Script:NoticesPath -Raw -Encoding UTF8
+    }
+    else {
+        [string]::Empty
+    }
 }
 
 Describe 'THIRD-PARTY-NOTICES' -Tag 'Unit' {
@@ -91,7 +100,7 @@ Describe 'THIRD-PARTY-NOTICES' -Tag 'Unit' {
 
     Context 'Runtime download sources' {
         It 'Should record the NuGet source that Install-WebView2 actually downloads from' {
-            $InstallWebView2 = Get-Content -Path (Join-Path $Script:ParentPath -ChildPath "src\lib\functions\Private\Install-WebView2.ps1") -Raw -Encoding UTF8
+            $InstallWebView2 = Get-Content -Path (Join-Path $Script:ParentPath -ChildPath "src\Lib\Functions\Private\Install-WebView2.ps1") -Raw -Encoding UTF8
             $InstallWebView2 | Should -Match 'https://www\.nuget\.org/api/v2/package/Microsoft\.Web\.WebView2'
             $Script:Notices | Should -Match 'https://www\.nuget\.org/api/v2/package/Microsoft\.Web\.WebView2'
         }
