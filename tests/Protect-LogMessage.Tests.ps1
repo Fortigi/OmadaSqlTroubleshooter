@@ -46,6 +46,18 @@ Describe 'Protect-LogMessage' {
             $Result | Should -Match "REDACTED"
         }
 
+        It 'still masks a Credential pair holding anything other than the safe rendering' {
+            Protect-LogMessage -Message '{"Credential": "omada\\svc_sql:Sup3rSecret!"}' | Should -Not -Match "Sup3rSecret"
+        }
+
+        It 'keeps the credential rendering ConvertTo-RedactedLogString deliberately emits' {
+            # Otherwise the safety net would undo the walker's decision to report which account
+            # authenticated. The rendering carries a user name and no password.
+            $Result = Protect-LogMessage -Message '{"Credential": "PSCredential(UserName=omada\\svc_sql)"}'
+
+            $Result | Should -Match "svc_sql"
+        }
+
         It 'masks a query-string style password' {
             Protect-LogMessage -Message "url=https://tenant/api?user=bob&password=P@ssw0rd123" | Should -Not -Match "P@ssw0rd123"
         }

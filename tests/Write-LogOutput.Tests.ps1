@@ -82,6 +82,11 @@ Describe 'Write-LogOutput redaction' {
             $Script:LogText | Should -Match "tenant.omada.cloud"
             $Script:LogText | Should -Match "POST"
         }
+
+        It 'reports which account authenticated, end to end through both redaction layers' {
+            # The walker keeps the user name and the safety net must not strip it again.
+            $Script:LogText | Should -Match "svc_sql"
+        }
     }
 
     Context 'The safety net' {

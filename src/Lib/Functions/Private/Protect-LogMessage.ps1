@@ -37,7 +37,10 @@ function Protect-LogMessage {
         $Result = $Result -replace '\beyJ[A-Za-z0-9_\-]{4,}\.[A-Za-z0-9_\-]{4,}\.[A-Za-z0-9_\-]*', '***REDACTED-JWT***'
 
         # JSON-style pairs whose key names a secret, e.g. {"Password": "..."} or {"X-CSRF-Token": "..."}.
-        $Result = $Result -replace '(?i)("[^"]*(?:authorization|cookie|credential|password|pwd|secret|token|apikey|api_key|clientsecret|sessionkey|csrf|assertion|privatekey|connectionstring)[^"]*"\s*:\s*)"[^"]*"', ('$1"{0}"' -f $Redacted)
+        # The lookahead spares the one value ConvertTo-RedactedLogString deliberately emits for a
+        # credential - "PSCredential(UserName=...)" - which carries no password and answers the first
+        # question you ask of a 401. Without it the safety net would undo that upstream decision.
+        $Result = $Result -replace '(?i)("[^"]*(?:authorization|cookie|credential|password|pwd|secret|token|apikey|api_key|clientsecret|sessionkey|csrf|assertion|privatekey|connectionstring)[^"]*"\s*:\s*)"(?!(?:PS|Network)Credential\(UserName=)[^"]*"', ('$1"{0}"' -f $Redacted)
 
         # Query-string, form and cookie style pairs, e.g. password=..., ASP.NET_SessionId=...
         $Result = $Result -replace '(?i)\b([\w.\-]*(?:password|pwd|secret|token|apikey|api_key|sessionid|sessionkey|auth|csrf)[\w.\-]*)\s*=\s*([^\s;,&"'']+)', ('$1={0}' -f $Redacted)
