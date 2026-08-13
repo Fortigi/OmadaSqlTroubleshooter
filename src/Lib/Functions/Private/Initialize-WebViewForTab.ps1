@@ -248,6 +248,16 @@ function Initialize-WebViewForTab {
                                 try {
                                     Set-EditorValue
 
+                                    # Monaco only exists from this point on, so a tab that was ALREADY
+                                    # connected before its editor finished loading (restored session,
+                                    # duplicated tab, auto-connect) never received a setSchema push -
+                                    # Invoke-ExecuteScriptAsync silently skips while the WebView is not
+                                    # ready. Push it now so IntelliSense knows this database's tables and
+                                    # columns. Get-SqlSchemaObject returns early when the tab is not
+                                    # connected yet (the connect path pushes it instead) and serves the
+                                    # per-pool + per-database cache, so this is normally just the push.
+                                    Get-SqlSchemaObject
+
                                     # Only clear NeedsEditorSync if this tab was genuinely the selected/
                                     # visible one when the push above happened. Navigation can complete
                                     # while this tab is backgrounded (e.g. a still-restoring tab further

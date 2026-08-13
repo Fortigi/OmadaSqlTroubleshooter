@@ -4,8 +4,13 @@
         <id>OmadaSqlTroubleshooter</id>
         <version>$VERSION$</version>
         <authors>Fortigi</authors>
-        <description>This module contains the Omada Sql Troubleshooter application.</description>
+        <description>This module contains the Omada Sql Troubleshooter application. Third-party components bundled with, downloaded by, or required by this package are listed with their licences in THIRD-PARTY-NOTICES.md, included in this package. Data handling and privacy are documented in the "Data handling and privacy" section of README.md.</description>
         <copyright>Copyright $YEAR$ - present Fortigi</copyright>
+        <license type="expression">MIT</license>
+        <projectUrl>https://github.com/Fortigi/OmadaSqlTroubleshooter</projectUrl>
+        <!-- LICENSE and THIRD-PARTY-NOTICES.md are copied into the build output by
+             build/psakeBuild.ps1, so they are picked up by the wildcard below and ship inside
+             the package alongside the module. -->
     </metadata>
     <files>
         <file src="buildoutput\OmadaSqlTroubleShooter\**" target="" />

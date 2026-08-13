@@ -24,7 +24,7 @@ function Test-ConnectionButton {
             else {
                 $Script:MainForm.Elements.ButtonConnect.IsEnabled = $true
                 if ($Script:ConnectionStatus) {
-                    $Script:MainForm.Elements.ButtonConnectText | Set-ButtonText -Value "_Disconnect"
+                    $Script:MainForm.Elements.ButtonConnectText | Set-ButtonText -Value "Dis_connect"
                     $Script:MainForm.Elements.ButtonConnect.ToolTip = "Disconnect from Omada"
                 }
                 else {

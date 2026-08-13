@@ -40,11 +40,16 @@ function script:Invoke-ExecuteScriptWithResultAsync {
 }
 
 # --- Editor write seams: no-op (no rendered WebView2; nothing to assert on editor content) ---------
+# The editor is not rendered, but the script string is recorded so scenarios can assert on what
+# would be pushed to it (e.g. the setSchema(...) payload shape). Cleared per scenario as needed.
+$script:E2EEditorScripts = [System.Collections.Generic.List[string]]::new()
+
 function script:Invoke-ExecuteScriptAsync {
     param(
         $ScriptToExecute,
         $OnCompletedScriptBlock
     )
+    $script:E2EEditorScripts.Add([string]$ScriptToExecute)
     $Script:Task = [pscustomobject]@{ Status = "RanToCompletion"; Result = $null }
     if ($null -ne $OnCompletedScriptBlock) {
         & $OnCompletedScriptBlock $null

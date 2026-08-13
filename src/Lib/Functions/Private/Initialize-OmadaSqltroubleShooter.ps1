@@ -108,6 +108,30 @@ namespace Fortigi {
 "@
         }
 
+        # Stop WPF's TabControl from claiming Home/End (see Test-EditorNavigationKey for the full
+        # story). TabControl.OnKeyDown is invoked through UIElement's class handler; a class handler
+        # registered on the more derived TabControl runs FIRST, so marking the key handled here means
+        # OnKeyDown never runs and the tab does not change. Marking it handled would normally also
+        # withhold the key from Monaco - WebView2 only forwards a key to the web content when the WPF
+        # routed event returns unhandled - so MainForm.Definition resets Handled at the end of the
+        # bubble, once the TabControl can no longer act on it. Gated on the event coming from a
+        # WebView2 so ordinary controls (TextBox, DataGrid) keep their normal Home/End behaviour.
+        if (-not $Script:EditorNavigationKeyHandlerRegistered) {
+            [System.Windows.EventManager]::RegisterClassHandler(
+                [System.Windows.Controls.TabControl],
+                [System.Windows.Input.Keyboard]::KeyDownEvent,
+                [System.Windows.Input.KeyEventHandler] {
+                    # $args[1] is the KeyEventArgs; the sender is not needed. Read from $args rather
+                    # than a param block so the handler does not shadow PowerShell's automatic
+                    # $EventArgs or declare a sender parameter it never uses.
+                    $KeyEventArgs = $args[1]
+                    if ((Test-EditorNavigationKey -KeyName ([string]$KeyEventArgs.Key)) -and $KeyEventArgs.OriginalSource -is [Microsoft.Web.WebView2.Wpf.WebView2]) {
+                        $KeyEventArgs.Handled = $true
+                    }
+                })
+            $Script:EditorNavigationKeyHandlerRegistered = $true
+        }
+
         # Per-tab state ($RunTimeData/$WebView/$AppConfig/$ConnectionStatus/$Task/$MainForm.Elements)
         # now lives on each entry in $Script:Tabs and is repointed onto these same global names by
         # Set-ActiveTabContext, one tab at a time - see New-TabSession.ps1 for the per-tab shape

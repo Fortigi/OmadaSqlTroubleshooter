@@ -19,7 +19,12 @@ OmadaSqlTroubleshooter is a PowerShell Module that contains an interactive deskt
   - Export historic queries (JSON, CSV, TXT)
 
 #### Editor & IntelliSense
-- Basic IntelliSense for SQL, tables and columns
+- Context-aware SQL IntelliSense (T-SQL):
+  - Tables (schema-qualified) are suggested after `FROM` / `JOIN`
+  - Columns are suggested in `SELECT` / `WHERE` / `ON` / `GROUP BY` / `ORDER BY`, scoped to the tables referenced in the statement
+  - Table aliases resolve to their columns (e.g. `FROM dbo.Person p` → `p.` completes Person's columns), and column suggestions show their data type
+  - Keyword, built-in function and snippet suggestions (e.g. `SELECT … FROM`, `JOIN … ON`, `CASE WHEN`) for SQL syntax
+  - The schema is retrieved automatically on connect and when you switch database — no need to open the schema view first
 - Schema view — press **Shift + click** on a table or column to insert it into the editor
 - Filter queries while typing in the editor
 
@@ -264,6 +269,109 @@ This cmdlet supports the common parameters: -Debug, -ErrorAction, -ErrorVariable
 > This is a limitation of the SQL Troubleshooter component in Omada Identity Suite,
 > which does not distinguish between an empty result set and a query execution failure.
 
+## DATA HANDLING & PRIVACY
+
+OmadaSqlTroubleshooter is used by identity professionals against production IGA data, so it is
+worth stating plainly — and checkably — what the application does with that data.
+
+In short: **the application sends no telemetry, all identity data flows only between your
+machine and your own Omada tenant, and everything it keeps is kept locally in your own Windows
+user profile.**
+
+### No telemetry
+
+The module contains no analytics, telemetry, usage-tracking or crash-reporting code, and no
+such SDK is bundled. Nothing about you, your tenant, your queries or your results is sent to
+Fortigi or to any third party.
+
+Every destination the module can contact is hard-coded in the source and listed below; there
+are no others. You can verify this for yourself in two ways: search the module source for
+`http`, or start the application with `Invoke-OmadaSqlTroubleshooter -LogLevel VERBOSE
+-LogToConsole` and watch every request it makes.
+
+### Where the application connects
+
+| Destination | When | What is sent | Why |
+|---|---|---|---|
+| **Your Omada tenant** (`https://<tenant>.omada.cloud` or the URL you enter) | While connected | Your SQL query text, saved query metadata and OData requests; the session credential or token for the tenant | This is the application's actual work: the SQL Troubleshooter OData endpoint (`C_P_SQLTROUBLESHOOTING`) and the Omada Enterprise Server API |
+| **Your identity provider** (Entra ID or the tenant's own sign-in page) | On sign-in only | Your credentials, handled by the browser/WebView2 sign-in flow of [OmadaWeb.PS](https://github.com/Fortigi/OmadaWeb.PS) | Authentication |
+| `api.nuget.org` and `www.nuget.org` | On module import | Nothing but the package request itself | Resolve and download the Microsoft WebView2 .NET SDK — see [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md) |
+| `www.powershellgallery.com` | On module import, and only when the module was installed from the PowerShell Gallery | The module name, in a public package-lookup request | Warn you when a newer version is available |
+
+The last two are ordinary package requests to Microsoft-operated services. They carry no
+tenant name, no user name and no query data. No other host is contacted by this module.
+
+### Data stored on your machine
+
+All of it lives in your own Windows user profile. Nothing is written to a shared or roaming
+location beyond `%APPDATA%`, and nothing is written outside your profile.
+
+| Path | Contents | Protection | Lifetime | How to clear |
+|---|---|---|---|---|
+| `%APPDATA%\OmadaSqlTroubleshooter\config\OmadaSqlTroubleshooter.json` | Application settings only: log level, window positions and sizes, last-used export folder and file type, tab capacity, and `InstanceGuid` (see below). No credentials, no query text, no results. | NTFS permissions on your profile | Until deleted | `Invoke-OmadaSqlTroubleshooter -Reset` restores defaults, or delete the file |
+| `%APPDATA%\OmadaSqlTroubleshooter\config\tabs.clixml` | Per-tab session state written when the application closes: tenant URL, user name, Entra application ID URI and tenant ID, the selected data connection, the *name* of the selected saved query, and — only if you ticked **Save password** — your password. The SQL text itself is not stored here; it lives in your Omada tenant. | The password field is encrypted with Windows DPAPI, bound to your Windows user account on that machine. The remaining fields are stored as plain CliXml. | Overwritten at each close; kept until deleted | `Invoke-OmadaSqlTroubleshooter -Reset` deletes the file, or delete it yourself |
+| `%LOCALAPPDATA%\OmadaSqlTroubleshooter\Bin\...` | The Microsoft WebView2 .NET SDK assemblies downloaded from NuGet. No user data. | NTFS permissions on your profile | Until deleted; refreshed when a newer SDK is released | Delete the folder; it is re-downloaded on the next import |
+| `%LOCALAPPDATA%\OmadaSqlTroubleshooter\Edge User Data\OmadaWebView2Profile` | A WebView2 browser-profile folder created when the first tab's editor starts. It is created but not currently used as a profile location — the editor's WebView2 uses the `%TEMP%` folder below — so it stays empty. | NTFS permissions on your profile | Until deleted | Delete the folder |
+| `%TEMP%\OmadaSqlTroubleshooter` | The WebView2 user-data folder (browser cache and local storage) for the editor. This WebView2 instance only ever loads the local Monaco editor page — it never loads Omada or a sign-in page, so it holds no session cookies and no tenant data. | NTFS permissions on your profile | Until deleted; `%TEMP%` is not cleared automatically by the application | Delete the folder while the application is closed |
+| `%LOCALAPPDATA%\OmadaSqlTroubleShooter\Run.ps1`, plus Start Menu and Desktop shortcuts | A small launcher script and shortcuts. No user data. | NTFS permissions on your profile | Until deleted | Delete the file and the shortcuts |
+| Files you export | Query results, query history, or the application log — see the next section | Whatever you choose; the application applies no encryption | Until you delete them | Delete them |
+
+Two details worth knowing:
+
+- **`InstanceGuid`** is a random GUID generated on first run and stored in the settings file. It
+  is never transmitted to Fortigi or to any third party. Its only use is to give the temporary
+  query object that the application creates *inside your own tenant* a stable name
+  (`TMP_<InstanceGuid>`), so repeated runs reuse one object instead of leaving new ones behind.
+- On the very first run, before `%APPDATA%\OmadaSqlTroubleshooter` exists, the settings file is
+  written next to the installed module instead. From the next run onwards it is read and
+  written under `%APPDATA%`.
+
+Authentication cookies, tokens and browser profiles used for signing in are managed by the
+[OmadaWeb.PS](https://github.com/Fortigi/OmadaWeb.PS) module, not by this one; see that
+module's documentation for where it caches them and how to clear them.
+
+### What exports and logs can contain
+
+Query results are production identity data. Treat them accordingly.
+
+- **Exported result files** (JSON, CSV, CliXml, plain text) and **clipboard copies** contain the
+  full rows your query returned. Depending on the query, that can include personal data such as
+  names, e-mail addresses, employee identifiers, manager relationships and account details.
+  Files are written unencrypted, to a location you choose.
+- **Exported query history** contains the SQL text, its change history and the names of the
+  users who created or modified each query.
+- **The application log** records connection URLs, user names and application events. At the
+  default log level it does not contain result data. At `VERBOSE` and `VERBOSE2` it additionally
+  records complete request and response bodies, **including full result-set rows**. Only raise
+  the log level when you need it, and treat an exported log from those levels as if it were an
+  exported result set. Passwords are held as `SecureString`/`PSCredential` and are not written
+  to the log in readable form at any log level.
+
+### Your responsibilities
+
+Once you export a result set, copy rows to the clipboard, or export a `VERBOSE` log, that data
+leaves the application's control and becomes your organisation's responsibility to handle under
+its own data-protection obligations — the GDPR included, where it applies. In practice:
+
+- Export only the columns and rows you actually need, and prefer filtering in the query.
+- Store exports on encrypted, access-controlled storage — not in a personal downloads folder,
+  a shared drive, a ticket attachment or a chat message.
+- Delete exports as soon as the troubleshooting task is finished; there is no automatic cleanup.
+- Remember that a query and its results are visible in Omada under your account, and that the
+  application acts only with the permissions of the signed-in user.
+
+### Scope of this statement
+
+This statement covers the OmadaSqlTroubleshooter module. Authentication is performed by the
+separate [OmadaWeb.PS](https://github.com/Fortigi/OmadaWeb.PS) module, and the Microsoft Edge
+WebView2 Runtime is a Microsoft component installed on your machine; both are governed by their
+own documentation and terms. Third-party components are inventoried in
+[THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md).
+
+If you find a statement here that does not match what the code does, please
+[open an issue](https://github.com/Fortigi/OmadaSqlTroubleshooter/issues) — an inaccurate
+privacy statement is a bug.
+
 ## CONTRIBUTING
 
 Contributions are welcome! If you have ideas for improvements or bug fixes, feel free to open a pull request on [GitHub](https://github.com/Fortigi/OmadaSqlTroubleshooter).
@@ -276,3 +384,11 @@ Contributions are welcome! If you have ideas for improvements or bug fixes, feel
 ## LICENSE
 
 This project is licensed under the MIT License. See the [LICENSE](LICENSE) file for details.
+
+### Third-party components
+
+OmadaSqlTroubleshooter bundles the Monaco editor, downloads the Microsoft WebView2 .NET SDK at
+run time, and requires the Microsoft Edge WebView2 Runtime and the OmadaWeb.PS module. Every
+such component, its version, its licence and where it comes from is listed in
+[THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md), which also records the review confirming that
+this project does not redistribute the WebView2 Runtime.
