@@ -313,6 +313,18 @@ Task Build -Depends Test {
         "Copy nuspec file" | Write-Host
         Copy-Item -Path "$ParentPath\OmadaSqlTroubleShooter.nuspec" -Destination "$OutputDir" -Force
 
+        # Ship the licence and the third-party notices with the module. The MIT licence of the
+        # bundled Monaco editor requires its copyright notice to travel with the redistribution,
+        # so THIRD-PARTY-NOTICES.md must be part of every published package, not just the repo.
+        "Copy licence and third-party notices" | Write-Host
+        "LICENSE", "THIRD-PARTY-NOTICES.md", "README.md" | ForEach-Object {
+            $NoticeSourcePath = Join-Path $ParentPath -ChildPath $_
+            if (-not (Test-Path $NoticeSourcePath -PathType Leaf)) {
+                "Required file '{0}' was not found at '{1}'" -f $_, $NoticeSourcePath | Write-Error -ErrorAction Stop
+            }
+            Copy-Item -Path $NoticeSourcePath -Destination $OutputDir -Force
+        }
+
         "Copy lib contents" | Write-Host
 
         Get-Item -Path (Join-Path $ModuleSource -ChildPath "Monaco") | Copy-Item -Destination $OutputDir -Force -Recurse
