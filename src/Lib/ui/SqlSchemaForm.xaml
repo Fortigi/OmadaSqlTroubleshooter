@@ -19,10 +19,6 @@
         <Style TargetType="TextBox">
             <Setter Property="Background"
                     Value="{DynamicResource {x:Static SystemColors.WindowBrushKey}}"/>
-            <Setter Property="FontFamily"
-                    Value="Consolas"/>
-            <Setter Property="FontSize"
-                    Value="14"/>
             <Setter Property="VerticalContentAlignment"
                     Value="Center"/>
             <Setter Property="Height"
