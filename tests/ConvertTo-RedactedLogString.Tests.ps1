@@ -123,7 +123,7 @@ Describe 'ConvertTo-RedactedLogString' {
 
         It 'applies the same treatment to a body passed on its own via -ShapeOnly' {
             # The "Body: ..." call sites hand over the body itself, not a parameter set containing it,
-            # so there is no key name for the walker to recognise.
+            # so there is no key name for the walker to recognize.
             $Result = ConvertTo-RedactedLogString -InputObject @{ query = "SELECT * FROM dbo.Identity"; page = 1 } -ShapeOnly
 
             $Result | Should -Match "query"

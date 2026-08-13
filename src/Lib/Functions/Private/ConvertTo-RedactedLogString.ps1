@@ -203,9 +203,7 @@ function Get-RedactedMemberValue {
     # Credential objects are handled by the type rules in the walker, which keep the user name -
     # knowing which account authenticated is diagnostic - while the password stays in its
     # SecureString. Applying the name rule here instead would throw that away for no gain.
-    $HandledByTypeRule = $MemberValue -is [System.Management.Automation.PSCredential] -or
-        $MemberValue -is [System.Net.NetworkCredential] -or
-        $MemberValue -is [System.Security.SecureString]
+    $HandledByTypeRule = $MemberValue -is [System.Management.Automation.PSCredential] -or $MemberValue -is [System.Net.NetworkCredential] -or $MemberValue -is [System.Security.SecureString]
 
     if (-not $HandledByTypeRule) {
         foreach ($Pattern in $SensitiveNamePatterns) {
