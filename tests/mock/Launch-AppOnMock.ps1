@@ -31,6 +31,10 @@ param(
     [switch]$Record,
     [switch]$AutoConnect,
     [string]$DriveScript,
+    [string]$ResultsPath,
+    # Guard against an unattended run hanging forever (a modal dialog, a WebView2 stall). 0 means
+    # wait indefinitely, which is what you want for interactive use; a drive script defaults to 180s.
+    [int]$TimeoutSeconds = 0,
     [string]$ModulePath,
     [ValidateSet("INFO", "DEBUG", "VERBOSE", "WARNING", "ERROR", "FATAL", "VERBOSE2")]
     [string]$LogLevel = "WARNING"
@@ -101,13 +105,38 @@ try {
         if ($AutoConnect) { $AppInfo.EnvironmentVariables["OMADASQL_MOCK_AUTOCONNECT"] = "1" }
         if (![string]::IsNullOrWhiteSpace($DriveScript)) {
             $AppInfo.EnvironmentVariables["OMADASQL_MOCK_DRIVE"] = (Resolve-Path -LiteralPath $DriveScript).Path
+            if ($TimeoutSeconds -le 0) { $TimeoutSeconds = 180 }
+            if ([string]::IsNullOrWhiteSpace($ResultsPath)) {
+                $ResultsPath = Join-Path $RepoRoot "buildoutput\MockAppDriveResults.json"
+            }
+            $ResultsDir = Split-Path -Path $ResultsPath -Parent
+            if (![string]::IsNullOrWhiteSpace($ResultsDir) -and -not (Test-Path $ResultsDir)) {
+                New-Item -Path $ResultsDir -ItemType Directory -Force | Out-Null
+            }
+            Remove-Item -Path $ResultsPath, ("{0}.done" -f $ResultsPath) -ErrorAction Ignore
+            $AppInfo.EnvironmentVariables["OMADASQL_MOCK_RESULTS"] = $ResultsPath
+            "  results : $ResultsPath" | Write-Host
         }
     }
 
     "Launching app..." | Write-Host -ForegroundColor Cyan
     $AppProcess = [System.Diagnostics.Process]::Start($AppInfo)
-    $AppProcess.WaitForExit()
+
+    if ($TimeoutSeconds -gt 0) {
+        if (-not $AppProcess.WaitForExit($TimeoutSeconds * 1000)) {
+            try { $AppProcess.Kill($true) } catch { }
+            throw "App run timed out after $TimeoutSeconds seconds (window never closed - a modal dialog or a stalled WebView2 will do this)."
+        }
+    }
+    else {
+        $AppProcess.WaitForExit()
+    }
     "App closed (exit code $($AppProcess.ExitCode))." | Write-Host
+
+    if (![string]::IsNullOrWhiteSpace($ResultsPath) -and (Test-Path -LiteralPath $ResultsPath)) {
+        "--- drive report ---" | Write-Host -ForegroundColor Cyan
+        Get-Content -LiteralPath $ResultsPath -Raw | Write-Host
+    }
 }
 finally {
     if ($null -ne $ServerProcess -and -not $ServerProcess.HasExited) {
