@@ -238,7 +238,18 @@ function Invoke-OmadaSqlTroubleshooter {
                 [System.Windows.Threading.DispatcherPriority]::ApplicationIdle,
                 [action]{
                     try {
-                        . $env:OMADASQL_MOCK_SCRIPT
+                        # Only ever dot-source an existing local .ps1. The path comes from the
+                        # environment, so validate it here: a typo'd or unexpected value fails with a
+                        # clear message instead of silently running something else.
+                        $MockScriptPath = $env:OMADASQL_MOCK_SCRIPT
+                        if (-not (Test-Path -LiteralPath $MockScriptPath -PathType Leaf)) {
+                            throw "OMADASQL_MOCK_SCRIPT does not point to an existing file: '$MockScriptPath'"
+                        }
+                        if ([System.IO.Path]::GetExtension($MockScriptPath) -ne ".ps1") {
+                            throw "OMADASQL_MOCK_SCRIPT must be a .ps1 file: '$MockScriptPath'"
+                        }
+
+                        . $MockScriptPath
                     }
                     catch {
                         "Mock automation failed: {0}" -f $_.Exception.Message | Write-Host -ForegroundColor Red

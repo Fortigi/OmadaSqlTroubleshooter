@@ -74,7 +74,7 @@ function script:Invoke-OmadaRestMethod {
         $ForceAuthentication,
         $InPrivate,
         $SessionKey,
-        $Credential,
+        [System.Management.Automation.PSCredential]$Credential,
         [Parameter(ValueFromRemainingArguments = $true)] $IgnoredRest
     )
 
@@ -104,3 +104,4 @@ function script:Invoke-OmadaRestMethod {
 
     return $Real
 }
+

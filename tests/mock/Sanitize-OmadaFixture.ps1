@@ -35,6 +35,18 @@ function New-OmadaScrubMap {
     return $Map
 }
 
+function ConvertTo-JsonEscapedFragment {
+    <#
+    Return $Text as it would appear INSIDE a JSON string value (backslashes doubled, quotes escaped),
+    without the surrounding quotes. Used so the scrubber matches values in already-serialized JSON.
+    #>
+    [CmdletBinding()]
+    param([string]$Text)
+    if ([string]::IsNullOrEmpty($Text)) { return $Text }
+    $Json = $Text | ConvertTo-Json -Compress
+    return $Json.Substring(1, $Json.Length - 2)
+}
+
 function ConvertTo-SanitizedOmadaFixture {
     <#
     .SYNOPSIS
@@ -53,10 +65,28 @@ function ConvertTo-SanitizedOmadaFixture {
 
     $Out = [string]$Content
     if ($null -ne $ScrubMap) {
+        # Build the replacement set. For every entry we scrub BOTH the raw value and its JSON-escaped
+        # form: the recorder serializes the response with ConvertTo-Json before sanitizing, so a
+        # domain-qualified account like "ACME\m.jansen" appears in the text as "ACME\\m.jansen" and a
+        # raw literal replace would silently miss it - leaking exactly the PII this is meant to remove.
+        $Replacements = [System.Collections.Generic.List[object]]::new()
         foreach ($Key in $ScrubMap.Keys) {
-            $K = [string]$Key
-            if ([string]::IsNullOrEmpty($K)) { continue }
-            $Out = $Out.Replace($K, [string]$ScrubMap[$Key])
+            $RawFrom = [string]$Key
+            if ([string]::IsNullOrEmpty($RawFrom)) { continue }
+            $RawTo = [string]$ScrubMap[$Key]
+            $Replacements.Add([pscustomobject]@{ From = $RawFrom; To = $RawTo })
+
+            $EscapedFrom = ConvertTo-JsonEscapedFragment -Text $RawFrom
+            if ($EscapedFrom -cne $RawFrom) {
+                $Replacements.Add([pscustomobject]@{ From = $EscapedFrom; To = (ConvertTo-JsonEscapedFragment -Text $RawTo) })
+            }
+        }
+
+        # Longest match first. Applying in insertion order lets a shorter entry rewrite the inside of a
+        # longer one (replacing the bare host first leaves "host/path" unmatchable), which would
+        # silently leave the more specific PII behind.
+        foreach ($Replacement in ($Replacements | Sort-Object -Property { $_.From.Length } -Descending)) {
+            $Out = $Out.Replace($Replacement.From, $Replacement.To)
         }
     }
 

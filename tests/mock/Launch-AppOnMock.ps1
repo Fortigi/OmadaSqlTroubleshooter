@@ -41,7 +41,10 @@ $ErrorActionPreference = "Stop"
 $MockDir = $PSScriptRoot
 $RepoRoot = Resolve-Path (Join-Path $MockDir "..\..")
 if ([string]::IsNullOrWhiteSpace($ModulePath)) {
-    $ModulePath = Join-Path $RepoRoot "src\OmadaSqlTroubleShooter.psd1"
+    # Casing matters: the manifest on disk is OmadaSqlTroubleshooter.psd1 (lowercase "s" in
+    # "shooter"), unlike the .psm1 next to it. Getting it wrong only breaks on a case-sensitive
+    # filesystem, so it survives local Windows testing.
+    $ModulePath = Join-Path $RepoRoot "src\OmadaSqlTroubleshooter.psd1"
 }
 if ([string]::IsNullOrWhiteSpace($FixturesDir)) {
     $FixturesDir = Join-Path $MockDir "fixtures"
