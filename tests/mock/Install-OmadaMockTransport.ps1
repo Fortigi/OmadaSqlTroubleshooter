@@ -49,15 +49,29 @@ function script:Invoke-OmadaRestMethod {
     }
 
     $HttpMethod = if ([string]::IsNullOrWhiteSpace($Method)) { "GET" } else { $Method.ToUpperInvariant() }
-    $IrmParams = @{
+    $RequestParams = @{
         Uri     = $TargetUri
         Method  = $HttpMethod
         NoProxy = $true   # the mock is on localhost; never route it through a configured proxy
     }
     if ($HttpMethod -in @("POST", "PUT", "PATCH") -and $null -ne $Body) {
-        $IrmParams.Body = if ($Body -is [string]) { $Body } else { $Body | ConvertTo-Json -Depth 20 -Compress }
-        $IrmParams.ContentType = "application/json; charset=utf-8"
+        $RequestParams.Body = if ($Body -is [string]) { $Body } else { $Body | ConvertTo-Json -Depth 20 -Compress }
+        $RequestParams.ContentType = "application/json; charset=utf-8"
     }
 
-    return Invoke-RestMethod @IrmParams
+    # Deliberately Invoke-WebRequest, NOT Invoke-RestMethod: the latter auto-deserializes by content
+    # type, which turns the dataobjdlg.aspx HTML into an [XmlDocument]. Update-DataConnectionList feeds
+    # that result to Get-DataConnectionOptionList -Html ([string]), where an XmlDocument stringifies to
+    # "System.Xml.XmlDocument" and the <option> regex matches nothing - i.e. no data connections, so no
+    # schema. Branching on the content type here reproduces what OmadaWeb.PS hands back: deserialized
+    # objects for JSON, the raw markup for HTML.
+    $Response = Invoke-WebRequest @RequestParams
+    $ResponseContentType = [string]$Response.Headers["Content-Type"]
+
+    if ($ResponseContentType -like "*json*") {
+        if ([string]::IsNullOrWhiteSpace($Response.Content)) { return $null }
+        return ($Response.Content | ConvertFrom-Json)
+    }
+
+    return $Response.Content
 }

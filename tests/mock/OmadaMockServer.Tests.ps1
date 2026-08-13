@@ -57,8 +57,14 @@ Describe "Mock server over HTTP" {
         $Fields = $Result.d.Rows[0].ChangedFields | ConvertFrom-Json
         ($Fields | Where-Object { $_.Field -eq "SQL Query" }).Count | Should -BeGreaterThan 0
     }
-    It "returns data connection HTML containing OISES" {
-        $Html = Get-Mock -PathAndQuery "/dataobjdlg.aspx?DOID=8801"
-        $Html | Should -Match "OISES"
+    It "returns data connection HTML the app can parse into options" {
+        # Must assert on the RAW markup: the app hands this response to
+        # Get-DataConnectionOptionList -Html ([string]). Invoke-RestMethod would deserialize the
+        # text/html body into an [XmlDocument] that stringifies to "System.Xml.XmlDocument" and
+        # matches no <option> - the exact failure the transport shim now avoids.
+        $Response = Invoke-WebRequest -Uri "$script:BaseUrl/dataobjdlg.aspx?DOID=8801" -NoProxy -TimeoutSec 5
+        $Response.Content | Should -BeOfType [string]
+        $Response.Content | Should -Match "OISES"
+        [regex]::Matches($Response.Content, '<option.*?value="(\d+).*?data-uid="(.*?)".*?>(.*?)</option>').Count | Should -BeGreaterThan 0
     }
 }

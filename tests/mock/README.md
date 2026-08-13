@@ -20,10 +20,16 @@ app  ──►  Invoke-OmadaPSWebRequestWrapper  ──►  Invoke-OmadaRestMeth
 ```
 
 The app's only network boundary is OmadaWeb.PS's `Invoke-OmadaRestMethod` (it does auth + HTTP).
-In **replay** mode a `script:`-scoped shim replaces just that call with a plain `Invoke-RestMethod`
-to the mock server — everything above it (URL building, the wrapper, response parsing, the whole UI)
-runs unchanged. In **record** mode the shim instead calls the *real* OmadaWeb.PS and tees each
-response into the fixture store.
+In **replay** mode a `script:`-scoped shim replaces just that call with an unauthenticated HTTP
+request to the mock server — everything above it (URL building, the wrapper, response parsing, the
+whole UI) runs unchanged. In **record** mode the shim instead calls the *real* OmadaWeb.PS and tees
+each response into the fixture store.
+
+The shim uses `Invoke-WebRequest` and branches on the response content type — JSON is deserialized,
+anything else is returned as raw text — to reproduce what OmadaWeb.PS hands back. This matters:
+`Invoke-RestMethod` would deserialize the `dataobjdlg.aspx` HTML into an `[XmlDocument]`, which
+stringifies to `"System.Xml.XmlDocument"` for `Get-DataConnectionOptionList`, silently yielding **no
+data connections and no schema**. `Install-OmadaMockTransport.Tests.ps1` guards against that.
 
 ## Files
 
