@@ -120,6 +120,16 @@ Describe 'ConvertTo-RedactedLogString' {
             $Result | Should -Match "query"
             $Result | Should -Not -Match "SELECT"
         }
+
+        It 'applies the same treatment to a body passed on its own via -ShapeOnly' {
+            # The "Body: ..." call sites hand over the body itself, not a parameter set containing it,
+            # so there is no key name for the walker to recognise.
+            $Result = ConvertTo-RedactedLogString -InputObject @{ query = "SELECT * FROM dbo.Identity"; page = 1 } -ShapeOnly
+
+            $Result | Should -Match "query"
+            $Result | Should -Match "page"
+            $Result | Should -Not -Match "SELECT"
+        }
     }
 
     Context 'Volume control' {

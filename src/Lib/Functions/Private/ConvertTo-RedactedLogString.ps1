@@ -20,11 +20,14 @@ function ConvertTo-RedactedLogString {
         [AllowNull()]
         $InputObject,
         [int]$MaxDepth = 6,
-        [int]$MaxStringLength = 512
+        [int]$MaxStringLength = 512,
+        # Keep keys and value shapes but no values at all. Used where the object being logged IS a
+        # request body, rather than a parameter set containing one.
+        [switch]$ShapeOnly
     )
 
     try {
-        $Redacted = ConvertTo-RedactedLogValue -Value $InputObject -Depth 0 -MaxDepth $MaxDepth -MaxStringLength $MaxStringLength -Visited ([System.Collections.Generic.List[object]]::new()) -MaskValues $false
+        $Redacted = ConvertTo-RedactedLogValue -Value $InputObject -Depth 0 -MaxDepth $MaxDepth -MaxStringLength $MaxStringLength -Visited ([System.Collections.Generic.List[object]]::new()) -MaskValues ([bool]$ShapeOnly)
         if ($null -eq $Redacted) {
             return "null"
         }

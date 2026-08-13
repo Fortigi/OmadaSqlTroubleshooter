@@ -31,12 +31,12 @@ function Invoke-OmadaPSWebRequestWrapper {
 
                 #$Private:Parameters.Body = $Private:Parameters.Body | ConvertTo-Json
             }
-            "Parameters: {0}" -f ($Private:Parameters | ConvertTo-Json -Depth 15) | Write-LogOutput -LogType VERBOSE
+            "Parameters: {0}" -f (ConvertTo-RedactedLogString -InputObject $Private:Parameters) | Write-LogOutput -LogType VERBOSE
             $Private:Result = Invoke-OmadaRestMethod @Parameters
             if ($null -ne $Script:MainForm -and $null -ne $Script:MainForm.Definitions -and $Script:MainForm.Definitions.IsVisible) {
                 $Script:MainForm.Definitions.TextBlockStatusBarConnectionStatus | Set-TextBlockText -Text "Connected"
             }
-            "Result: {0}" -f ($Private:Result | ConvertTo-Json -Depth 15) | Write-LogOutput -LogType VERBOSE
+            "Result: {0}" -f (ConvertTo-RedactedLogString -InputObject $Private:Result) | Write-LogOutput -LogType VERBOSE
             $Script:RunTimeData.RestMethodParam.ForceAuthentication = $false
             return $Private:Result
         }
