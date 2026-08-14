@@ -2,7 +2,7 @@ function Update-LogFormPosition {
     [CmdLetBinding()]
     param()
     try {
-        $Script:Tracer::WriteLine(("{0}: Function: {1} - Caller: {2}({3}) - Command: {4} - Parameters: {5}" -f $($Script:RunTimeConfig.ApplicationName), $($MyInvocation.MyCommand.Name), $($MyInvocation.ScriptName).Split("\")[-1], $($MyInvocation.ScriptLineNumber), $MyInvocation.Statement, ($PSBoundParameters | Out-String)))
+        $Script:Tracer::WriteLine(("{0}: Function: {1} - Caller: {2}({3}) - Command: {4} - Parameters: {5}" -f $($Script:RunTimeConfig.ApplicationName), $($MyInvocation.MyCommand.Name), $($MyInvocation.ScriptName).Split("\")[-1], $($MyInvocation.ScriptLineNumber), $MyInvocation.Statement, (ConvertTo-RedactedLogString -InputObject $PSBoundParameters -MaxDepth 1)))
         $Script:LogForm.PositionManager.MainFormRight = [Int]::Abs($Script:MainForm.Definition.Left) + [Int]::Abs($Script:MainForm.Definition.Width)
         "PositionManagerLogForm MainFormRight: {0}" -f $Script:LogForm.PositionManager.MainFormRight | Write-LogOutput -LogType DEBUG
         $Script:LogForm.PositionManager.MainFormBottom = [Int]::Abs($Script:MainForm.Definition.Top) - [Int]::Abs($Script:MainForm.Definition.Height)

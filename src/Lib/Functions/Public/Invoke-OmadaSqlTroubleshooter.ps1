@@ -169,7 +169,7 @@ function Invoke-OmadaSqlTroubleshooter {
         $Message = "Application '{0}': Initialized!" -f $Script:RunTimeConfig.ApplicationTitle
         $Message | Write-Host -ForegroundColor Green
         $Message | Write-LogOutput -LogType DEBUG
-        "Loading Main form with settings:`r`n{0}" -f ($Script:AppConfig | ConvertTo-Json) | Write-LogOutput -LogType DEBUG
+        "Loading Main form with settings:`r`n{0}" -f (ConvertTo-RedactedLogString -InputObject $Script:AppConfig) | Write-LogOutput -LogType DEBUG
 
         # End-to-end automation hook. Inert during normal use; only active when OMADASQL_E2E_SCRIPT is
         # set (by the local E2E harness). Once the window is loaded and the dispatcher goes idle (so the

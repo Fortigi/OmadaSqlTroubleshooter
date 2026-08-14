@@ -2,7 +2,7 @@ function Invoke-ExecuteQuery {
     [CmdLetBinding()]
     param()
     try {
-        $Script:Tracer::WriteLine(("{0}: Function: {1} - Caller: {2}({3}) - Command: {4} - Parameters: {5}" -f $($Script:RunTimeConfig.ApplicationName), $($MyInvocation.MyCommand.Name), $($MyInvocation.ScriptName).Split("\")[-1], $($MyInvocation.ScriptLineNumber), $MyInvocation.Statement, ($PSBoundParameters | Out-String)))
+        $Script:Tracer::WriteLine(("{0}: Function: {1} - Caller: {2}({3}) - Command: {4} - Parameters: {5}" -f $($Script:RunTimeConfig.ApplicationName), $($MyInvocation.MyCommand.Name), $($MyInvocation.ScriptName).Split("\")[-1], $($MyInvocation.ScriptLineNumber), $MyInvocation.Statement, (ConvertTo-RedactedLogString -InputObject $PSBoundParameters -MaxDepth 1)))
         if (!(Test-ConnectionRequirements)) {
             "Connection not ready" | Write-LogOutput -LogType DEBUG
             return
@@ -50,7 +50,7 @@ function Invoke-ExecuteQuery {
                         "filters"      = $null
                         "searchOper"   = $null
                     }
-                    "Body: {0}" -f ($Script:RunTimeData.RestMethodParam.Body | ConvertTo-Json) | Write-LogOutput -LogType VERBOSE
+                    "Body: {0}" -f (ConvertTo-RedactedLogString -InputObject $Script:RunTimeData.RestMethodParam.Body -ShapeOnly) | Write-LogOutput -LogType VERBOSE
                     "QueryUrl: {0}" -f $Script:RunTimeData.RestMethodParam.Uri | Write-LogOutput -LogType DEBUG
 
                     "Retrieve query output, please wait..." | Write-LogOutput
@@ -79,7 +79,7 @@ function Invoke-ExecuteQuery {
                             #Work-around issue that Omada can return invalid JSON keys.
                             $Script:MainForm.Elements.DataGridQueryResult.ItemsSource = @(($Script:RunTimeData.QueryResult | ConvertTo-Json -Depth 10 | Invoke-SanitizeJsonKeys | ConvertFrom-Json -Depth 10).d.Rows)
                         }
-                        "Result:`r`n{0}" -f ($Script:RunTimeData.QueryResult.d.rows | Format-Table -AutoSize | Out-String -Width 10000000 ) | Write-LogOutput -LogType VERBOSE2
+                        "Result: {0}" -f (Get-LogResultShape -InputObject $Script:RunTimeData.QueryResult.d.rows) | Write-LogOutput -LogType VERBOSE2
                         $Script:MainForm.Elements.ButtonShowOutput.IsEnabled = $true
                         $Script:MainForm.Elements.ButtonSaveOutputFile.IsEnabled = $true
                         "{0} record(s) retrieved!" -f $Script:RunTimeData.QueryResult.d.Records | Write-LogOutput

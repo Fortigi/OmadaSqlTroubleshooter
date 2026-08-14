@@ -14,6 +14,15 @@ function Write-LogOutput {
         if ($null -eq $Message) {
             $Message = "-"
         }
+
+        # Last gate before anything reaches AppLogObject, which the log window's "Export Log File"
+        # button writes to disk verbatim. Structure-aware redaction already happened at the call
+        # sites via ConvertTo-RedactedLogString; this catches secrets embedded in free-form text -
+        # exception messages, third-party output, and any call site that forgets. Applied to
+        # $Message itself so every derived value (the log line, the dialog text, the Write-Error
+        # and Write-Verbose paths) inherits it.
+        $Message = Protect-LogMessage -Message $Message
+
         $DateTimeObject = Get-Date
         $DateTime = $DateTimeObject.ToString("yyyy-MM-dd HH:mm:ss")
         if ($Script:RunTimeConfig.Logging.LogLevelSetting -in ("VERBOSE", "VERBOSE2")) {

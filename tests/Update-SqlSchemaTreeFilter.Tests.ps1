@@ -5,6 +5,8 @@ BeforeAll {
     . (Join-Path $ParentPath -ChildPath "src\lib\functions\Private\ConvertTo-WildcardFilterPattern.ps1")
     . (Join-Path $ParentPath -ChildPath "src\lib\functions\Private\Update-SqlSchemaTreeFilter.ps1")
 
+    # The tracer preamble of the function under test redacts its bound parameters.
+    . (Join-Path $ParentPath -ChildPath "src\lib\functions\Private\ConvertTo-RedactedLogString.ps1")
     $Script:Tracer = [System.Diagnostics.Trace]
     $Script:RunTimeConfig = [PSCustomObject]@{ ApplicationName = "Test" }
 

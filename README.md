@@ -340,18 +340,25 @@ Query results are production identity data. Treat them accordingly.
   Files are written unencrypted, to a location you choose.
 - **Exported query history** contains the SQL text, its change history and the names of the
   users who created or modified each query.
-- **The application log** records connection URLs, user names and application events. At the
-  default log level it does not contain result data. At `VERBOSE` and `VERBOSE2` it additionally
-  records complete request and response bodies, **including full result-set rows**. Only raise
-  the log level when you need it, and treat an exported log from those levels as if it were an
-  exported result set. Passwords are held as `SecureString`/`PSCredential` and are not written
-  to the log in readable form at any log level.
+- **The application log** records connection URLs, user names and application events. It is
+  designed to be shareable: every request, response and result set reaches it through a single
+  redaction layer, so an exported log should never need scrubbing before you attach it to a
+  support ticket. At every log level, including `VERBOSE` and `VERBOSE2`:
+  - `Authorization` headers, session cookies and tokens are masked.
+  - Passwords are held as `SecureString`/`PSCredential` and are never written in readable form.
+    The account's user name is recorded, because knowing which account authenticated is what
+    makes a permission failure diagnosable.
+  - Request bodies are recorded as their field names and value shapes, not their values.
+  - Result sets are recorded as row and column counts plus column names — **never cell values**.
+
+  Result data therefore does not reach the log at any level. This applies to the log only; the
+  export and clipboard paths above are unaffected and still contain full rows by design.
 
 ### Your responsibilities
 
-Once you export a result set, copy rows to the clipboard, or export a `VERBOSE` log, that data
-leaves the application's control and becomes your organisation's responsibility to handle under
-its own data-protection obligations — the GDPR included, where it applies. In practice:
+Once you export a result set or copy rows to the clipboard, that data leaves the application's
+control and becomes your organisation's responsibility to handle under its own data-protection
+obligations — the GDPR included, where it applies. In practice:
 
 - Export only the columns and rows you actually need, and prefer filtering in the query.
 - Store exports on encrypted, access-controlled storage — not in a personal downloads folder,
