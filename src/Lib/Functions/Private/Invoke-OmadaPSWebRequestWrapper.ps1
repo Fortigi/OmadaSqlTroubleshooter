@@ -2,7 +2,7 @@ function Invoke-OmadaPSWebRequestWrapper {
     [CmdLetBinding()]
     param()
 
-    $Script:Tracer::WriteLine(("{0}: Function: {1} - Caller: {2}({3}) - Command: {4} - Parameters: {5}" -f $($Script:RunTimeConfig.ApplicationName), $($MyInvocation.MyCommand.Name), $($MyInvocation.ScriptName).Split("\")[-1], $($MyInvocation.ScriptLineNumber), $MyInvocation.Statement, ($PSBoundParameters | Out-String)))
+    $Script:Tracer::WriteLine(("{0}: Function: {1} - Caller: {2}({3}) - Command: {4} - Parameters: {5}" -f $($Script:RunTimeConfig.ApplicationName), $($MyInvocation.MyCommand.Name), $($MyInvocation.ScriptName).Split("\")[-1], $($MyInvocation.ScriptLineNumber), $MyInvocation.Statement, (ConvertTo-RedactedLogString -InputObject $PSBoundParameters -MaxDepth 1)))
 
     # Invoke-OmadaRestMethod (OmadaWeb.PS) can show its own interactive WebView2/Browser login
     # popup when authentication is needed - a modal window this app does not own, but which pumps
@@ -31,12 +31,12 @@ function Invoke-OmadaPSWebRequestWrapper {
 
                 #$Private:Parameters.Body = $Private:Parameters.Body | ConvertTo-Json
             }
-            "Parameters: {0}" -f ($Private:Parameters | ConvertTo-Json -Depth 15) | Write-LogOutput -LogType VERBOSE
+            "Parameters: {0}" -f (ConvertTo-RedactedLogString -InputObject $Private:Parameters) | Write-LogOutput -LogType VERBOSE
             $Private:Result = Invoke-OmadaRestMethod @Parameters
             if ($null -ne $Script:MainForm -and $null -ne $Script:MainForm.Definitions -and $Script:MainForm.Definitions.IsVisible) {
                 $Script:MainForm.Definitions.TextBlockStatusBarConnectionStatus | Set-TextBlockText -Text "Connected"
             }
-            "Result: {0}" -f ($Private:Result | ConvertTo-Json -Depth 15) | Write-LogOutput -LogType VERBOSE
+            "Result: {0}" -f (ConvertTo-RedactedLogString -InputObject $Private:Result) | Write-LogOutput -LogType VERBOSE
             $Script:RunTimeData.RestMethodParam.ForceAuthentication = $false
             return $Private:Result
         }

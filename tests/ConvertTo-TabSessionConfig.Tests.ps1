@@ -2,6 +2,8 @@ BeforeAll {
     $ParentPath = Split-Path -Path $PSScriptRoot -Parent
     . (Join-Path $ParentPath -ChildPath "src\lib\functions\Private\Get-DefaultTabDisplayName.ps1")
     . (Join-Path $ParentPath -ChildPath "src\lib\functions\Private\ConvertTo-TabSessionConfig.ps1")
+    # The tracer preamble of the function under test redacts its bound parameters.
+    . (Join-Path $ParentPath -ChildPath "src\lib\functions\Private\ConvertTo-RedactedLogString.ps1")
     $Script:Tracer = [System.Diagnostics.Trace]
     $Script:RunTimeConfig = [PSCustomObject]@{ ApplicationName = "Test" }
 }
