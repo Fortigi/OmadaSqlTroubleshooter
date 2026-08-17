@@ -2,7 +2,7 @@ name: PR Validation
 
 # Runs on `issue_comment`, so GITHUB_SHA / github.ref always point at the default
 # branch, never at the PR being validated. Everything that identifies the PR has to
-# come from `dispatch.outputs.head_sha` — never from the ambient github context —
+# come from `needs.dispatch.outputs.head_sha` — never from the ambient github context —
 # otherwise concurrent validations of different PRs all report against main.
 run-name: >-
   ${{ github.event_name == 'issue_comment'
@@ -144,6 +144,7 @@ jobs:
       # Reduce the JUnit report Pester emits to a small JSON summary. Kept compatible
       # with Windows PowerShell 5.1, since this job runs under both shells.
       - name: Summarize test results
+        id: summarize
         if: always() && steps.test-results.outputs.exists == 'True'
         run: |
           [xml]$doc = Get-Content -LiteralPath 'buildoutput/TestResults.xml' -Raw
@@ -176,15 +177,19 @@ jobs:
           [System.IO.File]::WriteAllText("$PWD/buildoutput/TestSummary.json", $json)
           Write-Host "Tests: $($summary.passed) passed, $($summary.failed) failed, $($summary.skipped) skipped."
 
-      # dorny/test-reporter is deliberately not used here. It has no head-sha input and
-      # resolves the commit as `payload.pull_request?.head.sha ?? github.sha`. An
+      # dorny/test-reporter is deliberately not used here — v1 and v3 alike. Neither has
+      # a head-sha input, and both resolve the commit as
+      # `payload.pull_request?.head.sha ?? github.sha`. An
       # issue_comment payload carries `issue.pull_request`, not `pull_request`, so it
       # falls back to github.sha — the tip of main. Every PR's report landed on the same
       # main commit under the same check name, so no PR showed its own results and
       # simultaneous validations were indistinguishable. Create the check ourselves,
       # against the PR head this run actually validated.
       - name: Publish test results
-        if: always() && steps.test-results.outputs.exists == 'True'
+        # Gated on the summarize step rather than on the XML existing: if summarization
+        # failed there is no TestSummary.json, and the reader's ENOENT would bury the
+        # real error.
+        if: always() && steps.summarize.outcome == 'success'
         uses: actions/github-script@v7
         with:
           script: |
