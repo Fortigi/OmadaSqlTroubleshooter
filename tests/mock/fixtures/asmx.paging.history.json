@@ -1,0 +1,23 @@
+{
+  "d": {
+    "Records": 2,
+    "Total": 1,
+    "Page": 1,
+    "Rows": [
+      {
+        "Object": "Data object overview",
+        "Who": "System (SYSTEM)",
+        "What": "Modify",
+        "When": "2026-06-30T20:41:00",
+        "ChangedFields": "[{\"Field\":\"SQL Query\",\"OldValue\":\"SELECT TOP 20 *\\r\\nFROM dbo.tblDataObject\",\"NewValue\":\"SELECT TOP 10 *\\r\\nFROM dbo.tblDataObject\"}]"
+      },
+      {
+        "Object": "Data object overview",
+        "Who": "System (SYSTEM)",
+        "What": "Create",
+        "When": "2023-07-17T14:33:00",
+        "ChangedFields": "[{\"Field\":\"SQL Query\",\"OldValue\":\"[N/A]\",\"NewValue\":\"SELECT TOP 20 *\\r\\nFROM dbo.tblDataObject\"}]"
+      }
+    ]
+  }
+}

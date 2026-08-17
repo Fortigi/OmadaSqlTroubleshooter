@@ -1,0 +1,11 @@
+{
+  "@odata.context": "https://tenant.omada.cloud/odata/dataobjects/$metadata#C_P_SQLTROUBLESHOOTING",
+  "value": [
+    { "Id": 10521, "Name": "SQLTS_DataObjectOverview", "DisplayName": "Data object overview", "Deleted": false },
+    { "Id": 10544, "Name": "SQLTS_IdentitiesWithoutManager", "DisplayName": "Identities without a manager", "Deleted": false },
+    { "Id": 10560, "Name": "SQLTS_OrphanedAccounts", "DisplayName": "Orphaned accounts", "Deleted": false },
+    { "Id": 10577, "Name": "SQLTS_PendingApprovals", "DisplayName": "Pending approvals by age", "Deleted": false },
+    { "Id": 10583, "Name": "SQLTS_RoleAssignmentCounts", "DisplayName": "Role assignment counts", "Deleted": false },
+    { "Id": 10591, "Name": "SQLTS_RecentImportErrors", "DisplayName": "Recent import errors", "Deleted": false }
+  ]
+}

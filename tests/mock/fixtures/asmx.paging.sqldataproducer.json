@@ -1,0 +1,18 @@
+{
+  "d": {
+    "Records": 9,
+    "Total": 1,
+    "Page": 1,
+    "Rows": [
+      { "Id": 900, "UID": "0f6a1b3c-1111-4a2b-9c01-a00000000900", "Number": "IDG-900", "DisplayName": "Users",                  "CreateTime": "2019-11-20T13:55:09", "CreatedBy": "System (SYSTEM)", "ChangeTime": "2019-11-20T13:55:09", "ChangedBy": "System (SYSTEM)", "Deleted": false, "ParentID": null },
+      { "Id": 901, "UID": "0f6a1b3c-1111-4a2b-9c01-a00000000901", "Number": "IDG-901", "DisplayName": "User groups",             "CreateTime": "2019-11-20T13:55:09", "CreatedBy": "System (SYSTEM)", "ChangeTime": "2019-11-20T13:55:09", "ChangedBy": "System (SYSTEM)", "Deleted": false, "ParentID": null },
+      { "Id": 902, "UID": "0f6a1b3c-1111-4a2b-9c01-a00000000902", "Number": "IDG-902", "DisplayName": "Processes",              "CreateTime": "2019-11-20T13:55:09", "CreatedBy": "System (SYSTEM)", "ChangeTime": "2019-11-20T13:55:09", "ChangedBy": "System (SYSTEM)", "Deleted": false, "ParentID": null },
+      { "Id": 903, "UID": "0f6a1b3c-1111-4a2b-9c01-a00000000903", "Number": "IDG-903", "DisplayName": "Root",                   "CreateTime": "2019-11-20T13:55:09", "CreatedBy": "System (SYSTEM)", "ChangeTime": "2019-11-20T13:55:09", "ChangedBy": "System (SYSTEM)", "Deleted": false, "ParentID": null },
+      { "Id": 904, "UID": "0f6a1b3c-1111-4a2b-9c01-a00000000904", "Number": "IDG-904", "DisplayName": "Platform administrators", "CreateTime": "2023-07-17T12:17:24", "CreatedBy": "System (SYSTEM)", "ChangeTime": "2023-07-17T12:17:24", "ChangedBy": "System (SYSTEM)", "Deleted": false, "ParentID": null },
+      { "Id": 905, "UID": "0f6a1b3c-1111-4a2b-9c01-a00000000905", "Number": "IDG-905", "DisplayName": "System administrators",   "CreateTime": "2019-11-20T13:55:09", "CreatedBy": "System (SYSTEM)", "ChangeTime": "2024-10-04T07:32:45", "ChangedBy": "System (SYSTEM)", "Deleted": false, "ParentID": null },
+      { "Id": 906, "UID": "0f6a1b3c-1111-4a2b-9c01-a00000000906", "Number": "IDG-906", "DisplayName": "Everyone",               "CreateTime": "2019-11-20T13:55:09", "CreatedBy": "System (SYSTEM)", "ChangeTime": "2019-11-20T13:55:09", "ChangedBy": "System (SYSTEM)", "Deleted": false, "ParentID": null },
+      { "Id": 907, "UID": "0f6a1b3c-1111-4a2b-9c01-a00000000907", "Number": "IDG-907", "DisplayName": "None",                   "CreateTime": "2024-07-19T09:40:42", "CreatedBy": "System (SYSTEM)", "ChangeTime": "2024-07-19T09:40:42", "ChangedBy": "System (SYSTEM)", "Deleted": false, "ParentID": null },
+      { "Id": 908, "UID": "0f6a1b3c-1111-4a2b-9c01-a00000000908", "Number": "IDG-908", "DisplayName": "System user",            "CreateTime": "2019-11-20T13:55:23", "CreatedBy": "System (SYSTEM)", "ChangeTime": "2019-11-20T13:55:23", "ChangedBy": "System (SYSTEM)", "Deleted": false, "ParentID": null }
+    ]
+  }
+}
