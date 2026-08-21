@@ -295,11 +295,15 @@ are no others. You can verify this for yourself in two ways: search the module s
 |---|---|---|---|
 | **Your Omada tenant** (`https://<tenant>.omada.cloud` or the URL you enter) | While connected | Your SQL query text, saved query metadata and OData requests; the session credential or token for the tenant | This is the application's actual work: the SQL Troubleshooter OData endpoint (`C_P_SQLTROUBLESHOOTING`) and the Omada Enterprise Server API |
 | **Your identity provider** (Entra ID or the tenant's own sign-in page) | On sign-in only | Your credentials, handled by the browser/WebView2 sign-in flow of [OmadaWeb.PS](https://github.com/Fortigi/OmadaWeb.PS) | Authentication |
-| `api.nuget.org` and `www.nuget.org` | On module import | Nothing but the package request itself | Resolve and download the Microsoft WebView2 .NET SDK — see [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md) |
+| `api.nuget.org` | On module import, and only when the pinned WebView2 assemblies are not already present | Nothing but the package request itself | Download the Microsoft WebView2 .NET SDK at the exact version pinned in [`src/DependencyLock.psd1`](src/DependencyLock.psd1), then verify it against the SHA-256 pinned there — see [SECURITY.md](SECURITY.md#runtime-dependency-verification) and [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md) |
 | `www.powershellgallery.com` | On module import, and only when the module was installed from the PowerShell Gallery | The module name, in a public package-lookup request | Warn you when a newer version is available |
 
 The last two are ordinary package requests to Microsoft-operated services. They carry no
 tenant name, no user name and no query data. No other host is contacted by this module.
+
+Once the WebView2 assemblies have been downloaded and verified, later imports contact
+`api.nuget.org` only when the pinned version changes. Nothing about the version is resolved over
+the network: it comes from the lock file that ships inside the module.
 
 ### Data stored on your machine
 
@@ -310,8 +314,8 @@ location beyond `%APPDATA%`, and nothing is written outside your profile.
 |---|---|---|---|---|
 | `%APPDATA%\OmadaSqlTroubleshooter\config\OmadaSqlTroubleshooter.json` | Application settings only: log level, window positions and sizes, last-used export folder and file type, tab capacity, and `InstanceGuid` (see below). No credentials, no query text, no results. | NTFS permissions on your profile | Until deleted | `Invoke-OmadaSqlTroubleshooter -Reset` restores defaults, or delete the file |
 | `%APPDATA%\OmadaSqlTroubleshooter\config\tabs.clixml` | Per-tab session state written when the application closes: tenant URL, user name, Entra application ID URI and tenant ID, the selected data connection, the *name* of the selected saved query, and — only if you ticked **Save password** — your password. The SQL text itself is not stored here; it lives in your Omada tenant. | The password field is encrypted with Windows DPAPI, bound to your Windows user account on that machine. The remaining fields are stored as plain CliXml. | Overwritten at each close; kept until deleted | `Invoke-OmadaSqlTroubleshooter -Reset` deletes the file, or delete it yourself |
-| `%LOCALAPPDATA%\OmadaSqlTroubleshooter\Bin\...` | The Microsoft WebView2 .NET SDK assemblies downloaded from NuGet. No user data. | NTFS permissions on your profile | Until deleted; refreshed when a newer SDK is released | Delete the folder; it is re-downloaded on the next import |
-| `%LOCALAPPDATA%\OmadaSqlTroubleshooter\Edge User Data\OmadaWebView2Profile` | A WebView2 browser-profile folder created when the first tab's editor starts. It is created but not currently used as a profile location — the editor's WebView2 uses the `%TEMP%` folder below — so it stays empty. | NTFS permissions on your profile | Until deleted | Delete the folder |
+| `%LOCALAPPDATA%\OmadaSqlTroubleshooter\Bin\...` | The Microsoft WebView2 .NET SDK assemblies, downloaded from NuGet at the pinned version and hash-verified before use, plus a `WebView2.pin` stamp recording which pin they came from. No user data. | NTFS permissions on your profile | Until deleted; refreshed when the pinned version changes | `Clear-OmadaSqlTroubleshooterCache -Scope Binaries`, or delete the folder. It is re-downloaded and re-verified on the next import |
+| `%LOCALAPPDATA%\OmadaSqlTroubleshooter\Edge User Data\OmadaWebView2Profile` | A WebView2 browser-profile folder created when the first tab's editor starts. It is created but not currently used as a profile location — the editor's WebView2 uses the `%TEMP%` folder below — so it stays empty. | NTFS permissions on your profile | Until deleted | `Clear-OmadaSqlTroubleshooterCache -Scope BrowserProfiles`, or delete the folder |
 | `%TEMP%\OmadaSqlTroubleshooter` | The WebView2 user-data folder (browser cache and local storage) for the editor. This WebView2 instance only ever loads the local Monaco editor page — it never loads Omada or a sign-in page, so it holds no session cookies and no tenant data. | NTFS permissions on your profile | Until deleted; `%TEMP%` is not cleared automatically by the application | Delete the folder while the application is closed |
 | `%LOCALAPPDATA%\OmadaSqlTroubleShooter\Run.ps1`, plus Start Menu and Desktop shortcuts | A small launcher script and shortcuts. No user data. | NTFS permissions on your profile | Until deleted | Delete the file and the shortcuts |
 | Files you export | Query results, query history, or the application log — see the next section | Whatever you choose; the application applies no encryption | Until you delete them | Delete them |
@@ -329,6 +333,24 @@ Two details worth knowing:
 Authentication cookies, tokens and browser profiles used for signing in are managed by the
 [OmadaWeb.PS](https://github.com/Fortigi/OmadaWeb.PS) module, not by this one; see that
 module's documentation for where it caches them and how to clear them.
+
+To see and remove what this module caches, without touching your settings:
+
+```powershell
+# Report only - changes nothing
+Clear-OmadaSqlTroubleshooterCache -ListOnly | Format-Table Scope, Artefact, Path, ItemCount, SizeBytes
+
+# Force a fresh, hash-verified download of the WebView2 assemblies on the next import
+Clear-OmadaSqlTroubleshooterCache -Scope Binaries
+
+# Remove everything the module caches, without being asked to confirm
+Clear-OmadaSqlTroubleshooterCache -Force
+```
+
+`-WhatIf` previews without removing. Your configuration under `%APPDATA%` is never touched by
+this command — use `Invoke-OmadaSqlTroubleshooter -Reset` for that. An assembly already loaded
+into the running PowerShell session is locked by Windows: the command reports which files it
+could not remove and carries on, so close that session and run it again.
 
 ### What exports and logs can contain
 
