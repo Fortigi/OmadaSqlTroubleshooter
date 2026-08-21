@@ -74,6 +74,7 @@
 
     # Functions to export from this module
     FunctionsToExport     = @(
+        'Clear-OmadaSqlTroubleshooterCache',
         'Invoke-OmadaSqlTroubleshooter',
         'Set-OmadaSqlTroubleshooterShortcut'
     )
