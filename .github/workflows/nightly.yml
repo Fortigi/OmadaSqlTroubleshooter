@@ -65,6 +65,12 @@ jobs:
         shell: pwsh
         run: ./build/InstallModules.ps1
 
+      # Runs without -SkipDownload, so it re-hashes what the pinned URL actually serves. This is the
+      # lane most likely to notice a published artefact changing under a pin.
+      - name: Verify dependency lock
+        shell: pwsh
+        run: ./build/Update-DependencyLock.ps1 -Check
+
       - name: Generate version number
         id: versioning
         shell: pwsh

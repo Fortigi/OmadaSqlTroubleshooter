@@ -20,9 +20,16 @@ try {
     $SourcePath = "{0}/buildoutput/{1}" -f $SystemDefaultWorkingDirectory, $BuildPath.TrimStart('/')
 
     if (-not [string]::IsNullOrWhiteSpace($Prerelease)) {
-        $Manifest = Get-ChildItem -Path $SourcePath -Filter '*.psd1' | Select-Object -First 1
+        # Select the module manifest by name, never "the first .psd1". The package also contains
+        # DependencyLock.psd1, which sorts before OmadaSqlTroubleShooter.psd1 - picking the first
+        # match would hand the lock file to Update-ModuleManifest below and rewrite it as a module
+        # manifest, leaving the published module unable to verify any download.
+        $ManifestName = '{0}.psd1' -f (Split-Path $SourcePath -Leaf)
+        $Manifest = Get-ChildItem -Path $SourcePath -Filter '*.psd1' |
+            Where-Object { $_.Name -eq $ManifestName } |
+            Select-Object -First 1
         if ($null -eq $Manifest) {
-            throw "No .psd1 manifest found in '$SourcePath'."
+            throw "No module manifest '$ManifestName' found in '$SourcePath'."
         }
 
         # PSGallery requires exactly 3-part version for pre-release packages (SemVer).

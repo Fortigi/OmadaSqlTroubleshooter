@@ -1,0 +1,31 @@
+<!--
+  Dependency manifest. NOT a buildable project and never compiled.
+
+  OmadaSqlTroubleshooter downloads the WebView2 .NET SDK at runtime instead of restoring it from a
+  package manifest, which used to mean GitHub could not see it: no dependency graph, no Dependabot
+  alerts, and no notification when a component the module loads turns out to be vulnerable.
+
+  This file exists so it can. Every package listed here is pinned in src/DependencyLock.psd1 with the
+  SHA-256 the module verifies at download time. Listing them as PackageReference puts them in the
+  repository's dependency graph, so a published advisory raises a Dependabot alert and a
+  security-update pull request.
+
+  The versions here and in the lock file must agree; build/Update-DependencyLock.ps1 -Check enforces
+  that in PR validation, and -Refresh recomputes the hashes after a bump. So the flow for a Dependabot
+  pull request is: Dependabot bumps the version here, the dependency-lock-sync workflow refreshes the
+  hash in the lock file, and validation passes.
+-->
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <!-- Nothing here is ever built; the file is parsed by Dependabot only. -->
+    <EnableDefaultItems>false</EnableDefaultItems>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- Hosts the Monaco SQL editor inside the WPF application (Install-WebView2). -->
+    <PackageReference Include="Microsoft.Web.WebView2" Version="1.0.4129.50" />
+  </ItemGroup>
+
+</Project>
