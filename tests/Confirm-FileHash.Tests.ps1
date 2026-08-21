@@ -64,6 +64,25 @@ Describe 'Confirm-FileHash' -Tag 'Unit' {
         $Message | Should -BeLike '*d121be3103007b41edf96f8262925f8c7d61894afe9a041843b631f69445bc57*'
     }
 
+    It 'Should say the file is still on disk when it could not be deleted' {
+        # Removal is best-effort: the file can be locked, or the directory read-only. Claiming "the
+        # file was deleted" when it was not is the sentence that stops someone removing it by hand.
+        Set-Content -Path $Script:PayloadPath -Value 'tampered' -NoNewline
+        Mock Remove-Item { }
+
+        $Message = $null
+        try {
+            Confirm-FileHash -Path $Script:PayloadPath -ExpectedSha256 $Script:HelloSha256 -ArtifactName 'Test 1.0.0' -ErrorAction Stop
+        }
+        catch {
+            $Message = $_.Exception.Message
+        }
+
+        $Message | Should -BeLike '*could NOT be deleted*'
+        $Message | Should -BeLike ('*{0}*' -f $Script:PayloadPath)
+        $Message | Should -Not -BeLike '*The file was deleted*'
+    }
+
     It 'Should fail closed when the expected hash is blank instead of accepting anything' {
         { Confirm-FileHash -Path $Script:PayloadPath -ExpectedSha256 '' -ArtifactName 'Test 1.0.0' -ErrorAction Stop } |
             Should -Throw -ExpectedMessage '*no expected SHA-256*'

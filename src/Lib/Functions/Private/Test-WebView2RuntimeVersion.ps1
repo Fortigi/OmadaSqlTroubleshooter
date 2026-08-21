@@ -31,6 +31,31 @@ function Test-WebView2RuntimeVersion {
             return $true
         }
 
+        # The version matching is not on its own enough. Bin is user-writable, so an assembly can be
+        # swapped after a verified install without the stamp changing - the download was verified,
+        # but nothing had re-checked the bytes since. Comparing each file against the hash recorded
+        # at install time closes that, and a mismatch means a re-download rather than a hard failure.
+        #
+        # Install-WebView2 separately tests that each assembly is present, so a missing file already
+        # forces a reinstall; this catches the file that is present but no longer what was installed.
+        $BinFolder = Split-Path $Script:WebView2StampPath
+        foreach ($StampedFile in @($Stamp.Files)) {
+            if ($null -eq $StampedFile -or [string]::IsNullOrWhiteSpace($StampedFile.Name)) {
+                continue
+            }
+
+            $FilePath = Join-Path $BinFolder -ChildPath $StampedFile.Name
+            if (-not (Test-Path $FilePath -PathType Leaf)) {
+                "The stamped WebView2 assembly '{0}' is missing. The assemblies will be reinstalled and verified." -f $StampedFile.Name | Write-Host
+                return $true
+            }
+
+            if ((Get-FileSha256 -Path $FilePath) -ne $StampedFile.Sha256) {
+                "The WebView2 assembly '{0}' no longer matches the hash recorded when it was installed. It will be reinstalled and verified." -f $StampedFile.Name | Write-Warning
+                return $true
+            }
+        }
+
         "WebView2 assemblies match the pinned version {0}" -f $Artifact.Version | Write-Verbose
         return $false
     }
