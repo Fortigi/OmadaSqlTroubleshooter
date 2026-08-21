@@ -20,9 +20,14 @@ try {
         }
     }
 
+    # Pinned versions and expected SHA-256 hashes of every binary the module downloads. Resolved from
+    # $PSScriptRoot so it works identically from src\ and from the built module folder. Nothing is
+    # downloaded without it - see Get-DependencyLock.
+    $Script:DependencyLockPath = Join-Path $PSScriptRoot -ChildPath "DependencyLock.psd1"
+
     $LocalAppDataPath = [System.Environment]::GetFolderPath([System.Environment+SpecialFolder]::LocalApplicationData)
-    $ModuleAppDataPath = (New-Item (Join-Path $LocalAppDataPath -ChildPath $ModuleName) -ItemType Directory -Force).FullName
-    $BinPath = (New-Item (Join-Path $ModuleAppDataPath -ChildPath "Bin\$PowerShellType") -ItemType Directory -Force).FullName
+    $Script:ModuleAppDataPath = (New-Item (Join-Path $LocalAppDataPath -ChildPath $ModuleName) -ItemType Directory -Force).FullName
+    $BinPath = (New-Item (Join-Path $Script:ModuleAppDataPath -ChildPath "Bin") -ItemType Directory -Force).FullName
 
     if (-not (Test-Path "$PSScriptRoot\Lib\Functions\Public" -PathType Container)) {
         $Public = @(Get-ChildItem "$PsscriptRoot\Lib\Functions\Functions.ps1")
@@ -79,8 +84,15 @@ try {
     $Script:WebView2LoaderPath = [System.IO.Path]::Combine($WebView2BasePath, "WebView2Loader.dll")
     "{0} - {1}" -f $MyInvocation.MyCommand, $Script:WebView2LoaderPath | Write-Verbose
 
+    #WebView2 Pin Stamp Location - records which pinned version the installed assemblies came from
+    $Script:WebView2StampPath = [System.IO.Path]::Combine($WebView2BasePath, "WebView2.pin")
+    "{0} - {1}" -f $MyInvocation.MyCommand, $Script:WebView2StampPath | Write-Verbose
+
+    #WebView2 User Profile Base Location
+    $Script:WebView2UserProfileBasePath = [System.IO.Path]::Combine($Script:ModuleAppDataPath, "Edge User Data")
+
     #WebView2 User Profile Location
-    $Script:WebView2UserProfilePath = [System.IO.Path]::Combine($ModuleAppDataPath, "Edge User Data\OmadaWebView2Profile")
+    $Script:WebView2UserProfilePath = [System.IO.Path]::Combine($Script:ModuleAppDataPath, "Edge User Data\OmadaWebView2Profile")
     "{0} - {1}" -f $MyInvocation.MyCommand, $Script:WebView2UserProfilePath | Write-Verbose
 
     $WebViewInstalled = Install-WebView2 -IncludeWpf

@@ -60,11 +60,14 @@ function Get-GalleryModuleVersion {
     }
 }
 
-Task Dependencies {
+Task VerifyDependencyLock {
     try {
-        "Retrieve dependencies" | Write-Host
-        $DestinationFolder = Join-Path $OutputDir -ChildPath "bin"
-        & "$PSScriptRoot\RetrieveDependencies.ps1" -DestinationFolder $DestinationFolder -Force
+        # The module refuses to download anything that is not pinned with a SHA-256 in
+        # src\DependencyLock.psd1, so a lock file that has drifted from build\Dependencies is a broken
+        # build, not a warning. -SkipDownload keeps local builds offline; CI runs the same script
+        # without it, which additionally re-hashes what the pinned URL actually serves.
+        "Verify dependency lock" | Write-Host
+        & "$PSScriptRoot\Update-DependencyLock.ps1" -Check -SkipDownload
     }
     catch {
         throw $_
@@ -72,7 +75,7 @@ Task Dependencies {
     }
 }
 
-Task Analyze {
+Task Analyze -Depends VerifyDependencyLock {
 
     try {
         $SaProfile = @{
@@ -114,11 +117,21 @@ Task Analyze {
 Task Test -Depends Analyze {
     try {
         $TestFiles = Get-ChildItem -Path $TestSource -Filter '*.Tests.ps1' -Recurse
+
+        # Suites that guard repository-level invariants rather than one function. The filter below
+        # maps <Name>.Tests.ps1 to a changed <Name>.ps1, which these have no counterpart for - so
+        # without this allowlist, bumping a pin or editing the notices would skip the very tests that
+        # exist to catch a bad bump or a stale notice.
+        $AlwaysRunTestFile = @(
+            'DependencyLock.Tests.ps1'
+            'ThirdPartyNotices.Tests.ps1'
+        )
+
         if ($ChangedFiles.Count -gt 0) {
             $ChangedFileLeafNames = $ChangedFiles | ForEach-Object { Split-Path $_ -Leaf }
             $TestFiles = $TestFiles | Where-Object {
                 $SourceFileName = '{0}.ps1' -f ($_.BaseName -replace '\.Tests$', '')
-                $_.FullName -in $ChangedFiles -or $ChangedFileLeafNames -contains $SourceFileName
+                $_.Name -in $AlwaysRunTestFile -or $_.FullName -in $ChangedFiles -or $ChangedFileLeafNames -contains $SourceFileName
             }
             if (($TestFiles | Measure-Object).Count -eq 0) {
                 "No Pester tests relevant to the changed files were found. Skipping test run." | Write-Host
@@ -317,12 +330,23 @@ Task Build -Depends Test {
         # bundled Monaco editor requires its copyright notice to travel with the redistribution,
         # so THIRD-PARTY-NOTICES.md must be part of every published package, not just the repo.
         "Copy licence and third-party notices" | Write-Host
-        "LICENSE", "THIRD-PARTY-NOTICES.md", "README.md" | ForEach-Object {
+        "LICENSE", "THIRD-PARTY-NOTICES.md", "README.md", "SECURITY.md" | ForEach-Object {
             $NoticeSourcePath = Join-Path $ParentPath -ChildPath $_
             if (-not (Test-Path $NoticeSourcePath -PathType Leaf)) {
                 "Required file '{0}' was not found at '{1}'" -f $_, $NoticeSourcePath | Write-Error -ErrorAction Stop
             }
             Copy-Item -Path $NoticeSourcePath -Destination $OutputDir -Force
+        }
+
+        # The dependency lock has to sit next to the psm1 in the package: the module resolves it
+        # through $PSScriptRoot and refuses every download without it, so a package missing this file
+        # cannot start. The post-condition below is what stands in for a FileList entry in the psd1 -
+        # see DependencyLock.Tests.ps1 for why FileList is deliberately not used.
+        "Copy dependency lock" | Write-Host
+        Copy-Item -Path (Join-Path $ModuleSource -ChildPath "DependencyLock.psd1") -Destination $OutputDir -Force
+        $LockOutputPath = Join-Path $OutputDir -ChildPath "DependencyLock.psd1"
+        if (-not (Test-Path $LockOutputPath -PathType Leaf)) {
+            "The dependency lock was not copied to '{0}'. The published module would refuse every download." -f $OutputDir | Write-Error -ErrorAction Stop
         }
 
         "Copy lib contents" | Write-Host
@@ -390,42 +414,6 @@ Task Build -Depends Test {
     }
 }
 
-Task TestAssemblies -Depends Build {
-
-    try {
-
-        "Check included assemblies" | Write-Host
-
-        "Microsoft.Web.WebView2.Core.dll", "Microsoft.Web.WebView2.Wpf.dll" | ForEach-Object {
-            "Test assembly: '{0}'" -f $_ | Write-Host
-            $WebViewDllPath = Join-Path $OutputDir -ChildPath "Bin\WebView2Dlls\$_"
-            if (!(Test-Path $WebViewDllPath -PathType Leaf)) {
-                throw ("The WebView2 Dll '{0}' is cannot be found at the '{1}' bin folder!" -f $_, $OutputDir)
-            }
-        }
-        $WebViewLoaderPath = Join-Path $OutputDir -ChildPath "Bin\WebView2Dlls\WebView2Loader.dll"
-        "Get 'WebView2Loader.Dll'" | Write-Host
-        if (!(Test-Path $WebViewLoaderPath -PathType Leaf)) {
-            throw ("The WebView2Loader Dll '{0}' is cannot be found at the '{1}' bin folder!" -f "WebView2Loader.dll", $OutputDir)
-        }
-
-        $WebViewRunTimePath = Join-Path $OutputDir -ChildPath "Bin\WebView2Runtime"
-        "Check WebViewRunTime" | Write-Host
-        if (!(Test-Path $WebViewRunTimePath -PathType Container)) {
-            throw ("The WebViewRunTime was not found at the '{0}' bin folder!" -f $OutputDir)
-        }
-        elseif (!(Test-Path (Join-Path $WebViewRunTimePath -ChildPath "msedgewebview2.exe") -PathType Leaf)) {
-            throw ("Msedgewebview2.exe is not found at the '{0}' bin folder!" -f $OutputDir)
-        }
-
-    }
-    catch {
-        throw $_
-        exit 1
-    }
-}
-
-
 Task ImportModule -Depends Build {
 
     try {
@@ -470,6 +458,11 @@ Task ImportModule -Depends Build {
     }
 }
 
-Task Deploy -Depends TestAssemblies {
+# Deploy used to depend on a TestAssemblies task that asserted a Bin\WebView2Dlls folder and a
+# msedgewebview2.exe were present in the build output. Nothing ever produced them - the only task
+# that would have was in no task chain - so the assertion could only ever fail. The module downloads
+# and hash-verifies those assemblies at runtime instead. Bundling them into the package is issue #54
+# Part B, which will reintroduce this check against what the lock file actually produces.
+Task Deploy -Depends Build {
 
 }

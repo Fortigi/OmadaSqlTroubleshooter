@@ -1,0 +1,38 @@
+# Dependabot keeps the pinned action versions used by the workflows in .github/workflows up to date,
+# and - since the runtime download became pinned - the binaries the module loads as well.
+#
+# The four Microsoft.Web.WebView2 assemblies the module loads are downloaded to
+# %LOCALAPPDATA%\OmadaSqlTroubleshooter\Bin at runtime rather than restored from a package manifest.
+# They are pinned by version and SHA-256 in src/DependencyLock.psd1 and declared as a PackageReference
+# in build/Dependencies, which is what puts them in this repository's dependency graph: advisories
+# against a pinned version raise an alert and a security-update PR.
+#
+# After Dependabot bumps the version in build/Dependencies, .github/workflows/dependency-lock-sync.yml
+# refreshes the matching SHA-256 in the lock file. PR validation fails while the two disagree.
+version: 2
+updates:
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: "ci"
+    labels:
+      - "dependencies"
+    groups:
+      github-actions:
+        patterns:
+          - "*"
+
+  - package-ecosystem: "nuget"
+    directory: "/build/Dependencies"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: "deps"
+    labels:
+      - "dependencies"

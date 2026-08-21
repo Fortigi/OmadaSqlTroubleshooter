@@ -15,7 +15,7 @@ obligations apply:
 | [2. Downloaded at run time](#2-components-downloaded-at-run-time) | Fetched from the vendor's servers onto the user's machine by this module | No |
 | [3. Prerequisites](#3-prerequisites-installed-by-the-user) | Installed separately by the user | No |
 
-Last reviewed: **2026-08-13**, against commit contents of `src/`.
+Last reviewed: **2026-08-21**, against commit contents of `src/`.
 The inventory below is checked automatically on every pull request by
 `tests/ThirdPartyNotices.Tests.ps1`, so it cannot silently drift out of date.
 
@@ -105,19 +105,26 @@ vendor, under the vendor's own terms, and they are stored only in that user's pr
 | Field | Value |
 |---|---|
 | Component | `Microsoft.Web.WebView2` |
-| Version | The latest stable version, resolved at run time |
+| Version | **1.0.4129.50** — pinned in `src/DependencyLock.psd1` |
 | Publisher | Microsoft Corporation |
 | Licence | Microsoft Software License Terms, embedded in the NuGet package |
 | Licence text | <https://www.nuget.org/packages/Microsoft.Web.WebView2/#license-body> |
 | Project | <https://aka.ms/webview> |
 | Downloaded by | `src/Lib/Functions/Private/Install-WebView2.ps1`, on module import |
-| Downloaded from | `https://www.nuget.org/api/v2/package/Microsoft.Web.WebView2/<version>` |
-| Version resolved via | `https://api.nuget.org/v3-flatcontainer/microsoft.web.webview2/index.json` |
-| Installed to | `%LOCALAPPDATA%\OmadaSqlTroubleshooter\Bin\<edition>\win-x64\` (or `win-x86`) |
+| Downloaded from | `https://api.nuget.org/v3-flatcontainer/microsoft.web.webview2/1.0.4129.50/microsoft.web.webview2.1.0.4129.50.nupkg` |
+| Verified against | SHA-256 `d3934f482d484b89fb4825df720c710664e1143a1e90f7b3a60794ef33f473d2`, pinned in `src/DependencyLock.psd1` |
+| Installed to | `%LOCALAPPDATA%\OmadaSqlTroubleshooter\Bin\win-x64\` (or `win-x86`) |
 
 Four files are extracted from the package: `Microsoft.Web.WebView2.Core.dll`,
 `Microsoft.Web.WebView2.WinForms.dll`, `Microsoft.Web.WebView2.Wpf.dll` and
 `WebView2Loader.dll`. They host the Monaco editor inside the WPF application.
+
+The version is **not** resolved at run time. It is pinned, together with the exact download URL
+and the expected SHA-256, in [`src/DependencyLock.psd1`](src/DependencyLock.psd1), which ships
+with the module. `Invoke-DownloadFile` verifies the downloaded bytes against that hash before
+the package is expanded or copied into `Bin`; on a mismatch it deletes the file and aborts. An
+artefact with no entry in the lock file is not downloaded at all. See
+[SECURITY.md](SECURITY.md#runtime-dependency-verification).
 
 No copy of this package is committed to this repository or included in the published module.
 
@@ -184,7 +191,10 @@ nightly build. It fails the build when:
 - the bundled Monaco version in the tree no longer matches the version recorded above;
 - a path listed above no longer exists in the repository;
 - a redistributable binary (`.exe`, `.dll`, `.msi`, `.cab`) is committed to the repository;
-- a component listed above loses its entry in this file.
+- a component listed above loses its entry in this file;
+- the WebView2 SDK version or download URL recorded in §2.1 no longer matches the pin in
+  `src/DependencyLock.psd1`, so the notices cannot drift away from what the module actually
+  downloads and verifies.
 
 When a component is added, upgraded, or removed, update this file in the same change. Once a
 machine-readable SBOM is produced for the module, generate the inventory table from it and

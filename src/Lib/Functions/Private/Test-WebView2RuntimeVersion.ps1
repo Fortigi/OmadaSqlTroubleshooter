@@ -1,66 +1,66 @@
 function Test-WebView2RuntimeVersion {
     [CmdletBinding()]
-    param(
-        [switch]$IncludeWpf
-    )
+    param()
+
+    # Returns $true when the assemblies on disk have to be reinstalled.
+    #
+    # This used to ask nuget.org for the newest non-prerelease version on every module import and
+    # compare it against the DLLs' ProductVersion, which meant the loaded bytes were whatever the feed
+    # served that day and the module could not start without egress to nuget.org. The pinned version
+    # now comes from DependencyLock.psd1, so no network call is made here at all.
+    #
+    # The comparison is against the stamp Install-WebView2 writes, not against the file versions - see
+    # Write-WebView2Stamp for why.
+    #
+    # No tracer preamble: see Get-DependencyLock. This runs during module import.
+
     try {
-        try {
-            if ($null -eq $Script:WebView2LatestVersion) {
-                $Uri = "https://api.nuget.org/v3-flatcontainer/microsoft.web.webview2/index.json"
-                $Versions = Invoke-RestMethod -Uri $Uri -UseBasicParsing
-                [System.Version[]]$Versions = $Versions.versions | Where-Object { $_ -notlike "*-prerelease" } | Sort-Object { [version]$_ } -Descending
-                [System.Version]$Script:WebView2LatestVersion = $Versions | Select-Object -First 1
+        $Artifact = Get-LockedArtifact -Id "Microsoft.Web.WebView2"
+
+        $Stamp = Get-WebView2Stamp
+
+        if ($null -eq $Stamp) {
+            "No usable WebView2 stamp found. The assemblies will be (re)installed and verified." | Write-Verbose
+            return $true
+        }
+
+        if ($Stamp.Version -ne $Artifact.Version) {
+            # Deliberately -ne and not -lt: a pin moving backwards is a rollback, and the newer,
+            # unverified assemblies already on disk must not keep being loaded.
+            "The installed WebView2 assemblies are stamped {0} but the pinned version is {1}. They will be reinstalled and verified." -f $Stamp.Version, $Artifact.Version | Write-Host
+            return $true
+        }
+
+        # The version matching is not on its own enough. Bin is user-writable, so an assembly can be
+        # swapped after a verified install without the stamp changing - the download was verified,
+        # but nothing had re-checked the bytes since. Comparing each file against the hash recorded
+        # at install time closes that, and a mismatch means a re-download rather than a hard failure.
+        #
+        # Install-WebView2 separately tests that each assembly is present, so a missing file already
+        # forces a reinstall; this catches the file that is present but no longer what was installed.
+        $BinFolder = Split-Path $Script:WebView2StampPath
+        foreach ($StampedFile in @($Stamp.Files)) {
+            if ($null -eq $StampedFile -or [string]::IsNullOrWhiteSpace($StampedFile.Name)) {
+                continue
             }
-            "Latest WebView2 version on NuGet is {0}" -f $Script:WebView2LatestVersion | Write-Verbose
-        }
-        catch {
-            "Could not check for latest WebView2 version on NuGet ({0}) because of an error: {1}" -f $Uri, $_ | Write-Warning
-            $Script:WebView2UpdateChecked = $true
-        }
 
-        if ($Script:WebView2UpdateChecked) {
-            return $false
-        }
-
-        $ReturnValue = $false
-        if ((Test-Path $Script:WebView2WinFormsPath -PathType Leaf) -and (Test-Path $Script:WebView2CorePath -PathType Leaf) -and (Test-Path $Script:WebView2LoaderPath -PathType Leaf)) {
-
-            try {
-
-                [System.Version]$WebView2CoreVersion = (Get-Item $Script:WebView2CorePath).VersionInfo.ProductVersion
-                "Current WebView2 Core version is {0}" -f $WebView2CoreVersion | Write-Verbose
-                [System.Version]$WebView2WinFormsVersion = (Get-Item $Script:WebView2WinFormsPath).VersionInfo.ProductVersion
-                "Current WebView2 WinForms version is {0}" -f $WebView2WinFormsVersion | Write-Verbose
-                [System.Version]$Webview2LoaderVersion = (Get-Item $Script:WebView2LoaderPath).VersionInfo.ProductVersion
-                "Current WebView2 Loader version is {0}" -f $Webview2LoaderVersion | Write-Verbose
-
-                if ($IncludeWpf.IsPresent) {
-                    [System.Version]$Webview2WpfVersion = (Get-Item $Script:WebView2WpfPath).VersionInfo.ProductVersion
-                    "Current WebView2 Wpf version is {0}" -f $Webview2WpfVersion | Write-Verbose
-                }
-                else {
-                    $Webview2WpfVersion = [System.Version]"9999.9999.9999.9999"
-                }
-
-                if ($Script:WebView2LatestVersion -gt $WebView2CoreVersion -or $Script:WebView2LatestVersion -gt $WebView2WinFormsVersion -or $Script:WebView2LatestVersion -gt $Webview2LoaderVersion -or $Script:WebView2LatestVersion -gt $Webview2WpfVersion ) {
-                    "One or more WebView2 assemblies are not up to date! Will try to update WebView2!" | Write-Warning
-                    $ReturnValue = $true
-                }
-                else {
-                    "WebView2 assemblies are up to date!" | Write-Verbose
-                }
+            $FilePath = Join-Path $BinFolder -ChildPath $StampedFile.Name
+            if (-not (Test-Path $FilePath -PathType Leaf)) {
+                "The stamped WebView2 assembly '{0}' is missing. The assemblies will be reinstalled and verified." -f $StampedFile.Name | Write-Host
+                return $true
             }
-            catch {
-                "Unable to check WebView2 versions against NuGet repository. Please ensure you have an active internet connection so the module can check for updates. An update check will be attempted again when the module is reloaded." | Write-Warning
-                $ReturnValue = $false
+
+            if ((Get-FileSha256 -Path $FilePath) -ne $StampedFile.Sha256) {
+                "The WebView2 assembly '{0}' no longer matches the hash recorded when it was installed. It will be reinstalled and verified." -f $StampedFile.Name | Write-Warning
+                return $true
             }
         }
-        $Script:WebView2UpdateChecked = $true
-        return $ReturnValue
 
+        "WebView2 assemblies match the pinned version {0}" -f $Artifact.Version | Write-Verbose
+        return $false
     }
     catch {
-        Write-Host "Error in Get-WebView2RuntimeVersion: $_" -ForegroundColor Red
+        "Error in Test-WebView2RuntimeVersion: {0}" -f $_.Exception.Message | Write-Warning
         $PSCmdlet.ThrowTerminatingError($PSItem)
     }
 }
