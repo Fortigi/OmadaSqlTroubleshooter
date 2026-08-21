@@ -99,10 +99,41 @@ Describe 'THIRD-PARTY-NOTICES' -Tag 'Unit' {
     }
 
     Context 'Runtime download sources' {
-        It 'Should record the NuGet source that Install-WebView2 actually downloads from' {
-            $InstallWebView2 = Get-Content -Path (Join-Path $Script:ParentPath -ChildPath "src\Lib\Functions\Private\Install-WebView2.ps1") -Raw -Encoding UTF8
-            $InstallWebView2 | Should -Match 'https://www\.nuget\.org/api/v2/package/Microsoft\.Web\.WebView2'
-            $Script:Notices | Should -Match 'https://www\.nuget\.org/api/v2/package/Microsoft\.Web\.WebView2'
+        # This used to assert that a literal www.nuget.org/api/v2 URL appeared in Install-WebView2.ps1.
+        # That function no longer contains a URL at all: the download address comes from
+        # src\DependencyLock.psd1. Reading the lock here is both more accurate and stricter - the
+        # notices now cannot drift from the pin the module actually downloads and verifies.
+        BeforeAll {
+            $Script:Lock = Import-PowerShellDataFile -Path (Join-Path $Script:ParentPath -ChildPath "src\DependencyLock.psd1")
+            $Script:WebView2Artifact = @($Script:Lock.Artifacts | Where-Object { $_.Id -eq 'Microsoft.Web.WebView2' })[0]
+
+            # Only the Microsoft.Web.WebView2 entry, so these assertions cannot be satisfied - or
+            # broken - by text belonging to another component.
+            $SectionMatch = [regex]::Match($Script:Notices, '(?s)###\s*2\.1\s*Microsoft\.Web\.WebView2.*?(?=\r?\n---)')
+            $Script:WebView2Section = $SectionMatch.Value
+        }
+
+        It 'Should have a Microsoft.Web.WebView2 entry to check' {
+            $Script:WebView2Artifact | Should -Not -BeNullOrEmpty -Because 'the lock file must pin the SDK'
+            $Script:WebView2Section | Should -Not -BeNullOrEmpty -Because 'the notices must carry a §2.1 entry for it'
+        }
+
+        It 'Should record the URL the module actually downloads the SDK from' {
+            $Script:WebView2Section | Should -BeLike ('*{0}*' -f $Script:WebView2Artifact.Url)
+        }
+
+        It 'Should record the pinned version, not a floating one' {
+            # The Version row of this entry specifically. A document-wide search for wording like
+            # "resolved at run time" would also hit the prose explaining that it is *not* resolved
+            # that way, which is exactly the wrong thing to fail on.
+            $VersionRow = [regex]::Match($Script:WebView2Section, '(?m)^\|\s*Version\s*\|\s*(?<Value>[^|]*?)\s*\|\s*$')
+            $VersionRow.Success | Should -BeTrue -Because 'the entry must record a version'
+            $VersionRow.Groups['Value'].Value | Should -BeLike ('*{0}*' -f $Script:WebView2Artifact.Version)
+        }
+
+        It 'Should record the SHA-256 the download is verified against' {
+            $Script:WebView2Section | Should -BeLike ('*{0}*' -f $Script:WebView2Artifact.Sha256)
+            $Script:WebView2Section | Should -Match 'DependencyLock\.psd1'
         }
     }
 }
