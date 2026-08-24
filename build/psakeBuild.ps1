@@ -1,5 +1,6 @@
 Properties {
     $Version = $BuildVersion
+    $AllowPrerelease = [bool]::Parse($AllowPrerelease.ToLower())
     $Date = Get-Date
     $ModuleName = "OmadaSqlTroubleShooter"
     $ParentPath = (Get-Item -Path $PSScriptRoot -Verbose:$false).Parent.FullName
@@ -38,7 +39,8 @@ Task E2E {
 function Get-GalleryModuleVersion {
     [CmdLetBinding()]
     param (
-        [string]$ModuleName
+        [string]$ModuleName,
+        [switch]$AllowPrerelease
     )
 
     try {
@@ -48,8 +50,14 @@ function Get-GalleryModuleVersion {
         } -ConnectionTimeoutSeconds 1
 
         if ($null -ne $Response) {
-            $LatestVersion = $Response | Sort-Object updated -Descending | Select-Object -First 1
-            return $LatestVersion.Properties.version
+            if ($AllowPrerelease) {
+                $LatestVersion = $Response | Sort-Object { $_.properties.Published.'#text' } -Descending | Select-Object -First 1
+            }
+            else {
+                $LatestVersion = $Response | Sort-Object { $_.properties.Published.'#text' } -Descending | Where-Object { $_.properties.IsPrerelease.'#text' -ne "true" } | Select-Object -First 1
+            }
+
+            return $LatestVersion.properties.Version
         }
         else {
             return $null
@@ -417,17 +425,20 @@ Task Build -Depends Test {
 Task ImportModule -Depends Build {
 
     try {
+        
+        $LatestOmadaWebPSVersion = Get-GalleryModuleVersion -ModuleName "OmadaWeb.PS" -AllowPrerelease:$AllowPrerelease
+        $LatestOmadaWebPSVersionStripped = $LatestOmadaWebPSVersion -replace "-nightly\d+", ""
 
-        $LatestOmadaWebPSVersion = Get-GalleryModuleVersion -ModuleName "OmadaWeb.PS"
+        $OmadaWebPSModulePath = Join-Path $Env:Temp -ChildPath $([guid]::NewGuid().ToString())
+        New-Item $OmadaWebPSModulePath -Force -ItemType Directory | Out-Null
 
-        if (!(Get-Module -Name "OmadaWeb.PS" -ListAvailable)) {
-            Install-Module -Name "OmadaWeb.PS" -Scope CurrentUser -Force -MinimumVersion $LatestOmadaWebPSVersion
-        }
-        elseif (Get-Module -Name "OmadaWeb.PS" -ListAvailable -ErrorAction SilentlyContinue | Where-Object { $_.Version -lt $LatestOmadaWebPSVersion }) {
-            Update-Module -Name "OmadaWeb.PS" -Scope CurrentUser -Force -RequiredVersion $LatestOmadaWebPSVersion
-        }
+        Save-Module -Name "OmadaWeb.PS" -Path $OmadaWebPSModulePath -Force -MinimumVersion $LatestOmadaWebPSVersion -AllowPrerelease:$AllowPrerelease
+
         "Import OmadaWeb.PS module" | Write-Host
-        Import-Module -Name "OmadaWeb.PS" -MinimumVersion $LatestOmadaWebPSVersion -Force
+        $OmadaWebPSModuleVersionPath = Join-Path $OmadaWebPSModulePath -ChildPath ("OmadaWeb.PS\{0}\OmadaWeb.PS.psd1" -f $LatestOmadaWebPSVersionStripped)
+
+        Remove-Module -Name "OmadaWeb.PS" -Force -ErrorAction SilentlyContinue
+        Import-Module $OmadaWebPSModuleVersionPath -Force
 
         "Test Import module" | Write-Host
         Test-ModuleManifest -Path "$OutputDir\$ModuleName.psd1"
@@ -451,8 +462,15 @@ Task ImportModule -Depends Build {
             }
             catch {}
         }
+
+        if (![string]::IsNullOrEmpty($OmadaWebPSModulePath) -and (Test-Path $OmadaWebPSModulePath -PathType Container)) {
+            Remove-Item -Path $OmadaWebPSModulePath -Recurse -Force
+        }
     }
     catch {
+        if (![string]::IsNullOrEmpty($OmadaWebPSModulePath) -and (Test-Path $OmadaWebPSModulePath -PathType Container)) {
+            Remove-Item -Path $OmadaWebPSModulePath -Recurse -Force
+        }
         throw $_
         exit 1
     }
