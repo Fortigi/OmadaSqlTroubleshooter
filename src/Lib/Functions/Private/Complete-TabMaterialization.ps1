@@ -65,6 +65,16 @@ function Complete-TabMaterialization {
             }
             Test-ConnectionSettings
             Test-ConnectionButton
+
+            # Unlike the Connect button, this branch populates the data connection list BEFORE the
+            # connection is actually established, so the ComboBox SelectionChanged handler that
+            # normally fetches the schema runs while this tab still counts as disconnected - and
+            # Get-SqlSchemaObject now (correctly) refuses to request anything for a disconnected tab.
+            # Retrieve it here instead, once the tab really is connected, so an auto-connected
+            # restored tab still gets its IntelliSense schema.
+            if ($Script:ConnectionStatus) {
+                Get-SqlSchemaObject
+            }
         }
         else {
             Set-SqlConnectionState -Status $false

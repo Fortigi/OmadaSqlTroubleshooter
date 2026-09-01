@@ -59,6 +59,7 @@ function script:Reset-E2EScenario {
     $script:E2EConnectionProbeError = $null
     $script:E2EFixtureOverride = $null
     $script:E2EChoiceReturn = $null
+    $script:E2EChoices.Clear()
 }
 
 function script:Reset-E2EConnection {
@@ -169,6 +170,17 @@ function script:Get-E2ECallCount {
             $_.Method -like $MethodLike -and $_.Uri -like $UriLike -and
             ($null -eq $DataType -or $_.DataType -eq $DataType)
         }).Count
+}
+
+function script:Clear-E2EChoices {
+    $script:E2EChoices.Clear()
+}
+
+function script:Get-E2EChoices {
+    param(
+        [string]$TitleLike = "*"
+    )
+    return @($script:E2EChoices | Where-Object { $_.Title -like $TitleLike })
 }
 
 function script:Clear-E2EPopups {

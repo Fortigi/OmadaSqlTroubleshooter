@@ -9,6 +9,21 @@ function Get-SqlSchemaObject {
             return
         }
 
+        # Retrieving the schema is an authenticated round-trip, so it may only run for a tab that
+        # genuinely connected. $Script:ConnectionStatus is the active tab's own connection flag
+        # (Set-ActiveTabContext swaps it in and out per tab, Set-SqlConnectionState is its only
+        # writer), which is the state this guard must read. The checks below are not a substitute:
+        # $Script:RunTimeConfig.ReconnectStatus is process-global and is already 3 once any tab's
+        # editor has loaded, Test-ConnectionRequirements only verifies that a URL and an
+        # authentication option are filled in, and CurrentDataConnection.DoId is restored from
+        # config - a restored, deliberately disconnected tab satisfies all three. Without this the
+        # NavigationCompleted handler in Initialize-WebViewForTab.ps1 silently authenticated against
+        # the tenant, defeating -NoReconnect and a declined reconnect prompt alike.
+        if (-not $Script:ConnectionStatus) {
+            "Tab is not connected; skipping SQL schema retrieval." | Write-LogOutput -LogType DEBUG
+            return
+        }
+
         if (!(Test-ConnectionRequirements)) {
             "Connection not ready" | Write-LogOutput -LogType DEBUG
             return

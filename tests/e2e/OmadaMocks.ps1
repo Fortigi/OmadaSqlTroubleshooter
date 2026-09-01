@@ -64,6 +64,10 @@ function script:Push-ToEditor {
 }
 
 # --- Popup neutralizers so nothing enters a nested WPF message pump --------------------------------
+# Every choice dialog the app would have shown is recorded, so a scenario can assert that the
+# reconnect prompt WAS shown (issue #64) as precisely as it asserts that it was not.
+$script:E2EChoices = [System.Collections.Generic.List[object]]::new()
+
 function script:Open-ChoiceForm {
     param(
         $Title,
@@ -73,6 +77,7 @@ function script:Open-ChoiceForm {
         $LeftButtonReturnValue = $true,
         $RightButtonReturnValue = $false
     )
+    $script:E2EChoices.Add([PSCustomObject]@{ Title = [string]$Title; Message = [string]$Message })
     if ($null -ne $script:E2EChoiceReturn) {
         return $script:E2EChoiceReturn
     }
