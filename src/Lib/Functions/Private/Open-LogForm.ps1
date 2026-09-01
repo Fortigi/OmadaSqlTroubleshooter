@@ -35,6 +35,17 @@ function Open-LogForm {
             $false | Set-ConfigProperty -Property "CheckboxConsoleLog"
         }
 
+        # The state was already resolved once by Initialize-GlobalConfigSettings (parameter, then
+        # persisted setting), so this only reflects it in the checkbox. Setting IsChecked fires the
+        # Checked/UnChecked handler, which is the single writer of both the runtime flag and the
+        # persisted value - hence no Set-ConfigProperty call of its own here.
+        if ($Script:RunTimeConfig.Logging.SkipBodyRedaction) {
+            $Script:LogForm.Elements.CheckboxShowRequestBody.IsChecked = $true
+        }
+        else {
+            $Script:LogForm.Elements.CheckboxShowRequestBody.IsChecked = $false
+        }
+
         #Set log level to show
         if (![string]::IsNullOrWhiteSpace($Script:RunTimeConfig.Logging.LogLevel)) {
             "Set form log level to: {0}" -f $Script:RunTimeConfig.Logging.LogLevel | Write-LogOutput -LogType DEBUG

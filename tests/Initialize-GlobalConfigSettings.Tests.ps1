@@ -28,6 +28,16 @@ BeforeAll {
         return $Script:ModuleSourceFolder
     }
 
+    # The single writer of the "show request body" state (issue #62). Recorded rather than executed,
+    # so these tests stay about log level resolution while still proving the state is resolved here.
+    function Set-BodyRedactionState {
+        param(
+            [Parameter(Mandatory = $true, Position = 0)]
+            [bool]$Enabled
+        )
+        $Script:BodyRedactionStateCalls.Add($Enabled)
+    }
+
     function Get-FormPositionConfig {
         param(
             [parameter(Mandatory = $false, Position = 0, ValueFromPipeline = $true)]
@@ -78,16 +88,18 @@ BeforeAll {
     function New-RuntimeConfig {
         param(
             $LogLevelSetting,
-            [bool]$LogLevelExplicit
+            [bool]$LogLevelExplicit,
+            [bool]$SkipBodyRedaction
         )
         return [PSCustomObject]@{
             ApplicationName = "Test"
             InstanceGuid    = "11111111111111111111111111111111"
             Logging         = [PSCustomObject]@{
-                LogToConsole     = $false
-                LogLevel         = $null
-                LogLevelSetting  = $LogLevelSetting
-                LogLevelExplicit = $LogLevelExplicit
+                LogToConsole      = $false
+                LogLevel          = $null
+                LogLevelSetting   = $LogLevelSetting
+                LogLevelExplicit  = $LogLevelExplicit
+                SkipBodyRedaction = $SkipBodyRedaction
             }
         }
     }
@@ -97,6 +109,7 @@ Describe 'Initialize-GlobalConfigSettings log level resolution' {
 
     BeforeEach {
         $Script:ConfigWrites = [System.Collections.Generic.List[object]]::new()
+        $Script:BodyRedactionStateCalls = [System.Collections.Generic.List[object]]::new()
         $Script:MainForm = $null
         $Script:GlobalConfigProperties = $null
     }
@@ -248,5 +261,44 @@ Describe 'Invoke-OmadaSqlTroubleshooter log level seeding' {
 
     It 'seeds the runtime level through the shared resolver' {
         $Script:EntryPointSource | Should -Match 'Resolve-LogLevel'
+    }
+}
+
+Describe 'Initialize-GlobalConfigSettings show request body resolution' {
+
+    BeforeEach {
+        $Script:ConfigWrites = [System.Collections.Generic.List[object]]::new()
+        $Script:BodyRedactionStateCalls = [System.Collections.Generic.List[object]]::new()
+        $Script:MainForm = $null
+        $Script:GlobalConfigProperties = $null
+        $Script:AppGlobalConfig = New-PersistedConfig -LogLevel "DEBUG"
+    }
+
+    It 'leaves the option off when neither the parameter nor the stored setting asks for it' {
+        $Script:RunTimeConfig = New-RuntimeConfig -LogLevelSetting "WARNING" -LogLevelExplicit $false -SkipBodyRedaction $false
+
+        Initialize-GlobalConfigSettings
+
+        $Script:BodyRedactionStateCalls | Should -Contain $false
+        $Script:BodyRedactionStateCalls | Should -Not -Contain $true
+    }
+
+    It 'turns the option on for -SkipBodyRedaction, before the first request' {
+        $Script:RunTimeConfig = New-RuntimeConfig -LogLevelSetting "WARNING" -LogLevelExplicit $false -SkipBodyRedaction $true
+
+        Initialize-GlobalConfigSettings
+
+        $Script:BodyRedactionStateCalls | Should -Contain $true
+        # ...and stored, so the log viewer opens with the checkbox already checked.
+        ($Script:ConfigWrites | Where-Object { $_.Property -eq "SkipBodyRedaction" }).Value | Should -BeTrue
+    }
+
+    It 'restores the option a previous session stored' {
+        $Script:AppGlobalConfig | Add-Member -NotePropertyName "SkipBodyRedaction" -NotePropertyValue $true -Force
+        $Script:RunTimeConfig = New-RuntimeConfig -LogLevelSetting "WARNING" -LogLevelExplicit $false -SkipBodyRedaction $false
+
+        Initialize-GlobalConfigSettings
+
+        $Script:BodyRedactionStateCalls | Should -Contain $true
     }
 }

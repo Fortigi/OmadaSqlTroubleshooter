@@ -140,3 +140,64 @@ Describe "Invoke-OmadaPSWebRequestWrapper connection state" {
         $script:ConnectionStateCalls[0] | Should -BeFalse
     }
 }
+
+Describe "Invoke-OmadaPSWebRequestWrapper body redaction pass-through" {
+
+    AfterEach {
+        $Script:SkipBodyRedaction = $false
+    }
+
+    It "does not pass SkipBodyRedaction to an OmadaWeb.PS that does not declare it" {
+        # The pinned minimum version predates the switch, and splatting a parameter a cmdlet does
+        # not have is a terminating error - so the capability check has to keep the key out.
+        Initialize-WrapperTestState
+        $Script:SkipBodyRedaction = $true
+
+        # The BeforeAll mock takes only remaining arguments, standing in for an older module.
+        { Invoke-OmadaPSWebRequestWrapper } | Should -Not -Throw
+        $Script:RunTimeData.RestMethodParam.ContainsKey("SkipBodyRedaction") | Should -BeFalse
+    }
+
+    It "passes the current state to an OmadaWeb.PS that declares the switch" {
+        Initialize-WrapperTestState
+        $Script:SkipBodyRedaction = $true
+
+        # Shadows the older mock for the duration of this test with a module that has the switch.
+        function Invoke-OmadaRestMethod {
+            [CmdletBinding()]
+            param(
+                [switch]$SkipBodyRedaction,
+                [Parameter(ValueFromRemainingArguments = $true)]$IgnoredRest
+            )
+            $script:ReceivedSkipBodyRedaction = $SkipBodyRedaction.IsPresent
+            return [PSCustomObject]@{ value = @() }
+        }
+
+        $script:ReceivedSkipBodyRedaction = $null
+        Invoke-OmadaPSWebRequestWrapper | Out-Null
+
+        $Script:RunTimeData.RestMethodParam.SkipBodyRedaction | Should -BeTrue
+        $script:ReceivedSkipBodyRedaction | Should -BeTrue
+    }
+
+    It "passes the switch as off when the option is off" {
+        Initialize-WrapperTestState
+        $Script:SkipBodyRedaction = $false
+
+        function Invoke-OmadaRestMethod {
+            [CmdletBinding()]
+            param(
+                [switch]$SkipBodyRedaction,
+                [Parameter(ValueFromRemainingArguments = $true)]$IgnoredRest
+            )
+            $script:ReceivedSkipBodyRedaction = $SkipBodyRedaction.IsPresent
+            return [PSCustomObject]@{ value = @() }
+        }
+
+        $script:ReceivedSkipBodyRedaction = $null
+        Invoke-OmadaPSWebRequestWrapper | Out-Null
+
+        $Script:RunTimeData.RestMethodParam.SkipBodyRedaction | Should -BeFalse
+        $script:ReceivedSkipBodyRedaction | Should -BeFalse
+    }
+}

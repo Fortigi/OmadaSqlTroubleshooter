@@ -20,6 +20,18 @@ function Initialize-GlobalConfigSettings {
             "Console logging is enabled" | Write-LogOutput -LogType LOG
         }
 
+        # Same shape as console logging above: an explicit -SkipBodyRedaction wins, otherwise the
+        # setting the user last chose in the log viewer is restored. Resolving it here - before the
+        # first request - is what makes -SkipBodyRedaction unredact the very first body, rather than
+        # only from the moment the log window happens to be opened.
+        if ($Script:RunTimeConfig.Logging.SkipBodyRedaction -or $Script:AppGlobalConfig.SkipBodyRedaction) {
+            Set-BodyRedactionState -Enabled $true
+            $true | Set-ConfigProperty -Property "SkipBodyRedaction"
+        }
+        else {
+            Set-BodyRedactionState -Enabled $false
+        }
+
         if ($null -eq ($Script:MainForm.Definition | Get-FormPositionConfig)) {
             $Script:MainForm.Definition.WindowStartupLocation = [System.Windows.WindowStartupLocation]::CenterScreen
         }
