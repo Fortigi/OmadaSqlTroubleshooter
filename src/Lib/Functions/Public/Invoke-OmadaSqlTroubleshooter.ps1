@@ -118,6 +118,10 @@ function Invoke-OmadaSqlTroubleshooter {
     # -SkipBodyRedaction covers the whole session and not just the part after the configuration file
     # has been read; Initialize-GlobalConfigSettings resolves it again against the persisted setting.
     $Script:SkipBodyRedaction = $SkipBodyRedaction.IsPresent
+    # The "your query text is now in the log" warning is once per application session, not once per
+    # PowerShell session: the module stays imported between runs, so without this reset a second
+    # Invoke-OmadaSqlTroubleshooter in the same console would enable body logging silently.
+    $Script:SkipBodyRedactionWarned = $false
 
     Initialize-OmadaSqlTroubleShooter
 

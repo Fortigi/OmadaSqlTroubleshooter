@@ -115,6 +115,12 @@ Describe 'Show request body option (issue #62)' {
         It 'documents the switch' {
             $Script:EntryPointSource | Should -Match '\.PARAMETER SkipBodyRedaction'
         }
+
+        It 'rearms the once-per-session warning, since the module outlives an application session' {
+            # Without this, a second Invoke-OmadaSqlTroubleshooter in the same console would enable
+            # body logging without warning about it.
+            $Script:EntryPointSource | Should -Match '\$Script:SkipBodyRedactionWarned = \$false'
+        }
     }
 
     Context 'Persistence' {
