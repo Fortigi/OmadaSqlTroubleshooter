@@ -98,24 +98,55 @@ Describe 'THIRD-PARTY-NOTICES' -Tag 'Unit' {
         }
     }
 
-    Context 'Runtime download sources' {
+    Context 'Bundled and downloaded dependency sources' {
         # This used to assert that a literal www.nuget.org/api/v2 URL appeared in Install-WebView2.ps1.
         # That function no longer contains a URL at all: the download address comes from
         # src\DependencyLock.psd1. Reading the lock here is both more accurate and stricter - the
-        # notices now cannot drift from the pin the module actually downloads and verifies.
+        # notices now cannot drift from the pin the module actually ships and verifies.
+        #
+        # The entry moved from §2 (downloaded, not redistributed) to §1 (redistributed) when the
+        # assemblies started being bundled into the package at build time.
         BeforeAll {
             $Script:Lock = Import-PowerShellDataFile -Path (Join-Path $Script:ParentPath -ChildPath "src\DependencyLock.psd1")
             $Script:WebView2Artifact = @($Script:Lock.Artifacts | Where-Object { $_.Id -eq 'Microsoft.Web.WebView2' })[0]
 
             # Only the Microsoft.Web.WebView2 entry, so these assertions cannot be satisfied - or
             # broken - by text belonging to another component.
-            $SectionMatch = [regex]::Match($Script:Notices, '(?s)###\s*2\.1\s*Microsoft\.Web\.WebView2.*?(?=\r?\n---)')
+            $SectionMatch = [regex]::Match($Script:Notices, '(?s)###\s*1\.3\s*Microsoft\.Web\.WebView2.*?(?=\r?\n---)')
             $Script:WebView2Section = $SectionMatch.Value
         }
 
         It 'Should have a Microsoft.Web.WebView2 entry to check' {
             $Script:WebView2Artifact | Should -Not -BeNullOrEmpty -Because 'the lock file must pin the SDK'
-            $Script:WebView2Section | Should -Not -BeNullOrEmpty -Because 'the notices must carry a §2.1 entry for it'
+            $Script:WebView2Section | Should -Not -BeNullOrEmpty -Because 'the notices must carry a §1.3 entry for it'
+        }
+
+        It 'Should list the component as redistributed now that it ships in the package' {
+            $Script:WebView2Section | Should -Match 'Location in package' -Because 'a bundled component must say where it lands in the package'
+            $Script:Notices | Should -Match 'fetched and hash-verified at build time' -Because "section 1's opening must cover a component that is not committed"
+        }
+
+        It 'Should still document the run-time download fallback' {
+            # The fallback is what keeps a damaged bundle, and every x86 process, working.
+            $Script:Notices | Should -Match '(?s)###\s*2\.1\s*Microsoft\.Web\.WebView2'
+            $Script:Notices | Should -Match 'LOCALAPPDATA'
+        }
+
+        It 'Should carry a redistribution review that is explicitly not yet signed off' {
+            # Bundling moves this component into Fortigi's redistribution obligations. The review is
+            # a blocking prerequisite for the first bundled release and must not read as concluded
+            # while the placeholder is still there. If someone completes the review, they remove the
+            # TODO and this assertion is updated in the same change.
+            $Script:WebView2Section | Should -Match 'DRAFT, NOT YET SIGNED OFF'
+            $Script:WebView2Section | Should -Match 'TODO: reviewed by'
+        }
+
+        It 'Should reproduce the licence text the redistribution grant depends on' {
+            # The grant permits binary redistribution only if the copyright notice, the conditions
+            # and the disclaimer travel with the distribution. This file is what carries them.
+            $Script:WebView2Section | Should -Match 'Copyright \(C\) Microsoft Corporation\. All rights reserved\.'
+            $Script:WebView2Section | Should -Match 'Redistributions in binary form must reproduce'
+            $Script:WebView2Section | Should -Match 'THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS'
         }
 
         It 'Should record the URL the module actually downloads the SDK from' {

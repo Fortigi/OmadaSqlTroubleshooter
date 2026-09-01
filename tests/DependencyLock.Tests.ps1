@@ -160,6 +160,37 @@ Describe 'Dependency lock packaging' -Tag 'Unit' {
         $Deploy | Should -Match 'DependencyLock\.psd1'
     }
 
+    It 'Should have its bundled files fetched into the package by psake' {
+        # Task Dependencies is what puts the assemblies in the package. Part A removed a Task
+        # Dependencies that was in no task chain at all, so the package contained no bin folder;
+        # asserting the call and the chain together is what keeps that from recurring.
+        $Psake = Get-Content -Path (Join-Path $Script:RepositoryRoot -ChildPath 'build\psakeBuild.ps1') -Raw
+
+        $Psake | Should -Match 'Get-BundledDependency\.ps1' -Because 'something has to fetch the bundle'
+        $Psake | Should -Match 'Task Build -Depends Test, Dependencies' -Because 'bundling must be in every chain that publishes'
+    }
+
+    It 'Should have the bundled files verified by psake before the package is published' {
+        $Psake = Get-Content -Path (Join-Path $Script:RepositoryRoot -ChildPath 'build\psakeBuild.ps1') -Raw
+
+        $Psake | Should -Match 'Task TestAssemblies'
+        foreach ($Chain in @('Task TestBuildOnly', 'Task Pipeline')) {
+            $ChainLine = [regex]::Match($Psake, ('(?m)^{0}.*$' -f [regex]::Escape($Chain))).Value
+            $ChainLine | Should -Match 'TestAssemblies' -Because "a package with a broken bundle still imports, so '$Chain' would not otherwise notice"
+        }
+    }
+
+    It 'Should not require the WebView2 Runtime executable in the build output' {
+        # msedgewebview2.exe is the 260 MB WebView2 Runtime, which this project does not
+        # redistribute (THIRD-PARTY-NOTICES.md section 3.1). The old TestAssemblies demanded it and
+        # could therefore only ever fail.
+        $Psake = Get-Content -Path (Join-Path $Script:RepositoryRoot -ChildPath 'build\psakeBuild.ps1') -Raw
+        $TaskBody = [regex]::Match($Psake, '(?s)Task TestAssemblies \{.*?\r?\n\}').Value
+
+        $TaskBody | Should -Not -BeNullOrEmpty
+        $TaskBody | Should -Not -Match 'msedgewebview2'
+    }
+
     It 'Should be verified by every CI lane that builds or publishes' {
         foreach ($Workflow in @('pr-validation.yml', 'release.yml', 'nightly.yml')) {
             $Content = Get-Content -Path (Join-Path $Script:RepositoryRoot -ChildPath ('.github\workflows\{0}' -f $Workflow)) -Raw
