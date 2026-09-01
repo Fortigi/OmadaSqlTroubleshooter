@@ -40,7 +40,10 @@ function Initialize-GlobalConfigSettings {
         "Config: LogLevelSetting: {0}" -f $ResolvedLogLevel | Write-LogOutput -LogType DEBUG
 
         # Write back only when the caller asked for a specific level, when nothing is stored yet, or
-        # when the stored value is unusable. Anything else would overwrite the user's own choice.
+        # when the stored value differs from the resolved one - which covers both an unusable value
+        # and a usable but unnormalized one such as " debug ", rewritten once as "DEBUG" and stable
+        # from then on. A stored value that already matches is never rewritten, so the user's own
+        # choice survives every later start.
         if ($Script:RunTimeConfig.Logging.LogLevelExplicit -or [string]::IsNullOrWhiteSpace($PersistedLogLevel) -or $PersistedLogLevel -ne $ResolvedLogLevel) {
             "Config: Persisting LogLevel: {0}" -f $ResolvedLogLevel | Write-LogOutput -LogType DEBUG
             $ResolvedLogLevel | Set-ConfigProperty -Property "LogLevel"

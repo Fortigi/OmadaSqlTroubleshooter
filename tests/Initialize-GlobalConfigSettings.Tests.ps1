@@ -180,6 +180,32 @@ Describe 'Initialize-GlobalConfigSettings log level resolution' {
         }
     }
 
+    Context 'The persisted value is usable but not normalized' {
+
+        BeforeEach {
+            $Script:AppGlobalConfig = New-PersistedConfig -LogLevel " debug "
+            $Script:RunTimeConfig = New-RuntimeConfig -LogLevelSetting "WARNING" -LogLevelExplicit $false
+            Initialize-GlobalConfigSettings
+        }
+
+        It 'still honours the level the user chose' {
+            $Script:RunTimeConfig.Logging.LogLevelSetting | Should -BeExactly "DEBUG"
+        }
+
+        It 'normalizes the stored value once' {
+            $Script:AppGlobalConfig.LogLevel | Should -BeExactly "DEBUG"
+        }
+
+        It 'leaves the normalized value alone on the next start' {
+            $Script:ConfigWrites = [System.Collections.Generic.List[object]]::new()
+            $Script:AppGlobalConfig = New-PersistedConfig -LogLevel "DEBUG"
+            $Script:RunTimeConfig = New-RuntimeConfig -LogLevelSetting "WARNING" -LogLevelExplicit $false
+            Initialize-GlobalConfigSettings
+
+            $Script:ConfigWrites | Where-Object { $_.Property -eq "LogLevel" } | Should -BeNullOrEmpty
+        }
+    }
+
     Context 'Round trip across a restart' {
 
         It 'keeps the level chosen in the log viewer, and leaves the stored value untouched' {
