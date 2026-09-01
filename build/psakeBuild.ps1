@@ -175,21 +175,18 @@ Task Test -Depends Analyze {
 }
 
 Task Dependencies {
-    try {
-        # Fetches the pinned WebView2 SDK and lays the four assemblies out in the package, so a normal
-        # module import makes no network call at all. Every byte is hash-verified: the package before
-        # it is opened, then each extracted file against its own pin in src\DependencyLock.psd1.
-        #
-        # This deliberately writes into buildoutput and never into src\. .gitignore only excludes
-        # src/bin/Debug/**, so a stray src\bin\*.dll would be committable and would fail the
-        # "No redistributable binaries" test in tests\ThirdPartyNotices.Tests.ps1.
-        "Bundle pinned dependencies" | Write-Host
-        & "$PSScriptRoot\Get-BundledDependency.ps1" -ArtifactId "Microsoft.Web.WebView2" -OutputPath $BundleDir
-    }
-    catch {
-        throw $_
-        exit 1
-    }
+    # Fetches the pinned WebView2 SDK and lays the four assemblies out in the package, so a normal
+    # module import makes no network call at all. Every byte is hash-verified: the package before it
+    # is opened, then each extracted file against its own pin in src\DependencyLock.psd1.
+    #
+    # This deliberately writes into buildoutput and never into src\. .gitignore only excludes
+    # src/bin/Debug/**, so a stray src\bin\*.dll would be committable and would fail the
+    # "No redistributable binaries" test in tests\ThirdPartyNotices.Tests.ps1.
+    #
+    # No try/catch: the script sets $ErrorActionPreference = "Stop", and psake fails the build on a
+    # terminating error anyway. Catching only to rethrow would lose the original stack.
+    "Bundle pinned dependencies" | Write-Host
+    & "$PSScriptRoot\Get-BundledDependency.ps1" -ArtifactId "Microsoft.Web.WebView2" -OutputPath $BundleDir
 }
 
 Task Build -Depends Test, Dependencies, TestAssemblies {
@@ -516,51 +513,48 @@ Task ImportModule -Depends Build {
 # Build depends on it as well as the chains listing it. That is what covers the nightly, which runs
 # a bare "Build" and publishes the result to the PowerShell Gallery; without it the one lane that
 # ships nightly packages would be the only one not checking what it ships.
+#
+# No try/catch: every failure below is already a terminating error, and psake fails the build on
+# one. Catching only to rethrow would lose the original stack.
 Task TestAssemblies -Depends Dependencies {
-    try {
-        "Verify bundled assemblies" | Write-Host
+    "Verify bundled assemblies" | Write-Host
 
-        if (-not (Test-Path $BundleDir -PathType Container)) {
-            "The bundle folder '{0}' does not exist. Task Dependencies did not run." -f $BundleDir | Write-Error -ErrorAction Stop
-        }
-
-        $Lock = Import-PowerShellDataFile -Path (Join-Path $ModuleSource -ChildPath "DependencyLock.psd1")
-        $Artifact = @($Lock.Artifacts | Where-Object { $_.Id -eq "Microsoft.Web.WebView2" })[0]
-
-        foreach ($File in @($Artifact.Files)) {
-            $FilePath = Join-Path $BundleDir -ChildPath $File.Target
-            if (-not (Test-Path $FilePath -PathType Leaf)) {
-                "The bundled assembly '{0}' is missing from '{1}'." -f $File.Target, $BundleDir | Write-Error -ErrorAction Stop
-            }
-
-            $ActualSha256 = (Get-FileHash -Path $FilePath -Algorithm SHA256).Hash.ToLowerInvariant()
-            if ($ActualSha256 -ne $File.Sha256) {
-                "The bundled assembly '{0}' does not match its pin.`r`n  Expected: {1}`r`n  Actual:   {2}" -f $File.Target, $File.Sha256, $ActualSha256 | Write-Error -ErrorAction Stop
-            }
-
-            "  {0} OK" -f $File.Target | Write-Host
-        }
-
-        # Without a stamp at the pinned version Test-WebView2Bundle refuses the bundle, and every
-        # install would silently fall back to downloading - the bundle would be dead weight.
-        $StampPath = Join-Path $BundleDir -ChildPath "WebView2.pin"
-        if (-not (Test-Path $StampPath -PathType Leaf)) {
-            "The bundle at '{0}' has no WebView2.pin stamp, so the module would ignore it and download instead." -f $BundleDir | Write-Error -ErrorAction Stop
-        }
-
-        $Stamp = Import-PowerShellDataFile -Path $StampPath
-        if ($Stamp.Version -ne $Artifact.Version) {
-            "The bundle stamp records version '{0}' but the lock pins '{1}'." -f $Stamp.Version, $Artifact.Version | Write-Error -ErrorAction Stop
-        }
-
-        $BundleSize = (Get-ChildItem -Path $BundleDir -File | Measure-Object -Property Length -Sum).Sum
-        "  Stamp OK, pinned version {0}" -f $Artifact.Version | Write-Host
-        "  Bundle adds {0:N0} bytes ({1:N2} MB) to the package" -f $BundleSize, ($BundleSize / 1MB) | Write-Host
+    if (-not (Test-Path $BundleDir -PathType Container)) {
+        "The bundle folder '{0}' does not exist. Task Dependencies did not run." -f $BundleDir | Write-Error -ErrorAction Stop
     }
-    catch {
-        throw $_
-        exit 1
+
+    $Lock = Import-PowerShellDataFile -Path (Join-Path $ModuleSource -ChildPath "DependencyLock.psd1")
+    $Artifact = @($Lock.Artifacts | Where-Object { $_.Id -eq "Microsoft.Web.WebView2" })[0]
+
+    foreach ($File in @($Artifact.Files)) {
+        $FilePath = Join-Path $BundleDir -ChildPath $File.Target
+        if (-not (Test-Path $FilePath -PathType Leaf)) {
+            "The bundled assembly '{0}' is missing from '{1}'." -f $File.Target, $BundleDir | Write-Error -ErrorAction Stop
+        }
+
+        $ActualSha256 = (Get-FileHash -Path $FilePath -Algorithm SHA256).Hash.ToLowerInvariant()
+        if ($ActualSha256 -ne $File.Sha256) {
+            "The bundled assembly '{0}' does not match its pin.`r`n  Expected: {1}`r`n  Actual:   {2}" -f $File.Target, $File.Sha256, $ActualSha256 | Write-Error -ErrorAction Stop
+        }
+
+        "  {0} OK" -f $File.Target | Write-Host
     }
+
+    # Without a stamp at the pinned version Test-WebView2Bundle refuses the bundle, and every
+    # install would silently fall back to downloading - the bundle would be dead weight.
+    $StampPath = Join-Path $BundleDir -ChildPath "WebView2.pin"
+    if (-not (Test-Path $StampPath -PathType Leaf)) {
+        "The bundle at '{0}' has no WebView2.pin stamp, so the module would ignore it and download instead." -f $BundleDir | Write-Error -ErrorAction Stop
+    }
+
+    $Stamp = Import-PowerShellDataFile -Path $StampPath
+    if ($Stamp.Version -ne $Artifact.Version) {
+        "The bundle stamp records version '{0}' but the lock pins '{1}'." -f $Stamp.Version, $Artifact.Version | Write-Error -ErrorAction Stop
+    }
+
+    $BundleSize = (Get-ChildItem -Path $BundleDir -File | Measure-Object -Property Length -Sum).Sum
+    "  Stamp OK, pinned version {0}" -f $Artifact.Version | Write-Host
+    "  Bundle adds {0:N0} bytes ({1:N2} MB) to the package" -f $BundleSize, ($BundleSize / 1MB) | Write-Host
 }
 
 Task Deploy -Depends Build, TestAssemblies {

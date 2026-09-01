@@ -48,20 +48,34 @@ function Initialize-OmadaSqlTroubleShooter {
         if (-not $Script:WebView2AssemblyVerified) {
             $ExpectedWebView2Hash = Get-WebView2ExpectedHash
 
-            if ($ExpectedWebView2Hash.Count -eq 0) {
-                "The WebView2 assemblies could not be checked against a recorded hash before loading." | Write-LogOutput -LogType WARNING
-            }
+            # WebView2Loader.dll is verified alongside the three managed assemblies. It is not loaded
+            # through Add-ReflectionAssembly - the Core assembly pulls it in natively - but it is
+            # still native code entering this process, so a gate that skipped it would be a gate with
+            # a hole in it.
+            $WebView2AssemblyToVerify = @(
+                $Script:WebView2CorePath
+                $Script:WebView2WinFormsPath
+                $Script:WebView2WpfPath
+                $Script:WebView2LoaderPath
+            )
 
-            foreach ($WebView2AssemblyPath in @($Script:WebView2CorePath, $Script:WebView2WinFormsPath, $Script:WebView2WpfPath)) {
+            foreach ($WebView2AssemblyPath in $WebView2AssemblyToVerify) {
                 $WebView2AssemblyName = Split-Path $WebView2AssemblyPath -Leaf
+
+                # Fail closed. "No hash is recorded for this file" is not the same as "this file is
+                # fine" - it means nothing can vouch for the bytes, and loading them anyway would
+                # defeat the point of checking at all. Both sources always record all four files
+                # (the lock for a bundle, the install stamp for a download), so getting here means
+                # the install is damaged rather than merely unusual.
                 if (-not $ExpectedWebView2Hash.ContainsKey($WebView2AssemblyName)) {
-                    continue
+                    "Refusing to load '{0}' from '{1}': no expected SHA-256 is recorded for it, so its integrity cannot be established. Run 'Clear-OmadaSqlTroubleshooterCache -Scope Binaries' and start the application again to force a fresh, verified download." -f $WebView2AssemblyName, $Script:WebView2BasePath | Write-Error -ErrorAction "Stop"
                 }
 
                 "Verify assembly before load: '{0}'" -f $WebView2AssemblyName | Write-LogOutput -LogType DEBUG
                 Confirm-FileHash -Path $WebView2AssemblyPath -ExpectedSha256 $ExpectedWebView2Hash[$WebView2AssemblyName] -ArtifactName $WebView2AssemblyName -SourceUrl $Script:WebView2BasePath
             }
 
+            # Only after every file has actually been verified.
             $Script:WebView2AssemblyVerified = $true
         }
 
