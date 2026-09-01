@@ -50,6 +50,17 @@ Describe 'Get-GalleryModuleVersion' -Tag 'Unit' {
         Get-GalleryModuleVersion -ModuleName 'OmadaSqlTroubleShooter' | Should -Be '2026.6.26.4'
     }
 
+    It 'Should ignore a prerelease whose flag is not lower case' {
+        Mock Invoke-RestMethod {
+            @(
+                New-GalleryPackageEntry -Version '2026.6.26.4' -Published (Get-Date).AddDays(-30)
+                New-GalleryPackageEntry -Version '2026.8.22' -IsPrerelease 'True' -Published (Get-Date)
+            )
+        }
+
+        Get-GalleryModuleVersion -ModuleName 'OmadaSqlTroubleShooter' | Should -Be '2026.6.26.4'
+    }
+
     It 'Should ignore a prerelease even when the feed does not flag it as one' {
         Mock Invoke-RestMethod {
             @(
