@@ -8,6 +8,16 @@ function Set-SqlConnectionState {
 
         Set-SqlQueryFunctionState -Status $Status
         if ($Status) {
+            # Flip the active tab's connection flag FIRST, before the dropdown refreshes below. Those
+            # refreshes are part of the connect sequence and reach connected-only work (for example
+            # Update-DataConnectionList selects an item, whose SelectionChanged handler calls
+            # Get-SqlSchemaObject), and Get-SqlSchemaObject now refuses to run for a tab that is not
+            # connected. Setting the flag at the end of this branch - as it used to be - would make
+            # the connect path look disconnected to its own follow-up work and silently drop the
+            # schema fetch. $Script:ConnectionStatus is not read by anything between here and its old
+            # position: the only handler that consults it is ComboBoxSelectQuery's DropDownOpened,
+            # which is a user gesture and never fires programmatically.
+            $Script:ConnectionStatus = $true
             $Script:MainForm.Elements.ButtonReset.IsEnabled = $true
             $Script:MainForm.Elements.ComboBoxSelectAuthenticationOption.IsEnabled = $false
             $Script:MainForm.Elements.TextBoxUserName.IsEnabled = $false
@@ -34,7 +44,6 @@ function Set-SqlConnectionState {
                     $ConnectingWindow.Close()
                 }
             }
-            $Script:ConnectionStatus = $true
             # The window title is refreshed from the active tab by Update-TabHeaderTitle below
             # (-> Update-ApplicationTitle), so it stays in the new "<name> - <connection> - <tenant>"
             # format instead of being set to the old app-title-plus-tenant string here.

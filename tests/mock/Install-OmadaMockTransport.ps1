@@ -18,10 +18,30 @@ shim reads $script:OmadaMockBaseUrl at call time, so setting it after dot-sourci
 # Marker string asserted by MockAppEntry.ps1 to confirm the shadow actually took effect.
 $script:OmadaMockBaseUrl = $null
 
+# Every request the app makes reaches the mock instance through the shim below, so recording them
+# here gives a test an exact, complete picture of what did (or did not) hit the tenant. Tests that
+# assert a code path performs NO authenticated request read this log.
+$script:OmadaMockRequestLog = [System.Collections.Generic.List[object]]::new()
+
 function Install-OmadaMockTransport {
     [CmdletBinding()]
     param([string]$MockBaseUrl)
     $script:OmadaMockBaseUrl = $MockBaseUrl
+}
+
+function Clear-OmadaMockRequestLog {
+    [CmdletBinding()]
+    param()
+    $script:OmadaMockRequestLog.Clear()
+}
+
+function Get-OmadaMockRequestLog {
+    [CmdletBinding()]
+    param(
+        [string]$UriLike = "*",
+        [string]$MethodLike = "*"
+    )
+    return @($script:OmadaMockRequestLog | Where-Object { $_.Uri -like $UriLike -and $_.Method -like $MethodLike })
 }
 
 function script:Invoke-OmadaRestMethod {
@@ -49,6 +69,15 @@ function script:Invoke-OmadaRestMethod {
     }
 
     $HttpMethod = if ([string]::IsNullOrWhiteSpace($Method)) { "GET" } else { $Method.ToUpperInvariant() }
+
+    # Recorded before the call goes out, so a request that fails still counts as "the app talked to
+    # the tenant" - which is exactly what a zero-request assertion has to catch.
+    $script:OmadaMockRequestLog.Add([PSCustomObject]@{
+            Uri    = $TargetUri
+            Method = $HttpMethod
+            Body   = $Body
+        })
+
     $RequestParams = @{
         Uri     = $TargetUri
         Method  = $HttpMethod
