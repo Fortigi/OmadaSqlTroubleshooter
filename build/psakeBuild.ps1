@@ -192,7 +192,7 @@ Task Dependencies {
     }
 }
 
-Task Build -Depends Test, Dependencies {
+Task Build -Depends Test, Dependencies, TestAssemblies {
     try {
         $FormattingSettings = @{
             IncludeRules = @("PSPlaceOpenBrace", "PSUseConsistentIndentation", "PsAvoidUsingCmdletAliases", "PSUseConsistentWhitespace", "PSAlignAssignmentStatement", "PSPlaceCloseBrace")
@@ -512,7 +512,11 @@ Task ImportModule -Depends Build {
 #
 # In the chains directly, not just reachable through Deploy: a package whose bundle is missing or
 # corrupt still imports - it degrades to the runtime download - so nothing else would notice.
-Task TestAssemblies {
+#
+# Build depends on it as well as the chains listing it. That is what covers the nightly, which runs
+# a bare "Build" and publishes the result to the PowerShell Gallery; without it the one lane that
+# ships nightly packages would be the only one not checking what it ships.
+Task TestAssemblies -Depends Dependencies {
     try {
         "Verify bundled assemblies" | Write-Host
 

@@ -167,7 +167,7 @@ Describe 'Dependency lock packaging' -Tag 'Unit' {
         $Psake = Get-Content -Path (Join-Path $Script:RepositoryRoot -ChildPath 'build\psakeBuild.ps1') -Raw
 
         $Psake | Should -Match 'Get-BundledDependency\.ps1' -Because 'something has to fetch the bundle'
-        $Psake | Should -Match 'Task Build -Depends Test, Dependencies' -Because 'bundling must be in every chain that publishes'
+        $Psake | Should -Match 'Task Build -Depends Test, Dependencies' -Because 'bundling must be in every chain that publishes, including the nightly which runs a bare Build'
     }
 
     It 'Should have the bundled files verified by psake before the package is published' {
@@ -185,7 +185,7 @@ Describe 'Dependency lock packaging' -Tag 'Unit' {
         # redistribute (THIRD-PARTY-NOTICES.md section 3.1). The old TestAssemblies demanded it and
         # could therefore only ever fail.
         $Psake = Get-Content -Path (Join-Path $Script:RepositoryRoot -ChildPath 'build\psakeBuild.ps1') -Raw
-        $TaskBody = [regex]::Match($Psake, '(?s)Task TestAssemblies \{.*?\r?\n\}').Value
+        $TaskBody = [regex]::Match($Psake, '(?s)Task TestAssemblies\b[^\{]*\{.*?\r?\n\}').Value
 
         $TaskBody | Should -Not -BeNullOrEmpty
         $TaskBody | Should -Not -Match 'msedgewebview2'
