@@ -147,13 +147,24 @@ Describe "Invoke-OmadaPSWebRequestWrapper body redaction pass-through" {
         $Script:SkipBodyRedaction = $false
     }
 
+    # Each test declares the module it is about, so none of them depends on the order they run in
+    # or on which stub a previous test left behind, and each asserts the capability it assumes
+    # before asserting the behaviour that follows from it.
     It "does not pass SkipBodyRedaction to an OmadaWeb.PS that does not declare it" {
         # The pinned minimum version predates the switch, and splatting a parameter a cmdlet does
         # not have is a terminating error - so the capability check has to keep the key out.
         Initialize-WrapperTestState
         $Script:SkipBodyRedaction = $true
 
-        # The BeforeAll mock takes only remaining arguments, standing in for an older module.
+        function Invoke-OmadaRestMethod {
+            [CmdletBinding()]
+            param(
+                [Parameter(ValueFromRemainingArguments = $true)]$IgnoredRest
+            )
+            return [PSCustomObject]@{ value = @() }
+        }
+
+        (Get-Command Invoke-OmadaRestMethod).Parameters.ContainsKey("SkipBodyRedaction") | Should -BeFalse
         { Invoke-OmadaPSWebRequestWrapper } | Should -Not -Throw
         $Script:RunTimeData.RestMethodParam.ContainsKey("SkipBodyRedaction") | Should -BeFalse
     }
@@ -162,7 +173,6 @@ Describe "Invoke-OmadaPSWebRequestWrapper body redaction pass-through" {
         Initialize-WrapperTestState
         $Script:SkipBodyRedaction = $true
 
-        # Shadows the older mock for the duration of this test with a module that has the switch.
         function Invoke-OmadaRestMethod {
             [CmdletBinding()]
             param(
@@ -173,6 +183,7 @@ Describe "Invoke-OmadaPSWebRequestWrapper body redaction pass-through" {
             return [PSCustomObject]@{ value = @() }
         }
 
+        (Get-Command Invoke-OmadaRestMethod).Parameters.ContainsKey("SkipBodyRedaction") | Should -BeTrue
         $script:ReceivedSkipBodyRedaction = $null
         Invoke-OmadaPSWebRequestWrapper | Out-Null
 
@@ -194,6 +205,7 @@ Describe "Invoke-OmadaPSWebRequestWrapper body redaction pass-through" {
             return [PSCustomObject]@{ value = @() }
         }
 
+        (Get-Command Invoke-OmadaRestMethod).Parameters.ContainsKey("SkipBodyRedaction") | Should -BeTrue
         $script:ReceivedSkipBodyRedaction = $null
         Invoke-OmadaPSWebRequestWrapper | Out-Null
 
