@@ -9,6 +9,13 @@ Properties {
     $OutputDir = Join-Path -Path $ParentPath -ChildPath 'buildoutput\OmadaSqlTroubleShooter'
     New-Item -Path $OutputDir -ItemType Directory -Force | Out-Null
 
+    # Where Task Dependencies lays the hash-verified WebView2 assemblies out, and where
+    # Resolve-WebView2AssemblyPath looks for them at run time. The layout mirrors
+    # %LOCALAPPDATA%\OmadaSqlTroubleshooter\Bin\win-x64 so load-time resolution is a single "which
+    # directory?" decision. x64 only: the manifest declares ProcessorArchitecture = 'Amd64', and x86
+    # falls back to the runtime download.
+    $BundleDir = Join-Path -Path $OutputDir -ChildPath 'Bin\WebView2Dlls\win-x64'
+
     # When set (PR validation only), scopes Analyze/Test to just these files so unrelated pre-existing issues don't block unrelated PRs.
     $ChangedFiles = @()
     if ($env:PR_CHANGED_FILES) {
@@ -18,9 +25,9 @@ Properties {
     }
 }
 
-Task default -Depends Analyze, Test, Build, ImportModule
-Task TestBuildOnly -Depends Analyze, Test, Build
-Task Pipeline -Depends Analyze, Test, Build
+Task default -Depends Analyze, Test, Build, TestAssemblies, ImportModule
+Task TestBuildOnly -Depends Analyze, Test, Build, TestAssemblies
+Task Pipeline -Depends Analyze, Test, Build, TestAssemblies
 Task DeployOnly -Depends Build, Deploy
 
 # End-to-end suite: launches the REAL app against a fully mocked Omada backend and drives every
@@ -167,7 +174,25 @@ Task Test -Depends Analyze {
     }
 }
 
-Task Build -Depends Test {
+Task Dependencies {
+    try {
+        # Fetches the pinned WebView2 SDK and lays the four assemblies out in the package, so a normal
+        # module import makes no network call at all. Every byte is hash-verified: the package before
+        # it is opened, then each extracted file against its own pin in src\DependencyLock.psd1.
+        #
+        # This deliberately writes into buildoutput and never into src\. .gitignore only excludes
+        # src/bin/Debug/**, so a stray src\bin\*.dll would be committable and would fail the
+        # "No redistributable binaries" test in tests\ThirdPartyNotices.Tests.ps1.
+        "Bundle pinned dependencies" | Write-Host
+        & "$PSScriptRoot\Get-BundledDependency.ps1" -ArtifactId "Microsoft.Web.WebView2" -OutputPath $BundleDir
+    }
+    catch {
+        throw $_
+        exit 1
+    }
+}
+
+Task Build -Depends Test, Dependencies {
     try {
         $FormattingSettings = @{
             IncludeRules = @("PSPlaceOpenBrace", "PSUseConsistentIndentation", "PsAvoidUsingCmdletAliases", "PSUseConsistentWhitespace", "PSAlignAssignmentStatement", "PSPlaceCloseBrace")
@@ -476,11 +501,64 @@ Task ImportModule -Depends Build {
     }
 }
 
-# Deploy used to depend on a TestAssemblies task that asserted a Bin\WebView2Dlls folder and a
-# msedgewebview2.exe were present in the build output. Nothing ever produced them - the only task
-# that would have was in no task chain - so the assertion could only ever fail. The module downloads
-# and hash-verifies those assemblies at runtime instead. Bundling them into the package is issue #54
-# Part B, which will reintroduce this check against what the lock file actually produces.
-Task Deploy -Depends Build {
+# The old TestAssemblies asserted a Bin\WebView2Dlls folder AND a msedgewebview2.exe in the build
+# output. Nothing ever produced either - the only task that would have was in no task chain - so it
+# could only ever fail, and Part A removed it. It is back here, checking what Task Dependencies
+# actually produces.
+#
+# The msedgewebview2.exe requirement is deliberately not back. That is the WebView2 *Runtime*, a
+# 260 MB component this project does not redistribute (see THIRD-PARTY-NOTICES.md section 3.1) and
+# never ships into the package. Only the SDK assemblies are bundled.
+#
+# In the chains directly, not just reachable through Deploy: a package whose bundle is missing or
+# corrupt still imports - it degrades to the runtime download - so nothing else would notice.
+Task TestAssemblies {
+    try {
+        "Verify bundled assemblies" | Write-Host
+
+        if (-not (Test-Path $BundleDir -PathType Container)) {
+            "The bundle folder '{0}' does not exist. Task Dependencies did not run." -f $BundleDir | Write-Error -ErrorAction Stop
+        }
+
+        $Lock = Import-PowerShellDataFile -Path (Join-Path $ModuleSource -ChildPath "DependencyLock.psd1")
+        $Artifact = @($Lock.Artifacts | Where-Object { $_.Id -eq "Microsoft.Web.WebView2" })[0]
+
+        foreach ($File in @($Artifact.Files)) {
+            $FilePath = Join-Path $BundleDir -ChildPath $File.Target
+            if (-not (Test-Path $FilePath -PathType Leaf)) {
+                "The bundled assembly '{0}' is missing from '{1}'." -f $File.Target, $BundleDir | Write-Error -ErrorAction Stop
+            }
+
+            $ActualSha256 = (Get-FileHash -Path $FilePath -Algorithm SHA256).Hash.ToLowerInvariant()
+            if ($ActualSha256 -ne $File.Sha256) {
+                "The bundled assembly '{0}' does not match its pin.`r`n  Expected: {1}`r`n  Actual:   {2}" -f $File.Target, $File.Sha256, $ActualSha256 | Write-Error -ErrorAction Stop
+            }
+
+            "  {0} OK" -f $File.Target | Write-Host
+        }
+
+        # Without a stamp at the pinned version Test-WebView2Bundle refuses the bundle, and every
+        # install would silently fall back to downloading - the bundle would be dead weight.
+        $StampPath = Join-Path $BundleDir -ChildPath "WebView2.pin"
+        if (-not (Test-Path $StampPath -PathType Leaf)) {
+            "The bundle at '{0}' has no WebView2.pin stamp, so the module would ignore it and download instead." -f $BundleDir | Write-Error -ErrorAction Stop
+        }
+
+        $Stamp = Import-PowerShellDataFile -Path $StampPath
+        if ($Stamp.Version -ne $Artifact.Version) {
+            "The bundle stamp records version '{0}' but the lock pins '{1}'." -f $Stamp.Version, $Artifact.Version | Write-Error -ErrorAction Stop
+        }
+
+        $BundleSize = (Get-ChildItem -Path $BundleDir -File | Measure-Object -Property Length -Sum).Sum
+        "  Stamp OK, pinned version {0}" -f $Artifact.Version | Write-Host
+        "  Bundle adds {0:N0} bytes ({1:N2} MB) to the package" -f $BundleSize, ($BundleSize / 1MB) | Write-Host
+    }
+    catch {
+        throw $_
+        exit 1
+    }
+}
+
+Task Deploy -Depends Build, TestAssemblies {
 
 }
