@@ -26,6 +26,25 @@
       InstalledBy  - the module function that downloads it
       PinReason    - why this entry is held at a version the manifest does not track
       Description  - why the module needs it
+      Files        - the individual files taken out of the package, each with its own SHA-256
+
+    About Files. The package hash above verifies the .nupkg as downloaded. It cannot verify a file
+    that has been *extracted* out of it, which is exactly what the build-time bundle in
+    Bin\WebView2Dlls\win-x64 contains - so every extracted file carries its own pin here. Those
+    same per-file hashes are what let the module re-check each assembly immediately before
+    [Reflection.Assembly]::LoadFrom, closing the window between "verified at download" and "loaded",
+    during which the user-writable Bin folder could have been written to by something else.
+
+      Source - path inside the .nupkg, forward slashes, exactly as the archive stores it
+      Target - file name written into the bundle folder and into %LOCALAPPDATA%\...\Bin
+      Sha256 - expected SHA-256 of that one file, lower-case hex
+
+    Note on Microsoft.Web.WebView2.Wpf.dll: the package ships three copies with different bytes, in
+    lib/net462, lib_manual/netcoreapp3.0 and lib_manual/net5.0-windows10.0.17763.0. The two fetchers
+    this repository used to have disagreed about which one to take. netcoreapp3.0 is the one
+    Install-WebView2 has always used and is the one pinned here. build/Get-BundledDependency.ps1
+    throws when a Source below is absent from the package, so an upstream repackaging becomes a build
+    failure rather than a silently incomplete bundle.
 #>
 @{
     SchemaVersion = 1
@@ -41,6 +60,28 @@
             InstalledBy  = "Install-WebView2"
             PinReason    = ""
             Description  = "Hosts the Monaco SQL editor inside the WPF application."
+            Files        = @(
+                @{
+                    Source = "lib_manual/netcoreapp3.0/Microsoft.Web.WebView2.Core.dll"
+                    Target = "Microsoft.Web.WebView2.Core.dll"
+                    Sha256 = "958efdb7f13a6d1f3079756c96956cc96cf713ae46fa085c8b1e7f44316a4f7e"
+                }
+                @{
+                    Source = "lib_manual/netcoreapp3.0/Microsoft.Web.WebView2.WinForms.dll"
+                    Target = "Microsoft.Web.WebView2.WinForms.dll"
+                    Sha256 = "ba823b3de79297389a9aad662e389d4d229bf3a6a0056f9ede4ee64cc49dc19c"
+                }
+                @{
+                    Source = "lib_manual/netcoreapp3.0/Microsoft.Web.WebView2.Wpf.dll"
+                    Target = "Microsoft.Web.WebView2.Wpf.dll"
+                    Sha256 = "85f62dc8c6d36759212fae31bdac27ac6f9096f9d84563db765340cf58fa4744"
+                }
+                @{
+                    Source = "runtimes/win-x64/native/WebView2Loader.dll"
+                    Target = "WebView2Loader.dll"
+                    Sha256 = "a9a09232c25805323d4cfb3fc8f545a190a9c8a99c93262ea99d0b88df99ec90"
+                }
+            )
         }
     )
 }

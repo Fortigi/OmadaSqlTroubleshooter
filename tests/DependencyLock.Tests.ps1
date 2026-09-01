@@ -64,6 +64,54 @@ Describe 'DependencyLock.psd1' -Tag 'Unit' {
         }
     }
 
+    It 'Should list the files taken out of every package' {
+        # The package hash cannot verify a file that has been extracted out of the package, and the
+        # build-time bundle ships exactly those extracted files. Without a Files list there is
+        # nothing for Get-BundledDependency to copy and nothing for Test-WebView2Bundle to check.
+        foreach ($Artifact in $Script:Artifacts) {
+            @($Artifact.Files).Count | Should -BeGreaterThan 0 -Because "artefact '$($Artifact.Id)' is bundled at build time"
+        }
+    }
+
+    It 'Should pin a 64-character lower-case SHA-256 for every bundled file' {
+        foreach ($Artifact in $Script:Artifacts) {
+            foreach ($File in @($Artifact.Files)) {
+                $File.Sha256 | Should -Match '^[0-9a-f]{64}$' -Because "'$($File.Target)' is re-verified immediately before it is loaded"
+                $File.Source | Should -Not -BeNullOrEmpty
+                $File.Target | Should -Not -BeNullOrEmpty
+            }
+        }
+    }
+
+    It 'Should map each bundled file onto a unique target name' {
+        # Microsoft.Web.WebView2.Wpf.dll exists three times in the package with different bytes. Two
+        # sources writing one target would mean whichever copied last wins - the exact ambiguity the
+        # two old fetchers disagreed about.
+        foreach ($Artifact in $Script:Artifacts) {
+            $Duplicate = @($Artifact.Files) | Group-Object { $_.Target } | Where-Object { $_.Count -gt 1 }
+            $Duplicate | Should -BeNullOrEmpty -Because "artefact '$($Artifact.Id)' must resolve one source per target"
+        }
+    }
+
+    It 'Should reference package entries by their in-archive path' {
+        foreach ($Artifact in $Script:Artifacts) {
+            foreach ($File in @($Artifact.Files)) {
+                $File.Source | Should -Not -Match '\\' -Because 'zip entry names use forward slashes'
+                $File.Source | Should -BeLike ('*{0}' -f $File.Target) -Because "'$($File.Source)' should end in the file it produces"
+            }
+        }
+    }
+
+    It 'Should take the WPF assembly from the framework Install-WebView2 has always used' {
+        # netcoreapp3.0, not net5.0-windows10.0.17763.0 and not net462. All three ship a
+        # Microsoft.Web.WebView2.Wpf.dll with different bytes; the deleted build/RetrieveDependencies.ps1
+        # took the net5.0 one while the module loaded the netcoreapp3.0 one.
+        $WebView2 = @($Script:Artifacts | Where-Object { $_.Id -eq 'Microsoft.Web.WebView2' })[0]
+        $Wpf = @($WebView2.Files | Where-Object { $_.Target -eq 'Microsoft.Web.WebView2.Wpf.dll' })[0]
+        $Wpf | Should -Not -BeNullOrEmpty
+        $Wpf.Source | Should -Be 'lib_manual/netcoreapp3.0/Microsoft.Web.WebView2.Wpf.dll'
+    }
+
     It 'Should name an installer that exists for every artefact' {
         foreach ($Artifact in $Script:Artifacts) {
             $InstallerPath = Join-Path $Script:PrivatePath -ChildPath ('{0}.ps1' -f $Artifact.InstalledBy)
