@@ -47,13 +47,16 @@ function Open-LogForm {
             $Script:RunTimeConfig.Logging.LogLevelSetting = $Script:RunTimeConfig.Logging.LogLevel
         }
         else {
-            "Set form log level to default because it was not set: INFO" | Write-LogOutput -LogType DEBUG
-            if (($LogForm.Elements.ComboBoxSelectLogLevel.Items | Measure-Object).count -le 0 -and !$LogForm.Elements.ComboBoxSelectLogLevel.Items.Content.Contains("INFO")) {
+            # The schema is the single source of truth for this default; it used to be a third,
+            # separate literal here.
+            $DefaultLogLevel = Get-ConfigSchemaDefault -Property "LogLevel"
+            "Set form log level to the schema default because it was not set: {0}" -f $DefaultLogLevel | Write-LogOutput -LogType DEBUG
+            if (($LogForm.Elements.ComboBoxSelectLogLevel.Items | Measure-Object).count -le 0 -and !$LogForm.Elements.ComboBoxSelectLogLevel.Items.Content.Contains($DefaultLogLevel)) {
                 $ComboBoxSelectLogLevelItem = New-Object System.Windows.Controls.ComboBoxItem
-                $ComboBoxSelectLogLevelItem.Content = "INFO"
+                $ComboBoxSelectLogLevelItem.Content = $DefaultLogLevel
                 $LogForm.Elements.ComboBoxSelectLogLevel.Items.Add($ComboBoxSelectLogLevelItem) | Out-Null
             }
-            $LogForm.Elements.ComboBoxSelectLogLevel.SelectedValue = $LogForm.Elements.ComboBoxSelectLogLevel.Items | Where-Object { $_.Content -eq "INFO" }
+            $LogForm.Elements.ComboBoxSelectLogLevel.SelectedValue = $LogForm.Elements.ComboBoxSelectLogLevel.Items | Where-Object { $_.Content -eq $DefaultLogLevel }
             $Script:RunTimeConfig.Logging.LogLevelSetting = $LogForm.Elements.ComboBoxSelectLogLevel.SelectedValue.Content
         }
 

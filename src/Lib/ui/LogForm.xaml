@@ -201,7 +201,6 @@
                        Width="Auto"/>
                 <Separator Width="10"/>
                 <ComboBox x:Name="ComboBoxSelectLogLevel"
-                          SelectedIndex="0"
                           ToolTip="Select log level"
                           Width="80">
                     <ComboBoxItem Content="LOG"/>
