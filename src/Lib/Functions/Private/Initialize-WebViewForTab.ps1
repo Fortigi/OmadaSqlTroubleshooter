@@ -104,7 +104,19 @@ function Initialize-WebViewForTab {
                     }
 
                     Test-ConnectionButton
-                    Update-QueryList
+
+                    # Refreshing the query list is an authenticated round-trip AND it re-enables
+                    # ComboBoxSelectQuery / ButtonRefreshQueries / the "my queries" checkboxes
+                    # unconditionally at the end of Update-QueryList. Running it for a tab that was
+                    # deliberately left disconnected (a restored tab under -NoReconnect, or after a
+                    # declined reconnect prompt) therefore both connected to the tenant and undid the
+                    # Set-SqlQueryFunctionState -Status $false that Complete-TabMaterialization had
+                    # just applied - which is why such a tab showed an openable query dropdown next
+                    # to a Connect button. Only refresh it for a tab that genuinely connected.
+                    if ($Script:ConnectionStatus) {
+                        Update-QueryList
+                    }
+
                     Set-EditorValue
 
                     # These WebView2 event handlers fire independently, long after this completion
@@ -253,8 +265,11 @@ function Initialize-WebViewForTab {
                                     # duplicated tab, auto-connect) never received a setSchema push -
                                     # Invoke-ExecuteScriptAsync silently skips while the WebView is not
                                     # ready. Push it now so IntelliSense knows this database's tables and
-                                    # columns. Get-SqlSchemaObject returns early when the tab is not
-                                    # connected yet (the connect path pushes it instead) and serves the
+                                    # columns. Get-SqlSchemaObject checks $Script:ConnectionStatus and
+                                    # returns without any request when this tab is not connected (the
+                                    # guard the previous version of this comment claimed but that did
+                                    # not exist - the call authenticated against the tenant instead,
+                                    # even under -NoReconnect); for a connected tab it serves the
                                     # per-pool + per-database cache, so this is normally just the push.
                                     Get-SqlSchemaObject
 

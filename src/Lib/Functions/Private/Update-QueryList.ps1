@@ -14,6 +14,20 @@ function Update-QueryList {
             return
         }
 
+        # This function ends by unconditionally enabling ComboBoxSelectQuery, ButtonRefreshQueries,
+        # the "my queries" checkboxes and ButtonShowSqlSchema - the exact controls
+        # Set-SqlQueryFunctionState -Status $false had just cleared and disabled for a disconnected
+        # tab. Called for such a tab it therefore both authenticated against the tenant and left the
+        # query dropdown openable next to a "Connect" button, which is the in-between state reported
+        # in issue #65. Connection state is single-sourced on $Script:ConnectionStatus (the active
+        # tab's own flag), so refuse here rather than relying on every call site to remember.
+        # Test-ConnectionRequirements below is not a substitute: it only checks that a URL and an
+        # authentication option are filled in, which stays true for a tab that never connected.
+        if (-not $Script:ConnectionStatus) {
+            "Tab is not connected; skipping query list refresh." | Write-LogOutput -LogType DEBUG
+            return
+        }
+
         if (!(Test-ConnectionRequirements)) {
             "Connection not ready" | Write-LogOutput -LogType DEBUG
             return
