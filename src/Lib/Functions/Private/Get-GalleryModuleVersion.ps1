@@ -28,6 +28,7 @@ function Get-GalleryModuleVersion {
         $Response = Invoke-RestMethod @Parameters
 
         if ($null -eq $Response) {
+            "The PowerShell Gallery returned no packages for module '{0}'." -f $ModuleName | Write-Verbose
             return $null
         }
 

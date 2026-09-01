@@ -36,7 +36,7 @@ Describe 'Get-GalleryModuleVersion' -Tag 'Unit' {
             )
         }
 
-        Get-GalleryModuleVersion -ModuleName 'OmadaWeb.PS' | Should -Be '2.0.0'
+        Get-GalleryModuleVersion -ModuleName 'OmadaSqlTroubleShooter' | Should -Be '2.0.0'
     }
 
     It 'Should ignore a prerelease that is the most recently published package' {
@@ -105,22 +105,30 @@ Describe 'Get-GalleryModuleVersion' -Tag 'Unit' {
     It 'Should return $null when the gallery response is empty' {
         Mock Invoke-RestMethod { $null }
 
-        Get-GalleryModuleVersion -ModuleName 'OmadaWeb.PS' | Should -BeNullOrEmpty
+        Get-GalleryModuleVersion -ModuleName 'OmadaSqlTroubleShooter' | Should -BeNullOrEmpty
+    }
+
+    It 'Should log a verbose line when the gallery response is empty' {
+        Mock Invoke-RestMethod { $null }
+
+        $Verbose = Get-GalleryModuleVersion -ModuleName 'OmadaSqlTroubleShooter' -Verbose 4>&1
+
+        "$Verbose" | Should -BeLike '*returned no packages*'
     }
 
     It 'Should return $null when the request fails' {
         Mock Invoke-RestMethod { throw 'network error' }
 
-        Get-GalleryModuleVersion -ModuleName 'OmadaWeb.PS' | Should -BeNullOrEmpty
+        Get-GalleryModuleVersion -ModuleName 'OmadaSqlTroubleShooter' | Should -BeNullOrEmpty
     }
 
     It 'Should request the correct PowerShell Gallery API endpoint' {
         Mock Invoke-RestMethod { $null }
 
-        Get-GalleryModuleVersion -ModuleName 'OmadaWeb.PS' | Out-Null
+        Get-GalleryModuleVersion -ModuleName 'OmadaSqlTroubleShooter' | Out-Null
 
         Should -Invoke Invoke-RestMethod -ParameterFilter {
-            $Uri -eq "https://www.powershellgallery.com/api/v2/FindPackagesById()?id='OmadaWeb.PS'"
+            $Uri -eq "https://www.powershellgallery.com/api/v2/FindPackagesById()?id='OmadaSqlTroubleShooter'"
         }
     }
 }
