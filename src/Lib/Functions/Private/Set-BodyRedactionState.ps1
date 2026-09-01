@@ -37,7 +37,7 @@ function Set-BodyRedactionState {
                 $Script:SkipBodyRedactionWarned = $true
                 # -SkipDialog on purpose: this is a heads-up that belongs in the log the user is
                 # looking at, not a modal box in front of the query they are trying to run.
-                "Request body logging is enabled: query text is now written to this log in full, and to any log file exported from it." | Write-LogOutput -LogType WARNING -SkipDialog
+                "Request body logging is enabled: query text is now written to this log, and to any log file exported from it. A very long value is still truncated." | Write-LogOutput -LogType WARNING -SkipDialog
             }
 
             "Request body logging is enabled" | Write-LogOutput -LogType LOG

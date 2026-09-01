@@ -25,8 +25,8 @@ Uses the WebView2 for browser-based authentication.
 Prevents the application from attempting to reconnect to the Omada Identity Suite using the stored connection information.
 
 .PARAMETER SkipBodyRedaction
-Logs the request body - the query as it was sent - instead of its shape, and starts the application with the log viewer's "Show request body" checkbox already checked.
-Only the body rule is lifted: a body member named for a secret, a credential and a secure string are still masked, and headers, credentials and session cookies are unaffected.
+Logs the request body - the query that was sent - instead of its shape, and starts the application with the log viewer's "Show request body" checkbox already checked.
+Only the body rule is lifted: a body member named for a secret, a credential and a secure string are still masked, headers, credentials and session cookies are unaffected, and a very long value is still truncated by the log's own length limit.
 The query text does end up in the log window and in any log file exported from it.
 The name matches the OmadaWeb.PS switch it drives.
 
@@ -48,7 +48,7 @@ Resets the stored configuration to default and starts the Omada SQL Troubleshoot
 .EXAMPLE
 Invoke-OmadaSqlTroubleshooter -LogLevel VERBOSE -SkipBodyRedaction
 
-Starts the Omada SQL Troubleshooter application logging the executed query text in full, from the first request onwards.
+Starts the Omada SQL Troubleshooter application logging the executed query text, from the first request onwards.
 
 .NOTES
 Requires PowerShell 7.0 or higher and the OmadaWeb.PS module.
