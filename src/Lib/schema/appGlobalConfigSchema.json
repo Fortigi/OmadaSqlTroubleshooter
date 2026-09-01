@@ -10,7 +10,7 @@
   {
     "Name": "LogLevel",
     "Type": "String",
-    "DefaultValue": "INFO"
+    "DefaultValue": "WARNING"
   },
   {
     "Name": "LogFormOpen",

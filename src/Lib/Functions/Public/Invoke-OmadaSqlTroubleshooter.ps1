@@ -70,7 +70,11 @@ function Invoke-OmadaSqlTroubleshooter {
             LogToConsole        = $LogToConsole.IsPresent -or $false
             LogLevel            = $null
             VerboseParameterSet = $PSCmdlet.MyInvocation.BoundParameters.Keys.Contains("Verbose")
-            LogLevelSetting     = $(if ([string]::IsNullOrWhiteSpace($LogLevel)) { "WARNING" } else { $LogLevel })
+            # Only a bound -LogLevel is authoritative. Leaving this flag unset lets
+            # Initialize-GlobalConfigSettings restore the level a previous session stored, instead
+            # of overwriting it with a value the caller never asked for.
+            LogLevelExplicit    = $PSCmdlet.MyInvocation.BoundParameters.ContainsKey("LogLevel")
+            LogLevelSetting     = $null
             AppLogObject        = [System.Collections.ObjectModel.ObservableCollection[string]]::new()
         }
         StopWatch          = $null
@@ -88,6 +92,12 @@ function Invoke-OmadaSqlTroubleshooter {
         ResetRequested     = $Reset.IsPresent -or $false
         NoReconnect        = $NoReconnect.IsPresent -or $false
     }
+
+    # Seed the level that filters log output before the configuration file has been read, so the
+    # handful of start-up lines emitted up to that point are filtered the same way as the rest of
+    # the session. Initialize-GlobalConfigSettings resolves this again once the persisted level is
+    # available.
+    $Script:RunTimeConfig.Logging.LogLevelSetting = Resolve-LogLevel -BoundLogLevel $LogLevel -SchemaDefault (Get-ConfigSchemaDefault -Property "LogLevel")
 
     Initialize-OmadaSqlTroubleShooter
 
