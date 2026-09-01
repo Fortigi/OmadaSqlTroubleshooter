@@ -13,6 +13,13 @@
 # against a running mock instance, so "no request" is measured, not stubbed.
 
 BeforeAll {
+    # Update-QueryList builds real System.Windows.Controls.ComboBoxItem objects for each query it
+    # retrieves. That type lives in PresentationFramework, which a headless CI pwsh does not load on
+    # its own - without this the connected-path run throws inside the function's own catch and
+    # silently adds nothing (it passes locally, where the assembly is already loaded, and fails in
+    # CI). Mirrors the Add-Type in Update-SqlSchemaTreeFilter.Tests.ps1.
+    Add-Type -AssemblyName PresentationFramework
+
     $ParentPath = Split-Path -Path $PSScriptRoot -Parent
     $PrivatePath = Join-Path $ParentPath -ChildPath "src\Lib\Functions\Private"
 
