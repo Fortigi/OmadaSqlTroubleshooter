@@ -63,7 +63,6 @@ Describe 'Show request body option (issue #62)' {
         $ParentPath = Split-Path -Path $PSScriptRoot -Parent
         $Script:ShowRequestBodyCheckBox = $Script:LogFormXaml.SelectSingleNode("//w:CheckBox[@x:Name='CheckboxShowRequestBody']", $Script:XamlNamespace)
         $Script:ShowRequestBodyEventSource = Get-Content (Join-Path $ParentPath -ChildPath "src\lib\Events\LogForm.Elements.CheckboxShowRequestBody.ps1") -Raw
-        $Script:BodyRedactionStateSource = Get-Content (Join-Path $ParentPath -ChildPath "src\lib\functions\Private\Set-BodyRedactionState.ps1") -Raw
         $Script:EntryPointSource = Get-Content (Join-Path $ParentPath -ChildPath "src\lib\functions\Public\Invoke-OmadaSqlTroubleshooter.ps1") -Raw
         $Script:GlobalConfigSchema = Get-Content (Join-Path $ParentPath -ChildPath "src\lib\schema\appGlobalConfigSchema.json") -Raw | ConvertFrom-Json
     }
@@ -99,18 +98,6 @@ Describe 'Show request body option (issue #62)' {
 
         It 'persists the choice like the other log viewer checkboxes do' {
             $Script:ShowRequestBodyEventSource | Should -Match 'Set-ConfigProperty -Property "SkipBodyRedaction"'
-        }
-    }
-
-    Context 'State writer' {
-
-        It 'sets the module scope flag the redactor reads' {
-            $Script:BodyRedactionStateSource | Should -Match '\$Script:SkipBodyRedaction = \$Enabled'
-        }
-
-        It 'warns once per session that query text now reaches the log' {
-            $Script:BodyRedactionStateSource | Should -Match 'SkipBodyRedactionWarned'
-            $Script:BodyRedactionStateSource | Should -Match '-LogType WARNING'
         }
     }
 

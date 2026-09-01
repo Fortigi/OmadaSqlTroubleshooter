@@ -26,6 +26,7 @@ function Set-BodyRedactionState {
     try {
         $Script:Tracer::WriteLine(("{0}: Function: {1} - Caller: {2}({3}) - Command: {4} - Parameters: {5}" -f $($Script:RunTimeConfig.ApplicationName), $($MyInvocation.MyCommand.Name), $($MyInvocation.ScriptName).Split("\")[-1], $($MyInvocation.ScriptLineNumber), $MyInvocation.Statement, (ConvertTo-RedactedLogString -InputObject $PSBoundParameters -MaxDepth 1)))
 
+        $PreviousState = [bool]$Script:SkipBodyRedaction
         $Script:SkipBodyRedaction = $Enabled
         if ($null -ne $Script:RunTimeConfig -and $null -ne $Script:RunTimeConfig.Logging) {
             $Script:RunTimeConfig.Logging.SkipBodyRedaction = $Enabled
@@ -41,7 +42,10 @@ function Set-BodyRedactionState {
 
             "Request body logging is enabled" | Write-LogOutput -LogType LOG
         }
-        else {
+        elseif ($PreviousState) {
+            # Only when it was actually on. Initialize-GlobalConfigSettings resolves this state on
+            # every start, so an unconditional line here would put "Request body logging is
+            # disabled" in the log of every session that never touches the option.
             "Request body logging is disabled" | Write-LogOutput -LogType LOG
         }
     }
