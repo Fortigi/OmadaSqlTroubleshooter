@@ -552,8 +552,19 @@ Task TestAssemblies -Depends Dependencies {
         "The bundle stamp records version '{0}' but the lock pins '{1}'." -f $Stamp.Version, $Artifact.Version | Write-Error -ErrorAction Stop
     }
 
+    # Nothing unpinned may travel in the package. The nuspec packages the build output wholesale, so
+    # any stray file in this folder would be redistributed with no hash covering it - and neither
+    # Test-WebView2Bundle nor the load-time check would ever look at it.
+    $ExpectedName = @(@($Artifact.Files | ForEach-Object { $_.Target }) + "WebView2.pin")
+    $UnexpectedName = @(Get-ChildItem -Path $BundleDir -Force -Recurse |
+            Where-Object { $_.PSIsContainer -or $ExpectedName -notcontains $_.Name } |
+            ForEach-Object { $_.Name })
+    if ($UnexpectedName.Count -gt 0) {
+        "The bundle folder '{0}' contains {1} unpinned item(s): {2}. They would be redistributed in the package unverified." -f $BundleDir, $UnexpectedName.Count, ($UnexpectedName -join ", ") | Write-Error -ErrorAction Stop
+    }
+
     $BundleSize = (Get-ChildItem -Path $BundleDir -File | Measure-Object -Property Length -Sum).Sum
-    "  Stamp OK, pinned version {0}" -f $Artifact.Version | Write-Host
+    "  Stamp OK, pinned version {0}, no unpinned files" -f $Artifact.Version | Write-Host
     "  Bundle adds {0:N0} bytes ({1:N2} MB) to the package" -f $BundleSize, ($BundleSize / 1MB) | Write-Host
 }
 

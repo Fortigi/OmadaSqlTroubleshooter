@@ -81,10 +81,29 @@ function Get-Sha256 {
     }
 }
 
+function Get-ExpectedBundleFileName {
+    # Everything the bundle folder is allowed to contain: the pinned targets and the stamp. Anything
+    # else is an unpinned file that would be redistributed inside the package.
+    param([hashtable]$Artifact)
+
+    return @(@($Artifact.Files | ForEach-Object { $_.Target }) + "WebView2.pin")
+}
+
+function Get-UnexpectedBundleFileName {
+    param([string]$Path, [hashtable]$Artifact)
+
+    $Expected = Get-ExpectedBundleFileName -Artifact $Artifact
+
+    return @(Get-ChildItem -Path $Path -Force -Recurse -ErrorAction SilentlyContinue |
+            Where-Object { $_.PSIsContainer -or $Expected -notcontains $_.Name } |
+            ForEach-Object { $_.Name })
+}
+
 function Test-ExistingBundle {
-    # True when the folder already holds every target at its pinned hash and a stamp for this
-    # version. Purely a build-time shortcut so a local rebuild does not re-download 9 MB; it never
-    # relaxes a check, because a bundle that fails here is simply rebuilt from a verified download.
+    # True when the folder already holds every target at its pinned hash, a stamp for this version,
+    # and nothing else. Purely a build-time shortcut so a local rebuild does not re-download 9 MB; it
+    # never relaxes a check, because a bundle that fails here is simply rebuilt from a verified
+    # download.
     param([string]$Path, [hashtable]$Artifact)
 
     $StampPath = Join-Path $Path "WebView2.pin"
@@ -104,6 +123,12 @@ function Test-ExistingBundle {
         if ((Get-Sha256 -Path $FilePath) -ne $File.Sha256) {
             return $false
         }
+    }
+
+    # A folder that holds the right files plus something else is not a bundle this script produced,
+    # and reusing it would ship the extra file. Rebuild instead.
+    if ((Get-UnexpectedBundleFileName -Path $Path -Artifact $Artifact).Count -gt 0) {
+        return $false
     }
 
     return $true
@@ -140,6 +165,11 @@ if (-not $Force -and (Test-ExistingBundle -Path $OutputPath -Artifact $Artifact)
     "  Bundle size: {0:N0} bytes ({1:N2} MB)" -f $ExistingSize, ($ExistingSize / 1MB) | Write-Host -ForegroundColor Green
     return
 }
+
+# Emptied before anything is written. Overwriting the pinned targets is not enough: if the Files
+# list changes between pins - an assembly renamed or dropped upstream - the previous run's copy
+# would survive here and be redistributed inside the package with no pin covering it.
+Get-ChildItem -Path $OutputPath -Force -ErrorAction SilentlyContinue | Remove-Item -Recurse -Force
 
 $PackagePath = Join-Path ([System.IO.Path]::GetTempPath()) ([System.Guid]::NewGuid().ToString() + ".nupkg")
 
@@ -214,6 +244,13 @@ $StampContent = @(
 
 $StampPath = Join-Path $OutputPath "WebView2.pin"
 [System.IO.File]::WriteAllText($StampPath, ($StampContent + "`r`n"), (New-Object System.Text.UTF8Encoding($false)))
+
+# Belt and braces after the clear above: whatever is in this folder is about to be published, so
+# assert it is exactly the pinned set and nothing more.
+$Unexpected = Get-UnexpectedBundleFileName -Path $OutputPath -Artifact $Artifact
+if ($Unexpected.Count -gt 0) {
+    "The bundle folder '{0}' contains {1} file(s) that are not pinned in '{2}': {3}. Refusing to publish an unpinned binary." -f $OutputPath, $Unexpected.Count, $LockPath, ($Unexpected -join ", ") | Write-Error -ErrorAction Stop
+}
 
 $BundleSize = (Get-ChildItem -Path $OutputPath -File | Measure-Object -Property Length -Sum).Sum
 "  Wrote stamp '{0}'" -f $StampPath | Write-Host
