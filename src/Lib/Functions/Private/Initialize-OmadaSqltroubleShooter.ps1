@@ -37,6 +37,34 @@ function Initialize-OmadaSqlTroubleShooter {
                 else { throw $_.Exception.Message }
             }
         }
+        # Re-verify immediately before loading. Until now verification happened only at download
+        # time, and nothing re-checked a file swapped afterwards - both folders these assemblies can
+        # come from are writable by something at some point, and Assembly.LoadFrom runs whatever
+        # bytes are there in this session. A mismatch deletes the file and aborts rather than
+        # loading it; the next import re-downloads and re-verifies.
+        #
+        # Guarded to run once per session: the hashes cannot change under a loaded assembly, and
+        # re-hashing 0.94 MB on every call would be for nothing.
+        if (-not $Script:WebView2AssemblyVerified) {
+            $ExpectedWebView2Hash = Get-WebView2ExpectedHash
+
+            if ($ExpectedWebView2Hash.Count -eq 0) {
+                "The WebView2 assemblies could not be checked against a recorded hash before loading." | Write-LogOutput -LogType WARNING
+            }
+
+            foreach ($WebView2AssemblyPath in @($Script:WebView2CorePath, $Script:WebView2WinFormsPath, $Script:WebView2WpfPath)) {
+                $WebView2AssemblyName = Split-Path $WebView2AssemblyPath -Leaf
+                if (-not $ExpectedWebView2Hash.ContainsKey($WebView2AssemblyName)) {
+                    continue
+                }
+
+                "Verify assembly before load: '{0}'" -f $WebView2AssemblyName | Write-LogOutput -LogType DEBUG
+                Confirm-FileHash -Path $WebView2AssemblyPath -ExpectedSha256 $ExpectedWebView2Hash[$WebView2AssemblyName] -ArtifactName $WebView2AssemblyName -SourceUrl $Script:WebView2BasePath
+            }
+
+            $Script:WebView2AssemblyVerified = $true
+        }
+
         Add-ReflectionAssembly -Object $Script:WebView2CorePath
         Add-ReflectionAssembly -Object $Script:WebView2WinFormsPath
         Add-ReflectionAssembly -Object $Script:WebView2WpfPath
