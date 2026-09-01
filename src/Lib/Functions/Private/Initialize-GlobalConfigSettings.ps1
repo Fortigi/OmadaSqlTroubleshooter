@@ -24,10 +24,26 @@ function Initialize-GlobalConfigSettings {
             $Script:MainForm.Definition.WindowStartupLocation = [System.Windows.WindowStartupLocation]::CenterScreen
         }
 
-        if ($null -ne $Script:RunTimeConfig.Logging.LogLevelSetting) {
-            $Script:RunTimeConfig.Logging.LogLevelSetting | Set-ConfigProperty -Property "LogLevel"
-            $Script:RunTimeConfig.Logging.LogLevel = $Script:RunTimeConfig.Logging.LogLevelSetting
-            "Config: LogLevelSetting: {0}" -f $Script:RunTimeConfig.Logging.LogLevelSetting | Write-LogOutput -LogType DEBUG
+        # The level a user picks in the log viewer is stored in the global config, so it has to be
+        # read back here - the previous code pushed the runtime value INTO the config on every
+        # start and overwrote it. An explicitly bound -LogLevel still wins for this session; with
+        # no parameter the persisted level is restored; with neither, the schema default applies.
+        $PersistedLogLevel = $Script:AppGlobalConfig.LogLevel
+        $BoundLogLevel = $null
+        if ($Script:RunTimeConfig.Logging.LogLevelExplicit) {
+            $BoundLogLevel = $Script:RunTimeConfig.Logging.LogLevelSetting
+        }
+
+        $ResolvedLogLevel = Resolve-LogLevel -BoundLogLevel $BoundLogLevel -PersistedLogLevel $PersistedLogLevel -SchemaDefault (Get-ConfigSchemaDefault -Property "LogLevel")
+        $Script:RunTimeConfig.Logging.LogLevel = $ResolvedLogLevel
+        $Script:RunTimeConfig.Logging.LogLevelSetting = $ResolvedLogLevel
+        "Config: LogLevelSetting: {0}" -f $ResolvedLogLevel | Write-LogOutput -LogType DEBUG
+
+        # Write back only when the caller asked for a specific level, when nothing is stored yet, or
+        # when the stored value is unusable. Anything else would overwrite the user's own choice.
+        if ($Script:RunTimeConfig.Logging.LogLevelExplicit -or [string]::IsNullOrWhiteSpace($PersistedLogLevel) -or $PersistedLogLevel -ne $ResolvedLogLevel) {
+            "Config: Persisting LogLevel: {0}" -f $ResolvedLogLevel | Write-LogOutput -LogType DEBUG
+            $ResolvedLogLevel | Set-ConfigProperty -Property "LogLevel"
         }
 
         if (![string]::IsNullOrWhiteSpace($Script:AppGlobalConfig.InstanceGuid)) {
