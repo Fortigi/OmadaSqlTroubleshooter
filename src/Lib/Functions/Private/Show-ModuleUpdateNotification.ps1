@@ -4,9 +4,15 @@ function Show-ModuleUpdateNotification {
         Warns the user when a newer stable release of the module is published on the PowerShell Gallery.
 
         .DESCRIPTION
-        Runs at module import. Every reason to skip the check is reported as a single verbose
-        line: an empty catch used to hide the failure, which silently disabled the update
-        notification for as long as a nightly was the most recently published package.
+        Runs at module import. Every reason to skip the check is reported on the verbose
+        stream instead of being discarded: an empty catch used to hide the failure, which
+        silently disabled the update notification for as long as a nightly was the most
+        recently published package.
+
+        Verbose output from Get-GalleryModuleVersion and Compare-ModuleVersion is deliberately
+        left in place. Those functions know which package or which version string was rejected,
+        which is the detail that makes a skipped check diagnosable; this function only knows
+        that the step returned nothing usable.
     #>
     [CmdletBinding()]
     param(
