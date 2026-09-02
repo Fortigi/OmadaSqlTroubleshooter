@@ -97,7 +97,9 @@ function Get-FlatContainerUrl {
     return "https://api.nuget.org/v3-flatcontainer/{0}/{1}/{0}.{1}.nupkg" -f $PackageId.ToLowerInvariant(), $Version.ToLowerInvariant()
 }
 
-function Get-RemoteSha256 {
+function Save-RemotePackage {
+    # Downloads an artefact to a temp file and hands back the path. The caller deletes it. Split out
+    # from hashing because the per-file pins need the package kept around long enough to be read.
     param([string]$Url)
 
     $TempFile = [System.IO.Path]::GetTempFileName()
@@ -109,16 +111,72 @@ function Get-RemoteSha256 {
         finally {
             $WebClient.Dispose()
         }
-        return (Get-FileHash -Path $TempFile -Algorithm SHA256).Hash.ToLowerInvariant()
+    }
+    catch {
+        # GetTempFileName has already created the file, so a failed download leaves an empty or
+        # partial one behind. The caller only deletes what it was handed, and it is handed nothing
+        # when this throws - so clean up here before rethrowing.
+        Remove-Item -Path $TempFile -Force -ErrorAction SilentlyContinue
+        throw
+    }
+    return $TempFile
+}
+
+function Get-Sha256 {
+    param([string]$Path)
+
+    return (Get-FileHash -Path $Path -Algorithm SHA256).Hash.ToLowerInvariant()
+}
+
+function Get-PackageEntrySha256 {
+    # SHA-256 of one entry inside a .nupkg, read straight out of the archive - nothing is expanded to
+    # disk. Returns $null when the entry is absent, which the callers report as a problem rather than
+    # skipping: a Source that has moved means the bundle would be silently incomplete.
+    param([string]$PackagePath, [string]$EntryPath)
+
+    Add-Type -AssemblyName "System.IO.Compression.FileSystem" -ErrorAction SilentlyContinue
+
+    $Archive = [System.IO.Compression.ZipFile]::OpenRead($PackagePath)
+    try {
+        # 0, 1 and many are all handled explicitly. A zip may legally carry two entries with the same
+        # name; letting $Entry become an array would fail on $Entry.Open() with an opaque method
+        # invocation error rather than saying what is actually wrong.
+        $Entry = @($Archive.Entries | Where-Object { $_.FullName -eq $EntryPath })
+        if ($Entry.Count -eq 0) {
+            return $null
+        }
+        if ($Entry.Count -gt 1) {
+            # Not $null: "absent" and "ambiguous" are different problems and the caller reports them
+            # differently.
+            "Package '{0}' contains {1} entries named '{2}'. Which one the pin refers to is ambiguous." -f $PackagePath, $Entry.Count, $EntryPath | Write-Error -ErrorAction Stop
+        }
+        $Entry = $Entry[0]
+
+        $Sha256 = [System.Security.Cryptography.SHA256]::Create()
+        try {
+            $Stream = $Entry.Open()
+            try {
+                return ([System.BitConverter]::ToString($Sha256.ComputeHash($Stream)) -replace "-", "").ToLowerInvariant()
+            }
+            finally {
+                $Stream.Dispose()
+            }
+        }
+        finally {
+            $Sha256.Dispose()
+        }
     }
     finally {
-        Remove-Item -Path $TempFile -Force -ErrorAction SilentlyContinue
+        $Archive.Dispose()
     }
 }
 
 function Set-ArtifactValue {
     # Rewrites Version/Url/Sha256 in place for one artefact, leaving every other line - comments and
     # alignment included - exactly as it was.
+    #
+    # Scanning stops at the artefact's "Files = @(" line. The per-file entries below it carry their
+    # own Sha256 keys, and without this the package hash would be written over all four of them.
     param(
         [string[]]$Line,
         [string]$Id,
@@ -134,10 +192,55 @@ function Set-ArtifactValue {
         if ($CurrentId -ne $Id) {
             continue
         }
+        if ($Line[$Index] -match '^\s*Files\s*=\s*@\(') {
+            $CurrentId = $null
+            continue
+        }
         foreach ($Key in $Value.Keys) {
             if ($Line[$Index] -match ('^(\s*{0}\s*=\s*)"[^"]*"\s*$' -f [regex]::Escape($Key))) {
                 $Line[$Index] = '{0}"{1}"' -f $Matches[1], $Value[$Key]
             }
+        }
+    }
+    return $Line
+}
+
+function Set-ArtifactFileHash {
+    # Rewrites the Sha256 of each Files entry belonging to ONE artefact, keyed on the Target line
+    # immediately above it. Only the hash line is touched, so Source, Target and the layout survive
+    # untouched.
+    #
+    # Scoped to $Id the same way Set-ArtifactValue is. Target names are not unique across artefacts -
+    # nothing stops a second package from also shipping a file called WebView2Loader.dll - and an
+    # unscoped rewrite would silently repin another artefact's file to this one's bytes.
+    param(
+        [string[]]$Line,
+        [string]$Id,
+        [hashtable]$HashByTarget
+    )
+
+    $CurrentId = $null
+    $CurrentTarget = $null
+    for ($Index = 0; $Index -lt $Line.Count; $Index++) {
+        # Id appears only at artefact level; the Files entries below it carry Source/Target/Sha256.
+        if ($Line[$Index] -match '^\s*Id\s*=\s*"([^"]+)"\s*$') {
+            $CurrentId = $Matches[1]
+            $CurrentTarget = $null
+            continue
+        }
+        if ($CurrentId -ne $Id) {
+            continue
+        }
+        if ($Line[$Index] -match '^\s*Target\s*=\s*"([^"]+)"\s*$') {
+            $CurrentTarget = $Matches[1]
+            continue
+        }
+        if ($null -eq $CurrentTarget -or -not $HashByTarget.ContainsKey($CurrentTarget)) {
+            continue
+        }
+        if ($Line[$Index] -match '^(\s*Sha256\s*=\s*)"[^"]*"\s*$') {
+            $Line[$Index] = '{0}"{1}"' -f $Matches[1], $HashByTarget[$CurrentTarget]
+            $CurrentTarget = $null
         }
     }
     return $Line
@@ -191,6 +294,37 @@ foreach ($Artifact in $Artifacts) {
     $ExpectedUrl = Get-FlatContainerUrl -PackageId $Artifact.PackageId -Version $Artifact.Version
     if ($Artifact.Url -ne $ExpectedUrl) {
         Add-Problem ("Artefact '{0}' has URL '{1}' but its pinned version implies '{2}'." -f $Artifact.Id, $Artifact.Url, $ExpectedUrl)
+    }
+
+    # Files is what build/Get-BundledDependency.ps1 copies into the package and what the module
+    # re-checks before it loads each assembly. An entry that is malformed here is a bundle that
+    # cannot be verified, so it is checked as strictly as the package pin itself.
+    $ArtifactFile = @($Artifact.Files)
+    if ($ArtifactFile.Count -eq 0) {
+        Add-Problem ("Artefact '{0}' lists no Files, so nothing can be bundled or re-verified before load." -f $Artifact.Id)
+    }
+
+    $SeenTarget = @{}
+    foreach ($File in $ArtifactFile) {
+        if ([string]::IsNullOrWhiteSpace($File.Source) -or [string]::IsNullOrWhiteSpace($File.Target)) {
+            Add-Problem ("Artefact '{0}' has a Files entry with an empty Source or Target." -f $Artifact.Id)
+            continue
+        }
+
+        if ($File.Source -match '\\') {
+            Add-Problem ("Artefact '{0}' file '{1}' has Source '{2}'; entry paths inside a .nupkg use forward slashes." -f $Artifact.Id, $File.Target, $File.Source)
+        }
+
+        if ($File.Sha256 -notmatch '^[0-9a-f]{64}$') {
+            Add-Problem ("Artefact '{0}' file '{1}' has SHA-256 '{2}', which is not 64 lower-case hex characters." -f $Artifact.Id, $File.Target, $File.Sha256)
+        }
+
+        if ($SeenTarget.ContainsKey($File.Target)) {
+            # Two sources writing the same file name means whichever copies last wins, which is
+            # precisely the netcoreapp3.0 / net5.0-windows Wpf.dll ambiguity this pin exists to settle.
+            Add-Problem ("Artefact '{0}' maps more than one Source onto target '{1}'." -f $Artifact.Id, $File.Target)
+        }
+        $SeenTarget[$File.Target] = $true
     }
 
     if ([string]::IsNullOrWhiteSpace($Artifact.Manifest)) {
@@ -250,21 +384,46 @@ if ($PSCmdlet.ParameterSetName -eq "Refresh") {
         }
 
         $Url = Get-FlatContainerUrl -PackageId $Artifact.PackageId -Version $Version
-        $Sha256 = Get-RemoteSha256 -Url $Url
 
-        if ($Version -eq $Artifact.Version -and $Url -eq $Artifact.Url -and $Sha256 -eq $Artifact.Sha256) {
-            "  {0} {1} unchanged" -f $Artifact.Id, $Version | Write-Host
-            continue
-        }
+        $PackagePath = Save-RemotePackage -Url $Url
+        try {
+            $Sha256 = Get-Sha256 -Path $PackagePath
 
-        "  {0}: {1} -> {2}" -f $Artifact.Id, $Artifact.Version, $Version | Write-Host -ForegroundColor Yellow
-        "    sha256 {0} -> {1}" -f $Artifact.Sha256, $Sha256 | Write-Host -ForegroundColor Yellow
-        $Line = Set-ArtifactValue -Line $Line -Id $Artifact.Id -Value @{
-            Version = $Version
-            Url     = $Url
-            Sha256  = $Sha256
+            # Per-file hashes are recomputed from the same download the package hash came from, so
+            # the two can never describe different bytes.
+            $FileHash = @{}
+            $FileChanged = $false
+            foreach ($File in @($Artifact.Files)) {
+                $EntrySha256 = Get-PackageEntrySha256 -PackagePath $PackagePath -EntryPath $File.Source
+                if ($null -eq $EntrySha256) {
+                    Add-Problem ("Artefact '{0}' version {1} has no entry '{2}'. The package layout changed; the Files list has to be corrected by hand." -f $Artifact.Id, $Version, $File.Source)
+                    continue
+                }
+                $FileHash[$File.Target] = $EntrySha256
+                if ($EntrySha256 -ne $File.Sha256) {
+                    $FileChanged = $true
+                    "    {0} sha256 {1} -> {2}" -f $File.Target, $File.Sha256, $EntrySha256 | Write-Host -ForegroundColor Yellow
+                }
+            }
+
+            if ($Version -eq $Artifact.Version -and $Url -eq $Artifact.Url -and $Sha256 -eq $Artifact.Sha256 -and -not $FileChanged) {
+                "  {0} {1} unchanged" -f $Artifact.Id, $Version | Write-Host
+                continue
+            }
+
+            "  {0}: {1} -> {2}" -f $Artifact.Id, $Artifact.Version, $Version | Write-Host -ForegroundColor Yellow
+            "    sha256 {0} -> {1}" -f $Artifact.Sha256, $Sha256 | Write-Host -ForegroundColor Yellow
+            $Line = Set-ArtifactValue -Line $Line -Id $Artifact.Id -Value @{
+                Version = $Version
+                Url     = $Url
+                Sha256  = $Sha256
+            }
+            $Line = Set-ArtifactFileHash -Line $Line -Id $Artifact.Id -HashByTarget $FileHash
+            $Changed++
         }
-        $Changed++
+        finally {
+            Remove-Item -Path $PackagePath -Force -ErrorAction SilentlyContinue
+        }
     }
 
     if ($Changed -gt 0) {
@@ -278,12 +437,35 @@ if ($PSCmdlet.ParameterSetName -eq "Refresh") {
 }
 elseif (-not $SkipDownload) {
     foreach ($Artifact in $Artifacts) {
-        $Actual = Get-RemoteSha256 -Url $Artifact.Url
-        if ($Actual -ne $Artifact.Sha256) {
-            Add-Problem ("Artefact '{0}' no longer matches what '{1}' serves.`r`n    Pinned: {2}`r`n    Actual: {3}" -f $Artifact.Id, $Artifact.Url, $Artifact.Sha256, $Actual)
-        }
-        else {
+        $PackagePath = Save-RemotePackage -Url $Artifact.Url
+        try {
+            $Actual = Get-Sha256 -Path $PackagePath
+            if ($Actual -ne $Artifact.Sha256) {
+                Add-Problem ("Artefact '{0}' no longer matches what '{1}' serves.`r`n    Pinned: {2}`r`n    Actual: {3}" -f $Artifact.Id, $Artifact.Url, $Artifact.Sha256, $Actual)
+                continue
+            }
+
             "  {0} {1} OK" -f $Artifact.Id, $Artifact.Version | Write-Host
+
+            # The package hash matching is not enough on its own. The bundle ships extracted files,
+            # which that hash cannot cover, so each per-file pin is re-derived from the package here.
+            # This is what catches a refresh that bumped the package hash but left the Files stale.
+            foreach ($File in @($Artifact.Files)) {
+                $EntrySha256 = Get-PackageEntrySha256 -PackagePath $PackagePath -EntryPath $File.Source
+                if ($null -eq $EntrySha256) {
+                    Add-Problem ("Artefact '{0}' pins file '{1}', but the package has no entry at that path. The bundle would be incomplete." -f $Artifact.Id, $File.Source)
+                    continue
+                }
+                if ($EntrySha256 -ne $File.Sha256) {
+                    Add-Problem ("Artefact '{0}' file '{1}' no longer matches the package.`r`n    Pinned: {2}`r`n    Actual: {3}" -f $Artifact.Id, $File.Source, $File.Sha256, $EntrySha256)
+                }
+                else {
+                    "    {0} OK" -f $File.Target | Write-Host
+                }
+            }
+        }
+        finally {
+            Remove-Item -Path $PackagePath -Force -ErrorAction SilentlyContinue
         }
     }
 }
