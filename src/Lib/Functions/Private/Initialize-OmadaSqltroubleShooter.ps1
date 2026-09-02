@@ -73,7 +73,18 @@ function Initialize-OmadaSqlTroubleShooter {
                 # (the lock for a bundle, the install stamp for a download), so getting here means
                 # the install is damaged rather than merely unusual.
                 if (-not $ExpectedWebView2Hash.ContainsKey($WebView2AssemblyName)) {
-                    "Refusing to load '{0}' from '{1}': no expected SHA-256 is recorded for it in '{2}', so its integrity cannot be established. Run 'Clear-OmadaSqlTroubleshooterCache -Scope Binaries' and start the application again to force a fresh, verified download." -f $WebView2AssemblyName, $Script:WebView2BasePath, $ExpectedWebView2HashSource | Write-Error -ErrorAction "Stop"
+                    # The fix depends on which file is incomplete. A missing entry in the stamp is a
+                    # damaged cache, which clearing repairs. A missing entry in the lock is a damaged
+                    # module installation, and clearing the cache would neither fix it nor even be
+                    # possible to recover from on a machine with no route to nuget.org.
+                    if ($Script:WebView2Source -eq "Bundle") {
+                        $Remediation = "Reinstall the module with 'Update-Module -Name OmadaSqlTroubleshooter' or 'Install-Module -Name OmadaSqlTroubleshooter -Force' to restore the dependency lock and the bundled assemblies."
+                    }
+                    else {
+                        $Remediation = "Run 'Clear-OmadaSqlTroubleshooterCache -Scope Binaries' and start the application again to force a fresh, verified download."
+                    }
+
+                    "Refusing to load '{0}' from '{1}': no expected SHA-256 is recorded for it in '{2}', so its integrity cannot be established. {3}" -f $WebView2AssemblyName, $Script:WebView2BasePath, $ExpectedWebView2HashSource, $Remediation | Write-Error -ErrorAction "Stop"
                 }
 
                 "Verify assembly before load: '{0}'" -f $WebView2AssemblyName | Write-LogOutput -LogType DEBUG

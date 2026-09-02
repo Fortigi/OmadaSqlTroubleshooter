@@ -14,10 +14,15 @@ function Confirm-FileHash {
         [string]$ExpectedHashSource
     )
 
-    # Where the expected hash came from, named in the failure so the remediation advice fits. It is
-    # the lock file for a download and for the build-time bundle, but the WebView2.pin stamp for
-    # assemblies already installed under %LOCALAPPDATA% - telling someone to stop editing the lock
-    # file when the mismatch is against a stamp sends them to the wrong place.
+    # Which file recorded the expected hash, named in the failure so the reader is sent to the right
+    # place. There are three callers and they do not all use the same one:
+    #
+    #   Invoke-DownloadFile        - DependencyLock.psd1, the pin for the package it just fetched.
+    #   Load time, bundle source   - DependencyLock.psd1, the per-file pins for the shipped bundle.
+    #   Load time, download source - WebView2.pin, the stamp Install-WebView2 wrote beside the
+    #                                assemblies in %LOCALAPPDATA% when it installed them.
+    #
+    # Defaults to the lock, so callers that predate this parameter are unchanged.
     if ([string]::IsNullOrWhiteSpace($ExpectedHashSource)) {
         $ExpectedHashSource = $Script:DependencyLockPath
     }
@@ -52,7 +57,7 @@ function Confirm-FileHash {
             $Disposition = "The file was deleted and has not been loaded."
         }
 
-        "Integrity check FAILED for '{0}' from '{1}'.`r`n  Expected SHA-256: {2}`r`n  Actual SHA-256:   {3}`r`n{4} Either the bytes were corrupted or replaced, or the artefact no longer matches what is recorded in '{5}'. Do not work around this by editing that file - run 'Clear-OmadaSqlTroubleshooterCache -Scope Binaries' to force a fresh, verified copy, and report it at https://github.com/Fortigi/OmadaSqlTroubleshooter/security/advisories/new if you believe the upstream artefact was tampered with." -f $ArtifactName, $SourceUrl, $ExpectedSha256.ToLowerInvariant(), $ActualSha256, $Disposition, $ExpectedHashSource | Write-Error -ErrorAction "Stop"
+        "Integrity check FAILED for '{0}' from '{1}'.`r`n  Expected SHA-256: {2}`r`n  Actual SHA-256:   {3}`r`n{4} Either the bytes were corrupted or replaced, or the artefact no longer matches what is recorded in '{5}'. Do not work around this by editing that file. If the file was downloaded, 'Clear-OmadaSqlTroubleshooterCache -Scope Binaries' forces a fresh, verified copy; if it shipped inside the module, reinstall the module with 'Update-Module -Name OmadaSqlTroubleshooter'. Report it at https://github.com/Fortigi/OmadaSqlTroubleshooter/security/advisories/new if you believe the upstream artefact was tampered with." -f $ArtifactName, $SourceUrl, $ExpectedSha256.ToLowerInvariant(), $ActualSha256, $Disposition, $ExpectedHashSource | Write-Error -ErrorAction "Stop"
     }
 
     "{0} - '{1}' matches the pinned SHA-256" -f $MyInvocation.MyCommand, $ArtifactName | Write-Verbose
