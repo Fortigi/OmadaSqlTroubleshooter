@@ -63,15 +63,26 @@ function Move-SqlDiagnosticToSelection {
         $Line = [int]$Item.Line
         $EndLine = [int]$Item.EndLine
 
-        $Moved.Add([PSCustomObject][Ordered]@{
-                Line      = $Line + $LineShift
-                Column    = if ($Line -eq 1) { [int]$Item.Column + $ColumnShift } else { [int]$Item.Column }
-                EndLine   = $EndLine + $LineShift
-                EndColumn = if ($EndLine -eq 1) { [int]$Item.EndColumn + $ColumnShift } else { [int]$Item.EndColumn }
-                Severity  = $Item.Severity
-                Message   = $Item.Message
-                Source    = $Item.Source
-            })
+        # Copied and adjusted rather than rebuilt from a fixed set of properties. Get-SqlSyntaxDiagnostic
+        # also emits Number, and the schema pass will add fields of its own; listing the fields here
+        # would silently drop them, and would do it only for an executed selection, so the diagnostic
+        # shape would depend on how the query was run.
+        $Copy = $Item.PSObject.Copy()
+
+        $Copy.Line = $Line + $LineShift
+        $Copy.EndLine = $EndLine + $LineShift
+
+        # Only the first line takes a column shift: a selection can start mid-line, but every line
+        # after it begins at column 1 in the model as well as in the selection.
+        if ($Line -eq 1) {
+            $Copy.Column = [int]$Item.Column + $ColumnShift
+        }
+
+        if ($EndLine -eq 1) {
+            $Copy.EndColumn = [int]$Item.EndColumn + $ColumnShift
+        }
+
+        $Moved.Add($Copy)
     }
 
     return @($Moved)

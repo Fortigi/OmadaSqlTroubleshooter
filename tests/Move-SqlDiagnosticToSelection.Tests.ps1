@@ -19,6 +19,7 @@ BeforeAll {
             Severity  = 'Error'
             Message   = "Incorrect syntax near ','."
             Source    = 'T-SQL syntax'
+            Number    = 46010
         }
     }
 }
@@ -87,6 +88,29 @@ Describe 'Move-SqlDiagnosticToSelection' -Tag 'Unit' {
             $Moved[0].Severity | Should -Be 'Error'
             $Moved[0].Message | Should -Be "Incorrect syntax near ','."
             $Moved[0].Source | Should -Be 'T-SQL syntax'
+            $Moved[0].Number | Should -Be 46010 -Because 'Get-SqlSyntaxDiagnostic emits Number and a selection must not be the reason it disappears'
+        }
+
+        It 'Should carry through a field this function has never heard of' {
+            # The schema pass adds fields of its own to the same shape. Rebuilding from a fixed
+            # property list would drop them, and would drop them only when a selection was executed,
+            # so the diagnostic shape would depend on how the query was run.
+            $Diagnostic = New-TestDiagnostic -Line 1 -Column 1 -EndLine 1 -EndColumn 2
+            $Diagnostic | Add-Member -NotePropertyName 'SchemaObject' -NotePropertyValue 'dbo.Person'
+
+            $Moved = @(Move-SqlDiagnosticToSelection -Diagnostic $Diagnostic -StartLine 4 -StartColumn 2)
+
+            $Moved[0].SchemaObject | Should -Be 'dbo.Person'
+        }
+
+        It 'Should not mutate the diagnostic it was given' {
+            # The caller keeps the parser's own result; moving markers onto the model must not
+            # rewrite the positions the parser reported.
+            $Diagnostic = New-TestDiagnostic -Line 1 -Column 3 -EndLine 1 -EndColumn 7
+            $null = Move-SqlDiagnosticToSelection -Diagnostic $Diagnostic -StartLine 9 -StartColumn 4
+
+            $Diagnostic.Line | Should -Be 1
+            $Diagnostic.Column | Should -Be 3
         }
 
         It 'Should keep the diagnostics in the order it was given them' {
