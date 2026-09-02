@@ -80,6 +80,13 @@ function Install-ScriptDom {
             if ($null -ne $ExpandedPath -and (Test-Path $ExpandedPath)) {
                 Remove-Item -Path $ExpandedPath -Force -Recurse -ErrorAction SilentlyContinue
             }
+
+            # The downloaded package too, not just what was expanded out of it. This one is ~20 MB,
+            # and Install-ScriptDom runs again on every pin change and every failed hash check, so
+            # leaving it behind accumulates copies in the user's temp folder.
+            if (![string]::IsNullOrWhiteSpace($TempFile) -and (Test-Path $TempFile)) {
+                Remove-Item -Path $TempFile -Force -ErrorAction SilentlyContinue
+            }
         }
 
         return (Test-Path $Script:ScriptDomPath -PathType Leaf)

@@ -8,7 +8,10 @@ function Invoke-ExecuteQuery {
             return
         }
 
-        $ScriptToExecute = "(function() { var fullText = editor.getValue(); var sel = editor.getSelection(); var hasSelection = sel && !sel.isEmpty(); var selectedText = hasSelection ? editor.getModel().getValueInRange(sel) : null; return { fullText: fullText, selectedText: selectedText }; })();"
+        # selectionStartLine/Column come back so the syntax pass can put its markers where the
+        # selected text actually sits in the model; the parser only ever sees the selection, so it
+        # numbers the selection's first line as line 1.
+        $ScriptToExecute = "(function() { var fullText = editor.getValue(); var sel = editor.getSelection(); var hasSelection = sel && !sel.isEmpty(); var selectedText = hasSelection ? editor.getModel().getValueInRange(sel) : null; return { fullText: fullText, selectedText: selectedText, selectionStartLine: hasSelection ? sel.startLineNumber : 1, selectionStartColumn: hasSelection ? sel.startColumn : 1 }; })();"
 
         $OnCompletedScriptBlock = {
             $Private:TempQueryDoId = $null
@@ -38,6 +41,13 @@ function Invoke-ExecuteQuery {
                         $Private:SyntaxDiagnostic = @()
                         if ($Private:SyntaxResult.Status -eq "Ok") {
                             $Private:SyntaxDiagnostic = $Private:SyntaxResult.Diagnostic
+
+                            # The parser numbered the selection from line 1. The markers go onto the
+                            # whole model, so without this every squiggle for an executed selection
+                            # lands too high by the height of the text above it.
+                            if (![string]::IsNullOrWhiteSpace($Private:SelectionText)) {
+                                $Private:SyntaxDiagnostic = Move-SqlDiagnosticToSelection -Diagnostic $Private:SyntaxDiagnostic -StartLine $Private:EditorData.selectionStartLine -StartColumn $Private:EditorData.selectionStartColumn
+                            }
                         }
 
                         Invoke-ExecuteScriptAsync -ScriptToExecute (ConvertTo-EditorDiagnosticScript -Diagnostic $Private:SyntaxDiagnostic)
