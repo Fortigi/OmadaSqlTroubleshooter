@@ -48,7 +48,19 @@ function Invoke-OmadaPSWebRequestWrapper {
             }
 
             "Parameters: {0}" -f (ConvertTo-RedactedLogString -InputObject $Private:Parameters) | Write-LogOutput -LogType VERBOSE
-            $Private:Result = Invoke-OmadaRestMethod @Parameters
+
+            # The call itself lives in Invoke-OmadaRequestCore, which reads no $Script: state and
+            # writes no log - the one part of this function that can legally run in a worker runspace
+            # (issue #40). Everything around it, from the parameter preparation above to the error
+            # classification below, stays here on the UI thread. Behaviour is unchanged: the core
+            # returns the failure instead of throwing it, and this rethrows so the existing catch
+            # classifies it exactly as before. A rethrown ErrorRecord keeps its Exception,
+            # ErrorDetails and FullyQualifiedErrorId, which is all the branches below read.
+            $Private:Outcome = Invoke-OmadaRequestCore -Parameters $Private:Parameters
+            if ($null -ne $Private:Outcome.ErrorRecord) {
+                throw $Private:Outcome.ErrorRecord
+            }
+            $Private:Result = $Private:Outcome.Result
             # Deliberately no status-bar write here. A successful request is not the same thing as a
             # connected tab: this transport is also used by probes and by work that runs while a tab
             # is being connected, so writing "Connected" from here put the status bar ahead of - and
