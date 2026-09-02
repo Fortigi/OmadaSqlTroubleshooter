@@ -91,6 +91,53 @@ function script:Invoke-E2EFlushDispatcher {
     $Script:MainForm.Definition.Dispatcher.Invoke([System.Action] {}, [System.Windows.Threading.DispatcherPriority]::Background)
 }
 
+function script:Wait-E2EUntil {
+    <#
+    .SYNOPSIS
+    Pump the dispatcher until $Condition is true, or fail after -TimeoutSeconds.
+
+    .DESCRIPTION
+    The scenario-side counterpart to work that no longer finishes inside the click that started it.
+    While every backend seam completed inline, an assertion could follow Invoke-E2EExecute directly;
+    work that runs off the UI thread instead completes through the 50 ms WebViewCompletionPollTimer,
+    which only fires when the dispatcher is pumped - and a scenario running ON the dispatcher thread
+    is precisely what stops it from being pumped. So this loop yields (Invoke-E2EFlushDispatcher) and
+    re-tests, rather than sleeping.
+
+    Throws on timeout, which E2ECase records as a failure with -Message. Never assert on a result
+    without waiting for it first: a bare assertion after an asynchronous action reads as a pass/fail
+    of the feature when it is really a race.
+
+    .PARAMETER Condition
+    A scriptblock returning something truthy once the wait is over.
+
+    .EXAMPLE
+    Wait-E2EUntil { $null -ne $Script:MainForm.Elements.DataGridQueryResult.ItemsSource } -Message "grid populated"
+    #>
+    param(
+        [Parameter(Mandatory)][scriptblock]$Condition,
+        [double]$TimeoutSeconds = 10,
+        [string]$Message = "condition"
+    )
+    $Deadline = [DateTime]::UtcNow.AddSeconds($TimeoutSeconds)
+    while ([DateTime]::UtcNow -lt $Deadline) {
+        if (& $Condition) {
+            return $true
+        }
+        Invoke-E2EFlushDispatcher
+        # A short sleep after the flush, not instead of it: the flush drains work that is already
+        # queued, while the poll timer needs wall-clock time to reach its next 50 ms tick. Without
+        # this the loop spins hot and starves the very timer it is waiting for.
+        Start-Sleep -Milliseconds 25
+    }
+    # One last chance after the final flush, so a condition that became true during the last pump is
+    # not reported as a timeout.
+    if (& $Condition) {
+        return $true
+    }
+    throw ("Timed out after {0}s waiting for: {1}" -f $TimeoutSeconds, $Message)
+}
+
 function script:New-E2ERestoredTab {
     param(
         [string]$DisplayName = "Restored",

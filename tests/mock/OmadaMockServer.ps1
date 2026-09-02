@@ -9,13 +9,26 @@ deliberately avoids System.Net.HttpListener, which needs a URL-ACL reservation (
 or elevation to bind a localhost port - so this "just works" for a normal user on a high port.
 
 Every request is classified and answered by OmadaMockRouter.ps1 (Resolve-OmadaMockResponse), which
-reads the response from fixtures/. Requests are simple, come only from the app via Invoke-RestMethod,
-and are served one at a time (the app issues them serially on its dispatcher thread).
+reads the response from fixtures/.
+
+Requests are served CONCURRENTLY: the accept loop hands each client to one of a fixed set of worker
+runspaces. This used to serve one client at a time, which was fine while the app issued every request
+serially on its dispatcher thread - but the app now executes requests off that thread, so a test for
+"two tabs executing at once" needs two slow requests to genuinely overlap rather than queue behind
+each other. With a serial server such a test would pass (or time out) for the wrong reason.
+
+A response can also be delayed on purpose, which is what makes "long-running query" testable at all:
+per route via "delayMs" in routes.json, or live via Set-OmadaMockRouteDelay on a running handle. The
+sleep happens in the worker just before the response is written, so it is felt by the client as a slow
+socket - the real Invoke-RestMethod path - not as a fake pause inside a shim.
 
 Dot-source this file for the library functions:
-  - Invoke-OmadaMockListenerLoop  : blocking accept/serve loop (used by Start-OmadaMockServer.ps1).
-  - New-OmadaMockServerHandle      : start the loop in a background runspace; returns a stop handle.
-  - Stop-OmadaMockServerHandle     : stop a handle started above.
+  - Invoke-OmadaMockListenerLoop  : blocking accept loop + worker pool (Start-OmadaMockServer.ps1).
+  - Invoke-OmadaMockWorkerLoop    : one worker's dequeue/serve loop (runs in a worker runspace).
+  - Invoke-OmadaMockClientRequest : serve exactly one accepted client.
+  - New-OmadaMockServerHandle     : start the loop in a background runspace; returns a stop handle.
+  - Stop-OmadaMockServerHandle    : stop a handle started above.
+  - Set-OmadaMockRouteDelay / Clear-OmadaMockRouteDelay : the live per-route delay knob.
 Nothing runs on load. OmadaMockRouter.ps1 must be dot-sourced first (or alongside).
 #>
 
@@ -120,59 +133,244 @@ function Write-OmadaMockHttpResponse {
     $Stream.Flush()
 }
 
+function Get-OmadaMockEffectiveDelayMs {
+    <#
+    .SYNOPSIS
+    How long this response should be held before it is written: the live override for the route if one
+    is set, otherwise whatever the manifest declared.
+
+    .DESCRIPTION
+    Two sources, in this order:
+      1. $Control.RouteDelays[<routeKey>] - set through Set-OmadaMockRouteDelay on a running handle.
+         A "*" key applies to every route, which is how a test slows the whole instance in one call.
+      2. $Response.DelayMs - the route's "delayMs" in routes.json.
+    The live override wins so a test can slow one route without editing (and having to restore) the
+    shared fixture manifest.
+    #>
+    [CmdletBinding()]
+    param(
+        [hashtable]$Response,
+        [hashtable]$Control
+    )
+
+    if ($null -ne $Control -and $null -ne $Control.RouteDelays) {
+        $RouteKey = [string]$Response.RouteKey
+        # Read into a local first: another thread may clear the table between the check and the read.
+        $Override = $Control.RouteDelays[$RouteKey]
+        if ($null -eq $Override) { $Override = $Control.RouteDelays["*"] }
+        if ($null -ne $Override) { return [Math]::Max(0, [int]$Override) }
+    }
+    if ($null -ne $Response -and $null -ne $Response.DelayMs) {
+        return [Math]::Max(0, [int]$Response.DelayMs)
+    }
+    return 0
+}
+
+function Invoke-OmadaMockClientRequest {
+    <#
+    .SYNOPSIS
+    Read one request off an accepted client, resolve it, honour its delay, write the response, close.
+
+    .DESCRIPTION
+    Split out of the accept loop so the same serving logic runs whether it is called from a worker
+    runspace or directly from a test. Errors are recorded on $Control rather than thrown: one bad
+    client must not take the server down for the others.
+    #>
+    [CmdletBinding()]
+    param(
+        [System.Net.Sockets.TcpClient]$Client,
+        [string]$FixturesDir,
+        [hashtable]$Control
+    )
+
+    try {
+        $Client.ReceiveTimeout = 5000
+        $Client.SendTimeout = 5000
+        $Stream = $Client.GetStream()
+        $Request = Read-OmadaMockHttpRequest -Stream $Stream
+        if ($null -ne $Request) {
+            $Response = Resolve-OmadaMockResponse -Path $Request.Path -Method $Request.Method -Body $Request.Body -FixturesDir $FixturesDir
+            $DelayMs = Get-OmadaMockEffectiveDelayMs -Response $Response -Control $Control
+            if ($DelayMs -gt 0) {
+                # Deliberately AFTER the fixture is resolved and BEFORE anything is written, so the
+                # client sees a slow server rather than a slow trickle of bytes - the shape a real
+                # long-running Omada query has.
+                #
+                # Slept in slices rather than in one Start-Sleep so a stop request is honoured
+                # promptly: Stop-OmadaMockServerHandle ends up in EndInvoke, which blocks until the
+                # workers return, and a worker parked in a single multi-second sleep would hold the
+                # whole shutdown for the length of the delay a test had just set.
+                $Deadline = [DateTime]::UtcNow.AddMilliseconds($DelayMs)
+                while ([DateTime]::UtcNow -lt $Deadline -and (($null -eq $Control) -or $Control.Running)) {
+                    Start-Sleep -Milliseconds 25
+                }
+            }
+            Write-OmadaMockHttpResponse -Stream $Stream -Response $Response
+        }
+    }
+    catch {
+        if ($null -ne $Control) { $Control.Error = $_.Exception.Message }
+    }
+    finally {
+        try { $Client.Close() } catch { }
+    }
+}
+
+function Invoke-OmadaMockWorkerLoop {
+    <#
+    .SYNOPSIS
+    One worker's loop: take accepted clients off the shared queue and serve them until told to stop.
+
+    .PARAMETER Queue
+    The ConcurrentQueue[TcpClient] the accept loop feeds.
+    #>
+    [CmdletBinding()]
+    param(
+        $Queue,
+        [string]$FixturesDir,
+        [hashtable]$Control
+    )
+
+    $Client = $null
+    while ($Control.Running) {
+        if ($Queue.TryDequeue([ref]$Client)) {
+            Invoke-OmadaMockClientRequest -Client $Client -FixturesDir $FixturesDir -Control $Control
+        }
+        else {
+            Start-Sleep -Milliseconds 5
+        }
+    }
+
+    # Shutting down: close anything still queued rather than leaving a client hanging on a socket that
+    # will never be answered - an unanswered client blocks its test until the request timeout instead.
+    while ($Queue.TryDequeue([ref]$Client)) {
+        try { $Client.Close() } catch { }
+    }
+}
+
 function Invoke-OmadaMockListenerLoop {
     <#
     .SYNOPSIS
-    Blocking accept/serve loop. Stops when $Control.Running becomes $false (polled between accepts).
+    Blocking accept loop feeding a fixed pool of worker runspaces. Stops when $Control.Running becomes
+    $false (polled between accepts).
+
+    .DESCRIPTION
+    The accept loop itself does no I/O beyond AcceptTcpClient, so a slow (delayed) response can never
+    stall the acceptance of the next connection - which is what lets two concurrent requests actually
+    overlap. Serving happens on $WorkerCount worker runspaces, each of which dot-sources the router and
+    this file once and then loops.
 
     .PARAMETER Control
     Optional synchronized hashtable used to signal/observe the server across threads. Keys:
-    Running (bool, set $false to stop), Started (bool, set true once listening), Error (last error).
+    Running (bool, set $false to stop), Started (bool, set true once listening), Error (last error),
+    Port (the actually-bound port), RouteDelays (route key -> delay in ms; "*" for all routes).
+
+    .PARAMETER WorkerCount
+    How many requests may be in flight at once. The default of 4 covers the app's tab capacity of
+    concurrent executes with room to spare; a value below 1 is raised to 1.
     #>
     [CmdletBinding()]
     param(
         [string]$BindAddress = "127.0.0.1",
         [int]$Port = 8787,
         [string]$FixturesDir,
-        [hashtable]$Control
+        [hashtable]$Control,
+        [int]$WorkerCount = 4
     )
 
-    if ($null -eq $Control) { $Control = @{ Running = $true } }
+    if ($null -eq $Control) { $Control = [hashtable]::Synchronized(@{ Running = $true }) }
+    if ($null -eq $Control.RouteDelays) { $Control.RouteDelays = [hashtable]::Synchronized(@{}) }
+    if ($WorkerCount -lt 1) { $WorkerCount = 1 }
+
     $Dir = Get-OmadaMockFixturesDir -FixturesDir $FixturesDir
+    $Queue = [System.Collections.Concurrent.ConcurrentQueue[System.Net.Sockets.TcpClient]]::new()
     $Listener = [System.Net.Sockets.TcpListener]::new([System.Net.IPAddress]::Parse($BindAddress), $Port)
+
+    $RouterPath = Join-Path $PSScriptRoot "OmadaMockRouter.ps1"
+    $ServerPath = Join-Path $PSScriptRoot "OmadaMockServer.ps1"
+    $Workers = [System.Collections.Generic.List[object]]::new()
 
     try {
         $Listener.Start()
         # Report the actually-bound port (matters when Port 0 was passed for an OS-assigned free port).
         $Control.Port = ([System.Net.IPEndPoint]$Listener.LocalEndpoint).Port
+
+        for ($Index = 0; $Index -lt $WorkerCount; $Index++) {
+            $WorkerShell = [powershell]::Create()
+            [void]$WorkerShell.AddScript({
+                    param($RouterPath, $ServerPath, $Queue, $Dir, $Control)
+                    . $RouterPath
+                    . $ServerPath
+                    Invoke-OmadaMockWorkerLoop -Queue $Queue -FixturesDir $Dir -Control $Control
+                }).AddArgument($RouterPath).AddArgument($ServerPath).AddArgument($Queue).AddArgument($Dir).AddArgument($Control)
+            $Workers.Add([pscustomobject]@{ Shell = $WorkerShell; Async = $WorkerShell.BeginInvoke() })
+        }
+
+        # Only now: a client that connects the instant Started flips must find a worker ready for it.
         $Control.Started = $true
+
         while ($Control.Running) {
             if (-not $Listener.Pending()) {
                 Start-Sleep -Milliseconds 20
                 continue
             }
-            $Client = $Listener.AcceptTcpClient()
-            try {
-                $Client.ReceiveTimeout = 5000
-                $Client.SendTimeout = 5000
-                $Stream = $Client.GetStream()
-                $Request = Read-OmadaMockHttpRequest -Stream $Stream
-                if ($null -ne $Request) {
-                    $Response = Resolve-OmadaMockResponse -Path $Request.Path -Method $Request.Method -Body $Request.Body -FixturesDir $Dir
-                    Write-OmadaMockHttpResponse -Stream $Stream -Response $Response
-                }
-            }
-            catch {
-                $Control.Error = $_.Exception.Message
-            }
-            finally {
-                $Client.Close()
-            }
+            $Queue.Enqueue($Listener.AcceptTcpClient())
         }
     }
     finally {
         try { $Listener.Stop() } catch { }
+        # $Control.Running is already $false on the normal stop path; force it so the workers also exit
+        # when this loop leaves because it threw.
+        $Control.Running = $false
+        foreach ($Worker in $Workers) {
+            try { $Worker.Shell.EndInvoke($Worker.Async) } catch { }
+            try { $Worker.Shell.Dispose() } catch { }
+        }
         $Control.Started = $false
+    }
+}
+
+function Set-OmadaMockRouteDelay {
+    <#
+    .SYNOPSIS
+    Make a running mock answer one route (or every route, with -RouteKey "*") slowly.
+
+    .DESCRIPTION
+    The knob a test uses to create a genuinely long-running request. It writes into the handle's
+    synchronized control table, which the serving workers read per request, so it takes effect
+    immediately and needs no restart. Clear it with Clear-OmadaMockRouteDelay.
+
+    .EXAMPLE
+    Set-OmadaMockRouteDelay -Handle $Handle -RouteKey "paging.sqldataproducer" -DelayMs 5000
+    #>
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)] $Handle,
+        [Parameter(Mandatory)][string]$RouteKey,
+        [Parameter(Mandatory)][int]$DelayMs
+    )
+    if ($null -eq $Handle.Control.RouteDelays) {
+        $Handle.Control.RouteDelays = [hashtable]::Synchronized(@{})
+    }
+    $Handle.Control.RouteDelays[$RouteKey] = [Math]::Max(0, $DelayMs)
+}
+
+function Clear-OmadaMockRouteDelay {
+    <#
+    .SYNOPSIS
+    Remove one route's live delay override, or all of them when -RouteKey is omitted.
+    #>
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)] $Handle,
+        [string]$RouteKey
+    )
+    if ($null -eq $Handle.Control.RouteDelays) { return }
+    if ([string]::IsNullOrWhiteSpace($RouteKey)) {
+        $Handle.Control.RouteDelays.Clear()
+    }
+    else {
+        $Handle.Control.RouteDelays.Remove($RouteKey)
     }
 }
 
@@ -187,13 +385,21 @@ function New-OmadaMockServerHandle {
         [string]$BindAddress = "127.0.0.1",
         [int]$Port = 8787,
         [string]$FixturesDir,
-        [int]$StartTimeoutSeconds = 10
+        [int]$StartTimeoutSeconds = 10,
+        [int]$WorkerCount = 4
     )
 
     $Dir = Get-OmadaMockFixturesDir -FixturesDir $FixturesDir
     $RouterPath = Join-Path $PSScriptRoot "OmadaMockRouter.ps1"
     $ServerPath = Join-Path $PSScriptRoot "OmadaMockServer.ps1"
-    $Control = [hashtable]::Synchronized(@{ Running = $true; Started = $false; Error = $null })
+    # RouteDelays is created here, not in the listener loop, so Set-OmadaMockRouteDelay can be called
+    # against the returned handle from this runspace and be seen by the workers in theirs.
+    $Control = [hashtable]::Synchronized(@{
+            Running     = $true
+            Started     = $false
+            Error       = $null
+            RouteDelays = [hashtable]::Synchronized(@{})
+        })
 
     $Runspace = [runspacefactory]::CreateRunspace()
     $Runspace.ApartmentState = "MTA"
@@ -203,11 +409,11 @@ function New-OmadaMockServerHandle {
     $Shell = [powershell]::Create()
     $Shell.Runspace = $Runspace
     [void]$Shell.AddScript({
-            param($RouterPath, $ServerPath, $BindAddress, $Port, $Dir, $Control)
+            param($RouterPath, $ServerPath, $BindAddress, $Port, $Dir, $Control, $WorkerCount)
             . $RouterPath
             . $ServerPath
-            Invoke-OmadaMockListenerLoop -BindAddress $BindAddress -Port $Port -FixturesDir $Dir -Control $Control
-        }).AddArgument($RouterPath).AddArgument($ServerPath).AddArgument($BindAddress).AddArgument($Port).AddArgument($Dir).AddArgument($Control)
+            Invoke-OmadaMockListenerLoop -BindAddress $BindAddress -Port $Port -FixturesDir $Dir -Control $Control -WorkerCount $WorkerCount
+        }).AddArgument($RouterPath).AddArgument($ServerPath).AddArgument($BindAddress).AddArgument($Port).AddArgument($Dir).AddArgument($Control).AddArgument($WorkerCount)
     $Async = $Shell.BeginInvoke()
 
     $Deadline = [DateTime]::UtcNow.AddSeconds($StartTimeoutSeconds)
