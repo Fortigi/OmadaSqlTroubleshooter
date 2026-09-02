@@ -32,9 +32,12 @@ E2ESuite -Name "AsyncExecute" -Body {
         Invoke-E2EExecute
 
         E2EAssertTrue ($null -eq $Elements.DataGridQueryResult.ItemsSource) "the grid must not be populated by the time the click returns"
-        E2EAssertTrue (-not $Elements.ButtonExecuteQuery.IsEnabled) "Execute should still be disabled while the query is in flight"
+        E2EAssertTrue (Test-E2EExecuteInFlight) "the query should still be outstanding when the click returns"
+        E2EAssertEqual "_Cancel" (Get-E2EExecuteButtonText) "the Execute button should read Cancel while the query is in flight"
+        E2EAssertTrue $Elements.ButtonExecuteQuery.IsEnabled "the Cancel button must stay enabled - it is the only way out"
 
-        Wait-E2EUntil -TimeoutSeconds 15 -Message "the query to complete" -Condition { $Elements.ButtonExecuteQuery.IsEnabled }
+        Wait-E2EUntil -TimeoutSeconds 15 -Message "the query to complete" -Condition { -not (Test-E2EExecuteInFlight) }
+        Invoke-E2EFlushDispatcher
         E2EAssertEqual 2 (@($Elements.DataGridQueryResult.ItemsSource).Count) "the grid should be populated once the result lands"
     }
 
@@ -57,7 +60,7 @@ E2ESuite -Name "AsyncExecute" -Body {
         Invoke-E2EFlushDispatcher
         $Stopwatch.Stop()
 
-        E2EAssertTrue (-not $Elements.ButtonExecuteQuery.IsEnabled) "the query should still be in flight for this to mean anything"
+        E2EAssertTrue (Test-E2EExecuteInFlight) "the query should still be in flight for this to mean anything"
         E2EAssertTrue ($Stopwatch.ElapsedMilliseconds -lt 500) ("a dispatcher round-trip took {0} ms while a 1500 ms query was in flight; the UI thread is blocked" -f $Stopwatch.ElapsedMilliseconds)
 
         Wait-E2ENoPendingRequests
@@ -82,8 +85,9 @@ E2ESuite -Name "AsyncExecute" -Body {
         E2EAssertTrue ((Get-ActiveTabSession).Id -eq $OtherTab.Id) "the new tab should be active while the first tab's query is in flight"
 
         Wait-E2EUntil -TimeoutSeconds 15 -Message "the backgrounded tab's query to complete" -Condition {
-            $ExecutingTab.Elements.ButtonExecuteQuery.IsEnabled
+            -not (Test-E2EExecuteInFlight -TabSession $ExecutingTab)
         }
+        Invoke-E2EFlushDispatcher
 
         E2EAssertEqual 2 (@($ExecutingTab.Elements.DataGridQueryResult.ItemsSource).Count) "the result must land on the tab that issued it"
         E2EAssertTrue ($null -eq $OtherTab.Elements.DataGridQueryResult.ItemsSource) "the result must NOT land on the tab that happened to be active"
@@ -107,8 +111,9 @@ E2ESuite -Name "AsyncExecute" -Body {
         Invoke-E2EExecute
 
         Wait-E2EUntil -TimeoutSeconds 20 -Message "both tabs' queries to complete" -Condition {
-            $FirstTab.Elements.ButtonExecuteQuery.IsEnabled -and $SecondTab.Elements.ButtonExecuteQuery.IsEnabled
+            -not (Test-E2EExecuteInFlight -TabSession $FirstTab) -and -not (Test-E2EExecuteInFlight -TabSession $SecondTab)
         }
+        Invoke-E2EFlushDispatcher
 
         E2EAssertEqual 2 (@($FirstTab.Elements.DataGridQueryResult.ItemsSource).Count) "the first tab should have its own result"
         E2EAssertEqual 2 (@($SecondTab.Elements.DataGridQueryResult.ItemsSource).Count) "the second tab should have its own result"
@@ -138,6 +143,7 @@ E2ESuite -Name "AsyncExecute" -Body {
         try {
             Invoke-E2EExecuteAndWait
 
+            E2EAssertEqual "_Execute" (Get-E2EExecuteButtonText) "the button must be back to Execute after a failure"
             E2EAssertTrue $Elements.ButtonExecuteQuery.IsEnabled "Execute must be re-enabled after a failure"
             E2EAssertTrue $Elements.ButtonSaveQuery.IsEnabled "Save must be re-enabled after a failure"
             E2EAssertTrue ($null -eq $Script:PopupWindowExecuteQuery) "the 'Executing Query...' popup must be closed after a failure"
@@ -169,7 +175,7 @@ E2ESuite -Name "AsyncExecute" -Body {
         Wait-E2EUntil -TimeoutSeconds 10 -Message "the elapsed-time indicator to update mid-flight" -Condition {
             $Elements.TextBlockStatusBarQueryTime.Text -ne "-"
         }
-        E2EAssertTrue (-not $Elements.ButtonExecuteQuery.IsEnabled) "the indicator must have updated while the query was still running"
+        E2EAssertTrue (Test-E2EExecuteInFlight) "the indicator must have updated while the query was still running"
 
         Wait-E2ENoPendingRequests
     }
@@ -190,7 +196,7 @@ E2ESuite -Name "AsyncExecute" -Body {
 
         $script:E2ERequestDelayMs = 900
         Invoke-E2EExecute
-        E2EAssertTrue (-not $Elements.ButtonExecuteQuery.IsEnabled) "arrange: Execute should be disabled while the query is in flight"
+        E2EAssertTrue (Test-E2EExecuteInFlight) "arrange: the query should be in flight"
 
         # Force a second, unrelated background request onto the queue and let it complete first.
         $Script:SqlSchemaCache = @{}
@@ -200,10 +206,10 @@ E2ESuite -Name "AsyncExecute" -Body {
             @($Script:PendingWebViewCompletions | Where-Object { $_.Description -eq "SQL schema" }).Count -eq 0
         }
 
-        E2EAssertTrue (-not $Elements.ButtonExecuteQuery.IsEnabled) "Execute must still be disabled: the query it belongs to is still running"
+        E2EAssertEqual "_Cancel" (Get-E2EExecuteButtonText) "the button must still read Cancel: the query it belongs to is still running"
 
         Wait-E2ENoPendingRequests
-        E2EAssertTrue $Elements.ButtonExecuteQuery.IsEnabled "Execute should be re-enabled once the query itself completes"
+        E2EAssertEqual "_Execute" (Get-E2EExecuteButtonText) "the button should be back to Execute once the query itself completes"
     }
 
     E2ECase -Name "closing a tab abandons its in-flight request instead of letting it repoint the app" -Body {

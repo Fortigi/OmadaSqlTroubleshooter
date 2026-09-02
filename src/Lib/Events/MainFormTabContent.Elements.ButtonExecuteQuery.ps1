@@ -2,6 +2,16 @@ $Script:MainForm.Elements.ButtonExecuteQuery.Add_Click({
         try {
             $_ | Show-EventInfo
 
+            # While a query is in flight this button reads "Cancel" (Set-ExecuteQueryButtonState), so
+            # a click here is a request to stop waiting rather than to execute again. Checked first,
+            # before any of the start-an-execute work below - starting a stopwatch and showing a
+            # popup on the way to cancelling would be exactly backwards.
+            if ($null -ne (Get-ActiveExecuteQueryRequest)) {
+                "Cancel requested for the running query." | Write-LogOutput
+                Stop-ExecuteQueryRequest
+                return
+            }
+
             $Script:RunTimeData.StopWatch = [System.Diagnostics.Stopwatch]::StartNew()
 
             $Script:PopupWindowExecuteQuery = Show-PopupWindow -Message "Executing Query..."

@@ -19,9 +19,18 @@ BeforeAll {
     . (Join-Path $PrivatePath -ChildPath "ConvertTo-RedactedLogString.ps1")
     . (Join-Path $PrivatePath -ChildPath "Get-LogResultShape.ps1")
     . (Join-Path $PrivatePath -ChildPath "Set-TextBlockText.ps1")
+    # Reset-ExecuteQueryUiState now also flips the Execute/Cancel button (issue #40 / C1-4). The real
+    # chain is dot-sourced rather than stubbed: a missing collaborator would throw inside this
+    # function's own catch and silently skip the rest of the teardown, which is exactly the failure
+    # mode these tests exist to catch.
+    . (Join-Path $PrivatePath -ChildPath "Set-ButtonText.ps1")
+    . (Join-Path $PrivatePath -ChildPath "Get-ActiveExecuteQueryRequest.ps1")
+    . (Join-Path $PrivatePath -ChildPath "Set-ExecuteQueryButtonState.ps1")
     . (Join-Path $PrivatePath -ChildPath "Invoke-ExecuteQuery.ps1")
 
     $Script:Tracer = [System.Diagnostics.Trace]
+
+    function Get-ActiveTabSession { return [pscustomobject]@{ Id = "tab-A" } }
 
     function Write-LogOutput {
         param(
@@ -71,6 +80,8 @@ BeforeAll {
         $script:QueryListRefreshes = 0
 
         $Script:RunTimeConfig = [PSCustomObject]@{ ApplicationName = "Test" }
+        # No request outstanding, so the button state resolves to "Execute".
+        $Script:PendingWebViewCompletions = [System.Collections.Generic.List[object]]::new()
         $Script:PopupWindowExecuteQuery = New-PopupStub
         $Script:AppConfig = [PSCustomObject]@{
             CurrentSqlQuery = [PSCustomObject]@{ DoId = 100; FullName = "TestQuery - 100" }
@@ -83,7 +94,9 @@ BeforeAll {
         $Script:MainForm = @{
             Elements = @{
                 ButtonSaveQuery             = [PSCustomObject]@{ IsEnabled = $false }
-                ButtonExecuteQuery          = [PSCustomObject]@{ IsEnabled = $false }
+                ButtonExecuteQuery          = [PSCustomObject]@{ IsEnabled = $false; ToolTip = "Execute" }
+                ButtonExecuteQueryText      = [PSCustomObject]@{ Name = "ButtonExecuteQueryText"; Text = "_Cancel" }
+                ButtonExecuteQueryImage     = [PSCustomObject]@{ Name = "ButtonExecuteQueryImage"; Text = [char]0xE711 }
                 ButtonShowOutput            = [PSCustomObject]@{ IsEnabled = $false }
                 ButtonSaveOutputFile        = [PSCustomObject]@{ IsEnabled = $false }
                 DataGridQueryResult         = [PSCustomObject]@{ ItemsSource = "previous"; AutoGenerateColumns = $false }
@@ -110,6 +123,15 @@ Describe "Reset-ExecuteQueryUiState" {
 
         $Script:MainForm.Elements.ButtonSaveQuery.IsEnabled | Should -BeTrue
         $Script:MainForm.Elements.ButtonExecuteQuery.IsEnabled | Should -BeTrue
+    }
+
+    It "puts the Execute/Cancel button back to Execute" {
+        # Every terminal path goes through here - success, failure and cancellation alike - so this
+        # is the single place that guarantees a tab cannot be left showing Cancel with nothing to
+        # cancel.
+        Reset-ExecuteQueryUiState
+
+        $Script:MainForm.Elements.ButtonExecuteQueryText.Text | Should -Be "_Execute"
     }
 
     It "closes the 'Executing Query...' popup and forgets it" {
