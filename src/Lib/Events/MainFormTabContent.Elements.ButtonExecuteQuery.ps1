@@ -10,7 +10,16 @@ $Script:MainForm.Elements.ButtonExecuteQuery.Add_Click({
             $Script:MainForm.Elements.ButtonExecuteQuery.IsEnabled = $false
             $Script:MainForm.Elements.ButtonShowOutput.IsEnabled = $false
             $Script:MainForm.Elements.ButtonSaveOutputFile.IsEnabled = $false
-            Start-Sleep -Milliseconds 100
+
+            # Let the "Executing Query..." popup actually paint before this handler goes on to block.
+            # This used to be Start-Sleep -Milliseconds 100, which cannot work: Start-Sleep parks the
+            # dispatcher thread without pumping it, so the render pass the popup is waiting for never
+            # runs - the window simply froze 100 ms longer with nothing new on screen.
+            # (Show-PopupWindow uses .Show(), not .ShowDialog(), so nothing else pumps for it either.)
+            # Invoking an empty action at Background priority drains everything of higher priority
+            # first - Render included - which is exactly the pass that draws the popup. Same primitive
+            # the E2E harness uses as Invoke-E2EFlushDispatcher.
+            $Script:MainForm.Definition.Dispatcher.Invoke([System.Action] {}, [System.Windows.Threading.DispatcherPriority]::Background)
 
             if (!(Test-ConnectionRequirements) -or [string]::IsNullOrWhiteSpace($Script:AppConfig.CurrentSqlQuery.DoId)) {
                 "Omada Url not set or Query not selected, cannot retrieve data!" | Write-LogOutput -LogType WARNING
