@@ -83,5 +83,17 @@
                 }
             )
         }
+        @{
+            Id           = "Microsoft.SqlServer.TransactSql.ScriptDom"
+            PackageId    = "Microsoft.SqlServer.TransactSql.ScriptDom"
+            Manifest     = "build/Dependencies/Dependencies.csproj"
+            Version      = "180.102.0"
+            Url          = "https://api.nuget.org/v3-flatcontainer/microsoft.sqlserver.transactsql.scriptdom/180.102.0/microsoft.sqlserver.transactsql.scriptdom.180.102.0.nupkg"
+            Sha256       = "91fc1a3f7b9de4b2a75388a1d72717d616684ac4d05c7aa0987d74ef78c0ae6d"
+            Verification = "Sha256"
+            InstalledBy  = "Install-ScriptDom"
+            PinReason    = ""
+            Description  = "Parses T-SQL locally so syntax errors are reported in the editor before a query is sent to Omada. The package declares no dependencies and the shipped assembly references nothing outside the base class library, so it needs no companion entry here."
+        }
     )
 }

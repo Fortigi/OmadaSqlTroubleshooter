@@ -34,11 +34,23 @@ $Script:WebViewCompletionPollTimer.Add_Tick({
                 # detached dynamic module that cannot resolve this app's dot-sourced private
                 # functions (CommandNotFoundException). Plain blocks without a param() simply
                 # ignore the argument.
+                # A completion block is optional. A caller that only pushes something into the editor
+                # and has nothing to do afterwards - the syntax pass writing its markers, for
+                # instance - passes none, and the item is still queued so the task is drained and
+                # removed. Invoking a $null here is what "The expression after '&' in a pipeline
+                # element produced an object that was not valid" means, so the queue is drained
+                # either way and only a real scriptblock is called.
+                $CompletedScriptBlock = $Pending.OnCompletedScriptBlock
+
+                if (-not (Test-WebViewCompletionCallback -Callback $CompletedScriptBlock)) {
+                    continue
+                }
+
                 if ($null -ne $Pending.TabSession) {
                     $PreviouslyActiveTab = Get-ActiveTabSession
                     try {
                         Set-ActiveTabContext -TabSession $Pending.TabSession
-                        & $Pending.OnCompletedScriptBlock $Pending
+                        & $CompletedScriptBlock $Pending
                     }
                     finally {
                         if ($null -ne $PreviouslyActiveTab) {
@@ -47,7 +59,7 @@ $Script:WebViewCompletionPollTimer.Add_Tick({
                     }
                 }
                 else {
-                    & $Pending.OnCompletedScriptBlock $Pending
+                    & $CompletedScriptBlock $Pending
                 }
             }
         }
@@ -56,6 +68,50 @@ $Script:WebViewCompletionPollTimer.Add_Tick({
         }
     })
 $Script:WebViewCompletionPollTimer.Start()
+
+# Debounce timer for the editor's client-side T-SQL syntax validation (issue #61). Declared here,
+# at the top level, for exactly the reason spelled out above: a DispatcherTimer whose Tick handler
+# is created inside a function cannot resolve this module's dot-sourced private functions when .NET
+# later invokes it. Request-SqlSyntaxValidation only restarts it; this is where it fires.
+#
+# It is created stopped and started on demand, so a session that never types - or one where the
+# feature is switched off or the parser is unavailable - never pays for a running timer.
+$Script:SqlValidationPendingTabId = $null
+$Script:SqlValidationDebounceTimer = New-Object System.Windows.Threading.DispatcherTimer
+$Script:SqlValidationDebounceTimer.Interval = [TimeSpan]::FromMilliseconds(400)
+$Script:SqlValidationDebounceTimer.Add_Tick({
+        try {
+            # One-shot: the timer is restarted by the next content change, not by itself.
+            $Script:SqlValidationDebounceTimer.Stop()
+
+            $PendingTab = $null
+            if (![string]::IsNullOrWhiteSpace($Script:SqlValidationPendingTabId)) {
+                $PendingTab = $Script:Tabs | Where-Object { $_.Id -eq $Script:SqlValidationPendingTabId } | Select-Object -First 1
+            }
+
+            if ($null -eq $PendingTab) {
+                return
+            }
+
+            # Validate the tab that actually changed, restoring whatever tab the user is looking at
+            # now - the same discipline the completion poll timer above follows.
+            $PreviouslyActiveTab = Get-ActiveTabSession
+            try {
+                Set-ActiveTabContext -TabSession $PendingTab
+                Update-SqlSyntaxDiagnostic
+            }
+            finally {
+                if ($null -ne $PreviouslyActiveTab) {
+                    Set-ActiveTabContext -TabSession $PreviouslyActiveTab
+                }
+            }
+        }
+        catch {
+            # Validation is a convenience. A failure here is logged at DEBUG and nothing else: it
+            # must never interrupt typing, and the message can quote the query.
+            "Debounced syntax validation failed." | Write-LogOutput -LogType DEBUG
+        }
+    })
 
 # Host the session tabs in the single-row ShrinkingTabPanel (defined in
 # Initialize-OmadaSqlTroubleShooter) so they shrink to fit on one row - with ellipsised text -

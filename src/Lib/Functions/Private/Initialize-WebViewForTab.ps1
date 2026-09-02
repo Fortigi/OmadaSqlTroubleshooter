@@ -237,6 +237,12 @@ function Initialize-WebViewForTab {
                                         $Script:MainForm.Definition.Dispatcher.Invoke([System.Action] {
                                                 $HandlerTab.IsDirty = $true
                                                 Update-TabHeaderTitle -TabSession $HandlerTab
+
+                                                # Push the syntax-validation debounce timer forward.
+                                                # This only restarts a timer - the parse itself
+                                                # happens once the user stops typing, off this
+                                                # handler and off the dispatcher.
+                                                Request-SqlSyntaxValidation -TabSession $HandlerTab
                                             })
                                     }
                                 }

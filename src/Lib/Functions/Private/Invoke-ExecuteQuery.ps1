@@ -8,7 +8,10 @@ function Invoke-ExecuteQuery {
             return
         }
 
-        $ScriptToExecute = "(function() { var fullText = editor.getValue(); var sel = editor.getSelection(); var hasSelection = sel && !sel.isEmpty(); var selectedText = hasSelection ? editor.getModel().getValueInRange(sel) : null; return { fullText: fullText, selectedText: selectedText }; })();"
+        # selectionStartLine/Column come back so the syntax pass can put its markers where the
+        # selected text actually sits in the model; the parser only ever sees the selection, so it
+        # numbers the selection's first line as line 1.
+        $ScriptToExecute = "(function() { var fullText = editor.getValue(); var sel = editor.getSelection(); var hasSelection = sel && !sel.isEmpty(); var selectedText = hasSelection ? editor.getModel().getValueInRange(sel) : null; return { fullText: fullText, selectedText: selectedText, selectionStartLine: hasSelection ? sel.startLineNumber : 1, selectionStartColumn: hasSelection ? sel.startColumn : 1 }; })();"
 
         $OnCompletedScriptBlock = {
             $Private:TempQueryDoId = $null
@@ -17,6 +20,57 @@ function Invoke-ExecuteQuery {
                     $Private:EditorData = $Script:Task.Result | ConvertFrom-Json
                     $Script:RunTimeData.QueryText = $Private:EditorData.fullText
                     $Private:SelectionText = $Private:EditorData.selectedText
+
+                    # Client-side syntax gate (issue #61). Checks the text that will actually run -
+                    # the selection when there is one - refreshes the editor's markers from it, and
+                    # asks once before spending a round trip on a batch SQL Server will reject
+                    # before it touches a table. It NEVER blocks: parser version and server version
+                    # can legitimately disagree, so declining is a choice, not an error.
+                    $Private:TextToValidate = $Private:EditorData.fullText
+                    if (![string]::IsNullOrWhiteSpace($Private:SelectionText)) {
+                        $Private:TextToValidate = $Private:SelectionText
+                    }
+
+                    $Private:ValidationSetting = Get-SqlValidationSetting
+                    if ($Private:ValidationSetting.Enabled) {
+                        $Private:SyntaxResult = Get-SqlSyntaxDiagnostic -SqlText $Private:TextToValidate -ParserVersion $Private:ValidationSetting.ParserVersion
+
+                        # Markers are refreshed either way. A parse that could not run clears them:
+                        # anything still on screen came from an earlier parse of different text, and
+                        # a stale squiggle is indistinguishable from a live one.
+                        $Private:SyntaxDiagnostic = @()
+                        if ($Private:SyntaxResult.Status -eq "Ok") {
+                            $Private:SyntaxDiagnostic = $Private:SyntaxResult.Diagnostic
+
+                            # The parser numbered the selection from line 1. The markers go onto the
+                            # whole model, so without this every squiggle for an executed selection
+                            # lands too high by the height of the text above it.
+                            if (![string]::IsNullOrWhiteSpace($Private:SelectionText)) {
+                                $Private:SyntaxDiagnostic = Move-SqlDiagnosticToSelection -Diagnostic $Private:SyntaxDiagnostic -StartLine $Private:EditorData.selectionStartLine -StartColumn $Private:EditorData.selectionStartColumn
+                            }
+                        }
+
+                        Invoke-ExecuteScriptAsync -ScriptToExecute (ConvertTo-EditorDiagnosticScript -Diagnostic $Private:SyntaxDiagnostic)
+
+                        # Only a completed parse can ask a question. A parse that did not run has
+                        # nothing to warn about and must not stand between the user and their query.
+                        if (($Private:SyntaxDiagnostic | Measure-Object).Count -gt 0 -and $Private:ValidationSetting.WarnOnExecuteWithErrors) {
+                            "Query has {0} syntax diagnostic(s); asking before executing." -f ($Private:SyntaxDiagnostic | Measure-Object).Count | Write-LogOutput -LogType DEBUG
+                            $Private:Confirmed = Open-ChoiceForm -Title "Syntax errors" -Message (Get-SqlSyntaxWarningMessage -Diagnostic $Private:SyntaxDiagnostic) -LeftButtonText "Execute anyway" -RightButtonText "Cancel"
+                            if ($Private:Confirmed -ne $true) {
+                                "Execution cancelled by the user after the syntax check." | Write-LogOutput -LogType DEBUG
+                                $Script:MainForm.Elements.ButtonSaveQuery.IsEnabled = $true
+                                $Script:MainForm.Elements.ButtonExecuteQuery.IsEnabled = $true
+                                if ($null -ne $Script:PopupWindowExecuteQuery) {
+                                    $Script:PopupWindowExecuteQuery.Close()
+                                }
+                                if ($null -ne $Script:RunTimeData.StopWatch) {
+                                    $Script:RunTimeData.StopWatch.Stop()
+                                }
+                                return
+                            }
+                        }
+                    }
 
                     $Private:Result = Save-Query -NewQuery:$false
 

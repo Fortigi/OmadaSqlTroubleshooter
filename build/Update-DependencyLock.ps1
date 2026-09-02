@@ -299,9 +299,16 @@ foreach ($Artifact in $Artifacts) {
     # Files is what build/Get-BundledDependency.ps1 copies into the package and what the module
     # re-checks before it loads each assembly. An entry that is malformed here is a bundle that
     # cannot be verified, so it is checked as strictly as the package pin itself.
-    $ArtifactFile = @($Artifact.Files)
-    if ($ArtifactFile.Count -eq 0) {
-        Add-Problem ("Artefact '{0}' lists no Files, so nothing can be bundled or re-verified before load." -f $Artifact.Id)
+    #
+    # Files is optional. An artefact that is bundled into the package must list the files taken out
+    # of it, because the package hash cannot verify an extracted file. An artefact that is only ever
+    # downloaded to Bin and loaded from there - ScriptDom - is covered end to end by its package hash
+    # plus its own install stamp, and has nothing to extract into the package. Note the null filter:
+    # @($null) is a one-element array holding $null, so a missing Files would otherwise arrive here
+    # as a single malformed entry rather than as no entries at all.
+    $ArtifactFile = @($Artifact.Files | Where-Object { $null -ne $_ })
+    if ($ArtifactFile.Count -eq 0 -and $Artifact.ContainsKey("Files")) {
+        Add-Problem ("Artefact '{0}' declares Files but lists none, so nothing can be bundled or re-verified before load." -f $Artifact.Id)
     }
 
     $SeenTarget = @{}
@@ -393,7 +400,7 @@ if ($PSCmdlet.ParameterSetName -eq "Refresh") {
             # the two can never describe different bytes.
             $FileHash = @{}
             $FileChanged = $false
-            foreach ($File in @($Artifact.Files)) {
+            foreach ($File in @($Artifact.Files | Where-Object { $null -ne $_ })) {
                 $EntrySha256 = Get-PackageEntrySha256 -PackagePath $PackagePath -EntryPath $File.Source
                 if ($null -eq $EntrySha256) {
                     Add-Problem ("Artefact '{0}' version {1} has no entry '{2}'. The package layout changed; the Files list has to be corrected by hand." -f $Artifact.Id, $Version, $File.Source)
@@ -450,7 +457,7 @@ elseif (-not $SkipDownload) {
             # The package hash matching is not enough on its own. The bundle ships extracted files,
             # which that hash cannot cover, so each per-file pin is re-derived from the package here.
             # This is what catches a refresh that bumped the package hash but left the Files stale.
-            foreach ($File in @($Artifact.Files)) {
+            foreach ($File in @($Artifact.Files | Where-Object { $null -ne $_ })) {
                 $EntrySha256 = Get-PackageEntrySha256 -PackagePath $PackagePath -EntryPath $File.Source
                 if ($null -eq $EntrySha256) {
                     Add-Problem ("Artefact '{0}' pins file '{1}', but the package has no entry at that path. The bundle would be incomplete." -f $Artifact.Id, $File.Source)

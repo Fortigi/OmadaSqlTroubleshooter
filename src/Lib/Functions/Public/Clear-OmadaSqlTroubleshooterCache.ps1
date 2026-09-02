@@ -6,10 +6,11 @@ function Clear-OmadaSqlTroubleshooterCache {
     .DESCRIPTION
         The module caches two things under %LOCALAPPDATA%\OmadaSqlTroubleshooter:
 
-        - Binaries: the four Microsoft.Web.WebView2 assemblies, downloaded from the URL pinned in
-          DependencyLock.psd1 and verified against its SHA-256 on first import, together with the
-          WebView2.pin stamp recording which pin they came from. Removing them only costs a fresh,
-          verified download on the next import.
+        - Binaries: the four Microsoft.Web.WebView2 assemblies and the
+          Microsoft.SqlServer.TransactSql.ScriptDom assembly, each downloaded from the URL pinned in
+          DependencyLock.psd1 and verified against its SHA-256 on first use, together with the
+          WebView2.pin and ScriptDom.pin stamps recording which pin they came from. Removing them
+          only costs a fresh, verified download on the next start.
         - BrowserProfiles: the Edge user profile WebView2 keeps under "Edge User Data". This holds
           the sign-in cookies that make re-authentication silent, so it is what to remove to sign
           out completely or switch user.

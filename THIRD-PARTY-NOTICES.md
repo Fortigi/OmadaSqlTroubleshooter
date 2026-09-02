@@ -15,8 +15,8 @@ obligations apply:
 | [2. Downloaded at run time](#2-components-downloaded-at-run-time) | Fetched from the vendor's servers onto the user's machine by this module | No |
 | [3. Prerequisites](#3-prerequisites-installed-by-the-user) | Installed separately by the user | No |
 
-Inventory last reviewed: **2026-09-01**, against commit contents of `src/` and the pinned
-package in `src/DependencyLock.psd1`. The inventory below is checked automatically on every pull
+Inventory last reviewed: **2026-09-02**, against commit contents of `src/` and the pinned
+packages in `src/DependencyLock.psd1`. The inventory below is checked automatically on every pull
 request by `tests/ThirdPartyNotices.Tests.ps1`, so it cannot silently drift out of date.
 
 > **Outstanding:** the redistribution review for the WebView2 .NET SDK in
@@ -228,6 +228,60 @@ installs the four assemblies to `%LOCALAPPDATA%\OmadaSqlTroubleshooter\Bin\win-x
 In this mode the SDK is fetched by the user's own machine from Microsoft's feed, so it is not
 redistributed by Fortigi — which is why it is described here as well as in §1.3.
 
+### 2.2 Microsoft.SqlServer.TransactSql.ScriptDom (SQL Script DOM)
+
+| Field | Value |
+|---|---|
+| Component | `Microsoft.SqlServer.TransactSql.ScriptDom` |
+| Version | **180.102.0** — pinned in `src/DependencyLock.psd1` |
+| Publisher | Microsoft Corporation |
+| Licence | **MIT** — declared as `<license type="expression">MIT</license>` in the `.nuspec` of the pinned package |
+| Licence text | <https://licenses.nuget.org/MIT> · <https://github.com/microsoft/SqlScriptDOM/blob/main/LICENSE> |
+| Project | <https://github.com/microsoft/SqlScriptDOM> |
+| Downloaded by | `src/Lib/Functions/Private/Install-ScriptDom.ps1`, on application start |
+| Downloaded from | `https://api.nuget.org/v3-flatcontainer/microsoft.sqlserver.transactsql.scriptdom/180.102.0/microsoft.sqlserver.transactsql.scriptdom.180.102.0.nupkg` |
+| Verified against | SHA-256 `91fc1a3f7b9de4b2a75388a1d72717d616684ac4d05c7aa0987d74ef78c0ae6d`, pinned in `src/DependencyLock.psd1` |
+| Installed to | `%LOCALAPPDATA%\OmadaSqlTroubleshooter\Bin\` |
+
+One file is extracted from the package: `lib/net8.0/Microsoft.SqlServer.TransactSql.ScriptDom.dll`
+(6.6 MB). It is the T-SQL parser behind the editor's client-side syntax diagnostics — the same
+parser SQL Server's own tooling uses — so a syntax error is reported in the editor, with the
+server's own wording, before a query is submitted.
+
+**Licence verification, against the pinned version rather than the project page.** The `.nuspec`
+inside `microsoft.sqlserver.transactsql.scriptdom.180.102.0.nupkg` carries
+`<license type="expression">MIT</license>`, `<licenseUrl>https://licenses.nuget.org/MIT</licenseUrl>`
+and `<copyright>© Microsoft Corporation. All rights reserved.</copyright>`, and names the
+repository `https://github.com/microsoft/SqlScriptDOM` at commit
+`9d1d1c1d062bd900ad9cac5e4e05bdf950d5a229`. The package embeds no `LICENSE` file of its own; the MIT
+grant is carried by the SPDX licence expression, which is how NuGet has expressed licensing since
+`licenseUrl` was deprecated.
+
+The licence link above points at `main` rather than at that commit deliberately. The commit the
+nuspec records is **not resolvable in the public repository** — `GET
+/repos/microsoft/SqlScriptDOM/commits/9d1d1c1d062bd900ad9cac5e4e05bdf950d5a229` returns HTTP 422
+"No commit found", and the repository publishes no tags — so there is no version-pinned licence URL
+to link. The statement that *is* pinned to this exact version is the SPDX expression inside the
+package itself, recorded above; the GitHub link is a convenience copy of the same MIT terms.
+
+**Transitive dependencies: none.** The pinned package declares four `<group>` dependency sets
+(`.NETFramework4.7.2`, `net8.0`, `.NETStandard2.0`, `.NETStandard2.1`) and every one of them is
+empty, and the `net8.0` assembly this module loads references only base class library assemblies
+(`System.Runtime`, `System.Collections`, `System.Collections.NonGeneric`,
+`System.ComponentModel.Primitives`, `System.Text.RegularExpressions`, `System.Linq`,
+`System.Console`, `System.Xml.ReaderWriter`). In particular it does **not** reference
+`Antlr4.Runtime.Standard`: ANTLR is used to generate the parser at build time, and the generated
+code carries no run-time dependency on it. There is therefore no companion lock entry or notice for
+ANTLR, and adding one would document a component this module never downloads.
+
+The version is **not** resolved at run time. It is pinned, together with the exact download URL and
+the expected SHA-256, in [`src/DependencyLock.psd1`](src/DependencyLock.psd1). `Invoke-DownloadFile`
+verifies the downloaded bytes against that hash before the package is expanded or copied into `Bin`;
+on a mismatch it deletes the file and aborts. Unlike WebView2, a failure here is not fatal: syntax
+validation switches itself off with a single warning and the application continues.
+
+No copy of this package is committed to this repository or included in the published module.
+
 ---
 
 ## 3. Prerequisites installed by the user
@@ -292,9 +346,9 @@ nightly build. It fails the build when:
 - a path listed above no longer exists in the repository;
 - a redistributable binary (`.exe`, `.dll`, `.msi`, `.cab`) is committed to the repository;
 - a component listed above loses its entry in this file;
-- the WebView2 SDK version or download URL recorded in §1.3 no longer matches the pin in
-  `src/DependencyLock.psd1`, so the notices cannot drift away from what the module actually
-  ships, downloads and verifies.
+- the version, download URL or SHA-256 recorded in §1.3 and §2.1 (WebView2 SDK) or §2.2
+  (ScriptDom) no longer matches the pin in `src/DependencyLock.psd1`, so the notices cannot drift
+  away from what the module actually ships, downloads and verifies.
 
 When a component is added, upgraded, or removed, update this file in the same change. Once a
 machine-readable SBOM is produced for the module, generate the inventory table from it and

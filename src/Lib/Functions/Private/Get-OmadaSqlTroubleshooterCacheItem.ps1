@@ -24,7 +24,7 @@ function Get-OmadaSqlTroubleshooterCacheItem {
     $Item = [System.Collections.Generic.List[object]]::new()
 
     if ($SelectedScope -contains "Binaries") {
-        $Item.Add((New-OmadaSqlTroubleshooterCacheItem -Scope "Binaries" -Artefact "Downloaded WebView2 assemblies" -Path (Join-Path $Script:ModuleAppDataPath -ChildPath "Bin") -Protection "NTFS permissions on the user profile only"))
+        $Item.Add((New-OmadaSqlTroubleshooterCacheItem -Scope "Binaries" -Artefact "Downloaded assemblies (WebView2, ScriptDom)" -Path (Join-Path $Script:ModuleAppDataPath -ChildPath "Bin") -Protection "NTFS permissions on the user profile only"))
     }
 
     if ($SelectedScope -contains "BrowserProfiles") {
