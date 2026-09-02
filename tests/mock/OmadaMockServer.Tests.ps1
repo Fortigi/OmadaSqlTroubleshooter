@@ -90,6 +90,30 @@ Describe "Get-OmadaMockEffectiveDelayMs" {
     }
 }
 
+Describe "Mock server control table safety" {
+    It "hands the caller a synchronized control table and delay table" {
+        # Serving is concurrent, so both are read and written from several threads at once. A plain
+        # System.Collections.Hashtable is not safe under that.
+        $script:Handle.Control.IsSynchronized | Should -BeTrue
+        $script:Handle.Control.RouteDelays.IsSynchronized | Should -BeTrue
+    }
+
+    It "wraps a caller's unsynchronized control table without losing its writes" {
+        # Start-OmadaMockServer.ps1 used to pass a plain hashtable. Hashtable.Synchronized returns a
+        # locking wrapper over the SAME storage, so wrapping defensively is free: a caller still
+        # holding the original sees everything the loop writes, and vice versa.
+        $Plain = @{ Running = $true }
+        $Wrapped = [hashtable]::Synchronized($Plain)
+
+        $Wrapped["Started"] = $true
+        $Plain["Port"] = 1234
+
+        $Wrapped.IsSynchronized | Should -BeTrue
+        $Plain["Started"] | Should -BeTrue
+        $Wrapped["Port"] | Should -Be 1234
+    }
+}
+
 Describe "Mock server delay and concurrency" {
     AfterEach {
         Clear-OmadaMockRouteDelay -Handle $script:Handle

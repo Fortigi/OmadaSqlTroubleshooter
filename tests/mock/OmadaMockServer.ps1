@@ -279,7 +279,16 @@ function Invoke-OmadaMockListenerLoop {
     )
 
     if ($null -eq $Control) { $Control = [hashtable]::Synchronized(@{ Running = $true }) }
+
+    # Serving is concurrent now, so the accept loop and every worker touch $Control at the same time -
+    # and a plain System.Collections.Hashtable is not safe under that. Callers are asked for a
+    # synchronized table, but wrap one that is not rather than trusting them: Hashtable.Synchronized
+    # returns a locking wrapper over the SAME storage, so a caller holding the original still sees
+    # every write (verified) and nothing is lost by being defensive here.
+    if (-not $Control.IsSynchronized) { $Control = [hashtable]::Synchronized($Control) }
     if ($null -eq $Control.RouteDelays) { $Control.RouteDelays = [hashtable]::Synchronized(@{}) }
+    elseif (-not $Control.RouteDelays.IsSynchronized) { $Control.RouteDelays = [hashtable]::Synchronized($Control.RouteDelays) }
+
     if ($WorkerCount -lt 1) { $WorkerCount = 1 }
 
     $Dir = Get-OmadaMockFixturesDir -FixturesDir $FixturesDir
