@@ -31,24 +31,33 @@ function Invoke-ExecuteQuery {
                     $Private:ValidationSetting = Get-SqlValidationSetting
                     if ($Private:ValidationSetting.Enabled) {
                         $Private:SyntaxResult = Get-SqlSyntaxDiagnostic -SqlText $Private:TextToValidate -ParserVersion $Private:ValidationSetting.ParserVersion
-                        if ($Private:SyntaxResult.Status -eq "Ok") {
-                            Invoke-ExecuteScriptAsync -ScriptToExecute (ConvertTo-EditorDiagnosticScript -Diagnostic $Private:SyntaxResult.Diagnostic)
 
-                            if (($Private:SyntaxResult.Diagnostic | Measure-Object).Count -gt 0 -and $Private:ValidationSetting.WarnOnExecuteWithErrors) {
-                                "Query has {0} syntax diagnostic(s); asking before executing." -f ($Private:SyntaxResult.Diagnostic | Measure-Object).Count | Write-LogOutput -LogType DEBUG
-                                $Private:Confirmed = Open-ChoiceForm -Title "Syntax errors" -Message (Get-SqlSyntaxWarningMessage -Diagnostic $Private:SyntaxResult.Diagnostic) -LeftButtonText "Execute anyway" -RightButtonText "Cancel"
-                                if ($Private:Confirmed -ne $true) {
-                                    "Execution cancelled by the user after the syntax check." | Write-LogOutput -LogType DEBUG
-                                    $Script:MainForm.Elements.ButtonSaveQuery.IsEnabled = $true
-                                    $Script:MainForm.Elements.ButtonExecuteQuery.IsEnabled = $true
-                                    if ($null -ne $Script:PopupWindowExecuteQuery) {
-                                        $Script:PopupWindowExecuteQuery.Close()
-                                    }
-                                    if ($null -ne $Script:RunTimeData.StopWatch) {
-                                        $Script:RunTimeData.StopWatch.Stop()
-                                    }
-                                    return
+                        # Markers are refreshed either way. A parse that could not run clears them:
+                        # anything still on screen came from an earlier parse of different text, and
+                        # a stale squiggle is indistinguishable from a live one.
+                        $Private:SyntaxDiagnostic = @()
+                        if ($Private:SyntaxResult.Status -eq "Ok") {
+                            $Private:SyntaxDiagnostic = $Private:SyntaxResult.Diagnostic
+                        }
+
+                        Invoke-ExecuteScriptAsync -ScriptToExecute (ConvertTo-EditorDiagnosticScript -Diagnostic $Private:SyntaxDiagnostic)
+
+                        # Only a completed parse can ask a question. A parse that did not run has
+                        # nothing to warn about and must not stand between the user and their query.
+                        if (($Private:SyntaxDiagnostic | Measure-Object).Count -gt 0 -and $Private:ValidationSetting.WarnOnExecuteWithErrors) {
+                            "Query has {0} syntax diagnostic(s); asking before executing." -f ($Private:SyntaxDiagnostic | Measure-Object).Count | Write-LogOutput -LogType DEBUG
+                            $Private:Confirmed = Open-ChoiceForm -Title "Syntax errors" -Message (Get-SqlSyntaxWarningMessage -Diagnostic $Private:SyntaxDiagnostic) -LeftButtonText "Execute anyway" -RightButtonText "Cancel"
+                            if ($Private:Confirmed -ne $true) {
+                                "Execution cancelled by the user after the syntax check." | Write-LogOutput -LogType DEBUG
+                                $Script:MainForm.Elements.ButtonSaveQuery.IsEnabled = $true
+                                $Script:MainForm.Elements.ButtonExecuteQuery.IsEnabled = $true
+                                if ($null -ne $Script:PopupWindowExecuteQuery) {
+                                    $Script:PopupWindowExecuteQuery.Close()
                                 }
+                                if ($null -ne $Script:RunTimeData.StopWatch) {
+                                    $Script:RunTimeData.StopWatch.Stop()
+                                }
+                                return
                             }
                         }
                     }

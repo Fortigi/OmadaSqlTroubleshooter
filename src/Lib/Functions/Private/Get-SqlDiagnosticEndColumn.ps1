@@ -43,7 +43,7 @@ function Get-SqlDiagnosticEndColumn {
     }
 
     $Index = $Offset
-    while ($Index -lt $SqlText.Length -and ($SqlText[$Index] -match "[\w@#\$]")) {
+    while ($Index -lt $SqlText.Length -and ($SqlText[$Index] -match '[\w@#\$]')) {
         $Index++
     }
 

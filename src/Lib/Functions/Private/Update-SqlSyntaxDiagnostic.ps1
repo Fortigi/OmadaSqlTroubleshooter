@@ -39,11 +39,18 @@ function Update-SqlSyntaxDiagnostic {
 
         if ($PSBoundParameters.ContainsKey("SqlText")) {
             $Result = Get-SqlSyntaxDiagnostic -SqlText $SqlText -ParserVersion $Setting.ParserVersion
-            if ($Result.Status -ne "Ok") {
-                return
+
+            # A parse that could not run clears the markers rather than leaving them. Anything still
+            # on screen came from an EARLIER parse of DIFFERENT text, so leaving it would keep
+            # asserting something about a script nobody checked - and the user cannot tell a stale
+            # squiggle from a live one. An empty set is what ConvertTo-EditorDiagnosticScript turns
+            # into a clearing call.
+            $Diagnostic = @()
+            if ($Result.Status -eq "Ok") {
+                $Diagnostic = $Result.Diagnostic
             }
 
-            Invoke-ExecuteScriptAsync -ScriptToExecute (ConvertTo-EditorDiagnosticScript -Diagnostic $Result.Diagnostic)
+            Invoke-ExecuteScriptAsync -ScriptToExecute (ConvertTo-EditorDiagnosticScript -Diagnostic $Diagnostic)
             return
         }
 

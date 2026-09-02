@@ -62,7 +62,7 @@ BeforeAll {
         try {
             New-Item -Path $CacheRoot -ItemType Directory -Force | Out-Null
             $Package = Join-Path $CacheRoot "package.zip"
-            Invoke-WebRequest -Uri $Artifact.Url -OutFile $Package -UseBasicParsing
+            Invoke-WebRequest -Uri $Artifact.Url -OutFile $Package
 
             $ActualHash = (Get-FileHash -Path $Package -Algorithm SHA256).Hash.ToLowerInvariant()
             if ($ActualHash -ne $Artifact.Sha256) {
@@ -428,6 +428,91 @@ Describe 'ConvertTo-EditorDiagnosticScript' -Tag 'Unit' {
                 $Script:IndexHtml | Should -Match ('diagnostic\.{0}\b' -f $Field) -Because "the seam must read the '$Field' the payload writes"
             }
         }
+    }
+}
+
+Describe 'Update-SqlSyntaxDiagnostic' -Tag 'Unit' {
+
+    # The editor must never be left showing markers from an earlier parse of different text: a stale
+    # squiggle is indistinguishable from a live one. Raised in review of PR #74.
+
+    BeforeAll {
+        . (Join-Path (Join-Path (Split-Path -Path $PSScriptRoot -Parent) "src\Lib\Functions\Private") "Update-SqlSyntaxDiagnostic.ps1")
+
+        $script:PushedEditorScripts = [System.Collections.Generic.List[string]]::new()
+
+        function Invoke-ExecuteScriptAsync {
+            param($ScriptToExecute, $OnCompletedScriptBlock)
+            $script:PushedEditorScripts.Add([string]$ScriptToExecute)
+        }
+
+        function Invoke-ExecuteScriptWithResultAsync {
+            param($ScriptToExecute, $OnCompletedScriptBlock)
+            throw "Update-SqlSyntaxDiagnostic must not read the editor when it was handed the text."
+        }
+
+        $script:ValidationSetting = $null
+        $script:SyntaxResult = $null
+
+        function Get-SqlValidationSetting { return $script:ValidationSetting }
+
+        function Get-SqlSyntaxDiagnostic {
+            param([string]$SqlText, [string]$ParserVersion, [string]$Source)
+            return $script:SyntaxResult
+        }
+    }
+
+    BeforeEach {
+        $script:PushedEditorScripts.Clear()
+        $script:ValidationSetting = [PSCustomObject]@{
+            Enabled                 = $true
+            DebounceMilliseconds    = 400
+            WarnOnExecuteWithErrors = $true
+            ParserVersion           = $null
+        }
+    }
+
+    It 'Should push the diagnostics it found' {
+        $script:SyntaxResult = [PSCustomObject]@{
+            Status        = "Ok"
+            ParserVersion = "TSql180Parser"
+            Diagnostic    = @([PSCustomObject]@{ Line = 1; Column = 11; EndLine = 1; EndColumn = 15; Severity = "Error"; Message = "Incorrect syntax near 'FROM'."; Source = "T-SQL syntax" })
+        }
+
+        Update-SqlSyntaxDiagnostic -SqlText "SELECT a, FROM dbo.Person"
+
+        @($script:PushedEditorScripts).Count | Should -Be 1
+        $script:PushedEditorScripts[0] | Should -Match 'setDiagnostics\(\[\{'
+    }
+
+    It 'Should clear the markers when the script parses clean' {
+        $script:SyntaxResult = [PSCustomObject]@{ Status = "Ok"; ParserVersion = "TSql180Parser"; Diagnostic = @() }
+
+        Update-SqlSyntaxDiagnostic -SqlText "SELECT 1"
+
+        $script:PushedEditorScripts[0] | Should -Be "setDiagnostics([]);"
+    }
+
+    It 'Should clear the markers when the parse could not run, rather than leaving stale ones' {
+        # E.g. a configured SqlParserVersion the assembly does not ship. Nothing was checked, so
+        # nothing may keep claiming to be wrong.
+        $script:SyntaxResult = [PSCustomObject]@{ Status = "Unavailable"; ParserVersion = $null; Diagnostic = @() }
+
+        Update-SqlSyntaxDiagnostic -SqlText "SELECT a, FROM dbo.Person"
+
+        @($script:PushedEditorScripts).Count | Should -Be 1
+        $script:PushedEditorScripts[0] | Should -Be "setDiagnostics([]);"
+    }
+
+    It 'Should push nothing at all when the pass is switched off' {
+        # Distinct from "could not parse": the user asked for no validation, so the editor is left
+        # exactly as it is and no script is sent to it.
+        $script:ValidationSetting.Enabled = $false
+        $script:SyntaxResult = [PSCustomObject]@{ Status = "Ok"; ParserVersion = "TSql180Parser"; Diagnostic = @() }
+
+        Update-SqlSyntaxDiagnostic -SqlText "SELECT a, FROM dbo.Person"
+
+        @($script:PushedEditorScripts).Count | Should -Be 0
     }
 }
 

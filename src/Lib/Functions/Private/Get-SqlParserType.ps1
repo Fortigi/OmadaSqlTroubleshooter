@@ -46,7 +46,7 @@ function Get-SqlParserType {
     }
 
     try {
-        $ParserType = @($ParserAssembly.GetExportedTypes() | Where-Object { $_.Name -match "^TSql\d+Parser$" })
+        $ParserType = @($ParserAssembly.GetExportedTypes() | Where-Object { $_.Name -match '^TSql\d+Parser$' })
     }
     catch {
         return $null
@@ -58,7 +58,7 @@ function Get-SqlParserType {
 
     if (![string]::IsNullOrWhiteSpace($ParserVersion)) {
         $RequestedName = $ParserVersion.Trim()
-        if ($RequestedName -match "^\d+$") {
+        if ($RequestedName -match '^\d+$') {
             $RequestedName = "TSql{0}Parser" -f $RequestedName
         }
         return ($ParserType | Where-Object { $_.Name -eq $RequestedName } | Select-Object -First 1)
@@ -66,6 +66,6 @@ function Get-SqlParserType {
 
     # Sorted numerically, not lexically: "TSql90Parser" sorts after "TSql180Parser" as a string.
     return ($ParserType |
-            Sort-Object -Property @{ Expression = { [int]($_.Name -replace "^TSql(\d+)Parser$", '$1') } } -Descending |
+            Sort-Object -Property @{ Expression = { [int]($_.Name -replace '^TSql(\d+)Parser$', '$1') } } -Descending |
             Select-Object -First 1)
 }
