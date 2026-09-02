@@ -22,6 +22,11 @@ BeforeAll {
     # real core is dot-sourced here rather than stubbed: these tests are the contract that the split
     # changed nothing, which only holds if the actual call path is exercised.
     . (Join-Path $PrivatePath -ChildPath "Invoke-OmadaRequestCore.ps1")
+    # Preparation and failure classification were extracted so the background path (issue #40)
+    # applies the same rules. The real ones are dot-sourced, not stubbed: these tests are the
+    # contract that the extraction changed nothing, which only holds if the actual code runs.
+    . (Join-Path $PrivatePath -ChildPath "Build-OmadaRequestParameter.ps1")
+    . (Join-Path $PrivatePath -ChildPath "Resolve-OmadaRequestFailure.ps1")
     . (Join-Path $PrivatePath -ChildPath "Invoke-OmadaPSWebRequestWrapper.ps1")
 
     $Script:Tracer = [System.Diagnostics.Trace]
