@@ -18,6 +18,10 @@ BeforeAll {
 
     . (Join-Path $PrivatePath -ChildPath "ConvertTo-RedactedLogString.ps1")
     . (Join-Path $PrivatePath -ChildPath "Set-TextBlockText.ps1")
+    # The wrapper now issues its request through the runspace-safe core (issue #40 / C1-1), so the
+    # real core is dot-sourced here rather than stubbed: these tests are the contract that the split
+    # changed nothing, which only holds if the actual call path is exercised.
+    . (Join-Path $PrivatePath -ChildPath "Invoke-OmadaRequestCore.ps1")
     . (Join-Path $PrivatePath -ChildPath "Invoke-OmadaPSWebRequestWrapper.ps1")
 
     $Script:Tracer = [System.Diagnostics.Trace]
