@@ -36,6 +36,7 @@ Describe 'THIRD-PARTY-NOTICES' -Tag 'Unit' {
                 'Monaco Editor'
                 'Codicons'
                 'Microsoft.Web.WebView2'
+                'Microsoft.SqlServer.TransactSql.ScriptDom'
                 'Microsoft Edge WebView2 Runtime'
                 'OmadaWeb.PS'
             )
@@ -105,35 +106,50 @@ Describe 'THIRD-PARTY-NOTICES' -Tag 'Unit' {
         # notices now cannot drift from the pin the module actually downloads and verifies.
         BeforeAll {
             $Script:Lock = Import-PowerShellDataFile -Path (Join-Path $Script:ParentPath -ChildPath "src\DependencyLock.psd1")
-            $Script:WebView2Artifact = @($Script:Lock.Artifacts | Where-Object { $_.Id -eq 'Microsoft.Web.WebView2' })[0]
 
-            # Only the Microsoft.Web.WebView2 entry, so these assertions cannot be satisfied - or
-            # broken - by text belonging to another component.
-            $SectionMatch = [regex]::Match($Script:Notices, '(?s)###\s*2\.1\s*Microsoft\.Web\.WebView2.*?(?=\r?\n---)')
-            $Script:WebView2Section = $SectionMatch.Value
+            # One section 2 entry at a time, so these assertions cannot be satisfied - or broken - by text
+            # belonging to another component. The lookahead stops at the next "### " heading as well
+            # as at the section rule, which is what keeps section 2.1 isolated now that section 2.2 follows it.
+            function Get-NoticeSection {
+                param([string]$Number)
+
+                return [regex]::Match($Script:Notices, ('(?s)###\s*{0}\s.*?(?=\r?\n---|\r?\n###\s)' -f [regex]::Escape($Number))).Value
+            }
+
         }
 
-        It 'Should have a Microsoft.Web.WebView2 entry to check' {
-            $Script:WebView2Artifact | Should -Not -BeNullOrEmpty -Because 'the lock file must pin the SDK'
-            $Script:WebView2Section | Should -Not -BeNullOrEmpty -Because 'the notices must carry a §2.1 entry for it'
-        }
+        # Declared in the Context body, not in BeforeAll: -ForEach data is read during Pester's
+        # discovery phase, before any BeforeAll has run.
+        $DownloadedArtifact = @(
+            @{ Number = '2.1'; Id = 'Microsoft.Web.WebView2' }
+            @{ Number = '2.2'; Id = 'Microsoft.SqlServer.TransactSql.ScriptDom' }
+        )
 
-        It 'Should record the URL the module actually downloads the SDK from' {
-            $Script:WebView2Section | Should -BeLike ('*{0}*' -f $Script:WebView2Artifact.Url)
-        }
+        It 'Should carry a section <Number> entry for <Id> that matches the lock file' -ForEach $DownloadedArtifact {
+            $Artifact = @($Script:Lock.Artifacts | Where-Object { $_.Id -eq $Id })[0]
+            $Artifact | Should -Not -BeNullOrEmpty -Because "the lock file must pin '$Id'"
 
-        It 'Should record the pinned version, not a floating one' {
+            $Section = Get-NoticeSection -Number $Number
+            $Section | Should -Not -BeNullOrEmpty -Because "the notices must carry a section $Number entry for '$Id'"
+            $Section | Should -BeLike ('*{0}*' -f $Id) -Because 'the section must actually be about this component'
+
+            # The URL and hash the module downloads and verifies against.
+            $Section | Should -BeLike ('*{0}*' -f $Artifact.Url)
+            $Section | Should -BeLike ('*{0}*' -f $Artifact.Sha256)
+            $Section | Should -Match 'DependencyLock\.psd1'
+
             # The Version row of this entry specifically. A document-wide search for wording like
             # "resolved at run time" would also hit the prose explaining that it is *not* resolved
             # that way, which is exactly the wrong thing to fail on.
-            $VersionRow = [regex]::Match($Script:WebView2Section, '(?m)^\|\s*Version\s*\|\s*(?<Value>[^|]*?)\s*\|\s*$')
+            $VersionRow = [regex]::Match($Section, '(?m)^\|\s*Version\s*\|\s*(?<Value>[^|]*?)\s*\|\s*$')
             $VersionRow.Success | Should -BeTrue -Because 'the entry must record a version'
-            $VersionRow.Groups['Value'].Value | Should -BeLike ('*{0}*' -f $Script:WebView2Artifact.Version)
+            $VersionRow.Groups['Value'].Value | Should -BeLike ('*{0}*' -f $Artifact.Version)
         }
 
-        It 'Should record the SHA-256 the download is verified against' {
-            $Script:WebView2Section | Should -BeLike ('*{0}*' -f $Script:WebView2Artifact.Sha256)
-            $Script:WebView2Section | Should -Match 'DependencyLock\.psd1'
+        It 'Should name the function that downloads each artefact' -ForEach $DownloadedArtifact {
+            $Artifact = @($Script:Lock.Artifacts | Where-Object { $_.Id -eq $Id })[0]
+            $Section = Get-NoticeSection -Number $Number
+            $Section | Should -BeLike ('*{0}*' -f $Artifact.InstalledBy) -Because 'the notices must say what fetches the component'
         }
     }
 }
