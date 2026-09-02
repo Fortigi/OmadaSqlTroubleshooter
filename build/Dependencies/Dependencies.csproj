@@ -26,6 +26,8 @@
   <ItemGroup>
     <!-- Hosts the Monaco SQL editor inside the WPF application (Install-WebView2). -->
     <PackageReference Include="Microsoft.Web.WebView2" Version="1.0.4129.50" />
+    <!-- Parses T-SQL locally for the editor's syntax diagnostics (Install-ScriptDom). -->
+    <PackageReference Include="Microsoft.SqlServer.TransactSql.ScriptDom" Version="180.102.0" />
   </ItemGroup>
 
 </Project>

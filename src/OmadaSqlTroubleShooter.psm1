@@ -88,6 +88,18 @@ try {
     $Script:WebView2StampPath = [System.IO.Path]::Combine($WebView2BasePath, "WebView2.pin")
     "{0} - {1}" -f $MyInvocation.MyCommand, $Script:WebView2StampPath | Write-Verbose
 
+    #ScriptDom Location - the T-SQL parser behind the editor's client-side syntax diagnostics.
+    #Architecture-neutral (pure managed assembly), so it sits in Bin rather than the win-x64/x86
+    #subfolder. Only the PATHS are resolved here: unlike WebView2 this dependency is optional, so it
+    #is downloaded and loaded from Initialize-OmadaSqlTroubleShooter, where a failure can be reported
+    #once and the feature switched off instead of stopping the import.
+    $Script:ScriptDomPath = [System.IO.Path]::Combine($WebBinBasePath, "Microsoft.SqlServer.TransactSql.ScriptDom.dll")
+    "{0} - {1}" -f $MyInvocation.MyCommand, $Script:ScriptDomPath | Write-Verbose
+
+    #ScriptDom Pin Stamp Location - records which pinned version the installed assembly came from
+    $Script:ScriptDomStampPath = [System.IO.Path]::Combine($WebBinBasePath, "ScriptDom.pin")
+    "{0} - {1}" -f $MyInvocation.MyCommand, $Script:ScriptDomStampPath | Write-Verbose
+
     #WebView2 User Profile Base Location
     $Script:WebView2UserProfileBasePath = [System.IO.Path]::Combine($Script:ModuleAppDataPath, "Edge User Data")
 
