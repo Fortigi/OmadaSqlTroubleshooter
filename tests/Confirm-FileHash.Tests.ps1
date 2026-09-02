@@ -64,6 +64,40 @@ Describe 'Confirm-FileHash' -Tag 'Unit' {
         $Message | Should -BeLike '*d121be3103007b41edf96f8262925f8c7d61894afe9a041843b631f69445bc57*'
     }
 
+    It 'Should point at the dependency lock by default' {
+        Set-Content -Path $Script:PayloadPath -Value 'tampered' -NoNewline
+
+        $Message = $null
+        try {
+            Confirm-FileHash -Path $Script:PayloadPath -ExpectedSha256 $Script:HelloSha256 -ArtifactName 'Test 1.0.0' -ErrorAction Stop
+        }
+        catch {
+            $Message = $_.Exception.Message
+        }
+
+        $Message | Should -BeLike '*DependencyLock.psd1*'
+    }
+
+    It 'Should name the file the expected hash actually came from' {
+        # The same verifier runs against a download pinned by the lock and against assemblies
+        # already installed under %LOCALAPPDATA%, whose expected hashes come from the WebView2.pin
+        # stamp beside them. Telling someone to stop editing the lock file when the mismatch is
+        # against a stamp sends them to the wrong file.
+        Set-Content -Path $Script:PayloadPath -Value 'tampered' -NoNewline
+        $StampPath = Join-Path $TestDrive 'WebView2.pin'
+
+        $Message = $null
+        try {
+            Confirm-FileHash -Path $Script:PayloadPath -ExpectedSha256 $Script:HelloSha256 -ArtifactName 'Test 1.0.0' -ExpectedHashSource $StampPath -ErrorAction Stop
+        }
+        catch {
+            $Message = $_.Exception.Message
+        }
+
+        $Message | Should -BeLike ('*{0}*' -f $StampPath)
+        $Message | Should -Not -BeLike '*DependencyLock.psd1*'
+    }
+
     It 'Should say the file is still on disk when it could not be deleted' {
         # Removal is best-effort: the file can be locked, or the directory read-only. Claiming "the
         # file was deleted" when it was not is the sentence that stops someone removing it by hand.

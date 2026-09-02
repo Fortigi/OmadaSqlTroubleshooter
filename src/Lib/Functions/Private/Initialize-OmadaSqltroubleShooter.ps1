@@ -37,6 +37,64 @@ function Initialize-OmadaSqlTroubleShooter {
                 else { throw $_.Exception.Message }
             }
         }
+        # Re-verify immediately before loading. Until now verification happened only at download
+        # time, and nothing re-checked a file swapped afterwards - both folders these assemblies can
+        # come from are writable by something at some point, and Assembly.LoadFrom runs whatever
+        # bytes are there in this session. A mismatch deletes the file and aborts rather than
+        # loading it; the next import re-downloads and re-verifies.
+        #
+        # Guarded to run once per session: the hashes cannot change under a loaded assembly, and
+        # re-hashing 0.94 MB on every call would be for nothing.
+        if (-not $Script:WebView2AssemblyVerified) {
+            $ExpectedWebView2Hash = Get-WebView2ExpectedHash
+
+            # Which file the expected hashes actually came from, so a failure points at the right
+            # one. The bundle is pinned by the lock; assemblies downloaded to %LOCALAPPDATA% are
+            # pinned by the stamp Install-WebView2 wrote beside them.
+            $ExpectedWebView2HashSource = if ($Script:WebView2Source -eq "Bundle") { $Script:DependencyLockPath } else { $Script:WebView2StampPath }
+
+            # WebView2Loader.dll is verified alongside the three managed assemblies. It is not loaded
+            # through Add-ReflectionAssembly - the Core assembly pulls it in natively - but it is
+            # still native code entering this process, so a gate that skipped it would be a gate with
+            # a hole in it.
+            $WebView2AssemblyToVerify = @(
+                $Script:WebView2CorePath
+                $Script:WebView2WinFormsPath
+                $Script:WebView2WpfPath
+                $Script:WebView2LoaderPath
+            )
+
+            foreach ($WebView2AssemblyPath in $WebView2AssemblyToVerify) {
+                $WebView2AssemblyName = Split-Path $WebView2AssemblyPath -Leaf
+
+                # Fail closed. "No hash is recorded for this file" is not the same as "this file is
+                # fine" - it means nothing can vouch for the bytes, and loading them anyway would
+                # defeat the point of checking at all. Both sources always record all four files
+                # (the lock for a bundle, the install stamp for a download), so getting here means
+                # the install is damaged rather than merely unusual.
+                if (-not $ExpectedWebView2Hash.ContainsKey($WebView2AssemblyName)) {
+                    # The fix depends on which file is incomplete. A missing entry in the stamp is a
+                    # damaged cache, which clearing repairs. A missing entry in the lock is a damaged
+                    # module installation, and clearing the cache would neither fix it nor even be
+                    # possible to recover from on a machine with no route to nuget.org.
+                    if ($Script:WebView2Source -eq "Bundle") {
+                        $Remediation = "Reinstall the module with 'Update-Module -Name OmadaSqlTroubleshooter' or 'Install-Module -Name OmadaSqlTroubleshooter -Force' to restore the dependency lock and the bundled assemblies."
+                    }
+                    else {
+                        $Remediation = "Run 'Clear-OmadaSqlTroubleshooterCache -Scope Binaries' and start the application again to force a fresh, verified download."
+                    }
+
+                    "Refusing to load '{0}' from '{1}': no expected SHA-256 is recorded for it in '{2}', so its integrity cannot be established. {3}" -f $WebView2AssemblyName, $Script:WebView2BasePath, $ExpectedWebView2HashSource, $Remediation | Write-Error -ErrorAction "Stop"
+                }
+
+                "Verify assembly before load: '{0}'" -f $WebView2AssemblyName | Write-LogOutput -LogType DEBUG
+                Confirm-FileHash -Path $WebView2AssemblyPath -ExpectedSha256 $ExpectedWebView2Hash[$WebView2AssemblyName] -ArtifactName $WebView2AssemblyName -SourceUrl $Script:WebView2BasePath -ExpectedHashSource $ExpectedWebView2HashSource
+            }
+
+            # Only after every file has actually been verified.
+            $Script:WebView2AssemblyVerified = $true
+        }
+
         Add-ReflectionAssembly -Object $Script:WebView2CorePath
         Add-ReflectionAssembly -Object $Script:WebView2WinFormsPath
         Add-ReflectionAssembly -Object $Script:WebView2WpfPath

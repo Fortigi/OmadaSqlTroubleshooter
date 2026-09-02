@@ -89,14 +89,28 @@ Out of scope:
 
 ## Runtime dependency verification
 
-The module ships no binaries. The four `Microsoft.Web.WebView2` assemblies that host the Monaco SQL
-editor — `Microsoft.Web.WebView2.Core.dll`, `Microsoft.Web.WebView2.WinForms.dll`,
-`Microsoft.Web.WebView2.Wpf.dll` and `WebView2Loader.dll` — are downloaded to
-`%LOCALAPPDATA%\OmadaSqlTroubleshooter\Bin` on first import and then loaded into the PowerShell
-session with `[Reflection.Assembly]::LoadFrom`.
+The four `Microsoft.Web.WebView2` assemblies that host the Monaco SQL editor —
+`Microsoft.Web.WebView2.Core.dll`, `Microsoft.Web.WebView2.WinForms.dll`,
+`Microsoft.Web.WebView2.Wpf.dll` and `WebView2Loader.dll` — are the module's entire binary supply
+chain. They are loaded into the PowerShell session with `[Reflection.Assembly]::LoadFrom`, so
+whatever bytes are on disk at that moment run with the privileges of the session.
 
-That download is the module's entire binary supply chain, so it is verified before the package is
-expanded or copied into `Bin`:
+They reach the machine one of two ways, and both are verified:
+
+- **Bundled (normal).** `build/Get-BundledDependency.ps1` fetches the pinned package during the
+  build, checks its SHA-256 **before** opening it, extracts each pinned file, re-hashes every
+  extracted file against its own pin, and writes the result into the package at
+  `Bin\WebView2Dlls\win-x64` (0.94 MB). Importing the module then makes **no network call at all**,
+  which is what lets the application start on a machine with no route to nuget.org.
+- **Downloaded (fallback).** Where the bundle is missing, incomplete or fails its hash check — and on
+  32-bit processes, which are not bundled — `Install-WebView2` downloads the same pinned package to
+  `%LOCALAPPDATA%\OmadaSqlTroubleshooter\Bin` and verifies it there, exactly as before.
+
+Because the module now redistributes those assemblies rather than only downloading them, per-file
+SHA-256 pins were added alongside the package pin: a package hash cannot verify a file that has been
+extracted out of the package.
+
+Whichever route the assemblies took, these properties hold:
 
 - **Pinned and hash-verified.** The artefact has a pinned version, an exact download URL and an
   expected SHA-256 in [`src/DependencyLock.psd1`](src/DependencyLock.psd1), which ships with the
@@ -116,6 +130,16 @@ expanded or copied into `Bin`:
 - **No version lookup over the network.** The version comes from the lock file inside the module, so
   module import performs no NuGet metadata request at all, and nothing about the loaded bytes depends
   on what a feed happens to serve on a given day.
+- **Re-verified immediately before loading.** Verification used to happen only at download time, and
+  nothing re-checked a file that was swapped afterwards — both folders the assemblies can come from
+  are writable by something at some point. Each assembly is now hashed against its pinned value
+  immediately before `Add-ReflectionAssembly`, once per session. A mismatch **deletes the file** and
+  aborts rather than loading it; the next import re-downloads and re-verifies.
+- **A broken bundle degrades, it does not break.** `Test-WebView2Bundle` never throws. A missing,
+  incomplete, tampered or wrongly-versioned bundle returns "unusable" and the module falls back to
+  the verified download, so a damaged install cannot stop the module from importing. It compares
+  against the hashes in the lock file rather than the ones in the bundle's own stamp, since anything
+  able to swap an assembly could also rewrite a stamp sitting beside it.
 
 To force a fresh, verified download — after a rollback, after an aborted integrity check, or simply
 to be sure of what is on disk:
@@ -150,19 +174,36 @@ To do it by hand:
 ./build/Update-DependencyLock.ps1 -Check     # verify without changing anything
 ```
 
-### Why the assemblies are still downloaded rather than shipped
+### Why the assemblies are shipped, and why the download stays
 
-Packaging the assemblies into the module at build time is the better end state, and it is planned:
-issue [#54](https://github.com/Fortigi/OmadaSqlTroubleshooter/issues/54) Part B covers bundling them
-into the published package with per-file hashes, keeping this download as the fallback. It is not in
-this release because redistributing the WebView2 SDK changes Fortigi's obligations under Microsoft's
-Distributable Code terms, and that review has to be completed and recorded in
-[THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md) before the first bundled release.
+Shipping them removes the last reason the application needed egress to nuget.org to start. That was
+never a theoretical problem: restricted corporate networks are the norm for Omada customers, and
+`Install-WebView2` returning `$false` is a terminating error, so a machine without a route to
+nuget.org could not run the application at all.
 
-Pinning and verifying stands on its own in the meantime: it closes the integrity hole for a few
-kilobytes of text, needs no licensing decision, and is a prerequisite for bundling anyway — a
-build-time fetch that is not itself verified would only move the unverified download from the user's
-machine to the build agent.
+The build-time fetch is verified for the same reason the run-time one is. Bundling *without* pinning
+would only move the unverified download from the user's machine to the build agent, which is why the
+pin and the hash gate landed first, in
+[#54](https://github.com/Fortigi/OmadaSqlTroubleshooter/issues/54) Part A.
+
+The `%LOCALAPPDATA%` download path stays, for three reasons:
+
+1. The module folder is typically read-only, and the bundle is used in place. Nothing is copied out
+   of it, so a writable location is still needed when the bundle cannot be used.
+2. A damaged or corrupted bundle has to degrade to something that works rather than bricking the
+   install.
+3. 32-bit processes are not bundled — the manifest declares `ProcessorArchitecture = 'Amd64'` — and
+   still need the assemblies.
+
+> **Licensing status.** Bundling moves `Microsoft.Web.WebView2` from "downloaded by the user" to
+> "redistributed by Fortigi", which is a real change in Fortigi's obligations. The redistribution
+> review in [THIRD-PARTY-NOTICES.md §1.3](THIRD-PARTY-NOTICES.md) is currently a **draft awaiting
+> sign-off** and must be accepted by a named person at Fortigi before the first release that ships
+> the bundle.
+
+Only the SDK assemblies are bundled. The 260 MB WebView2 **Runtime** is not, and bundling it was
+rejected — see the note below and
+[THIRD-PARTY-NOTICES.md §3.1](THIRD-PARTY-NOTICES.md#31-microsoft-edge-webview2-runtime).
 
 Note that the **WebView2 Runtime** is a separate question and is not affected by any of this. It is a
 prerequisite the user installs from Microsoft; this project neither ships nor downloads it. See

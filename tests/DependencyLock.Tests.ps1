@@ -64,6 +64,63 @@ Describe 'DependencyLock.psd1' -Tag 'Unit' {
         }
     }
 
+    It 'Should list the files taken out of every bundled package' {
+        # The package hash cannot verify a file that has been extracted out of the package, and the
+        # build-time bundle ships exactly those extracted files. Without a Files list there is
+        # nothing for Get-BundledDependency to copy and nothing for Test-WebView2Bundle to check.
+        #
+        # Only bundled artefacts need this. ScriptDom is downloaded to Bin and loaded from there,
+        # never extracted into the package, so its package hash and install stamp cover it end to
+        # end and it has no Files list. Asserting per bundled id rather than over every artefact
+        # keeps the guarantee where it bites without making a downloaded-only artefact illegal.
+        $BundledId = @('Microsoft.Web.WebView2')
+
+        foreach ($Id in $BundledId) {
+            $Artifact = @($Script:Artifacts | Where-Object { $_.Id -eq $Id })[0]
+            $Artifact | Should -Not -BeNullOrEmpty -Because "the lock file must pin '$Id'"
+            @($Artifact.Files).Count | Should -BeGreaterThan 0 -Because "artefact '$Id' is bundled at build time"
+        }
+    }
+
+    It 'Should pin a 64-character lower-case SHA-256 for every bundled file' {
+        foreach ($Artifact in $Script:Artifacts) {
+            foreach ($File in @($Artifact.Files | Where-Object { $null -ne $_ })) {
+                $File.Sha256 | Should -Match '^[0-9a-f]{64}$' -Because "'$($File.Target)' is re-verified immediately before it is loaded"
+                $File.Source | Should -Not -BeNullOrEmpty
+                $File.Target | Should -Not -BeNullOrEmpty
+            }
+        }
+    }
+
+    It 'Should map each bundled file onto a unique target name' {
+        # Microsoft.Web.WebView2.Wpf.dll exists three times in the package with different bytes. Two
+        # sources writing one target would mean whichever copied last wins - the exact ambiguity the
+        # two old fetchers disagreed about.
+        foreach ($Artifact in $Script:Artifacts) {
+            $Duplicate = @($Artifact.Files | Where-Object { $null -ne $_ }) | Group-Object { $_.Target } | Where-Object { $_.Count -gt 1 }
+            $Duplicate | Should -BeNullOrEmpty -Because "artefact '$($Artifact.Id)' must resolve one source per target"
+        }
+    }
+
+    It 'Should reference package entries by their in-archive path' {
+        foreach ($Artifact in $Script:Artifacts) {
+            foreach ($File in @($Artifact.Files | Where-Object { $null -ne $_ })) {
+                $File.Source | Should -Not -Match '\\' -Because 'zip entry names use forward slashes'
+                $File.Source | Should -BeLike ('*{0}' -f $File.Target) -Because "'$($File.Source)' should end in the file it produces"
+            }
+        }
+    }
+
+    It 'Should take the WPF assembly from the framework Install-WebView2 has always used' {
+        # netcoreapp3.0, not net5.0-windows10.0.17763.0 and not net462. All three ship a
+        # Microsoft.Web.WebView2.Wpf.dll with different bytes; the deleted build/RetrieveDependencies.ps1
+        # took the net5.0 one while the module loaded the netcoreapp3.0 one.
+        $WebView2 = @($Script:Artifacts | Where-Object { $_.Id -eq 'Microsoft.Web.WebView2' })[0]
+        $Wpf = @($WebView2.Files | Where-Object { $_.Target -eq 'Microsoft.Web.WebView2.Wpf.dll' })[0]
+        $Wpf | Should -Not -BeNullOrEmpty
+        $Wpf.Source | Should -Be 'lib_manual/netcoreapp3.0/Microsoft.Web.WebView2.Wpf.dll'
+    }
+
     It 'Should name an installer that exists for every artefact' {
         foreach ($Artifact in $Script:Artifacts) {
             $InstallerPath = Join-Path $Script:PrivatePath -ChildPath ('{0}.ps1' -f $Artifact.InstalledBy)
@@ -110,6 +167,37 @@ Describe 'Dependency lock packaging' -Tag 'Unit' {
     It 'Should be copied by the local deploy script' {
         $Deploy = Get-Content -Path (Join-Path $Script:RepositoryRoot -ChildPath 'deploy\deploy.ps1') -Raw
         $Deploy | Should -Match 'DependencyLock\.psd1'
+    }
+
+    It 'Should have its bundled files fetched into the package by psake' {
+        # Task Dependencies is what puts the assemblies in the package. Part A removed a Task
+        # Dependencies that was in no task chain at all, so the package contained no bin folder;
+        # asserting the call and the chain together is what keeps that from recurring.
+        $Psake = Get-Content -Path (Join-Path $Script:RepositoryRoot -ChildPath 'build\psakeBuild.ps1') -Raw
+
+        $Psake | Should -Match 'Get-BundledDependency\.ps1' -Because 'something has to fetch the bundle'
+        $Psake | Should -Match 'Task Build -Depends Test, Dependencies' -Because 'bundling must be in every chain that publishes, including the nightly which runs a bare Build'
+    }
+
+    It 'Should have the bundled files verified by psake before the package is published' {
+        $Psake = Get-Content -Path (Join-Path $Script:RepositoryRoot -ChildPath 'build\psakeBuild.ps1') -Raw
+
+        $Psake | Should -Match 'Task TestAssemblies'
+        foreach ($Chain in @('Task TestBuildOnly', 'Task Pipeline')) {
+            $ChainLine = [regex]::Match($Psake, ('(?m)^{0}.*$' -f [regex]::Escape($Chain))).Value
+            $ChainLine | Should -Match 'TestAssemblies' -Because "a package with a broken bundle still imports, so '$Chain' would not otherwise notice"
+        }
+    }
+
+    It 'Should not require the WebView2 Runtime executable in the build output' {
+        # msedgewebview2.exe is the 260 MB WebView2 Runtime, which this project does not
+        # redistribute (THIRD-PARTY-NOTICES.md section 3.1). The old TestAssemblies demanded it and
+        # could therefore only ever fail.
+        $Psake = Get-Content -Path (Join-Path $Script:RepositoryRoot -ChildPath 'build\psakeBuild.ps1') -Raw
+        $TaskBody = [regex]::Match($Psake, '(?s)Task TestAssemblies\b[^\{]*\{.*?\r?\n\}').Value
+
+        $TaskBody | Should -Not -BeNullOrEmpty
+        $TaskBody | Should -Not -Match 'msedgewebview2'
     }
 
     It 'Should be verified by every CI lane that builds or publishes' {

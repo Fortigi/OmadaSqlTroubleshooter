@@ -59,34 +59,45 @@ try {
 
     "{0} - Set paths" -f $MyInvocation.MyCommand | Write-Verbose
 
-    #WebView2 Base Path
+    # WebView2 assembly locations. Prefers the bundle laid down and hash-verified at build time in
+    # <ModuleRoot>\Bin\WebView2Dlls\win-x64; falls back to the writable
+    # %LOCALAPPDATA%\OmadaSqlTroubleshooter\Bin\<win-x64|win-x86> download path, unchanged. With a
+    # valid bundle nothing is downloaded and module import makes no network call at all.
+    $ResolvedWebView2Path = Resolve-WebView2AssemblyPath -ModuleRoot $PSScriptRoot -BinPath $WebBinBasePath
+
+    $Script:WebView2CorePath = $ResolvedWebView2Path.Core
+    $Script:WebView2WinFormsPath = $ResolvedWebView2Path.WinForms
+    $Script:WebView2WpfPath = $ResolvedWebView2Path.Wpf
+    $Script:WebView2LoaderPath = $ResolvedWebView2Path.Loader
+
+    # Which of the two folders the paths above point at. Get-WebView2ExpectedHash reads it to decide
+    # whether the load-time check compares against the lock or against the download stamp.
+    $Script:WebView2Source = $ResolvedWebView2Path.Source
+
+    # Named in the load-time integrity error, so the message says which folder the rejected bytes
+    # were in rather than just which file.
+    $Script:WebView2BasePath = $ResolvedWebView2Path.BasePath
+
+    "{0} - WebView2 assemblies resolved from the {1} at '{2}'" -f $MyInvocation.MyCommand, $ResolvedWebView2Path.Source.ToLowerInvariant(), $ResolvedWebView2Path.BasePath | Write-Verbose
+
+    # The pin stamp Install-WebView2 writes always lives with the DOWNLOADED assemblies, never in the
+    # bundle. Write-WebView2Stamp, Test-WebView2RuntimeVersion and
+    # Clear-OmadaSqlTroubleshooterCache -Scope Binaries all address that one, and the module folder
+    # is typically read-only anyway. The bundle carries its own stamp, which Test-WebView2Bundle
+    # reads directly.
     if ($Env:PROCESSOR_ARCHITECTURE -eq "AMD64") {
-        $WebView2BasePath = [System.IO.Path]::Combine($WebBinBasePath, "win-x64")
+        $WebView2DownloadPath = [System.IO.Path]::Combine($WebBinBasePath, "win-x64")
     }
     else {
-        $WebView2BasePath = [System.IO.Path]::Combine($WebBinBasePath, "win-x86")
+        $WebView2DownloadPath = [System.IO.Path]::Combine($WebBinBasePath, "win-x86")
     }
-    New-Item -ItemType Directory -Path $WebView2BasePath -Force | Out-Null
+    $Script:WebView2StampPath = [System.IO.Path]::Combine($WebView2DownloadPath, "WebView2.pin")
 
-    #WebView2 Core Location
-    $Script:WebView2CorePath = [System.IO.Path]::Combine($WebView2BasePath, "Microsoft.Web.WebView2.Core.dll")
-    "{0} - {1}" -f $MyInvocation.MyCommand, $Script:WebView2CorePath | Write-Verbose
-
-    #WebView2 WinForms Location
-    $Script:WebView2WinFormsPath = [System.IO.Path]::Combine($WebView2BasePath, "Microsoft.Web.WebView2.WinForms.dll")
-    "{0} - {1}" -f $MyInvocation.MyCommand, $Script:WebView2WinFormsPath | Write-Verbose
-
-    #WebView2 WPF Location
-    $Script:WebView2WpfPath = [System.IO.Path]::Combine($WebView2BasePath, "Microsoft.Web.WebView2.Wpf.dll")
-    "{0} - {1}" -f $MyInvocation.MyCommand, $Script:WebView2WpfPath | Write-Verbose
-
-    #WebView2 Loader Location
-    $Script:WebView2LoaderPath = [System.IO.Path]::Combine($WebView2BasePath, "WebView2Loader.dll")
-    "{0} - {1}" -f $MyInvocation.MyCommand, $Script:WebView2LoaderPath | Write-Verbose
-
-    #WebView2 Pin Stamp Location - records which pinned version the installed assemblies came from
-    $Script:WebView2StampPath = [System.IO.Path]::Combine($WebView2BasePath, "WebView2.pin")
-    "{0} - {1}" -f $MyInvocation.MyCommand, $Script:WebView2StampPath | Write-Verbose
+    if ($ResolvedWebView2Path.RequiresInstall) {
+        # Only created when it is actually going to be used, so a bundled install does not leave an
+        # empty folder behind in the user's profile.
+        New-Item -ItemType Directory -Path $WebView2DownloadPath -Force | Out-Null
+    }
 
     #ScriptDom Location - the T-SQL parser behind the editor's client-side syntax diagnostics.
     #Architecture-neutral (pure managed assembly), so it sits in Bin rather than the win-x64/x86
@@ -107,7 +118,15 @@ try {
     $Script:WebView2UserProfilePath = [System.IO.Path]::Combine($Script:ModuleAppDataPath, "Edge User Data\OmadaWebView2Profile")
     "{0} - {1}" -f $MyInvocation.MyCommand, $Script:WebView2UserProfilePath | Write-Verbose
 
-    $WebViewInstalled = Install-WebView2 -IncludeWpf
+    # Only downloads when there is no usable bundle. Install-WebView2 is unchanged: it fetches the
+    # pinned URL, verifies the bytes, and writes the assemblies and their stamp into
+    # %LOCALAPPDATA%\OmadaSqlTroubleshooter\Bin, exactly as before.
+    if ($ResolvedWebView2Path.RequiresInstall) {
+        $WebViewInstalled = Install-WebView2 -IncludeWpf
+    }
+    else {
+        $WebViewInstalled = $true
+    }
     # (Join-Path $env:ProgramFiles -ChildPath "Microsoft\EdgeWebView"), (Join-Path ${env:ProgramFiles(x86)} -ChildPath "Microsoft\EdgeWebView"), (Join-Path $LocalAppDataPath -ChildPath "$ModuleName\bin\Webview2Runtime"), (Join-Path $PsscriptRoot -ChildPath "bin\Webview2Runtime") | ForEach-Object {
     #     if (Test-Path $_) {
     #         (Get-ChildItem $_ -Filter *.exe -Recurse | Where-Object { $_.Name -eq "msedgewebview2.exe" }) | ForEach-Object {
