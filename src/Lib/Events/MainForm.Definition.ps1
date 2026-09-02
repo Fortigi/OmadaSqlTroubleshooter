@@ -34,11 +34,23 @@ $Script:WebViewCompletionPollTimer.Add_Tick({
                 # detached dynamic module that cannot resolve this app's dot-sourced private
                 # functions (CommandNotFoundException). Plain blocks without a param() simply
                 # ignore the argument.
+                # A completion block is optional. A caller that only pushes something into the editor
+                # and has nothing to do afterwards - the syntax pass writing its markers, for
+                # instance - passes none, and the item is still queued so the task is drained and
+                # removed. Invoking a $null here is what "The expression after '&' in a pipeline
+                # element produced an object that was not valid" means, so the queue is drained
+                # either way and only a real scriptblock is called.
+                $CompletedScriptBlock = $Pending.OnCompletedScriptBlock
+
+                if (-not (Test-WebViewCompletionCallback -Callback $CompletedScriptBlock)) {
+                    continue
+                }
+
                 if ($null -ne $Pending.TabSession) {
                     $PreviouslyActiveTab = Get-ActiveTabSession
                     try {
                         Set-ActiveTabContext -TabSession $Pending.TabSession
-                        & $Pending.OnCompletedScriptBlock $Pending
+                        & $CompletedScriptBlock $Pending
                     }
                     finally {
                         if ($null -ne $PreviouslyActiveTab) {
@@ -47,7 +59,7 @@ $Script:WebViewCompletionPollTimer.Add_Tick({
                     }
                 }
                 else {
-                    & $Pending.OnCompletedScriptBlock $Pending
+                    & $CompletedScriptBlock $Pending
                 }
             }
         }
