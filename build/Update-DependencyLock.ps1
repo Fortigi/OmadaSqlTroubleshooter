@@ -103,12 +103,21 @@ function Save-RemotePackage {
     param([string]$Url)
 
     $TempFile = [System.IO.Path]::GetTempFileName()
-    $WebClient = New-Object System.Net.WebClient
     try {
-        $WebClient.DownloadFile($Url, $TempFile)
+        $WebClient = New-Object System.Net.WebClient
+        try {
+            $WebClient.DownloadFile($Url, $TempFile)
+        }
+        finally {
+            $WebClient.Dispose()
+        }
     }
-    finally {
-        $WebClient.Dispose()
+    catch {
+        # GetTempFileName has already created the file, so a failed download leaves an empty or
+        # partial one behind. The caller only deletes what it was handed, and it is handed nothing
+        # when this throws - so clean up here before rethrowing.
+        Remove-Item -Path $TempFile -Force -ErrorAction SilentlyContinue
+        throw
     }
     return $TempFile
 }
