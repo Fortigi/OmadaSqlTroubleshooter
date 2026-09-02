@@ -196,12 +196,19 @@ try {
     $Archive = [System.IO.Compression.ZipFile]::OpenRead($PackagePath)
     try {
         foreach ($File in $PinnedFile) {
-            $Entry = $Archive.Entries | Where-Object { $_.FullName -eq $File.Source }
-            if ($null -eq $Entry) {
+            # 0, 1 and many are all handled explicitly. A zip may legally carry two entries with the
+            # same name; letting $Entry become an array would fail inside ExtractToFile with an
+            # opaque method-resolution error instead of saying what is actually wrong.
+            $Entry = @($Archive.Entries | Where-Object { $_.FullName -eq $File.Source })
+            if ($Entry.Count -eq 0) {
                 # Deliberately terminating. An upstream repackaging that moves a file must fail the
                 # build; a bundle missing an assembly would import, then fail at the first tab.
                 "Artefact '{0}' version {1} has no entry '{2}'. The package layout has changed upstream. Correct the Files list in '{3}' and re-pin the hashes with build/Update-DependencyLock.ps1 -Refresh." -f $Artifact.Id, $Artifact.Version, $File.Source, $LockPath | Write-Error -ErrorAction Stop
             }
+            if ($Entry.Count -gt 1) {
+                "Artefact '{0}' version {1} has {2} entries named '{3}'. Which one is meant is ambiguous, so nothing is extracted." -f $Artifact.Id, $Artifact.Version, $Entry.Count, $File.Source | Write-Error -ErrorAction Stop
+            }
+            $Entry = $Entry[0]
 
             $TargetPath = Join-Path $OutputPath $File.Target
             [System.IO.Compression.ZipFileExtensions]::ExtractToFile($Entry, $TargetPath, $true)

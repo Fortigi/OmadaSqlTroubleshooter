@@ -129,10 +129,19 @@ function Get-PackageEntrySha256 {
 
     $Archive = [System.IO.Compression.ZipFile]::OpenRead($PackagePath)
     try {
-        $Entry = $Archive.Entries | Where-Object { $_.FullName -eq $EntryPath }
-        if ($null -eq $Entry) {
+        # 0, 1 and many are all handled explicitly. A zip may legally carry two entries with the same
+        # name; letting $Entry become an array would fail on $Entry.Open() with an opaque method
+        # invocation error rather than saying what is actually wrong.
+        $Entry = @($Archive.Entries | Where-Object { $_.FullName -eq $EntryPath })
+        if ($Entry.Count -eq 0) {
             return $null
         }
+        if ($Entry.Count -gt 1) {
+            # Not $null: "absent" and "ambiguous" are different problems and the caller reports them
+            # differently.
+            "Package '{0}' contains {1} entries named '{2}'. Which one the pin refers to is ambiguous." -f $PackagePath, $Entry.Count, $EntryPath | Write-Error -ErrorAction Stop
+        }
+        $Entry = $Entry[0]
 
         $Sha256 = [System.Security.Cryptography.SHA256]::Create()
         try {
