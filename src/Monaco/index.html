@@ -220,6 +220,50 @@
                 rebuildSchema(schema || {});
             };
 
+            // ---- Diagnostics channel ------------------------------------------------
+            //
+            // ONE channel for every validation pass, mirroring the setSchema/setEditorValue seam:
+            // all analysis stays in PowerShell (where Pester can reach it) and the editor stays a
+            // pure renderer. The T-SQL syntax pass pushes severity 'Error'; the schema pass added
+            // later pushes severity 'Warning' with its own 'source', and needs no change here.
+            //
+            // Markers live in the model only. They are never persisted with the tab session, and
+            // nothing on this side sends the query text anywhere.
+            const diagnosticSeverity = {
+                error: monaco.MarkerSeverity.Error,
+                warning: monaco.MarkerSeverity.Warning,
+                info: monaco.MarkerSeverity.Info,
+                hint: monaco.MarkerSeverity.Hint
+            };
+
+            window.setDiagnostics = function (diagnostics) {
+                const model = editor.getModel();
+                if (!model) {
+                    return;
+                }
+
+                // An empty or missing list clears the markers, which is how a script that has
+                // become valid again loses its squiggles.
+                const markers = (diagnostics || []).map(function (diagnostic) {
+                    // Unknown severities fall back to Warning rather than being dropped: a
+                    // diagnostic the user cannot see is worse than one shown at the wrong weight.
+                    const severity = diagnosticSeverity[String(diagnostic.severity || '').toLowerCase()]
+                        || monaco.MarkerSeverity.Warning;
+
+                    return {
+                        startLineNumber: diagnostic.line,
+                        startColumn: diagnostic.column,
+                        endLineNumber: diagnostic.endLine || diagnostic.line,
+                        endColumn: diagnostic.endColumn || (diagnostic.column + 1),
+                        message: diagnostic.message,
+                        source: diagnostic.source,
+                        severity: severity
+                    };
+                });
+
+                monaco.editor.setModelMarkers(model, 'omada-sql', markers);
+            };
+
             // Map a typed schema name (any casing) onto its canonical name, or null when unknown.
             function resolveSchemaName(name) {
                 if (!name) {
