@@ -209,7 +209,11 @@ function Complete-SqlSchemaRetrieval {
         "Schema for Monaco editor: {0}" -f $SchemaObjectsJson | Write-LogOutput -LogType VERBOSE
         $OnCompletedScriptBlock = {
             try {
-                if (!$Script:Task.Status -eq "RanToCompletion") {
+                # -ne, not "!... -eq". The original read !$Script:Task.Status -eq "RanToCompletion",
+                # where ! binds to the property first: a non-empty status string becomes $false, and
+                # $false -eq "RanToCompletion" is always $false - so the failure branch never ran and
+                # every editor push, successful or not, was logged as a success.
+                if ($Script:Task.Status -ne "RanToCompletion") {
                     "Monaco Editor Task failed: {0}" -f $Script:Task.Status | Write-LogOutput -LogType ERROR -ErrorObject $_
                 }
                 else {

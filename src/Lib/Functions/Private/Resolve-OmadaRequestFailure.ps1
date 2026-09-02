@@ -21,6 +21,16 @@ function Resolve-OmadaRequestFailure {
     it to throw - the poll timer's own try/catch logs it - whereas the synchronous wrapper lets it
     propagate to whoever called the wrapper.
 
+    Both branches used to be followed by "$Script:RunTimeData.SkipRetryRequest = $true", which the
+    Write-Error above made unreachable - dead since it was written. Those lines are gone rather than
+    moved before the throw, because moving them would be a real and untested behaviour change, not a
+    tidy-up: SkipRetryRequest makes Invoke-OmadaPSWebRequestWrapper return $null WITHOUT making a
+    request, and the only thing that ever clears it is Reset-Application. Setting it here would mean
+    a single Unauthorized - an expired cookie, say - silently stopped the tab from issuing any
+    request at all for the rest of the session, with no way back short of a full application reset.
+    Whether that is wanted is a product decision that belongs to issue #44's territory (telling a
+    failed request apart from an empty one), not to this change.
+
     .PARAMETER ErrorRecord
     The failure, either caught inline or returned from Invoke-OmadaRequestCore.
 
@@ -41,13 +51,11 @@ function Resolve-OmadaRequestFailure {
         # on claiming the tab was connected.
         Set-SqlConnectionState -Status $false
         $Message | Write-Error -ErrorAction Stop -TargetObject $ErrorRecord
-        $Script:RunTimeData.SkipRetryRequest = $true
     }
     elseif ($null -ne $ErrorRecord.Exception?.Response?.StatusCode -and $ErrorRecord.Exception.Response.StatusCode -eq [System.Net.HttpStatusCode]::Unauthorized) {
         $Message = "Access denied to {0}, message:`n`r{1}" -f [system.uri]::New($Script:AppConfig.BaseUrl).Host, $ErrorRecord.ErrorDetails.Message
         Set-SqlConnectionState -Status $false
         $Message | Write-Error -ErrorAction Stop -TargetObject $ErrorRecord
-        $Script:RunTimeData.SkipRetryRequest = $true
     }
     else {
         $ErrorRecord
