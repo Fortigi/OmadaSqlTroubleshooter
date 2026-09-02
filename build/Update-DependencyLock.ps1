@@ -197,15 +197,31 @@ function Set-ArtifactValue {
 }
 
 function Set-ArtifactFileHash {
-    # Rewrites the Sha256 of each Files entry, keyed on the Target line immediately above it. Only
-    # the hash line is touched, so Source, Target and the layout survive untouched.
+    # Rewrites the Sha256 of each Files entry belonging to ONE artefact, keyed on the Target line
+    # immediately above it. Only the hash line is touched, so Source, Target and the layout survive
+    # untouched.
+    #
+    # Scoped to $Id the same way Set-ArtifactValue is. Target names are not unique across artefacts -
+    # nothing stops a second package from also shipping a file called WebView2Loader.dll - and an
+    # unscoped rewrite would silently repin another artefact's file to this one's bytes.
     param(
         [string[]]$Line,
+        [string]$Id,
         [hashtable]$HashByTarget
     )
 
+    $CurrentId = $null
     $CurrentTarget = $null
     for ($Index = 0; $Index -lt $Line.Count; $Index++) {
+        # Id appears only at artefact level; the Files entries below it carry Source/Target/Sha256.
+        if ($Line[$Index] -match '^\s*Id\s*=\s*"([^"]+)"\s*$') {
+            $CurrentId = $Matches[1]
+            $CurrentTarget = $null
+            continue
+        }
+        if ($CurrentId -ne $Id) {
+            continue
+        }
         if ($Line[$Index] -match '^\s*Target\s*=\s*"([^"]+)"\s*$') {
             $CurrentTarget = $Matches[1]
             continue
@@ -393,7 +409,7 @@ if ($PSCmdlet.ParameterSetName -eq "Refresh") {
                 Url     = $Url
                 Sha256  = $Sha256
             }
-            $Line = Set-ArtifactFileHash -Line $Line -HashByTarget $FileHash
+            $Line = Set-ArtifactFileHash -Line $Line -Id $Artifact.Id -HashByTarget $FileHash
             $Changed++
         }
         finally {
