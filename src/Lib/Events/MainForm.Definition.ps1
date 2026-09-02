@@ -174,6 +174,11 @@ $Script:MainForm.Definition.Add_Closing({
             if (Test-SqlSchemaFormIsVisible) {
                 $Script:SqlSchemaForm.Definition.Close()
             }
+
+            # Background request workers are real threads; left open they keep the process alive
+            # after the window has gone (issue #40). Best-effort, and last, so a failure here cannot
+            # cost the user their saved tab sessions or window measurements above.
+            Close-OmadaRequestPool
         }
         catch {
             $_.Exception.Message | Write-LogOutput -LogType ERROR -ErrorObject $_

@@ -16,51 +16,26 @@ function Invoke-OmadaPSWebRequestWrapper {
     Suspend-WebViewCompletionPolling
     try {
         if (!$Script:RunTimeData.SkipRetryRequest) {
-            $Private:Parameters = $Script:RunTimeData.RestMethodParam
-            #$Private:Parameters.AuthenticationType = $($Script:MainForm.Elements.ComboBoxSelectAuthenticationOption.SelectedItem.Content)
-            $Private:Parameters.UseWebView2 = $Private:Parameters.AuthenticationType -eq "Browser" ? $($Script:RunTimeConfig.UseWebView2Auth) : $false
-            if ($null -eq $Private:Parameters.Body) {
-                if ($Private:Parameters.ContainsKey("Body")) {
-                    $Private:Parameters.Remove("Body")
-                }
-            }
-            else {
-                if (!$Private:Parameters.ContainsKey("Body")) {
-                    $Private:Parameters.Add("Body", $null)
-                }
-
-                #$Private:Parameters.Body = $Private:Parameters.Body | ConvertTo-Json
-            }
-
-            # Keep the module's own verbose stream in step with this application's log, so the two
-            # do not contradict each other on the same request. Passed only when the installed
-            # OmadaWeb.PS actually declares the parameter: -SkipBodyRedaction is newer than the
-            # pinned minimum version, and splatting a parameter a cmdlet does not have is a
-            # terminating error. Capability-checked rather than version-gated, so this works the day
-            # the switch ships without forcing everyone onto a release that does not exist yet.
-            $Private:RestMethodCommand = Get-Command -Name Invoke-OmadaRestMethod -ErrorAction SilentlyContinue
-            if ($null -ne $Private:RestMethodCommand -and $Private:RestMethodCommand.Parameters.ContainsKey("SkipBodyRedaction")) {
-                $Private:Parameters.SkipBodyRedaction = [bool]$Script:SkipBodyRedaction
-            }
-            elseif ($Private:Parameters.ContainsKey("SkipBodyRedaction")) {
-                # The installed module was downgraded mid-session; drop the key rather than fail.
-                $Private:Parameters.Remove("SkipBodyRedaction")
-            }
+            # Preparation and failure classification live in Build-OmadaRequestParameter and
+            # Resolve-OmadaRequestFailure so the background path (issue #40,
+            # Invoke-OmadaPSWebRequestWrapperAsync) applies exactly the same rules. This function is
+            # still the synchronous choke point, and is still what runs when a request is not
+            # eligible for a worker or no worker could be had.
+            $Private:Parameters = Build-OmadaRequestParameter
 
             "Parameters: {0}" -f (ConvertTo-RedactedLogString -InputObject $Private:Parameters) | Write-LogOutput -LogType VERBOSE
 
             # The call itself lives in Invoke-OmadaRequestCore, which reads no $Script: state and
-            # writes no log - the one part of this function that can legally run in a worker runspace
-            # (issue #40). Everything around it, from the parameter preparation above to the error
-            # classification below, stays here on the UI thread. Behaviour is unchanged: the core
-            # returns the failure instead of throwing it, and this rethrows so the existing catch
-            # classifies it exactly as before. A rethrown ErrorRecord keeps its Exception,
-            # ErrorDetails and FullyQualifiedErrorId, which is all the branches below read.
+            # writes no log - the one part of this function that can legally run in a worker runspace.
+            # The core returns the failure instead of throwing it, so this rethrows to keep the
+            # control flow identical: a rethrown ErrorRecord keeps its Exception, ErrorDetails and
+            # FullyQualifiedErrorId, which is all the classification reads.
             $Private:Outcome = Invoke-OmadaRequestCore -Parameters $Private:Parameters
             if ($null -ne $Private:Outcome.ErrorRecord) {
                 throw $Private:Outcome.ErrorRecord
             }
             $Private:Result = $Private:Outcome.Result
+
             # Deliberately no status-bar write here. A successful request is not the same thing as a
             # connected tab: this transport is also used by probes and by work that runs while a tab
             # is being connected, so writing "Connected" from here put the status bar ahead of - and
@@ -78,29 +53,7 @@ function Invoke-OmadaPSWebRequestWrapper {
         }
     }
     catch {
-        if (![string]::IsNullOrWhiteSpace($_.ErrorDetails?.Message) -and $_.ErrorDetails.Message -like "*Resource not found for the segment 'C_P_SQLTROUBLESHOOTING'*") {
-            $Message = "OData Endpoint for SQL Troubleshooting not enabled at tenant {0}.`n`r`n`rError returned by Omada:`n`r`n`r{1}" -f [system.uri]::New($Script:AppConfig.BaseUrl).Host, $_.ErrorDetails.Message
-            # Route the teardown through the state function, exactly as the Unauthorized branch below
-            # already does. This used to hand-write four status-bar fields while leaving
-            # $Script:ConnectionStatus untouched, so the button, the dropdowns and the Display name
-            # went on claiming the tab was connected. (The writes were in fact unreachable: the guard
-            # tested $Script:MainForm.Definitions, which does not exist - the member is Definition -
-            # so the status bar was never even updated on this error.)
-            Set-SqlConnectionState -Status $false
-            $Message | Write-Error -ErrorAction Stop -TargetObject $_
-            $Script:RunTimeData.SkipRetryRequest = $true
-        }
-        elseif ($null -ne $_.Exception?.Response?.StatusCode -and $_.Exception.Response.StatusCode -eq [System.Net.HttpStatusCode]::Unauthorized) {
-            $Message = "Access denied to {0}, message:`n`r{1}" -f [system.uri]::New($Script:AppConfig.BaseUrl).Host, $_.ErrorDetails.Message
-            Set-SqlConnectionState -Status $false
-            $Message | Write-Error -ErrorAction Stop -TargetObject $_
-            $Script:RunTimeData.SkipRetryRequest = $true
-        }
-        else {
-            # $Message = "Error occurred:`n`r{1}" -f [system.uri]::New($Script:AppConfig.BaseUrl).Host, $_.ErrorDetails.Message
-            # $Message | Write-Error -ErrorAction Stop -TargetObject $_
-            $_
-        }
+        Resolve-OmadaRequestFailure -ErrorRecord $_
     }
     finally {
         Resume-WebViewCompletionPolling
