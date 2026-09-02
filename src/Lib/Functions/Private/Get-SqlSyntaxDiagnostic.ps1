@@ -79,8 +79,15 @@ function Get-SqlSyntaxDiagnostic {
             }
 
             # initialQuotedIdentifiers: $true matches the SET QUOTED_IDENTIFIER ON that SQL Server
-            # connections from .NET clients - Omada's included - run under. Parsing with it off would
-            # reject "..." string literals that the tenant accepts.
+            # connections from .NET clients - Omada's included - run under. The flag decides what
+            # "..." MEANS: under ON it is a delimited identifier, under OFF a string literal.
+            #
+            # Measured, not assumed: it makes little difference to this pass. Both
+            # 'SELECT "Col Name" FROM dbo.T' and 'SELECT "a string" AS x' parse without error under
+            # either setting, because what changes is the node the parser builds, not whether it can
+            # build one. It is set to match the connection anyway - it costs nothing, it is the
+            # honest model of the tenant, and the schema pass that will read identifiers out of this
+            # same AST does depend on it.
             $Parser = $ParserType::new($true)
 
             $ParseError = $null

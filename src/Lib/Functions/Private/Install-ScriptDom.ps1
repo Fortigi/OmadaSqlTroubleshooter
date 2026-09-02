@@ -37,9 +37,12 @@ function Install-ScriptDom {
 
         $Artifact = Get-LockedArtifact -Id "Microsoft.SqlServer.TransactSql.ScriptDom"
 
-        $InstalledVersion = Get-ScriptDomStamp
-        if (-not $Force.IsPresent -and (Test-Path $Script:ScriptDomPath -PathType Leaf) -and $InstalledVersion -eq $Artifact.Version) {
-            "ScriptDom {0} is already installed at '{1}'" -f $Artifact.Version, $Script:ScriptDomPath | Write-Verbose
+        # Version AND hash, via the same stamp Test-WebView2RuntimeVersion uses for the WebView2
+        # assemblies. Trusting the recorded version alone would let a swapped DLL in a user-writable
+        # Bin survive indefinitely, because the download that was verified is not the file that would
+        # be loaded.
+        if (-not $Force.IsPresent -and -not (Test-ScriptDomInstallRequired)) {
+            "ScriptDom {0} is already installed and verified at '{1}'" -f $Artifact.Version, $Script:ScriptDomPath | Write-Verbose
             return $true
         }
 

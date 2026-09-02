@@ -2,8 +2,8 @@ function Get-ScriptDomStamp {
     [CmdletBinding()]
     param()
 
-    # Returns the pinned version recorded in the stamp Install-ScriptDom wrote next to the assembly,
-    # or $null when there is nothing usable there.
+    # Returns the stamp Install-ScriptDom wrote next to the assembly - Version and Sha256 - or $null
+    # when there is nothing usable there.
     #
     # This must never throw. A corrupt or hand-edited stamp has to degrade to "reinstall" rather than
     # break the startup path.
@@ -37,9 +37,17 @@ function Get-ScriptDomStamp {
         return $null
     }
 
+    # A stamp missing either field cannot answer the question it exists to answer, so it is treated
+    # as no stamp at all rather than as a partial one - fail closed, and reinstall.
     if (-not $Stamp.ContainsKey("Version") -or [string]::IsNullOrWhiteSpace($Stamp.Version)) {
+        "The ScriptDom stamp file '{0}' records no version. Treating the installed assembly as unverified." -f $Script:ScriptDomStampPath | Write-Verbose
         return $null
     }
 
-    return $Stamp.Version
+    if (-not $Stamp.ContainsKey("Sha256") -or [string]::IsNullOrWhiteSpace($Stamp.Sha256)) {
+        "The ScriptDom stamp file '{0}' records no hash. Treating the installed assembly as unverified." -f $Script:ScriptDomStampPath | Write-Verbose
+        return $null
+    }
+
+    return $Stamp
 }
