@@ -48,6 +48,11 @@ function Initialize-OmadaSqlTroubleShooter {
         if (-not $Script:WebView2AssemblyVerified) {
             $ExpectedWebView2Hash = Get-WebView2ExpectedHash
 
+            # Which file the expected hashes actually came from, so a failure points at the right
+            # one. The bundle is pinned by the lock; assemblies downloaded to %LOCALAPPDATA% are
+            # pinned by the stamp Install-WebView2 wrote beside them.
+            $ExpectedWebView2HashSource = if ($Script:WebView2Source -eq "Bundle") { $Script:DependencyLockPath } else { $Script:WebView2StampPath }
+
             # WebView2Loader.dll is verified alongside the three managed assemblies. It is not loaded
             # through Add-ReflectionAssembly - the Core assembly pulls it in natively - but it is
             # still native code entering this process, so a gate that skipped it would be a gate with
@@ -68,11 +73,11 @@ function Initialize-OmadaSqlTroubleShooter {
                 # (the lock for a bundle, the install stamp for a download), so getting here means
                 # the install is damaged rather than merely unusual.
                 if (-not $ExpectedWebView2Hash.ContainsKey($WebView2AssemblyName)) {
-                    "Refusing to load '{0}' from '{1}': no expected SHA-256 is recorded for it, so its integrity cannot be established. Run 'Clear-OmadaSqlTroubleshooterCache -Scope Binaries' and start the application again to force a fresh, verified download." -f $WebView2AssemblyName, $Script:WebView2BasePath | Write-Error -ErrorAction "Stop"
+                    "Refusing to load '{0}' from '{1}': no expected SHA-256 is recorded for it in '{2}', so its integrity cannot be established. Run 'Clear-OmadaSqlTroubleshooterCache -Scope Binaries' and start the application again to force a fresh, verified download." -f $WebView2AssemblyName, $Script:WebView2BasePath, $ExpectedWebView2HashSource | Write-Error -ErrorAction "Stop"
                 }
 
                 "Verify assembly before load: '{0}'" -f $WebView2AssemblyName | Write-LogOutput -LogType DEBUG
-                Confirm-FileHash -Path $WebView2AssemblyPath -ExpectedSha256 $ExpectedWebView2Hash[$WebView2AssemblyName] -ArtifactName $WebView2AssemblyName -SourceUrl $Script:WebView2BasePath
+                Confirm-FileHash -Path $WebView2AssemblyPath -ExpectedSha256 $ExpectedWebView2Hash[$WebView2AssemblyName] -ArtifactName $WebView2AssemblyName -SourceUrl $Script:WebView2BasePath -ExpectedHashSource $ExpectedWebView2HashSource
             }
 
             # Only after every file has actually been verified.
