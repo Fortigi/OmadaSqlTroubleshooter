@@ -66,12 +66,16 @@ Describe "Invoke-OmadaRequestCore" {
     }
 
     It "returns a null Result rather than failing when the transport returns nothing" {
+        # A successful Omada call can legitimately return nothing, so a null Result is NOT a failure
+        # signal. ErrorRecord is the only discriminator - which is why the help says so explicitly
+        # and why this asserts both halves.
         $script:RestBehaviour = "Null"
 
         $Outcome = Invoke-OmadaRequestCore -Parameters @{ Uri = "https://tenant.omada.cloud/probe" }
 
         $Outcome.Result | Should -BeNullOrEmpty
         $Outcome.ErrorRecord | Should -BeNullOrEmpty
+        $Outcome.ContainsKey("ErrorRecord") | Should -BeTrue
     }
 
     It "returns the failure instead of throwing it" {

@@ -32,8 +32,12 @@ function Invoke-OmadaRequestCore {
     RunTimeData object out from under a request that is still in flight.
 
     .OUTPUTS
-    Hashtable @{ Result = <response or $null>; ErrorRecord = <ErrorRecord or $null> }. Exactly one of
-    the two is populated.
+    Hashtable @{ Result = <response or $null>; ErrorRecord = <ErrorRecord or $null> }.
+
+    ErrorRecord is the discriminator, and it is the only one: a non-null ErrorRecord means the request
+    failed and Result is $null. A null ErrorRecord means the request succeeded - but Result may still
+    be $null, because a successful Omada call can legitimately return nothing. Callers must therefore
+    branch on ErrorRecord and never infer failure from a null Result.
     #>
     [CmdletBinding()]
     param(
