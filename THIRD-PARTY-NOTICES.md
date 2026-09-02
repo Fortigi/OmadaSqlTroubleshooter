@@ -157,6 +157,13 @@ repository `https://github.com/microsoft/SqlScriptDOM` at commit
 grant is carried by the SPDX licence expression, which is how NuGet has expressed licensing since
 `licenseUrl` was deprecated.
 
+The licence link above points at `main` rather than at that commit deliberately. The commit the
+nuspec records is **not resolvable in the public repository** — `GET
+/repos/microsoft/SqlScriptDOM/commits/9d1d1c1d062bd900ad9cac5e4e05bdf950d5a229` returns HTTP 422
+"No commit found", and the repository publishes no tags — so there is no version-pinned licence URL
+to link. The statement that *is* pinned to this exact version is the SPDX expression inside the
+package itself, recorded above; the GitHub link is a convenience copy of the same MIT terms.
+
 **Transitive dependencies: none.** The pinned package declares four `<group>` dependency sets
 (`.NETFramework4.7.2`, `net8.0`, `.NETStandard2.0`, `.NETStandard2.1`) and every one of them is
 empty, and the `net8.0` assembly this module loads references only base class library assemblies
