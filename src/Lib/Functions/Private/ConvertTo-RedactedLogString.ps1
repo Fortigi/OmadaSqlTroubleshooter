@@ -13,6 +13,11 @@ function ConvertTo-RedactedLogString {
         Write-LogOutput. The tracer preamble in every other function routes through this one, and
         Write-LogOutput routes through Protect-LogMessage - instrumenting the helpers would make them
         call themselves.
+
+        The one rule a user can lift is the request-body rule, through the log window's
+        "Show request body" checkbox or -SkipBodyRedaction. That state is read from module scope
+        ($Script:SkipBodyRedaction), exactly as OmadaWeb.PS does it, so no call site and no step of
+        the recursion has to thread a parameter through.
     #>
     [CmdLetBinding()]
     param(
@@ -27,7 +32,11 @@ function ConvertTo-RedactedLogString {
     )
 
     try {
-        $Redacted = ConvertTo-RedactedLogValue -Value $InputObject -Depth 0 -MaxDepth $MaxDepth -MaxStringLength $MaxStringLength -Visited ([System.Collections.Generic.List[object]]::new()) -MaskValues ([bool]$ShapeOnly)
+        # -ShapeOnly says "this object IS the body", so the user's choice has to reach it here as
+        # well. Without this the "Body:" line would keep showing String(24) while the "Parameters:"
+        # line from the same request showed the query - one log contradicting itself.
+        $MaskBodyValues = [bool]$ShapeOnly -and -not $Script:SkipBodyRedaction
+        $Redacted = ConvertTo-RedactedLogValue -Value $InputObject -Depth 0 -MaxDepth $MaxDepth -MaxStringLength $MaxStringLength -Visited ([System.Collections.Generic.List[object]]::new()) -MaskValues $MaskBodyValues
         if ($null -eq $Redacted) {
             return "null"
         }
@@ -214,8 +223,13 @@ function Get-RedactedMemberValue {
     }
 
     # Request bodies keep their keys and value shapes - enough to tell what was sent - but no values.
+    # "Show request body" / -SkipBodyRedaction lifts that one rule, because in a SQL troubleshooter
+    # the body IS the query. Only this rule: everything above still applies inside the body, so a
+    # member named for a secret, a credential and a secure string stay masked, and Protect-LogMessage
+    # still sweeps the finished line. Read from module scope so no call site and no step of the
+    # recursion has to pass it along.
     $ChildMaskValues = $MaskValues
-    if ($Name -eq "Body") {
+    if ($Name -eq "Body" -and -not $Script:SkipBodyRedaction) {
         $ChildMaskValues = $true
     }
 

@@ -24,6 +24,12 @@ Uses the WebView2 for browser-based authentication.
 .PARAMETER NoReconnect
 Prevents the application from attempting to reconnect to the Omada Identity Suite using the stored connection information.
 
+.PARAMETER SkipBodyRedaction
+Logs the request body - the query that was sent - instead of its shape, and starts the application with the log viewer's "Show request body" checkbox already checked.
+Only the body rule is lifted: a body member named for a secret, a credential and a secure string are still masked, headers, credentials and session cookies are unaffected, and a very long value is still truncated by the log's own length limit.
+The query text does end up in the log window and in any log file exported from it.
+The name matches the OmadaWeb.PS switch it drives.
+
 .EXAMPLE
 Invoke-OmadaSqlTroubleshooter
 
@@ -39,6 +45,11 @@ Invoke-OmadaSqlTroubleshooter -Reset
 
 Resets the stored configuration to default and starts the Omada SQL Troubleshooter application.
 
+.EXAMPLE
+Invoke-OmadaSqlTroubleshooter -LogLevel VERBOSE -SkipBodyRedaction
+
+Starts the Omada SQL Troubleshooter application logging the executed query text, from the first request onwards.
+
 .NOTES
 Requires PowerShell 7.0 or higher and the OmadaWeb.PS module.
 
@@ -53,7 +64,8 @@ function Invoke-OmadaSqlTroubleshooter {
         [switch]$Reset,
         [switch]$LogToConsole,
         [switch]$UseWebView2Auth,
-        [switch]$NoReconnect
+        [switch]$NoReconnect,
+        [switch]$SkipBodyRedaction
     )
     $Error.Clear()
     #region Initialize
@@ -75,6 +87,9 @@ function Invoke-OmadaSqlTroubleshooter {
             # of overwriting it with a value the caller never asked for.
             LogLevelExplicit    = $PSCmdlet.MyInvocation.BoundParameters.ContainsKey("LogLevel")
             LogLevelSetting     = $null
+            # Seeded here so the option is in effect before the first request; a persisted setting
+            # is folded in by Initialize-GlobalConfigSettings, which is also what checks the box.
+            SkipBodyRedaction   = $SkipBodyRedaction.IsPresent -or $false
             AppLogObject        = [System.Collections.ObjectModel.ObservableCollection[string]]::new()
         }
         StopWatch          = $null
@@ -98,6 +113,15 @@ function Invoke-OmadaSqlTroubleshooter {
     # the session. Initialize-GlobalConfigSettings resolves this again once the persisted level is
     # available.
     $Script:RunTimeConfig.Logging.LogLevelSetting = Resolve-LogLevel -BoundLogLevel $LogLevel -SchemaDefault (Get-ConfigSchemaDefault -Property "LogLevel")
+
+    # The flag ConvertTo-RedactedLogString reads. Set before anything can log a body, so a bound
+    # -SkipBodyRedaction covers the whole session and not just the part after the configuration file
+    # has been read; Initialize-GlobalConfigSettings resolves it again against the persisted setting.
+    $Script:SkipBodyRedaction = $SkipBodyRedaction.IsPresent
+    # The "your query text is now in the log" warning is once per application session, not once per
+    # PowerShell session: the module stays imported between runs, so without this reset a second
+    # Invoke-OmadaSqlTroubleshooter in the same console would enable body logging silently.
+    $Script:SkipBodyRedactionWarned = $false
 
     Initialize-OmadaSqlTroubleShooter
 

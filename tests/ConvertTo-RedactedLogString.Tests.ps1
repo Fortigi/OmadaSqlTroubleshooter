@@ -202,3 +202,154 @@ Describe 'ConvertTo-RedactedLogString' {
         }
     }
 }
+
+Describe 'ConvertTo-RedactedLogString with the body redaction lifted' {
+
+    BeforeEach {
+        # The flag is module state, exactly as in OmadaWeb.PS, so every test starts from "off" and
+        # nothing a previous test set can leak into the next one.
+        $Script:SkipBodyRedaction = $false
+    }
+
+    AfterEach {
+        $Script:SkipBodyRedaction = $false
+    }
+
+    Context 'Option off' {
+
+        It 'produces byte-for-byte the output it produced before the option existed' {
+            $Parameters = [ordered]@{
+                Uri    = "https://tenant.omada.cloud/odata"
+                Method = "POST"
+                Body   = [ordered]@{ C_QUERY = "SELECT TOP 10 * FROM x" }
+            }
+
+            $Expected = @"
+{
+  "Uri": "https://tenant.omada.cloud/odata",
+  "Method": "POST",
+  "Body": {
+    "C_QUERY": "String(22)"
+  }
+}
+"@
+
+            $Result = ConvertTo-RedactedLogString -InputObject $Parameters
+
+            $Result | Should -BeExactly $Expected
+        }
+
+        It 'still reduces a body passed on its own via -ShapeOnly to its shape' {
+            $Result = ConvertTo-RedactedLogString -InputObject @{ C_QUERY = "SELECT * FROM dbo.Identity" } -ShapeOnly
+
+            $Result | Should -Not -Match "SELECT"
+        }
+    }
+
+    Context 'Option on' {
+
+        It 'shows the executed query text instead of its shape' {
+            $Script:SkipBodyRedaction = $true
+
+            $Result = ConvertTo-RedactedLogString -InputObject @{
+                Uri  = "https://tenant.omada.cloud/odata"
+                Body = @{ C_QUERY = "SELECT * FROM dbo.Identity" }
+            }
+
+            $Result | Should -Match "SELECT \* FROM dbo.Identity"
+        }
+
+        It 'shows the body of a request logged through -ShapeOnly as well' {
+            # The "Body: ..." call sites hand over the body itself, so -ShapeOnly is the only signal
+            # the walker gets. The option has to reach that path too, or the log contradicts itself.
+            $Script:SkipBodyRedaction = $true
+
+            $Result = ConvertTo-RedactedLogString -InputObject @{ C_QUERY = "SELECT * FROM dbo.Identity" } -ShapeOnly
+
+            $Result | Should -Match "SELECT \* FROM dbo.Identity"
+        }
+
+        It 'still masks a body member whose name names a secret' {
+            $Script:SkipBodyRedaction = $true
+
+            $Result = ConvertTo-RedactedLogString -InputObject @{
+                Body = @{ C_QUERY = "SELECT 1"; Password = "body-password-value" }
+            }
+
+            $Result | Should -Match "SELECT 1"
+            $Result | Should -Not -Match "body-password-value"
+            $Result | Should -Match "REDACTED"
+        }
+
+        It 'still masks a credential inside the body by type' {
+            $Script:SkipBodyRedaction = $true
+
+            $Result = ConvertTo-RedactedLogString -InputObject @{
+                Body = @{ Identity = $Script:TestCredential }
+            }
+
+            $Result | Should -Not -Match ([regex]::Escape($Script:TestPassword))
+            $Result | Should -Match "serviceaccount"
+        }
+
+        It 'still masks a secure string inside the body by type' {
+            $Script:SkipBodyRedaction = $true
+            $Secure = ConvertTo-SecureString "body-secure-string-secret" -AsPlainText -Force
+
+            $Result = ConvertTo-RedactedLogString -InputObject @{ Body = @{ Value = $Secure } }
+
+            $Result | Should -Not -Match "body-secure-string-secret"
+            $Result | Should -Match "REDACTED"
+        }
+
+        It 'still lets the free-form safety net catch a token inside a body value' {
+            # Protect-LogMessage is the last gate before AppLogObject, so a bearer token riding
+            # inside an otherwise legitimate body value is caught even though the body is now shown.
+            $ParentPath = Split-Path -Path $PSScriptRoot -Parent
+            . (Join-Path $ParentPath -ChildPath "src\lib\functions\Private\Protect-LogMessage.ps1")
+            $Script:SkipBodyRedaction = $true
+
+            $Redacted = ConvertTo-RedactedLogString -InputObject @{
+                Body = @{ C_QUERY = "SELECT 1 -- Bearer abcdefghijklmnop1234567890" }
+            }
+            $Result = Protect-LogMessage -Message $Redacted
+
+            $Result | Should -Match "SELECT 1"
+            $Result | Should -Not -Match "abcdefghijklmnop1234567890"
+        }
+
+        It 'leaves everything outside the body alone' {
+            $Script:SkipBodyRedaction = $true
+
+            $Result = ConvertTo-RedactedLogString -InputObject @{
+                Headers = @{ Authorization = "Basic outside-the-body-secret" }
+                Body    = @{ C_QUERY = "SELECT 1" }
+            }
+
+            $Result | Should -Not -Match "outside-the-body-secret"
+            $Result | Should -Match "SELECT 1"
+        }
+    }
+
+    Context 'State isolation' {
+
+        It 'does not let a request with the option on affect the next request with it off' {
+            $Parameters = [ordered]@{
+                Uri  = "https://tenant.omada.cloud/odata"
+                Body = [ordered]@{ C_QUERY = "SELECT TOP 10 * FROM x" }
+            }
+
+            $Before = ConvertTo-RedactedLogString -InputObject $Parameters
+
+            $Script:SkipBodyRedaction = $true
+            $During = ConvertTo-RedactedLogString -InputObject $Parameters
+
+            $Script:SkipBodyRedaction = $false
+            $After = ConvertTo-RedactedLogString -InputObject $Parameters
+
+            $During | Should -Match "SELECT TOP 10"
+            $Before | Should -Not -Match "SELECT TOP 10"
+            $After | Should -BeExactly $Before
+        }
+    }
+}

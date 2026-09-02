@@ -31,6 +31,22 @@ function Invoke-OmadaPSWebRequestWrapper {
 
                 #$Private:Parameters.Body = $Private:Parameters.Body | ConvertTo-Json
             }
+
+            # Keep the module's own verbose stream in step with this application's log, so the two
+            # do not contradict each other on the same request. Passed only when the installed
+            # OmadaWeb.PS actually declares the parameter: -SkipBodyRedaction is newer than the
+            # pinned minimum version, and splatting a parameter a cmdlet does not have is a
+            # terminating error. Capability-checked rather than version-gated, so this works the day
+            # the switch ships without forcing everyone onto a release that does not exist yet.
+            $Private:RestMethodCommand = Get-Command -Name Invoke-OmadaRestMethod -ErrorAction SilentlyContinue
+            if ($null -ne $Private:RestMethodCommand -and $Private:RestMethodCommand.Parameters.ContainsKey("SkipBodyRedaction")) {
+                $Private:Parameters.SkipBodyRedaction = [bool]$Script:SkipBodyRedaction
+            }
+            elseif ($Private:Parameters.ContainsKey("SkipBodyRedaction")) {
+                # The installed module was downgraded mid-session; drop the key rather than fail.
+                $Private:Parameters.Remove("SkipBodyRedaction")
+            }
+
             "Parameters: {0}" -f (ConvertTo-RedactedLogString -InputObject $Private:Parameters) | Write-LogOutput -LogType VERBOSE
             $Private:Result = Invoke-OmadaRestMethod @Parameters
             # Deliberately no status-bar write here. A successful request is not the same thing as a

@@ -222,6 +222,11 @@
                           Content="Console Log"
                           VerticalAlignment="Center"
                           ToolTip="Log output in console"/>
+                <Separator Width="20"/>
+                <CheckBox x:Name="CheckboxShowRequestBody"
+                          Content="Show request body"
+                          VerticalAlignment="Center"
+                          ToolTip="Log the request body (your query) instead of its shape - the same as starting with -SkipBodyRedaction. Secrets are still masked and a very long value is still truncated, but the query text ends up in this window and in any exported log file."/>
             </StackPanel>
         </StackPanel>
     </Grid>

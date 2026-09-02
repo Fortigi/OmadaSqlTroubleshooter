@@ -65,6 +65,10 @@
     "Type": "Bool"
   },
   {
+    "Name": "SkipBodyRedaction",
+    "Type": "Bool"
+  },
+  {
     "Name": "UseWebView2Auth",
     "Type": "Bool"
   },

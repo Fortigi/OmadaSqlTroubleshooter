@@ -20,6 +20,21 @@ function Initialize-GlobalConfigSettings {
             "Console logging is enabled" | Write-LogOutput -LogType LOG
         }
 
+        # Deliberately the same shape as console logging above: either source can turn the option
+        # on - -SkipBodyRedaction for this session, or the setting the user last chose in the log
+        # viewer - and neither can turn it off. Turning it off is the checkbox's job (or -Reset),
+        # not a parameter's, exactly as for console logging; -SkipBodyRedaction:$false does not
+        # override a persisted "on". Resolving it here - before the first request - is what makes
+        # -SkipBodyRedaction unredact the very first body, rather than only from the moment the log
+        # window happens to be opened.
+        if ($Script:RunTimeConfig.Logging.SkipBodyRedaction -or $Script:AppGlobalConfig.SkipBodyRedaction) {
+            Set-BodyRedactionState -Enabled $true
+            $true | Set-ConfigProperty -Property "SkipBodyRedaction"
+        }
+        else {
+            Set-BodyRedactionState -Enabled $false
+        }
+
         if ($null -eq ($Script:MainForm.Definition | Get-FormPositionConfig)) {
             $Script:MainForm.Definition.WindowStartupLocation = [System.Windows.WindowStartupLocation]::CenterScreen
         }
