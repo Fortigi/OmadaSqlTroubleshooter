@@ -25,6 +25,78 @@ function script:Invoke-OmadaPSWebRequestWrapper {
     return $Response
 }
 
+# --- The background dispatch seam (issue #40) -----------------------------------------------------
+# Requests now also run on worker runspaces. The shim above cannot cover those: a worker has its own
+# OmadaWeb.PS and would call the REAL Invoke-OmadaRestMethod, so an unmocked background request would
+# reach out to whatever tenant URL the app built.
+#
+# The seam is placed at Start-OmadaBackgroundRequest rather than at
+# Invoke-OmadaPSWebRequestWrapperAsync deliberately. Everything ABOVE it stays real - the eligibility
+# gate, the parameter preparation, the completion queue, Complete-OmadaBackgroundRequest, the error
+# classification and the 50 ms poll timer - which is precisely the machinery issue #40 adds and the
+# part a scenario needs to be exercising. Only the worker's contents are replaced: the fixture is
+# resolved HERE, on the UI thread (Resolve-E2EFixture is a harness function and could not run in a
+# worker anyway), and the worker itself just waits and hands it back.
+#
+# The wait is real, on a real runspace, so a scenario can genuinely observe an in-flight request:
+# set $script:E2ERequestDelayMs to make a query take time.
+$script:E2ERequestDelayMs = 0
+
+function script:Start-OmadaBackgroundRequest {
+    param(
+        [hashtable]$Parameters,
+        $TabSession,
+        [scriptblock]$OnCompletedScriptBlock,
+        $Context,
+        [string]$Description
+    )
+
+    # Recorded in the same shape as the synchronous seam, so Get-E2ECallCount counts a background
+    # request exactly as it counts an inline one and existing assertions keep working.
+    $script:E2ECalls.Add([pscustomobject]@{
+            Uri      = [string]$Parameters.Uri
+            Method   = [string]$Parameters.Method
+            Body     = $Parameters.Body
+            DataType = $(if ($Parameters.Body -is [System.Collections.IDictionary] -and $Parameters.Body.Contains("dataType")) { [string]$Parameters.Body["dataType"] } else { $null })
+        })
+
+    $Payload = @{ Result = $null; ErrorRecord = $null }
+    try {
+        $Response = Resolve-E2EFixture -Uri $Parameters.Uri -Method $Parameters.Method -Body $Parameters.Body
+        if ($Response -is [System.Exception]) {
+            $Payload.ErrorRecord = [System.Management.Automation.ErrorRecord]::new(
+                $Response, "E2EFixtureFailure", [System.Management.Automation.ErrorCategory]::ConnectionError, $null)
+        }
+        else {
+            $Payload.Result = $Response
+        }
+    }
+    catch {
+        $Payload.ErrorRecord = $_
+    }
+
+    $Shell = [powershell]::Create()
+    [void]$Shell.AddScript({
+            param($DelayMs, $Payload)
+            if ($DelayMs -gt 0) { Start-Sleep -Milliseconds $DelayMs }
+            return $Payload
+        }).AddArgument($script:E2ERequestDelayMs).AddArgument($Payload)
+
+    $Pending = [PSCustomObject]@{
+        Task                   = $Shell.BeginInvoke()
+        Shell                  = $Shell
+        TabSession             = $TabSession
+        OnCompletedScriptBlock = $OnCompletedScriptBlock
+        StartedUtc             = [DateTime]::UtcNow
+        IsCancelled            = $false
+        IsBackgroundRequest    = $true
+        Description            = $Description
+        Context                = $Context
+    }
+    $Script:PendingWebViewCompletions.Add($Pending)
+    return $Pending
+}
+
 # --- Editor read seam: reproduce the poll-timer contract synchronously -----------------------------
 # The real poll timer sets $Script:Task then invokes the completion block. Invoke-ExecuteQuery reads
 # $Script:Task.Result as a JSON string. We invoke the block inline so execute is fully synchronous.

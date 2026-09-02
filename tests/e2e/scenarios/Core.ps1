@@ -27,7 +27,7 @@ E2ESuite -Name "Execute" -Body {
         $Item = Select-E2EQuery
         E2EAssertTrue ($null -ne $Item) "Query item 'TestQuery - 100' should exist in the dropdown"
 
-        Invoke-E2EExecute
+        Invoke-E2EExecuteAndWait
 
         $Elements = Get-E2EElements
         E2EAssertEqual 2 ([int]$Script:RunTimeData.QueryResult.d.Records) "Records count should match the fixture"
@@ -42,7 +42,7 @@ E2ESuite -Name "Execute" -Body {
         Set-E2EConnectionFields
         Invoke-E2EConnect
         Select-E2EQuery | Out-Null
-        Invoke-E2EExecute
+        Invoke-E2EExecuteAndWait
 
         $Elements = Get-E2EElements
         E2EAssertEqual 0 ([int]$Script:RunTimeData.QueryResult.d.Records) "Records should be 0 for an empty result"

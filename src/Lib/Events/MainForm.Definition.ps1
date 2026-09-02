@@ -12,8 +12,18 @@ $Script:PendingWebViewCompletions = [System.Collections.Generic.List[object]]::n
 
 $Script:WebViewCompletionPollTimer = New-Object System.Windows.Threading.DispatcherTimer
 $Script:WebViewCompletionPollTimer.Interval = [TimeSpan]::FromMilliseconds(50)
+$Script:WebViewCompletionTickCount = 0
 $Script:WebViewCompletionPollTimer.Add_Tick({
         try {
+            # Elapsed-time indicator for background requests (issue #40), driven from THIS timer
+            # rather than a second one: this is already the only place that knows about pending work,
+            # and it is already suspended around modal dialogs. Every 20th tick is once a second,
+            # which is as often as a duration in seconds can visibly change.
+            $Script:WebViewCompletionTickCount++
+            if ($Script:WebViewCompletionTickCount % 20 -eq 0) {
+                Update-BackgroundRequestElapsedTime -Pending $Script:PendingWebViewCompletions
+            }
+
             $Completed = @($Script:PendingWebViewCompletions | Where-Object { $_.Task.IsCompleted })
             foreach ($Pending in $Completed) {
                 [void]$Script:PendingWebViewCompletions.Remove($Pending)
@@ -43,6 +53,19 @@ $Script:WebViewCompletionPollTimer.Add_Tick({
                 $CompletedScriptBlock = $Pending.OnCompletedScriptBlock
 
                 if (-not (Test-WebViewCompletionCallback -Callback $CompletedScriptBlock)) {
+                    continue
+                }
+
+                # Second line of defence behind Remove-PendingBackgroundRequest (issue #40). A
+                # completion whose tab has been closed must not run: Set-ActiveTabContext below would
+                # repoint every "current tab" global onto a tab that is gone, and the restore in the
+                # finally cannot undo it - Get-ActiveTabSession returns $null when the closed tab was
+                # the active one, so the restore is skipped and the app is left pointing at a dead
+                # tab. Only background requests are checked; a $null TabSession still means "the
+                # block manages its own context", which is a different and legitimate case.
+                if ($true -eq $Pending.IsBackgroundRequest -and $null -ne $Pending.TabSession -and
+                    -not ($Script:Tabs | Where-Object { $_.Id -eq $Pending.TabSession.Id })) {
+                    "Dropping a completion for a tab that no longer exists." | Write-LogOutput -LogType DEBUG
                     continue
                 }
 
