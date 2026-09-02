@@ -91,12 +91,35 @@ Invoke-Pester -Path tests/mock
 `OmadaMockRouter.Tests.ps1` is pure and fast; `OmadaMockServer.Tests.ps1` starts a real server on an
 OS-assigned port and asserts every endpoint shape. Both are picked up by the psake `Test` task.
 
+## Making a route slow
+
+Testing "the window stays responsive during a long query" needs a request that actually takes a long
+time. Two ways to get one:
+
+```powershell
+# Live, against a running handle - takes effect on the next request, no restart:
+Set-OmadaMockRouteDelay -Handle $Handle -RouteKey "paging.sqldataproducer" -DelayMs 5000
+Set-OmadaMockRouteDelay -Handle $Handle -RouteKey "*" -DelayMs 250   # every route
+Clear-OmadaMockRouteDelay -Handle $Handle                            # remove all overrides
+```
+
+```jsonc
+// Or declared per route in fixtures/routes.json, for a fixture that is inherently slow:
+"paging.sqldataproducer": { "file": "...", "contentType": "...", "status": 200, "delayMs": 5000 }
+```
+
+The delay is applied in the worker just before the response is written, so the client experiences a
+slow **socket** — the real `Invoke-RestMethod` path — rather than a pause faked inside a shim. A live
+override wins over the manifest value. Because serving is concurrent, delaying one route does not hold
+up requests to any other.
+
 ## Notes & limitations
 
 - **Windows-only for the app** (WPF + STA + OmadaWeb.PS + WebView2); the server, router and tests are
   cross-platform.
 - The server is intentionally minimal HTTP/1.1 over a raw socket, so it needs **no** `netsh http add
-  urlacl` / elevation. It serves the app's serial requests one at a time.
+  urlacl` / elevation. Requests are served **concurrently** by a small pool of worker runspaces
+  (`-WorkerCount`, default 4), so two slow requests genuinely overlap.
 - Write operations (save/create/delete) return canned success fixtures — enough to exercise the flows,
   not a stateful database.
 - Automating the README screenshot on top of this mock is a **separate, dependent** feature.

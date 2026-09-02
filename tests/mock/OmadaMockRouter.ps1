@@ -136,7 +136,15 @@ function Resolve-OmadaMockResponse {
     Resolve a request to a concrete mock response read from the fixture store.
 
     .OUTPUTS
-    Hashtable @{ StatusCode = <int>; ContentType = <string>; Body = <string>; RouteKey = <string> }.
+    Hashtable @{ StatusCode = <int>; ContentType = <string>; Body = <string>; RouteKey = <string>;
+    DelayMs = <int> }.
+
+    .NOTES
+    DelayMs comes from the route's optional "delayMs" field in routes.json and is how a test asks the
+    mock to answer slowly - the server sleeps for it before writing the response, so the delay is felt
+    on a real socket by a real Invoke-RestMethod rather than being faked inside a shim. Routes without
+    the field resolve to 0. A live per-route override (Set-OmadaMockRouteDelay) takes precedence and is
+    what a test should normally use; the manifest field exists for fixtures that are inherently slow.
     #>
     [CmdletBinding()]
     param(
@@ -160,6 +168,7 @@ function Resolve-OmadaMockResponse {
                     ContentType = [string]$Route.Value.contentType
                     Body        = (Get-Content -LiteralPath $FixturePath -Raw)
                     RouteKey    = $Key
+                    DelayMs     = (Get-OmadaMockRouteDelayMs -Route $Route.Value)
                 }
             }
         }
@@ -171,5 +180,22 @@ function Resolve-OmadaMockResponse {
         ContentType = [string]$Fallback.contentType
         Body        = [string]$Fallback.inlineBody
         RouteKey    = ($null -ne $Key ? $Key : "fallback")
+        DelayMs     = (Get-OmadaMockRouteDelayMs -Route $Fallback)
     }
+}
+
+function Get-OmadaMockRouteDelayMs {
+    <#
+    Read a route entry's optional "delayMs". Absent, null or non-numeric all mean "no delay" - a
+    manifest without the field must keep behaving exactly as it did before the field existed.
+    #>
+    [CmdletBinding()]
+    param($Route)
+    if ($null -eq $Route) { return 0 }
+    $Property = $Route.PSObject.Properties["delayMs"]
+    if ($null -eq $Property -or $null -eq $Property.Value) { return 0 }
+    $Parsed = 0
+    if (-not [int]::TryParse([string]$Property.Value, [ref]$Parsed)) { return 0 }
+    if ($Parsed -lt 0) { return 0 }
+    return $Parsed
 }
