@@ -80,5 +80,24 @@
     "Name": "TabCapacity",
     "Type": "Int",
     "DefaultValue": 8
+  },
+  {
+    "Name": "EnableSyntaxValidation",
+    "Type": "Bool",
+    "DefaultValue": true
+  },
+  {
+    "Name": "ValidationDebounceMilliseconds",
+    "Type": "Int",
+    "DefaultValue": 400
+  },
+  {
+    "Name": "WarnOnExecuteWithErrors",
+    "Type": "Bool",
+    "DefaultValue": true
+  },
+  {
+    "Name": "SqlParserVersion",
+    "Type": "String"
   }
 ]

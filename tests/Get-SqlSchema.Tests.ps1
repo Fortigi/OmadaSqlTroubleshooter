@@ -56,6 +56,18 @@ BeforeAll {
         $script:PushedEditorScripts.Add([string]$ScriptToExecute)
     }
 
+    # A schema push also re-triggers the debounced syntax validation (issue #61): a new connection
+    # can invalidate the diagnostics already on screen. Recorded rather than executed - the timer it
+    # would restart lives in MainForm.Definition.ps1 and there is no window here.
+    $script:ValidationRequests = 0
+
+    function Request-SqlSyntaxValidation {
+        param($TabSession)
+        $script:ValidationRequests++
+    }
+
+    function Get-ActiveTabSession { return $null }
+
     function Initialize-SchemaTestState {
         <#
         Puts the module-scope state into the shape a RESTORED tab has: a tenant URL and an

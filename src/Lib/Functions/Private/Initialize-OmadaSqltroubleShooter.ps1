@@ -41,6 +41,30 @@ function Initialize-OmadaSqlTroubleShooter {
         Add-ReflectionAssembly -Object $Script:WebView2WinFormsPath
         Add-ReflectionAssembly -Object $Script:WebView2WpfPath
 
+        # The T-SQL parser behind the editor's client-side syntax diagnostics (issue #61). Optional
+        # by design: this whole block degrades to "feature off" and emits exactly ONE warning, and
+        # from that point the application behaves precisely as it did before the feature existed.
+        # Nothing below the flag is reached when it is $false.
+        $Script:SqlSyntaxValidationAvailable = $false
+        try {
+            if (Install-ScriptDom) {
+                Add-ReflectionAssembly -Object $Script:ScriptDomPath
+                $Script:SqlSyntaxValidationAvailable = ($null -ne (Get-SqlParserType))
+            }
+        }
+        catch {
+            $Script:SqlSyntaxValidationAvailable = $false
+        }
+
+        if ($Script:SqlSyntaxValidationAvailable) {
+            "Client-side T-SQL syntax validation is available (parser {0})." -f (Get-SqlParserType).Name | Write-LogOutput -LogType DEBUG
+        }
+        else {
+            # -SkipDialog: a message box on startup for an optional convenience would be worse than
+            # the missing convenience. One line in the log, and on with it.
+            "The T-SQL parser could not be installed or loaded, so client-side syntax validation is switched off for this session. Everything else works as usual." | Write-LogOutput -LogType WARNING -SkipDialog
+        }
+
         # Custom panel that hosts the session tabs in a SINGLE row: instead of wrapping onto a new
         # row when they no longer fit (the default TabPanel behaviour), it shrinks the tabs
         # proportionally so their text ellipsises. The narrow "+" add tab (desired width <= 48) is

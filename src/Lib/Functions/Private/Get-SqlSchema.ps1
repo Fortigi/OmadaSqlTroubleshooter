@@ -160,6 +160,12 @@ function Get-SqlSchemaObject {
             "Push schema to Monaco editor." | Write-LogOutput -LogType DEBUG
             Invoke-ExecuteScriptAsync -ScriptToExecute "setSchema($SchemaObjectsJson);" -OnCompletedScriptBlock $OnCompletedScriptBlock
 
+            # Re-validate after a schema push. A new connection can invalidate the diagnostics that
+            # are currently on screen, and it is also the first moment a restored tab's editor
+            # content has ever been looked at. Debounced like every other trigger, so switching
+            # connection rapidly costs one parse, not one per switch.
+            Request-SqlSyntaxValidation -TabSession (Get-ActiveTabSession)
+
         }
         else {
             "SqlSchema DoID is not set! Cannot retrieve Sql schema!" | Write-LogOutput -LogType WARNING -SkipDialog

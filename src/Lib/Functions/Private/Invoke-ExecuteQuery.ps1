@@ -18,6 +18,41 @@ function Invoke-ExecuteQuery {
                     $Script:RunTimeData.QueryText = $Private:EditorData.fullText
                     $Private:SelectionText = $Private:EditorData.selectedText
 
+                    # Client-side syntax gate (issue #61). Checks the text that will actually run -
+                    # the selection when there is one - refreshes the editor's markers from it, and
+                    # asks once before spending a round trip on a batch SQL Server will reject
+                    # before it touches a table. It NEVER blocks: parser version and server version
+                    # can legitimately disagree, so declining is a choice, not an error.
+                    $Private:TextToValidate = $Private:EditorData.fullText
+                    if (![string]::IsNullOrWhiteSpace($Private:SelectionText)) {
+                        $Private:TextToValidate = $Private:SelectionText
+                    }
+
+                    $Private:ValidationSetting = Get-SqlValidationSetting
+                    if ($Private:ValidationSetting.Enabled) {
+                        $Private:SyntaxResult = Get-SqlSyntaxDiagnostic -SqlText $Private:TextToValidate -ParserVersion $Private:ValidationSetting.ParserVersion
+                        if ($Private:SyntaxResult.Status -eq "Ok") {
+                            Invoke-ExecuteScriptAsync -ScriptToExecute (ConvertTo-EditorDiagnosticScript -Diagnostic $Private:SyntaxResult.Diagnostic)
+
+                            if (($Private:SyntaxResult.Diagnostic | Measure-Object).Count -gt 0 -and $Private:ValidationSetting.WarnOnExecuteWithErrors) {
+                                "Query has {0} syntax diagnostic(s); asking before executing." -f ($Private:SyntaxResult.Diagnostic | Measure-Object).Count | Write-LogOutput -LogType DEBUG
+                                $Private:Confirmed = Open-ChoiceForm -Title "Syntax errors" -Message (Get-SqlSyntaxWarningMessage -Diagnostic $Private:SyntaxResult.Diagnostic) -LeftButtonText "Execute anyway" -RightButtonText "Cancel"
+                                if ($Private:Confirmed -ne $true) {
+                                    "Execution cancelled by the user after the syntax check." | Write-LogOutput -LogType DEBUG
+                                    $Script:MainForm.Elements.ButtonSaveQuery.IsEnabled = $true
+                                    $Script:MainForm.Elements.ButtonExecuteQuery.IsEnabled = $true
+                                    if ($null -ne $Script:PopupWindowExecuteQuery) {
+                                        $Script:PopupWindowExecuteQuery.Close()
+                                    }
+                                    if ($null -ne $Script:RunTimeData.StopWatch) {
+                                        $Script:RunTimeData.StopWatch.Stop()
+                                    }
+                                    return
+                                }
+                            }
+                        }
+                    }
+
                     $Private:Result = Save-Query -NewQuery:$false
 
                     $Private:ExecutionTargetId = $Script:AppConfig.CurrentSqlQuery.DoId
