@@ -68,6 +68,14 @@ function Initialize-OmadaRequestPool {
     catch {
         # Never fatal. Every caller falls back to running the request synchronously, which is exactly
         # what the app did before issue #40 - slower, but correct.
+        #
+        # The half-built pool is disposed first. CreateRunspacePool can succeed and Open() still
+        # throw, and the pool holds worker threads from the moment it is created - so returning
+        # without disposing leaks them for the life of the process, on a path the app is otherwise
+        # designed to survive and retry.
+        if ($null -ne $Private:Pool) {
+            try { $Private:Pool.Dispose() } catch { }
+        }
         "Could not open the background request pool; requests will run on the UI thread. {0}" -f $_.Exception.Message | Write-LogOutput -LogType WARNING -SkipDialog
         $Script:OmadaRequestPool = $null
         return $null

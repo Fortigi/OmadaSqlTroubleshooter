@@ -161,9 +161,20 @@ function Start-OmadaBackgroundRequest {
         $Script:PendingWebViewCompletions.Add($Private:Pending)
 
         "Dispatched background request: {0}" -f $Description | Write-LogOutput -LogType DEBUG
+        # Handed over: from here the completion owns the shell and will dispose it. Nulling the local
+        # is what tells the catch below not to dispose a shell that is now in flight.
+        $Private:Shell = $null
         return $Private:Pending
     }
     catch {
+        # Dispose a half-created worker. AddScript, BeginInvoke or the queue Add can throw after the
+        # [powershell] exists, and the caller then falls back to a synchronous request - so nothing
+        # else will ever reach this shell to release its runspace back to the pool. Leaking one per
+        # failure would eventually starve the pool of the very workers the fallback exists to
+        # compensate for.
+        if ($null -ne $Private:Shell) {
+            try { $Private:Shell.Dispose() } catch { }
+        }
         "Could not dispatch a background request ({0}); it will run on the UI thread. {1}" -f $Description, $_.Exception.Message | Write-LogOutput -LogType WARNING -SkipDialog
         return $null
     }
