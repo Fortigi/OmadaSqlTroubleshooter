@@ -25,6 +25,38 @@ function script:Invoke-OmadaPSWebRequestWrapper {
     return $Response
 }
 
+# --- The transport seam under the pipeline (issue #40, C1-5) --------------------------------------
+# Invoke-OmadaExecutePipeline issues its steps through Invoke-OmadaRequestCore, NOT through
+# Invoke-OmadaPSWebRequestWrapper - that is the whole point of the core, since the wrapper cannot run
+# in a worker. Without this override the pipeline would call the real OmadaWeb.PS and reach out to
+# whatever tenant URL the app had built. Shadowing it here means the scenarios run the REAL pipeline
+# - its sequencing, its step decisions, its temporary-object clean-up - over fixture responses.
+function script:Invoke-OmadaRequestCore {
+    param(
+        [hashtable]$Parameters
+    )
+    $script:E2ECalls.Add([pscustomobject]@{
+            Uri      = [string]$Parameters.Uri
+            Method   = [string]$Parameters.Method
+            Body     = $Parameters.Body
+            DataType = $(if ($Parameters.Body -is [System.Collections.IDictionary] -and $Parameters.Body.Contains("dataType")) { [string]$Parameters.Body["dataType"] } else { $null })
+        })
+    try {
+        $Response = Resolve-E2EFixture -Uri $Parameters.Uri -Method $Parameters.Method -Body $Parameters.Body
+        if ($Response -is [System.Exception]) {
+            return @{ Result = $null; ErrorRecord = [System.Management.Automation.ErrorRecord]::new(
+                    $Response, "E2EFixtureFailure", [System.Management.Automation.ErrorCategory]::ConnectionError, $null) }
+        }
+        if ($Response -is [System.Management.Automation.ErrorRecord]) {
+            return @{ Result = $null; ErrorRecord = $Response }
+        }
+        return @{ Result = $Response; ErrorRecord = $null }
+    }
+    catch {
+        return @{ Result = $null; ErrorRecord = $_ }
+    }
+}
+
 # --- The background dispatch seam (issue #40) -----------------------------------------------------
 # Requests now also run on worker runspaces. The shim above cannot cover those: a worker has its own
 # OmadaWeb.PS and would call the REAL Invoke-OmadaRestMethod, so an unmocked background request would
@@ -48,31 +80,49 @@ function script:Start-OmadaBackgroundRequest {
         $TabSession,
         [scriptblock]$OnCompletedScriptBlock,
         $Context,
+        [hashtable]$PipelineContext,
         [string]$Description
     )
 
-    # Recorded in the same shape as the synchronous seam, so Get-E2ECallCount counts a background
-    # request exactly as it counts an inline one and existing assertions keep working.
-    $script:E2ECalls.Add([pscustomobject]@{
-            Uri      = [string]$Parameters.Uri
-            Method   = [string]$Parameters.Method
-            Body     = $Parameters.Body
-            DataType = $(if ($Parameters.Body -is [System.Collections.IDictionary] -and $Parameters.Body.Contains("dataType")) { [string]$Parameters.Body["dataType"] } else { $null })
-        })
-
+    $Progress = [hashtable]::Synchronized(@{})
     $Payload = @{ Result = $null; ErrorRecord = $null }
-    try {
-        $Response = Resolve-E2EFixture -Uri $Parameters.Uri -Method $Parameters.Method -Body $Parameters.Body
-        if ($Response -is [System.Exception]) {
-            $Payload.ErrorRecord = [System.Management.Automation.ErrorRecord]::new(
-                $Response, "E2EFixtureFailure", [System.Management.Automation.ErrorCategory]::ConnectionError, $null)
-        }
-        else {
-            $Payload.Result = $Response
-        }
+
+    if ($null -ne $PipelineContext) {
+        # C1-5: the worker runs the whole dependent chain. The REAL Invoke-OmadaExecutePipeline is
+        # used here, on the UI thread, because it is runspace-safe and therefore also
+        # dispatcher-safe - so the scenarios exercise the actual sequencing, the actual step
+        # decisions and the actual temporary-object clean-up. Only the transport under it is the
+        # fixture, via Invoke-OmadaRequestCore's seam below.
+        $PipelineContext = $PipelineContext.Clone()
+        $PipelineContext.Parameters = $Parameters.Clone()
+        $PipelineContext.Progress = $Progress
+        $PipelineOutcome = Invoke-OmadaExecutePipeline -Context $PipelineContext
+        $Payload.Result = $PipelineOutcome
+        $Payload.ErrorRecord = $PipelineOutcome.ErrorRecord
     }
-    catch {
-        $Payload.ErrorRecord = $_
+    else {
+        # Recorded in the same shape as the synchronous seam, so Get-E2ECallCount counts a background
+        # request exactly as it counts an inline one and existing assertions keep working.
+        $script:E2ECalls.Add([pscustomobject]@{
+                Uri      = [string]$Parameters.Uri
+                Method   = [string]$Parameters.Method
+                Body     = $Parameters.Body
+                DataType = $(if ($Parameters.Body -is [System.Collections.IDictionary] -and $Parameters.Body.Contains("dataType")) { [string]$Parameters.Body["dataType"] } else { $null })
+            })
+
+        try {
+            $Response = Resolve-E2EFixture -Uri $Parameters.Uri -Method $Parameters.Method -Body $Parameters.Body
+            if ($Response -is [System.Exception]) {
+                $Payload.ErrorRecord = [System.Management.Automation.ErrorRecord]::new(
+                    $Response, "E2EFixtureFailure", [System.Management.Automation.ErrorCategory]::ConnectionError, $null)
+            }
+            else {
+                $Payload.Result = $Response
+            }
+        }
+        catch {
+            $Payload.ErrorRecord = $_
+        }
     }
 
     $Shell = [powershell]::Create()
@@ -92,6 +142,7 @@ function script:Start-OmadaBackgroundRequest {
         IsBackgroundRequest    = $true
         Description            = $Description
         Context                = $Context
+        Progress               = $Progress
     }
     $Script:PendingWebViewCompletions.Add($Pending)
     return $Pending

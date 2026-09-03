@@ -14,7 +14,6 @@ function Invoke-ExecuteQuery {
         $ScriptToExecute = "(function() { var fullText = editor.getValue(); var sel = editor.getSelection(); var hasSelection = sel && !sel.isEmpty(); var selectedText = hasSelection ? editor.getModel().getValueInRange(sel) : null; return { fullText: fullText, selectedText: selectedText, selectionStartLine: hasSelection ? sel.startLineNumber : 1, selectionStartColumn: hasSelection ? sel.startColumn : 1 }; })();"
 
         $OnCompletedScriptBlock = {
-            $Private:TempQueryDoId = $null
             try {
                 if ($Script:Task.Status -eq "RanToCompletion") {
                     $Private:EditorData = $Script:Task.Result | ConvertFrom-Json
@@ -65,81 +64,56 @@ function Invoke-ExecuteQuery {
                         }
                     }
 
-                    $Private:Result = Save-Query -NewQuery:$false
-
-                    $Private:ExecutionTargetId = $Script:AppConfig.CurrentSqlQuery.DoId
-                    if (![string]::IsNullOrWhiteSpace($Private:SelectionText)) {
-                        "Execute selection mode: creating temporary query object" | Write-LogOutput -LogType DEBUG
-                        $Private:TempQueryDoId = New-TemporarySqlQueryObject -QueryText $Private:SelectionText
-                        if ($null -ne $Private:TempQueryDoId) {
-                            $Private:ExecutionTargetId = $Private:TempQueryDoId
-                        }
-                        else {
-                            "Failed to create temporary query object for selection execution." | Write-LogOutput -LogType ERROR
-                            return
-                        }
+                    # C1-5: the whole dependent chain - fetch the query, save it if it changed,
+                    # create the temporary selection object, execute, delete the temporary object -
+                    # runs as ONE background job. Up to five round-trips, none of them on the UI
+                    # thread, and still only ONE completion.
+                    #
+                    # That last part is the design decision worth reviewing. The obvious way to make
+                    # five dependent calls non-blocking is five dispatches chained through five
+                    # completions; issue #40's own analysis names the danger of doing that here, and
+                    # it is real: Set-ActiveTabContext can repoint $Script:MainForm.Elements,
+                    # $Script:RunTimeData and $Script:AppConfig between completions, so every extra
+                    # completion is another place the chain can resume against the wrong tab. One job
+                    # means one repoint - the same number this path already had after C1-3.
+                    #
+                    # The context is gathered HERE, on the UI thread, as plain values. The worker gets
+                    # no $Script: state and no WPF, and returns a description of what happened for the
+                    # completion to apply.
+                    $Private:PipelineContext = @{
+                        BaseUrl            = $Script:AppConfig.BaseUrl
+                        QueryDoId          = $Script:AppConfig.CurrentSqlQuery.DoId
+                        QueryText          = $Script:RunTimeData.QueryText
+                        CurrentQueryText   = $Script:RunTimeData.CurrentQueryText
+                        DisplayName        = $Script:MainForm.Elements.TextBoxDisplayName.Text
+                        CurrentDisplayName = $Script:RunTimeData.CurrentSqlQuery.DisplayName
+                        DataConnectionDoId = $Script:AppConfig.CurrentDataConnection.DoId
+                        SelectionText      = $Private:SelectionText
+                        TempName           = "TMP_$($Script:RunTimeConfig.InstanceGuid)"
+                        SkipSave           = $false
                     }
-
-                    $Script:RunTimeData.RestMethodParam.Uri = "{0}/webservice/jQGridPopulationWebService.asmx/GetPagingData" -f $Script:AppConfig.BaseUrl
-
-                    $Script:RunTimeData.RestMethodParam.Body = @{
-                        "dataType"     = "SqlDataProducer"
-                        "dataTypeArgs" = @{
-                            "targetId" = $Private:ExecutionTargetId
-                        }
-                        "page"         = 1
-                        "rows"         = 100000
-                        "sidx"         = $null
-                        "sord"         = "asc"
-                        "_search"      = $false
-                        "searchField"  = $null
-                        "searchString" = $null
-                        "filters"      = $null
-                        "searchOper"   = $null
-                    }
-                    "Body: {0}" -f (ConvertTo-RedactedLogString -InputObject $Script:RunTimeData.RestMethodParam.Body -ShapeOnly) | Write-LogOutput -LogType VERBOSE
-                    "QueryUrl: {0}" -f $Script:RunTimeData.RestMethodParam.Uri | Write-LogOutput -LogType DEBUG
 
                     "Retrieve query output, please wait..." | Write-LogOutput
-                    $Script:RunTimeData.RestMethodParam.Method = "POST"
-                    $Script:RunTimeData.QueryResult = $null
 
-                    # The headline of issue #40: THIS is the call that freezes the window, and it is
-                    # the one that now runs on a background worker. Everything above it - reading the
-                    # editor, the syntax gate, saving the query, creating the temporary object - is
-                    # still synchronous, and deliberately so: those are short calls, and two of them
-                    # can open a modal dialog, which belongs on the UI thread. Moving the remaining
-                    # round-trips off-thread is C1-5, a separate slice with a much larger blast radius.
-                    #
-                    # Everything the completion needs travels on the context. It must not re-read
-                    # $Script: state: by the time the response lands the user may be looking at
-                    # another tab, and $Private:Result (the Save-Query outcome) and the temporary
-                    # object id do not exist anywhere else.
-                    $Private:Pending = Invoke-OmadaPSWebRequestWrapperAsync -Description $Script:ExecuteQueryRequestDescription -Context @{
-                        SaveResult    = $Private:Result
-                        TempQueryDoId = $Private:TempQueryDoId
+                    $Private:Pending = Invoke-OmadaPSWebRequestWrapperAsync -Description $Script:ExecuteQueryRequestDescription -PipelineContext $Private:PipelineContext -Context @{
+                        DisplayName = $Private:PipelineContext.DisplayName
                     } -OnResultScriptBlock {
                         param($Pending)
-                        Complete-ExecuteQueryResult -QueryResult $Pending.Outcome -SaveResult $Pending.Context.Caller.SaveResult -TempQueryDoId $Pending.Context.Caller.TempQueryDoId
+                        Complete-ExecuteQueryPipeline -Outcome $Pending.Outcome
                     }
 
                     if ($null -ne $Private:Pending) {
-                        # Dispatched. Ownership of the temporary object passes to the completion, so
-                        # this frame must forget it - otherwise the catch below would delete an object
-                        # the in-flight query is still executing against. (Stop-ExecuteQueryRequest
-                        # reads it back off the pending item if the user cancels.)
-                        $Private:TempQueryDoId = $null
                         # The Execute button becomes Cancel: from here the only useful thing the user
                         # can do with it is stop waiting.
                         Set-ExecuteQueryButtonState
                         return
                     }
 
-                    # Not eligible for a worker, or none available: run it inline, exactly as before.
-                    $Private:QueryResult = Invoke-OmadaPSWebRequestWrapper
-                    $Private:CompletedTempQueryDoId = $Private:TempQueryDoId
-                    $Private:TempQueryDoId = $null
-                    Complete-ExecuteQueryResult -QueryResult $Private:QueryResult -SaveResult $Private:Result -TempQueryDoId $Private:CompletedTempQueryDoId
+                    # No worker available, or the tab is not eligible for one: run the identical
+                    # chain inline. Slower - it blocks, exactly as the app did before #40 - but the
+                    # same requests in the same order, because it is literally the same function.
+                    $Private:PipelineContext.Parameters = Build-OmadaRequestParameter
+                    Complete-ExecuteQueryPipeline -Outcome (Invoke-OmadaExecutePipeline -Context $Private:PipelineContext)
                     return
                 }
                 elseif ($Script:Task.Status -eq "Faulted") {
@@ -151,9 +125,9 @@ function Invoke-ExecuteQuery {
                 Reset-ExecuteQueryUiState
             }
             catch {
-                if ($null -ne $Private:TempQueryDoId) {
-                    Remove-SqlQueryObject -DoId $Private:TempQueryDoId
-                }
+                # No temporary-object clean-up here any more: since C1-5 the pipeline owns that
+                # object for its whole lifetime and deletes it in its own finally, so this frame
+                # never holds one to leak.
                 Reset-ExecuteQueryUiState
                 $_.Exception.Message | Write-LogOutput -LogType ERROR -ErrorObject $_
             }
@@ -230,6 +204,67 @@ function Reset-ExecuteQueryUiState {
     }
 }
 
+function Complete-ExecuteQueryPipeline {
+    <#
+    .SYNOPSIS
+    Apply the outcome of an execute pipeline on the UI thread: log what it did, then bind the result.
+
+    .DESCRIPTION
+    The UI half of C1-5. Invoke-OmadaExecutePipeline cannot log, cannot touch WPF and cannot write
+    the config, so it returns a description of what happened and this applies it - from the
+    completion poll timer, with the owning tab already made active.
+
+    Everything it needs is in $Outcome. It deliberately re-reads nothing from $Script: state that the
+    pipeline already decided: by the time this runs the user may be looking at another tab, and the
+    save result in particular exists nowhere else.
+
+    .PARAMETER Outcome
+    The pipeline's outcome hashtable - or an ErrorRecord, when the failure was one of the two
+    tenant-level kinds Resolve-OmadaRequestFailure classifies and returns in place of a result.
+    #>
+    [CmdLetBinding()]
+    param(
+        $Outcome
+    )
+
+    try {
+        # The classified-failure case: the request never got far enough to produce an outcome, and
+        # Set-SqlConnectionState has already torn the tab down. Complete-ExecuteQueryResult reports
+        # it the same way a failed single request has always been reported.
+        if ($Outcome -is [System.Management.Automation.ErrorRecord] -or $null -eq $Outcome -or $null -eq $Outcome.Steps) {
+            Complete-ExecuteQueryResult -QueryResult $Outcome -SaveResult $null -TempQueryDoId $null
+            return
+        }
+
+        # The steps the worker actually took, logged here because it could not log them itself. This
+        # is what keeps the log as informative as it was when every request was made inline.
+        foreach ($Private:Step in @($Outcome.Steps)) {
+            "Pipeline step {0}: {1} {2}" -f $Private:Step.Name, $Private:Step.Method, $Private:Step.Uri | Write-LogOutput -LogType DEBUG
+        }
+
+        if ($Outcome.SaveSkipped) {
+            "No changes detected! Saving not needed." | Write-LogOutput -LogType DEBUG
+        }
+        elseif ($null -ne $Outcome.SaveResult) {
+            "Query saved!" | Write-LogOutput
+        }
+
+        if ($null -ne $Outcome.ErrorRecord) {
+            "The query pipeline failed at step '{0}': {1}" -f $Outcome.FailedStep, $Outcome.ErrorRecord.Exception.Message | Write-LogOutput -LogType ERROR -ErrorObject $Outcome.ErrorRecord
+            Complete-ExecuteQueryResult -QueryResult $Outcome.ErrorRecord -SaveResult $Outcome.SaveResult -TempQueryDoId $null
+            return
+        }
+
+        # TempQueryDoId is passed as $null on purpose: the pipeline already deleted the temporary
+        # object in its own finally, whatever the outcome. Passing it would delete it twice.
+        Complete-ExecuteQueryResult -QueryResult $Outcome.QueryResult -SaveResult $Outcome.SaveResult -TempQueryDoId $null
+    }
+    catch {
+        Reset-ExecuteQueryUiState
+        $_.Exception.Message | Write-LogOutput -LogType ERROR -ErrorObject $_
+    }
+}
+
 function Complete-ExecuteQueryResult {
     <#
     .SYNOPSIS
@@ -270,7 +305,12 @@ function Complete-ExecuteQueryResult {
 
         $Script:DataGridQueryResultColumnSelectionAnchor = $null
 
-        if ($null -ne $Script:RunTimeData.QueryResult -and ($Script:RunTimeData.QueryResult.d.Rows | Measure-Object).Count -le 0) {
+        # "-eq $null -or", not "-ne $null -and". A null result used to fall through to the binding
+        # branch, where @($null.d.Rows) is a one-element array containing $null: the grid was bound to
+        # a phantom row and the Show output / Save output buttons were enabled for a result that does
+        # not exist. Null became far more reachable once a request could fail or be abandoned in a
+        # worker, so it is now treated as what it is - no rows.
+        if ($null -eq $Script:RunTimeData.QueryResult -or ($Script:RunTimeData.QueryResult.d.Rows | Measure-Object).Count -le 0) {
             "Query did not return any results!" | Write-LogOutput -LogType WARNING
             $Script:MainForm.Elements.TextBlockStatusBarRows | Set-TextBlockText -Text "0 rows"
             $Script:MainForm.Elements.DataGridQueryResult.ItemsSource = $null

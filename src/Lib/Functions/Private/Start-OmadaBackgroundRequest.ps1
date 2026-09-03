@@ -58,6 +58,11 @@ function Start-OmadaBackgroundRequest {
 
         $Context,
 
+        # When supplied, the worker runs the whole dependent execute chain (Invoke-OmadaExecutePipeline)
+        # instead of a single request, and returns its outcome as the Result. This is what makes C1-5
+        # possible with ONE completion rather than five - see the pipeline's own notes.
+        [hashtable]$PipelineContext,
+
         [string]$Description = "Omada request"
     )
 
@@ -69,21 +74,50 @@ function Start-OmadaBackgroundRequest {
             return $null
         }
 
-        $Private:CorePath = Join-Path $Script:RunTimeConfig.ModuleFolder -ChildPath "Lib\Functions\Private\Invoke-OmadaRequestCore.ps1"
-        if (-not (Test-Path -LiteralPath $Private:CorePath)) {
-            "Background request core not found at '{0}'; running on the UI thread instead." -f $Private:CorePath | Write-LogOutput -LogType WARNING -SkipDialog
-            return $null
+        # Everything the worker will dot-source is checked here, not just the core: a missing file
+        # must mean "fall back to the UI thread", the way every other unavailability does. Checking
+        # only the core would dispatch a worker that then fails on its first line - turning a clean
+        # fallback into a failed request.
+        $Private:PrivateFolder = Join-Path $Script:RunTimeConfig.ModuleFolder -ChildPath "Lib\Functions\Private"
+        $Private:RequiredWorkerFiles = @("Invoke-OmadaRequestCore.ps1")
+        if ($null -ne $PipelineContext) {
+            $Private:RequiredWorkerFiles += @("New-OmadaQueryRequest.ps1", "Invoke-OmadaExecutePipeline.ps1")
+        }
+        foreach ($Private:WorkerFile in $Private:RequiredWorkerFiles) {
+            if (-not (Test-Path -LiteralPath (Join-Path $Private:PrivateFolder -ChildPath $Private:WorkerFile))) {
+                "Background worker file '{0}' not found under '{1}'; running on the UI thread instead." -f $Private:WorkerFile, $Private:PrivateFolder | Write-LogOutput -LogType WARNING -SkipDialog
+                return $null
+            }
+        }
+
+        # The pipeline builds each step's request itself, but every step still goes out with the
+        # session's own transport settings - SessionKey, authentication, redaction - so it is handed
+        # the same prepared splat a single request would have used. Cloned, and into a clone of the
+        # context, for the reason the -Parameters help gives: the live hashtable is mutated by the
+        # next call site.
+        # A synchronized table the worker can publish into while it is still running. Only used by
+        # the pipeline, and only for the temporary object's id: cancellation kills the worker outright
+        # so its own clean-up never runs, and the UI has to know which object to remove.
+        $Private:Progress = [hashtable]::Synchronized(@{})
+        if ($null -ne $PipelineContext) {
+            $PipelineContext = $PipelineContext.Clone()
+            $PipelineContext.Parameters = $Parameters.Clone()
+            $PipelineContext.Progress = $Private:Progress
         }
 
         $Private:Shell = [powershell]::Create()
         $Private:Shell.RunspacePool = $Private:Pool
 
-        # The worker dot-sources the core from disk rather than being handed its source text: one
-        # copy of the function, and the file is already the thing the unit tests execute.
-        # $TransportScriptPath is the test seam - see Start-OmadaBackgroundRequest's note below.
+        # The worker dot-sources what it needs from disk rather than being handed source text: one
+        # copy of every function, and those files are already the things the unit tests execute.
+        # $TransportScriptPath is the mock seam - see Install-OmadaMockTransport.
         [void]$Private:Shell.AddScript({
-                param($CorePath, $RequestParameters, $TransportScriptPath, $TransportContext)
-                . $CorePath
+                param($PrivateFolder, $RequestParameters, $PipelineContext, $TransportScriptPath, $TransportContext)
+                . (Join-Path $PrivateFolder "Invoke-OmadaRequestCore.ps1")
+                if ($null -ne $PipelineContext) {
+                    . (Join-Path $PrivateFolder "New-OmadaQueryRequest.ps1")
+                    . (Join-Path $PrivateFolder "Invoke-OmadaExecutePipeline.ps1")
+                }
                 if (![string]::IsNullOrWhiteSpace($TransportScriptPath) -and (Test-Path -LiteralPath $TransportScriptPath)) {
                     . $TransportScriptPath
                     $Initializer = Get-Command -Name Initialize-OmadaRequestWorkerTransport -ErrorAction SilentlyContinue
@@ -91,8 +125,16 @@ function Start-OmadaBackgroundRequest {
                         Initialize-OmadaRequestWorkerTransport -Context $TransportContext
                     }
                 }
+                if ($null -ne $PipelineContext) {
+                    $PipelineOutcome = Invoke-OmadaExecutePipeline -Context $PipelineContext
+                    # Reported in the transport's own shape so the UI-side plumbing needs no special
+                    # case: the whole outcome is the Result, and the pipeline's first failure is also
+                    # surfaced as the ErrorRecord so Resolve-OmadaRequestFailure still classifies an
+                    # Unauthorized or a missing OData endpoint exactly as it does for a single request.
+                    return @{ Result = $PipelineOutcome; ErrorRecord = $PipelineOutcome.ErrorRecord }
+                }
                 return (Invoke-OmadaRequestCore -Parameters $RequestParameters)
-            }).AddArgument($Private:CorePath).AddArgument($Parameters.Clone()).AddArgument($Script:OmadaRequestWorkerTransportPath).AddArgument($Script:OmadaRequestWorkerTransportContext)
+            }).AddArgument($Private:PrivateFolder).AddArgument($Parameters.Clone()).AddArgument($PipelineContext).AddArgument($Script:OmadaRequestWorkerTransportPath).AddArgument($Script:OmadaRequestWorkerTransportContext)
 
         $Private:AsyncResult = $Private:Shell.BeginInvoke()
 
@@ -108,6 +150,7 @@ function Start-OmadaBackgroundRequest {
             IsBackgroundRequest    = $true
             Description            = $Description
             Context                = $Context
+            Progress               = $Private:Progress
         }
 
         # Deliberately NOT assigned to $Script:Task or $TabSession.PendingTask. That field belongs
