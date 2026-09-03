@@ -7,13 +7,30 @@ function Invoke-OmadaPSWebRequestWrapper {
     # Invoke-OmadaRestMethod (OmadaWeb.PS) can show its own interactive WebView2/Browser login
     # popup when authentication is needed - a modal window this app does not own, but which pumps
     # this thread's messages while blocked exactly like our own dialogs (see
-    # Suspend-WebViewCompletionPolling.ps1). Without suspending here, the WebViewCompletionPollTimer
-    # can fire reentrantly during that popup and process a DIFFERENT tab's WebView2 completion,
-    # repointing $Script:MainForm.Elements/$Script:AppConfig/etc. mid-call - corrupting which tab's
-    # UI this function's own status updates (and any Set-SqlConnectionState a caller makes right
-    # after it returns) end up applying to. This is the single choke point every Omada REST call in
-    # this app goes through, so suspending here covers all of them.
-    Suspend-WebViewCompletionPolling
+    # Suspend-WebViewCompletionPolling.ps1). Without suspending, the WebViewCompletionPollTimer can
+    # fire reentrantly during that popup and process a DIFFERENT tab's WebView2 completion,
+    # repointing $Script:MainForm.Elements/$Script:AppConfig/etc. mid-call.
+    #
+    # Issue #40's last criterion asks for this suppression to be "simplified or removed where it is
+    # no longer needed". Removing it from here would be exactly backwards, and it is worth writing
+    # down why, because the plan for that slice assumed the opposite.
+    #
+    # Before #40 this was the single choke point every Omada request went through, so it covered all
+    # of them - most of which could never have opened a dialog. Now the requests that cannot open a
+    # dialog do not come through here at all: they go to a worker, and
+    # Invoke-OmadaPSWebRequestWrapperAsync suspends nothing, because there is nothing on the UI
+    # thread to protect. What is left calling this function is precisely the set of cases
+    # Test-OmadaBackgroundRequestEligible refuses to dispatch - a tab that has not authenticated, or
+    # a request that explicitly asks to authenticate again - which is to say: the login prompt now
+    # happens HERE, by design, and nowhere else. The suppression is more necessary than it was, not
+    # less.
+    #
+    # The simplification that IS available is narrowing it. It used to be held across parameter
+    # preparation, two rounds of redaction and logging, and the whole error classification - during
+    # all of which no dialog can appear, and every completion in the queue was needlessly delayed.
+    # It now covers just the call that can actually show a window. (Write-LogOutput and
+    # Set-SqlConnectionState open their own dialogs on some paths and suspend for themselves; the
+    # helper is idempotent, so a nested suspend is harmless either way.)
     try {
         if (!$Script:RunTimeData.SkipRetryRequest) {
             # Preparation and failure classification live in Build-OmadaRequestParameter and
@@ -30,7 +47,14 @@ function Invoke-OmadaPSWebRequestWrapper {
             # The core returns the failure instead of throwing it, so this rethrows to keep the
             # control flow identical: a rethrown ErrorRecord keeps its Exception, ErrorDetails and
             # FullyQualifiedErrorId, which is all the classification reads.
-            $Private:Outcome = Invoke-OmadaRequestCore -Parameters $Private:Parameters
+            Suspend-WebViewCompletionPolling
+            try {
+                $Private:Outcome = Invoke-OmadaRequestCore -Parameters $Private:Parameters
+            }
+            finally {
+                Resume-WebViewCompletionPolling
+            }
+
             if ($null -ne $Private:Outcome.ErrorRecord) {
                 throw $Private:Outcome.ErrorRecord
             }
@@ -54,8 +78,5 @@ function Invoke-OmadaPSWebRequestWrapper {
     }
     catch {
         Resolve-OmadaRequestFailure -ErrorRecord $_
-    }
-    finally {
-        Resume-WebViewCompletionPolling
     }
 }
