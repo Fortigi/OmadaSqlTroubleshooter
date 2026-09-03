@@ -34,6 +34,24 @@ function script:Invoke-E2EConnect {
     Invoke-E2EClick -ElementName "ButtonConnect"
 }
 
+function script:Test-E2EExecuteInFlight {
+    # Whether a tab has a query outstanding, read off the completion queue - the same record the app
+    # itself uses (Get-ActiveExecuteQueryRequest). Since C1-4 the Execute button stays ENABLED while a
+    # query runs, because it is the Cancel button, so IsEnabled is no longer a usable signal for this.
+    param($TabSession)
+    if ($null -eq $TabSession) { $TabSession = Get-ActiveTabSession }
+    return @($Script:PendingWebViewCompletions | Where-Object {
+            $_.Description -eq "Execute query" -and $null -ne $_.TabSession -and
+            $_.TabSession.Id -eq $TabSession.Id -and -not $_.IsCancelled
+        }).Count -gt 0
+}
+
+function script:Get-E2EExecuteButtonText {
+    param($TabSession)
+    $Elements = if ($null -ne $TabSession) { $TabSession.Elements } else { $Script:MainForm.Elements }
+    return [string]$Elements.ButtonExecuteQueryText.Text
+}
+
 function script:Wait-E2EAppSettled {
     <#
     Pump the dispatcher for a fixed period so work the APP started on its own - a WebView2
@@ -110,13 +128,17 @@ function script:Invoke-E2EExecuteAndWait {
     param(
         [double]$TimeoutSeconds = 15
     )
+    $Tab = Get-ActiveTabSession
     Invoke-E2EExecute
     Wait-E2EUntil -TimeoutSeconds $TimeoutSeconds -Message "execute to complete" -Condition {
-        # Re-enabled by Reset-ExecuteQueryUiState, which every terminal path goes through - success,
-        # failure and abandonment alike. Waiting on the grid instead would hang forever on the
+        # The queue, not the button: since C1-4 the Execute button stays enabled during a query
+        # because it is the Cancel button. Waiting on the grid instead would hang forever on the
         # perfectly legitimate "query returned no rows" path.
-        $Script:MainForm.Elements.ButtonExecuteQuery.IsEnabled
+        -not (Test-E2EExecuteInFlight -TabSession $Tab)
     }
+    # The request leaves the queue just BEFORE its completion block runs, so one more pump makes sure
+    # the completion (grid binding, status bar, button reset) has actually happened.
+    Invoke-E2EFlushDispatcher
 }
 
 function script:Wait-E2ENoPendingRequests {
@@ -130,6 +152,11 @@ function script:Wait-E2ENoPendingRequests {
 
 function script:Reset-E2EConnection {
     # Put the active tab back to a disconnected, clean state between scenarios that reuse one tab.
+    # Drained first: a request still in flight from the previous scenario would otherwise complete
+    # in the middle of this one, repointing the tab context and binding a stale result into its grid.
+    # A scenario that leaves work outstanding fails HERE, where the cause is obvious, rather than as
+    # a puzzling assertion failure in whichever scenario happens to run next.
+    Wait-E2ENoPendingRequests
     if ($Script:ConnectionStatus) {
         Invoke-E2EConnect   # ButtonConnect toggles to Disconnect when already connected
     }

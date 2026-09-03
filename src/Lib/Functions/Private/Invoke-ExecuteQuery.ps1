@@ -115,7 +115,7 @@ function Invoke-ExecuteQuery {
                     # $Script: state: by the time the response lands the user may be looking at
                     # another tab, and $Private:Result (the Save-Query outcome) and the temporary
                     # object id do not exist anywhere else.
-                    $Private:Pending = Invoke-OmadaPSWebRequestWrapperAsync -Description "Execute query" -Context @{
+                    $Private:Pending = Invoke-OmadaPSWebRequestWrapperAsync -Description $Script:ExecuteQueryRequestDescription -Context @{
                         SaveResult    = $Private:Result
                         TempQueryDoId = $Private:TempQueryDoId
                     } -OnResultScriptBlock {
@@ -126,8 +126,12 @@ function Invoke-ExecuteQuery {
                     if ($null -ne $Private:Pending) {
                         # Dispatched. Ownership of the temporary object passes to the completion, so
                         # this frame must forget it - otherwise the catch below would delete an object
-                        # the in-flight query is still executing against.
+                        # the in-flight query is still executing against. (Stop-ExecuteQueryRequest
+                        # reads it back off the pending item if the user cancels.)
                         $Private:TempQueryDoId = $null
+                        # The Execute button becomes Cancel: from here the only useful thing the user
+                        # can do with it is stop waiting.
+                        Set-ExecuteQueryButtonState
                         return
                     }
 
@@ -162,6 +166,11 @@ function Invoke-ExecuteQuery {
     }
 }
 
+# The label an execute request carries on the completion queue. A constant because it is matched,
+# not just displayed: Get-ActiveExecuteQueryRequest reads the queue through it to decide whether the
+# active tab is executing, which is what drives the Execute/Cancel button.
+$Script:ExecuteQueryRequestDescription = "Execute query"
+
 function Reset-ExecuteQueryUiState {
     <#
     .SYNOPSIS
@@ -187,8 +196,21 @@ function Reset-ExecuteQueryUiState {
     )
 
     try {
-        $Script:MainForm.Elements.ButtonSaveQuery.IsEnabled = $true
-        $Script:MainForm.Elements.ButtonExecuteQuery.IsEnabled = $true
+        # Only for a tab that is still connected. A query can now outlive the connection it was
+        # issued on - the user can disconnect, or a 401 can tear the tab down through
+        # Set-SqlConnectionState, while the request is in flight - and the completion still runs
+        # afterwards. Re-enabling here unconditionally would hand a disconnected tab a live Execute
+        # and Save button: the "in-between tab state" of issue #65, arrived at from a new direction.
+        # Set-SqlQueryFunctionState remains the single writer of these when disconnected.
+        if ($Script:ConnectionStatus) {
+            $Script:MainForm.Elements.ButtonSaveQuery.IsEnabled = $true
+            $Script:MainForm.Elements.ButtonExecuteQuery.IsEnabled = $true
+        }
+
+        # Back to "Execute" either way: a tab must never be left showing Cancel with nothing to
+        # cancel, connected or not. By the time any caller reaches this the request is off the queue -
+        # drained by the poll timer, or removed by Stop-ExecuteQueryRequest before it called here.
+        Set-ExecuteQueryButtonState
 
         if ($null -ne $Script:PopupWindowExecuteQuery) {
             $Script:PopupWindowExecuteQuery.Close()
