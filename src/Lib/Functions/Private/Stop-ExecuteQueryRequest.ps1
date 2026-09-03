@@ -56,9 +56,15 @@ function Stop-ExecuteQueryRequest {
             "Stopping the query worker reported: {0}" -f $_.Exception.Message | Write-LogOutput -LogType DEBUG
         }
 
-        # Itself a network call, on the UI thread exactly as it is on the normal completion path.
-        # Cancelling a query does not make cleaning up after it optional.
-        $Private:TempQueryDoId = $Private:Pending.Context.Caller.TempQueryDoId
+        # Read from the worker's progress table, not from the request context. Since C1-5 the
+        # temporary object is created INSIDE the pipeline, so the UI thread only learns its id
+        # because the pipeline publishes it there the moment it has one - which it does precisely
+        # for this case, since stopping the pipeline kills its own clean-up.
+        # (The Context fallback covers a caller that knew the id up front.)
+        $Private:TempQueryDoId = $Private:Pending.Progress.TempQueryDoId
+        if ($null -eq $Private:TempQueryDoId) {
+            $Private:TempQueryDoId = $Private:Pending.Context.Caller.TempQueryDoId
+        }
         if ($null -ne $Private:TempQueryDoId) {
             "Removing the temporary query object left by the cancelled execution." | Write-LogOutput -LogType DEBUG
             Remove-SqlQueryObject -DoId $Private:TempQueryDoId

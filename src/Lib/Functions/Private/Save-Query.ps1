@@ -34,17 +34,37 @@ function Save-Query {
             $private:Result = Get-SqlQueryObject
             $Script:RunTimeData.RestMethodParam.Method = "PUT"
         }
-        $Script:RunTimeData.RestMethodParam.Body = @{}
-        if ($NewQuery -or ($Script:RunTimeData.CurrentQueryText -ne $Script:RunTimeData.QueryText -or $Script:RunTimeData.QueryText -ne $private:Result.C_QUERY)) {
-            $Script:RunTimeData.RestMethodParam.Body.Add("C_QUERY", $Script:RunTimeData.QueryText)
+
+        # The diff rules and the URL come from New-OmadaQueryRequest, which is also what the
+        # background pipeline uses inside the worker (issue #40, C1-5). One definition of "what does
+        # saving a query send, and when is there nothing to send" - two copies of that would drift,
+        # and the drift would only show up against a real tenant.
+        $Private:SaveContext = @{
+            BaseUrl            = $Script:AppConfig.BaseUrl
+            QueryDoId          = $Script:AppConfig.CurrentSqlQuery.DoId
+            QueryText          = $Script:RunTimeData.QueryText
+            CurrentQueryText   = $Script:RunTimeData.CurrentQueryText
+            SavedQueryText     = $private:Result.C_QUERY
+            DisplayName        = $Script:MainForm.Elements.TextBoxDisplayName.Text
+            CurrentDisplayName = $Script:RunTimeData.CurrentSqlQuery.DisplayName
+            DataConnectionDoId = $Script:AppConfig.CurrentDataConnection.DoId
+        }
+        $Private:SaveRequest = New-OmadaQueryRequest -Kind "SaveExistingQuery" -Context $Private:SaveContext
+
+        # A new query always has a body: there is nothing on the server to compare against, so the
+        # "nothing changed" answer cannot apply. The URI and method for that case were set above.
+        $Script:RunTimeData.RestMethodParam.Body = if ($null -ne $Private:SaveRequest) { $Private:SaveRequest.Body } else { @{} }
+        if ($NewQuery) {
+            $Script:RunTimeData.RestMethodParam.Body = @{ "C_QUERY" = $Script:RunTimeData.QueryText }
             if (![string]::IsNullOrWhiteSpace($Script:AppConfig.CurrentDataConnection.DoId)) {
                 $Script:RunTimeData.RestMethodParam.Body.Add("C_SQLTROUBLESHOOTING_DATACONNECTION", @{Id = $Script:AppConfig.CurrentDataConnection.DoId })
             }
+            if ($Script:RunTimeData.CurrentSqlQuery.DisplayName -ne $Script:MainForm.Elements.TextBoxDisplayName.Text) {
+                $Script:RunTimeData.RestMethodParam.Body.Add("NAME", $Script:MainForm.Elements.TextBoxDisplayName.Text)
+            }
         }
-        if ($Script:RunTimeData.CurrentSqlQuery.DisplayName -ne $Script:MainForm.Elements.TextBoxDisplayName.Text) {
-            $Script:RunTimeData.RestMethodParam.Body.Add("NAME", $Script:MainForm.Elements.TextBoxDisplayName.Text)
-        }
-        if (!$NewQuery -and ($Script:RunTimeData.RestMethodParam.Body.Keys | Measure-Object).Count -le 0) {
+
+        if (!$NewQuery -and $null -eq $Private:SaveRequest) {
             "No changes detected! Saving not needed." | Write-LogOutput -LogType DEBUG
             return $private:Result
         }

@@ -47,6 +47,12 @@ function Invoke-OmadaPSWebRequestWrapperAsync {
 
         $Context,
 
+        # When supplied, the worker runs the whole dependent execute chain rather than a single
+        # request (issue #40, C1-5). $Pending.Outcome is then the pipeline's outcome object instead
+        # of a single response - or an ErrorRecord, when the failure was one of the two tenant-level
+        # kinds Resolve-OmadaRequestFailure classifies.
+        [hashtable]$PipelineContext,
+
         [string]$Description = "Omada request"
     )
 
@@ -84,7 +90,7 @@ function Invoke-OmadaPSWebRequestWrapperAsync {
         # The completion block below is the bridge back onto the UI thread. It is a plain block: it
         # reads everything it needs from $Pending, and calls only module-private functions, which
         # resolve because the poll timer invokes it from a top-level frame.
-        return Start-OmadaBackgroundRequest -Parameters $Private:Parameters -TabSession $Private:TabSession -Description $Description -Context $Private:RequestContext -OnCompletedScriptBlock {
+        return Start-OmadaBackgroundRequest -Parameters $Private:Parameters -TabSession $Private:TabSession -Description $Description -Context $Private:RequestContext -PipelineContext $PipelineContext -OnCompletedScriptBlock {
             param($Pending)
 
             $Private:Outcome = Complete-OmadaBackgroundRequest -Pending $Pending

@@ -9,10 +9,21 @@ function New-TemporarySqlQueryObject {
 
         $TempName = "TMP_$($Script:RunTimeConfig.InstanceGuid)"
 
+        # Every URL and body below comes from New-OmadaQueryRequest, which the background pipeline
+        # also uses inside the worker (issue #40, C1-5) - one definition each, so the inline and
+        # background paths cannot drift apart.
+        $Private:TempContext = @{
+            BaseUrl            = $Script:AppConfig.BaseUrl
+            TempName           = $TempName
+            SelectionText      = $QueryText
+            DataConnectionDoId = $Script:AppConfig.CurrentDataConnection.DoId
+        }
+
         try {
-            $Script:RunTimeData.RestMethodParam.Uri = "{0}/odata/dataobjects/C_P_SQLTROUBLESHOOTING?DeletedStatus=Both&`$filter=NAME eq '{1}'" -f $Script:AppConfig.BaseUrl, $TempName
-            $Script:RunTimeData.RestMethodParam.Method = "GET"
-            $Script:RunTimeData.RestMethodParam.Body = $null
+            $Private:Probe = New-OmadaQueryRequest -Kind "TempQueryProbe" -Context $Private:TempContext
+            $Script:RunTimeData.RestMethodParam.Uri = $Private:Probe.Uri
+            $Script:RunTimeData.RestMethodParam.Method = $Private:Probe.Method
+            $Script:RunTimeData.RestMethodParam.Body = $Private:Probe.Body
             $ExistingTempQuery = Invoke-OmadaPSWebRequestWrapper
 
             $RestoreSuccess = $false
@@ -20,11 +31,12 @@ function New-TemporarySqlQueryObject {
 
                 if ($ExistingTempQuery.Value[0].Deleted -eq $true) {
                     "Temporary query object with name '{0}' exists. Reuse it." -f $TempName | Write-LogOutput -LogType DEBUG
-                    $Script:RunTimeData.RestMethodParam.Uri = "{0}/WebService/DataObjectWebService.asmx/UndeleteDataObject" -f $Script:AppConfig.BaseUrl
-                    $Script:RunTimeData.RestMethodParam.Method = "POST"
-                    $Script:RunTimeData.RestMethodParam.Body = @{
-                        id = $ExistingTempQuery.Value[0].Id
-                    } | ConvertTo-Json
+                    $Private:UndeleteContext = $Private:TempContext.Clone()
+                    $Private:UndeleteContext.TempQueryDoId = $ExistingTempQuery.Value[0].Id
+                    $Private:Undelete = New-OmadaQueryRequest -Kind "TempQueryUndelete" -Context $Private:UndeleteContext
+                    $Script:RunTimeData.RestMethodParam.Uri = $Private:Undelete.Uri
+                    $Script:RunTimeData.RestMethodParam.Method = $Private:Undelete.Method
+                    $Script:RunTimeData.RestMethodParam.Body = $Private:Undelete.Body
                     $null = Invoke-OmadaPSWebRequestWrapper
                 }
                 else {
@@ -39,8 +51,7 @@ function New-TemporarySqlQueryObject {
 
         if ($RestoreSuccess) {
             "Reusing existing temporary query object with DoId: {0}" -f $ExistingTempQuery.Value[0].Id | Write-LogOutput -LogType DEBUG
-            $Script:RunTimeData.RestMethodParam.Uri = "{0}/odata/dataobjects/C_P_SQLTROUBLESHOOTING({1})" -f $Script:AppConfig.BaseUrl, $ExistingTempQuery.Value[0].Id
-            $Script:RunTimeData.RestMethodParam.Method = "PUT"
+            $Private:TempContext.TempQueryDoId = $ExistingTempQuery.Value[0].Id
         }
         else {
             # Reuse the application-wide InstanceGuid (see Initialize-GlobalConfigSettings) for the
@@ -49,25 +60,26 @@ function New-TemporarySqlQueryObject {
             # query objects piled up on the server instead of the single shared TMP_<InstanceGuid>
             # being recreated and reused.
             "Temporary query object '{0}' does not exist. Creating it." -f $TempName | Write-LogOutput -LogType DEBUG
-            $Script:RunTimeData.RestMethodParam.Uri = "{0}/odata/dataobjects/C_P_SQLTROUBLESHOOTING" -f $Script:AppConfig.BaseUrl
-            $Script:RunTimeData.RestMethodParam.Method = "POST"
+            $Private:TempContext.TempQueryDoId = $null
         }
 
-        $Script:RunTimeData.RestMethodParam.Body = @{
-            "NAME"    = $TempName
-            "C_QUERY" = $QueryText
-        }
-        if (![string]::IsNullOrWhiteSpace($Script:AppConfig.CurrentDataConnection.DoId)) {
-            $Script:RunTimeData.RestMethodParam.Body.Add("C_SQLTROUBLESHOOTING_DATACONNECTION", @{ Id = $Script:AppConfig.CurrentDataConnection.DoId })
-        }
+        # PUT when an object was recovered, POST otherwise - the builder decides from TempQueryDoId.
+        $Private:Upsert = New-OmadaQueryRequest -Kind "TempQueryUpsert" -Context $Private:TempContext
+        $Script:RunTimeData.RestMethodParam.Uri = $Private:Upsert.Uri
+        $Script:RunTimeData.RestMethodParam.Method = $Private:Upsert.Method
+        $Script:RunTimeData.RestMethodParam.Body = $Private:Upsert.Body
 
         "Body: {0}" -f (ConvertTo-RedactedLogString -InputObject $Script:RunTimeData.RestMethodParam.Body -ShapeOnly) | Write-LogOutput -LogType VERBOSE
         "QueryUrl: {0}" -f $Script:RunTimeData.RestMethodParam.Uri | Write-LogOutput -LogType DEBUG
 
         $Private:Result = Invoke-OmadaPSWebRequestWrapper
-        if ($null -ne $Private:Result -and $null -ne $Private:Result.Id) {
-            "Temporary query object created with DoId: {0}" -f $Private:Result.Id | Write-LogOutput -LogType DEBUG
-            return $Private:Result.Id
+        # A PUT onto a recovered object answers without an Id, so fall back to the id that was
+        # reused: it is the object the query has to run against either way. Same rule the pipeline
+        # applies in the worker.
+        $Private:CreatedDoId = if ($null -ne $Private:Result -and $null -ne $Private:Result.Id) { $Private:Result.Id } else { $Private:TempContext.TempQueryDoId }
+        if ($null -ne $Private:CreatedDoId) {
+            "Temporary query object ready with DoId: {0}" -f $Private:CreatedDoId | Write-LogOutput -LogType DEBUG
+            return $Private:CreatedDoId
         }
         else {
             "Failed to create temporary query object: no Id in response." | Write-LogOutput -LogType ERROR
