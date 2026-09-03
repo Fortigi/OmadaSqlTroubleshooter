@@ -121,7 +121,15 @@ function Invoke-ExecuteQuery {
                     return
                 }
                 elseif ($Script:Task.Status -eq "Faulted") {
-                    "Task failed: {0}" -f $Script:Task.Status | Write-ContainedErrorLog
+                    # "Task failed: Faulted" - which is what this used to say - tells the reader only
+                    # that the status is the status. A faulted Task carries an AggregateException, so
+                    # the message worth having is the base exception's, not the wrapper's.
+                    $Private:TaskFailure = "no exception was recorded"
+                    if ($null -ne $Script:Task.Exception) {
+                        $Private:TaskFailure = $Script:Task.Exception.GetBaseException().Message
+                    }
+
+                    "Reading the editor's contents failed: {0}" -f $Private:TaskFailure | Write-ContainedErrorLog -ErrorObject $Script:Task.Exception
                 }
                 else {
                     "Task result: {0}" -f $Script:Task.Status | Write-LogOutput -LogType DEBUG

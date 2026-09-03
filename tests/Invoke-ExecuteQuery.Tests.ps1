@@ -492,6 +492,62 @@ Describe "Complete-ExecuteQueryPipeline does not retry a tab that was torn down"
     }
 }
 
+Describe "Invoke-ExecuteQuery reports a faulted editor read usefully" {
+    # "Task failed: Faulted" told the reader only that the status is the status. In a PR about the
+    # log's diagnostic value that is exactly the wrong thing to leave behind, so the message now comes
+    # from the Task's base exception - a faulted Task wraps it in an AggregateException, whose own
+    # message is the equally useless "One or more errors occurred."
+
+    BeforeEach {
+        Initialize-ExecuteQueryTestState
+
+        $script:CapturedCompletion = $null
+        function Invoke-ExecuteScriptWithResultAsync {
+            param($ScriptToExecute, $OnCompletedScriptBlock)
+            $script:CapturedCompletion = $OnCompletedScriptBlock
+        }
+
+        function Test-ConnectionRequirements { return $true }
+
+        $script:ErrorLines = [System.Collections.Generic.List[string]]::new()
+        Mock Write-LogOutput {
+            if ($LogType -eq "ERROR") {
+                $script:ErrorLines.Add([string]$InputObject)
+                Write-Error -Message ([string]$InputObject) -ErrorAction Stop
+            }
+        }
+    }
+
+    It "logs what actually failed, not the status name" {
+        Invoke-ExecuteQuery
+        $Script:Task = [System.Threading.Tasks.Task]::FromException([System.InvalidOperationException]::new("The editor is no longer available"))
+
+        & $script:CapturedCompletion
+
+        @($script:ErrorLines).Count | Should -Be 1
+        $script:ErrorLines[0] | Should -Match "The editor is no longer available"
+        $script:ErrorLines[0] | Should -Not -Match "One or more errors occurred"
+    }
+
+    It "says so plainly when a faulted task carries no exception at all" {
+        Invoke-ExecuteQuery
+        $Script:Task = [pscustomobject]@{ Status = "Faulted"; Exception = $null }
+
+        { & $script:CapturedCompletion } | Should -Not -Throw
+
+        $script:ErrorLines[0] | Should -Match "no exception was recorded"
+    }
+
+    It "still returns the UI to a usable state after a faulted read" {
+        Invoke-ExecuteQuery
+        $Script:Task = [System.Threading.Tasks.Task]::FromException([System.InvalidOperationException]::new("gone"))
+
+        & $script:CapturedCompletion
+
+        $Script:MainForm.Elements.ButtonExecuteQuery.IsEnabled | Should -BeTrue
+    }
+}
+
 Describe "Complete-ExecuteQueryPipeline reports a tenant failure once" {
     # Found on a live tenant: one HTTP 500 produced FIVE stacked error dialogs and a log entry
     # containing four nested copies of itself. Write-LogOutput -LogType ERROR ends with Write-Error,
