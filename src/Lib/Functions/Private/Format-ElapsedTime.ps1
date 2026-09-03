@@ -20,7 +20,9 @@ function Format-ElapsedTime {
     request is in flight - is rendered as zero rather than as a negative duration.
 
     .OUTPUTS
-    [string] in the form h+:mm:ss.f
+    [string] in the form hh:mm:ss.f - every field fixed-width so the indicator does not shift about as
+    it counts, except hours, which is padded to two digits and grows beyond them rather than rolling
+    over: a query running for 26 hours reads "26:00:14.0".
     #>
     [CmdLetBinding()]
     [OutputType([string])]
