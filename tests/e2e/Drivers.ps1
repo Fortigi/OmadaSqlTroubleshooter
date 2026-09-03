@@ -34,6 +34,42 @@ function script:Invoke-E2EConnect {
     Invoke-E2EClick -ElementName "ButtonConnect"
 }
 
+function script:Wait-E2EAppSettled {
+    <#
+    Pump the dispatcher for a fixed period so work the APP started on its own - a WebView2
+    NavigationCompleted callback, a deferred editor push - has landed before a scenario acts.
+
+    Not the same thing as Wait-E2ENoPendingRequests, which waits on a condition. There is no
+    condition to wait on here: WebView2 posts its callbacks straight to the dispatcher rather than
+    onto the completion queue, and the harness leaves at least one editor task permanently pending,
+    so "the queue is empty" never becomes true. Only the first scenario of a run really needs this;
+    by the second, startup has long finished.
+    #>
+    param([int]$SettleMilliseconds = 500)
+    $Deadline = [DateTime]::UtcNow.AddMilliseconds($SettleMilliseconds)
+    while ([DateTime]::UtcNow -lt $Deadline) {
+        Invoke-E2EFlushDispatcher
+        Start-Sleep -Milliseconds 25
+    }
+}
+
+function script:Invoke-E2EGetSchemaAndWait {
+    # Retrieve the SQL schema and wait for it to land. Since issue #40 Get-SqlSchemaObject dispatches
+    # the fetch to a background worker and returns immediately, so anything asserting on the cache,
+    # the tree or the setSchema push has to wait for the completion.
+    param([double]$TimeoutSeconds = 15)
+    Get-SqlSchemaObject
+    Wait-E2ENoPendingRequests -TimeoutSeconds $TimeoutSeconds
+}
+
+function script:Invoke-E2EConnectAndWait {
+    # Connect and let the schema fetch land. Since issue #40 that fetch runs on a background worker,
+    # so a scenario asserting on the schema (or merely acting next) must wait for it.
+    param([double]$TimeoutSeconds = 15)
+    Invoke-E2EConnect
+    Wait-E2ENoPendingRequests -TimeoutSeconds $TimeoutSeconds
+}
+
 function script:Invoke-E2EExecute {
     Invoke-E2EClick -ElementName "ButtonExecuteQuery"
 }
@@ -60,6 +96,36 @@ function script:Reset-E2EScenario {
     $script:E2EFixtureOverride = $null
     $script:E2EChoiceReturn = $null
     $script:E2EChoices.Clear()
+    # Background requests complete immediately again unless a scenario asks for a slow one.
+    $script:E2ERequestDelayMs = 0
+}
+
+function script:Invoke-E2EExecuteAndWait {
+    <#
+    Click Execute and wait for the result to land. Since issue #40 the query round-trip runs on a
+    background worker, so the grid is NOT populated by the time the click returns - an assertion made
+    straight after Invoke-E2EExecute would be testing a race, not the feature. Every scenario that
+    cares about the outcome of an execute should go through here.
+    #>
+    param(
+        [double]$TimeoutSeconds = 15
+    )
+    Invoke-E2EExecute
+    Wait-E2EUntil -TimeoutSeconds $TimeoutSeconds -Message "execute to complete" -Condition {
+        # Re-enabled by Reset-ExecuteQueryUiState, which every terminal path goes through - success,
+        # failure and abandonment alike. Waiting on the grid instead would hang forever on the
+        # perfectly legitimate "query returned no rows" path.
+        $Script:MainForm.Elements.ButtonExecuteQuery.IsEnabled
+    }
+}
+
+function script:Wait-E2ENoPendingRequests {
+    # Drain any background request still in flight, so one scenario's slow query cannot complete in
+    # the middle of the next one and repoint the tab under it.
+    param([double]$TimeoutSeconds = 15)
+    Wait-E2EUntil -TimeoutSeconds $TimeoutSeconds -Message "pending background requests to drain" -Condition {
+        @($Script:PendingWebViewCompletions | Where-Object { $null -ne $_.StartedUtc }).Count -eq 0
+    }
 }
 
 function script:Reset-E2EConnection {
@@ -82,6 +148,9 @@ function script:New-E2EConnectedTab {
     New-EmptyTabSession | Out-Null   # creates and activates a new tab
     Set-E2EConnectionFields -Url $Url -Auth $Auth
     Invoke-E2EConnect
+    # Connecting fetches the SQL schema, which is a background request since issue #40. Let it land
+    # before the caller acts, so it does not complete in the middle of the caller's first step.
+    Wait-E2ENoPendingRequests
     return (Get-ActiveTabSession)
 }
 
@@ -201,6 +270,11 @@ function script:Reset-E2ETabsToOne {
     (Get-TabControlSessions).SelectedItem = $Script:Tabs[0].TabItem
     Reset-E2EConnection
     Reset-E2EScenario
+    # Settle before handing the scenario a clean tab. Since issue #40 a connect leaves a schema
+    # request in flight, and a scenario that starts while one is outstanding has it complete
+    # underneath its own first action - which repoints the tab context mid-step and makes the
+    # scenario's failures unrelated to what it is testing.
+    Wait-E2ENoPendingRequests
 }
 
 function script:Get-E2EActiveTabIndex {

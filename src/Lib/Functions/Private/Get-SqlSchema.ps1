@@ -1,3 +1,8 @@
+# The label a schema request carries on the completion queue. A constant because it is matched, not
+# just displayed: Get-SqlSchemaObject reads the queue through it to decide whether a fetch for the
+# same pool and database is already outstanding.
+$Script:SqlSchemaRequestDescription = "SQL schema"
+
 function Get-SqlSchemaObject {
     [CmdLetBinding()]
     param()
@@ -51,6 +56,30 @@ function Get-SqlSchemaObject {
                 return
             }
 
+            # The cache alone stopped being enough once this fetch went off-thread (issue #40): the
+            # cache is only populated when the response LANDS, so two calls close together - a
+            # connect immediately followed by a data-connection change, say - would both miss it and
+            # both hit the tenant. This preserves the once-per-pool-per-database contract the cache
+            # was written for.
+            #
+            # Read straight off the completion queue rather than kept in a side table of "keys in
+            # flight". A side table has to be cleared on every path a request can leave by - success,
+            # failure, and abandonment when its tab is closed - and a key left behind on the
+            # abandonment path would block that pool and database from ever fetching its schema again
+            # for the rest of the session. The queue cannot get out of step with itself.
+            # Any matching item on the queue counts, including one whose worker has already finished
+            # but which the poll timer has not drained yet. Its completion is queued and about to
+            # populate the cache and push the schema to the editor, so the caller's intent is already
+            # being served - dispatching again in that window would be a duplicate request for
+            # exactly the answer that is moments away.
+            if (@($Script:PendingWebViewCompletions | Where-Object {
+                        $_.Description -eq $Script:SqlSchemaRequestDescription -and
+                        $_.Context.Caller.SchemaCacheKey -eq $SchemaCacheKey
+                    }).Count -gt 0) {
+                "SQL schema for '{0}' is already being retrieved; not requesting it twice." -f $SchemaCacheKey | Write-LogOutput -LogType DEBUG
+                return
+            }
+
             $Script:RunTimeData.RestMethodParam.Body = @{
                 connectionId = $Script:AppConfig.CurrentDataConnection.DoId
             }
@@ -65,13 +94,14 @@ function Get-SqlSchemaObject {
             # $Pending.Context.Caller instead of re-deriving it: by the time it runs, the user may
             # have switched to a tab with a different SessionKey or data connection, and the key must
             # be the one this request was issued for.
-            $Private:Pending = Invoke-OmadaPSWebRequestWrapperAsync -Description "SQL schema" -Context @{ SchemaCacheKey = $SchemaCacheKey } -OnResultScriptBlock {
+            $Private:Pending = Invoke-OmadaPSWebRequestWrapperAsync -Description $Script:SqlSchemaRequestDescription -Context @{ SchemaCacheKey = $SchemaCacheKey } -OnResultScriptBlock {
                 param($Pending)
                 Complete-SqlSchemaRetrieval -SchemaResponse $Pending.Outcome -SchemaCacheKey $Pending.Context.Caller.SchemaCacheKey
             }
 
             if ($null -ne $Private:Pending) {
-                # Dispatched. Everything after the response now happens in the completion block.
+                # Dispatched. Everything after the response now happens in the completion block, and
+                # the item's presence on the queue is itself the "already in flight" record.
                 return
             }
 

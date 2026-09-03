@@ -6,7 +6,11 @@ E2ESuite -Name "SchemaCache" -Body {
     E2ECase -Name "the SQL schema is fetched once per pool + data connection and reused from cache" -Body {
         Reset-E2ETabsToOne
         Set-E2EConnectionFields
-        Invoke-E2EConnect
+        # Waited for, so the connect's own schema request has drained before the cache is emptied
+        # below. Left outstanding it would suppress BOTH calls, since a request for that key really
+        # would already be in flight - and the case would pass for the wrong reason, measuring the
+        # in-flight guard instead of the cache.
+        Invoke-E2EConnectAndWait
 
         # Provide the schema window objects Get-SqlSchemaObject writes into (it is normally driven by
         # the schema window). Created on the UI/dispatcher thread so WPF is happy.
@@ -20,8 +24,12 @@ E2ESuite -Name "SchemaCache" -Body {
         $Script:SqlSchemaCache = @{}
 
         $script:E2ECalls.Clear()
+        # Both calls are issued before the first response lands, which is exactly the case the
+        # in-flight guard exists for: the cache alone cannot suppress the second one, because the
+        # cache is only populated when a response arrives.
         Get-SqlSchemaObject
         Get-SqlSchemaObject
+        Wait-E2ENoPendingRequests
 
         E2EAssertEqual 1 (Get-E2ECallCount -MethodLike "POST" -UriLike "*getsqlschema*") "the schema POST should fire once; the second call is served from the pool cache"
     }
@@ -35,7 +43,7 @@ E2ESuite -Name "SchemaCache" -Body {
         $Script:SqlSchemaForm = [pscustomobject]@{ Definition = (New-Object System.Windows.Window) }
 
         $script:E2EEditorScripts.Clear()
-        Get-SqlSchemaObject
+        Invoke-E2EGetSchemaAndWait
 
         $SetSchema = $script:E2EEditorScripts | Where-Object { $_ -like "setSchema(*" } | Select-Object -Last 1
         E2EAssertTrue ($null -ne $SetSchema) "a setSchema(...) script should be pushed to the editor"
@@ -59,7 +67,7 @@ E2ESuite -Name "SchemaCache" -Body {
 
         $script:E2EEditorScripts.Clear()
         $script:E2ELogMessages.Clear()
-        Get-SqlSchemaObject
+        Invoke-E2EGetSchemaAndWait
 
         $SetSchema = $script:E2EEditorScripts | Where-Object { $_ -like "setSchema(*" } | Select-Object -Last 1
         E2EAssertTrue ($null -ne $SetSchema) "setSchema(...) must still be pushed with the schema window closed"
@@ -88,6 +96,7 @@ E2ESuite -Name "SchemaCache" -Body {
 
         $script:E2EEditorScripts.Clear()
         $ComboBoxDataConnection.SelectedItem = $TargetItem
+        Wait-E2ENoPendingRequests
 
         $SetSchema = $script:E2EEditorScripts | Where-Object { $_ -like "setSchema(*" } | Select-Object -Last 1
         E2EAssertTrue ($null -ne $SetSchema) "selecting a data connection should push that database's schema to the editor"
@@ -130,17 +139,19 @@ E2ESuite -Name "SchemaWindowTabSwitch" -Body {
 
         try {
             E2EAssertTrue (Test-SqlSchemaFormIsVisible) "the mock schema window should be visible for the test"
-            Get-SqlSchemaObject
+            Invoke-E2EGetSchemaAndWait
             E2EAssertTrue ($Script:SqlSchemaForm.Definition.Title -like "*OtherDB*") "the schema window should first show tab B's database (OtherDB)"
 
             # Switch to tab A: the schema window must follow it to OISES. This is the discriminating
             # assertion - without the fix the window stays on tab B's OtherDB.
             (Get-TabControlSessions).SelectedItem = $TabA.TabItem
+            Wait-E2ENoPendingRequests
             $TitleAfterA = $Script:SqlSchemaForm.Definition.Title
             E2EAssertTrue ($TitleAfterA -like "*OISES*") ("switching to tab A must refresh the schema window to tab A's database (OISES); actual='{0}', visible='{1}'" -f $TitleAfterA, (Test-SqlSchemaFormIsVisible))
 
             # And switching back to tab B follows it to OtherDB.
             (Get-TabControlSessions).SelectedItem = $TabB.TabItem
+            Wait-E2ENoPendingRequests
             E2EAssertTrue ($Script:SqlSchemaForm.Definition.Title -like "*OtherDB*") "switching to tab B must refresh the schema window to tab B's database (OtherDB)"
         }
         finally {
