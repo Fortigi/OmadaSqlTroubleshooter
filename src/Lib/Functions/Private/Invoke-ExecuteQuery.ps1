@@ -252,6 +252,20 @@ function Invoke-ExecuteQueryOnUiThread {
     )
 
     try {
+        # A tab that is no longer connected must not be retried against. Resolve-OmadaRequestFailure
+        # tears the tab down through Set-SqlConnectionState for the two tenant-level failures
+        # (Unauthorized, OData endpoint missing) and then throws - and the completion still runs,
+        # because the async wrapper invokes it in a finally. Those are the tenant's answer, not a
+        # worker that could not do its job: retrying would fail again at best, and disabling
+        # background execution over an expired session would be the wrong conclusion entirely.
+        # $Script:ConnectionStatus is the signal, and it also covers the user disconnecting while a
+        # query was in flight.
+        if (-not $Script:ConnectionStatus) {
+            "Not retrying the query on the UI thread: the tab is no longer connected." | Write-LogOutput -LogType DEBUG
+            Complete-ExecuteQueryResult -QueryResult $null -SaveResult $null -TempQueryDoId $null
+            return
+        }
+
         Disable-OmadaBackgroundRequest -Reason $Reason
 
         if ($null -eq $PipelineContext) {

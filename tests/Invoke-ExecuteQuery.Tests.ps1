@@ -446,3 +446,41 @@ Describe "Complete-ExecuteQueryPipeline falls back to the UI thread" {
         $script:InlinePipelineRuns.Count | Should -Be 1
     }
 }
+
+Describe "Complete-ExecuteQueryPipeline does not retry a tab that was torn down" {
+    # Resolve-OmadaRequestFailure disconnects the tab through Set-SqlConnectionState for the two
+    # tenant-level failures (Unauthorized, OData endpoint missing) and then throws - and the
+    # completion still runs, because the async wrapper invokes it in a finally. Those are the
+    # tenant's answer, not a worker that could not do its job.
+
+    BeforeEach {
+        Initialize-ExecuteQueryTestState
+        $script:RetryContext = @{ BaseUrl = "https://tenant.omada.cloud"; QueryDoId = 100 }
+        $Script:ConnectionStatus = $false
+    }
+
+    It "does not re-run the query when the tab is no longer connected" {
+        Complete-ExecuteQueryPipeline -Outcome (New-TestErrorRecord "Access denied") -PipelineContext $script:RetryContext
+
+        $script:InlinePipelineRuns.Count | Should -Be 0
+    }
+
+    It "does not disable background execution over an expired session" {
+        # The wrong conclusion to draw: a 401 says nothing about whether workers can authenticate,
+        # and turning the feature off for the session because of one would be a permanent penalty
+        # for a transient condition.
+        Complete-ExecuteQueryPipeline -Outcome (New-TestErrorRecord "Access denied") -PipelineContext $script:RetryContext
+
+        $script:DisableReasons.Count | Should -Be 0
+    }
+
+    It "still leaves the tab in a usable state" {
+        Complete-ExecuteQueryPipeline -Outcome (New-TestErrorRecord "Access denied") -PipelineContext $script:RetryContext
+
+        # Disconnected, so the query controls stay disabled - but the popup is closed, the stopwatch
+        # stopped and the button reads Execute rather than Cancel.
+        $Script:PopupWindowExecuteQuery | Should -BeNullOrEmpty
+        $Script:MainForm.Elements.ButtonExecuteQueryText.Text | Should -Be "_Execute"
+        $Script:RunTimeData.StopWatch.IsRunning | Should -BeFalse
+    }
+}

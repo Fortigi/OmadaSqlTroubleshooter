@@ -102,22 +102,32 @@ function Get-SqlSchemaObject {
             $Private:Pending = Invoke-OmadaPSWebRequestWrapperAsync -Description $Script:SqlSchemaRequestDescription -Context @{
                 SchemaCacheKey = $SchemaCacheKey
                 Uri            = $Script:RunTimeData.RestMethodParam.Uri
+                Method         = $Script:RunTimeData.RestMethodParam.Method
                 Body           = $Script:RunTimeData.RestMethodParam.Body
             } -OnResultScriptBlock {
                 param($Pending)
                 # A worker that could not run the request at all is not an answer. Retry once on the
                 # UI thread, where authentication works - the same fallback the execute path takes,
                 # and for the same reason: a fresh worker runspace cannot always establish an
-                # OmadaWeb.PS session. Safe to retry whatever the cause, because this is a GET that
-                # changes nothing.
-                if ($null -eq $Pending.Outcome -or $Pending.Outcome -is [System.Management.Automation.ErrorRecord]) {
+                # OmadaWeb.PS session.
+                #
+                # Safe to retry whatever the cause: GetSqlSchema is POST-shaped but purely a read, so
+                # running it twice changes nothing on the tenant. (The execute path needs a far more
+                # careful gate for exactly this reason - see CompletedSteps there.)
+                #
+                # Not retried for a tab that is no longer connected: Resolve-OmadaRequestFailure tears
+                # the tab down for the two tenant-level failures before throwing, and those are the
+                # tenant's answer rather than a worker that could not do its job.
+                if (($null -eq $Pending.Outcome -or $Pending.Outcome -is [System.Management.Automation.ErrorRecord]) -and $Script:ConnectionStatus) {
                     $Private:Reason = if ($null -eq $Pending.Outcome) { "the background worker returned no result" } else { $Pending.Outcome.Exception.Message }
                     "The SQL schema could not be retrieved on a background worker: {0}" -f $Private:Reason | Write-LogOutput -LogType DEBUG
                     Disable-OmadaBackgroundRequest -Reason $Private:Reason
 
+                    # Method carried alongside Uri and Body rather than hard-coded, so the retry
+                    # cannot drift from the request that was actually dispatched.
                     "Retrying the SQL schema retrieval on the UI thread." | Write-LogOutput -LogType DEBUG
                     $Script:RunTimeData.RestMethodParam.Uri = $Pending.Context.Caller.Uri
-                    $Script:RunTimeData.RestMethodParam.Method = "POST"
+                    $Script:RunTimeData.RestMethodParam.Method = $Pending.Context.Caller.Method
                     $Script:RunTimeData.RestMethodParam.Body = $Pending.Context.Caller.Body
                     Complete-SqlSchemaRetrieval -SchemaResponse (Invoke-OmadaPSWebRequestWrapper) -SchemaCacheKey $Pending.Context.Caller.SchemaCacheKey
                     return
