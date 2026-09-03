@@ -26,6 +26,11 @@ BeforeAll {
     . (Join-Path $PrivatePath -ChildPath "Set-ButtonText.ps1")
     . (Join-Path $PrivatePath -ChildPath "Get-ActiveExecuteQueryRequest.ps1")
     . (Join-Path $PrivatePath -ChildPath "Set-ExecuteQueryButtonState.ps1")
+    # Both are dot-sourced rather than stubbed, and for the same reason as the chain above: the
+    # containment these two provide IS the behaviour under test in the cascade suite, so a stub would
+    # assert nothing.
+    . (Join-Path $PrivatePath -ChildPath "Write-ContainedErrorLog.ps1")
+    . (Join-Path $PrivatePath -ChildPath "Write-ExecutePipelineLog.ps1")
     . (Join-Path $PrivatePath -ChildPath "Invoke-ExecuteQuery.ps1")
 
     $Script:Tracer = [System.Diagnostics.Trace]
@@ -54,9 +59,11 @@ BeforeAll {
             $QueryResult = $null,
             $ErrorRecord = $null,
             [int]$CompletedSteps = 1,
-            $SaveResult = ([pscustomobject]@{ Id = 100; DisplayName = "TestQuery" })
+            $SaveResult = ([pscustomobject]@{ Id = 100; DisplayName = "TestQuery" }),
+            $Log = @()
         )
         return @{
+            Log            = $Log
             SaveResult     = $SaveResult
             SaveSkipped    = $false
             TempQueryDoId  = $null
@@ -482,5 +489,76 @@ Describe "Complete-ExecuteQueryPipeline does not retry a tab that was torn down"
         $Script:PopupWindowExecuteQuery | Should -BeNullOrEmpty
         $Script:MainForm.Elements.ButtonExecuteQueryText.Text | Should -Be "_Execute"
         $Script:RunTimeData.StopWatch.IsRunning | Should -BeFalse
+    }
+}
+
+Describe "Complete-ExecuteQueryPipeline reports a tenant failure once" {
+    # Found on a live tenant: one HTTP 500 produced FIVE stacked error dialogs and a log entry
+    # containing four nested copies of itself. Write-LogOutput -LogType ERROR ends with Write-Error,
+    # which under this application's $ErrorActionPreference = Stop is terminating - so reporting the
+    # pipeline failure threw before the grid was bound, the function's own catch reported the throw
+    # as a second error, which threw again, and so on out to the dispatcher.
+    #
+    # These tests only mean anything with a Write-LogOutput that throws on ERROR the way the real one
+    # does; the suite's default stub is a no-op and would pass whatever the code did.
+
+    BeforeEach {
+        Initialize-ExecuteQueryTestState
+        $script:ErrorLines = [System.Collections.Generic.List[string]]::new()
+        $script:ReplayedLines = [System.Collections.Generic.List[string]]::new()
+        Mock Write-LogOutput {
+            if ($LogType -eq "ERROR") {
+                $script:ErrorLines.Add([string]$InputObject)
+                Write-Error -Message ([string]$InputObject) -ErrorAction Stop
+            }
+            $script:ReplayedLines.Add([string]$InputObject)
+        }
+    }
+
+    It "writes one ERROR, not a cascade of them" {
+        $Failed = New-PipelineOutcome -ErrorRecord (New-TestErrorRecord "Response status code does not indicate success: 500 (Internal Server Error)") -CompletedSteps 2
+
+        { Complete-ExecuteQueryPipeline -Outcome $Failed -PipelineContext @{ BaseUrl = "https://tenant.omada.cloud"; QueryDoId = 100 } } | Should -Not -Throw
+
+        @($script:ErrorLines).Count | Should -Be 1
+        $script:ErrorLines[0] | Should -Match "500"
+    }
+
+    It "still returns the UI to a usable state after the failure" {
+        # The user-visible half of the same bug. The report threw before Complete-ExecuteQueryResult
+        # ran, so the Execute button stayed disabled and the stopwatch kept running: the window was
+        # left believing a query was still in flight.
+        $Failed = New-PipelineOutcome -ErrorRecord (New-TestErrorRecord "500") -CompletedSteps 2
+
+        Complete-ExecuteQueryPipeline -Outcome $Failed -PipelineContext @{ BaseUrl = "https://tenant.omada.cloud"; QueryDoId = 100 }
+
+        $Script:MainForm.Elements.ButtonExecuteQuery.IsEnabled | Should -BeTrue
+        $Script:RunTimeData.StopWatch.IsRunning | Should -BeFalse
+    }
+
+    It "replays what the worker recorded, so an execute is still traceable in the log" {
+        # Moving the chain into a worker took the URLs, bodies and responses out of the log. They come
+        # back through the outcome's Log, and they have to survive a FAILED run - that is precisely
+        # when someone reads the log.
+        $Failed = New-PipelineOutcome -ErrorRecord (New-TestErrorRecord "500") -CompletedSteps 2 -Log @(
+            @{ Level = "DEBUG"; Text = "QueryUrl: https://tenant.omada.cloud/api/x" }
+            @{ Level = "INFO"; Text = "Retrieve query output, please wait..." }
+        )
+
+        Complete-ExecuteQueryPipeline -Outcome $Failed -PipelineContext @{ BaseUrl = "https://tenant.omada.cloud"; QueryDoId = 100 }
+
+        @($script:ReplayedLines) | Should -Contain "QueryUrl: https://tenant.omada.cloud/api/x"
+        @($script:ReplayedLines) | Should -Contain "Retrieve query output, please wait..."
+    }
+
+    It "replays the worker's log on a successful run too" {
+        $Succeeded = New-PipelineOutcome -QueryResult ([pscustomobject]@{ d = [pscustomobject]@{ Records = 2; Rows = @(1, 2) } }) -Log @(
+            @{ Level = "DEBUG"; Text = "QueryUrl: https://tenant.omada.cloud/api/x" }
+        )
+
+        Complete-ExecuteQueryPipeline -Outcome $Succeeded -PipelineContext @{ BaseUrl = "https://tenant.omada.cloud"; QueryDoId = 100 }
+
+        @($script:ReplayedLines) | Should -Contain "QueryUrl: https://tenant.omada.cloud/api/x"
+        @($script:ErrorLines).Count | Should -Be 0
     }
 }

@@ -92,7 +92,14 @@ $Script:WebViewCompletionPollTimer.Add_Tick({
             }
         }
         catch {
-            $_.Exception.Message | Write-LogOutput -LogType ERROR -ErrorObject $_
+            # Contained, and this is the outermost guarantee that a completion cannot cascade.
+            # Write-LogOutput ends every ERROR with Write-Error, which under this application's
+            # ErrorActionPreference = Stop is terminating - so reporting an error from HERE would
+            # throw out of the Tick handler into the dispatcher's unhandled-exception handler, which
+            # logs another ERROR, which throws again. One tenant failure produced five stacked error
+            # dialogs and a log entry containing four nested copies of itself. There is nothing above
+            # a timer tick to unwind to, so an error reported here is reported and contained.
+            $_.Exception.Message | Write-ContainedErrorLog -ErrorObject $_
         }
     })
 $Script:WebViewCompletionPollTimer.Start()

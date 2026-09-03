@@ -121,7 +121,7 @@ function Invoke-ExecuteQuery {
                     return
                 }
                 elseif ($Script:Task.Status -eq "Faulted") {
-                    "Task failed: {0}" -f $Script:Task.Status | Write-LogOutput -LogType ERROR
+                    "Task failed: {0}" -f $Script:Task.Status | Write-ContainedErrorLog
                 }
                 else {
                     "Task result: {0}" -f $Script:Task.Status | Write-LogOutput -LogType DEBUG
@@ -133,14 +133,14 @@ function Invoke-ExecuteQuery {
                 # object for its whole lifetime and deletes it in its own finally, so this frame
                 # never holds one to leak.
                 Reset-ExecuteQueryUiState
-                $_.Exception.Message | Write-LogOutput -LogType ERROR -ErrorObject $_
+                $_.Exception.Message | Write-ContainedErrorLog -ErrorObject $_
             }
         }
         Invoke-ExecuteScriptWithResultAsync -ScriptToExecute $ScriptToExecute -OnCompletedScriptBlock $OnCompletedScriptBlock
     }
     catch {
         Reset-ExecuteQueryUiState
-        $_.Exception.Message | Write-LogOutput -LogType ERROR -ErrorObject $_
+        $_.Exception.Message | Write-ContainedErrorLog -ErrorObject $_
     }
 }
 
@@ -204,7 +204,7 @@ function Reset-ExecuteQueryUiState {
         }
     }
     catch {
-        $_.Exception.Message | Write-LogOutput -LogType ERROR -ErrorObject $_
+        $_.Exception.Message | Write-ContainedErrorLog -ErrorObject $_
     }
 }
 
@@ -272,7 +272,7 @@ function Invoke-ExecuteQueryOnUiThread {
             # Nothing to re-run with. Reported rather than silently ignored: this would mean the
             # context was lost between dispatch and completion, which is a bug here rather than a
             # problem at the tenant.
-            "Cannot retry the query on the UI thread: the request context is no longer available." | Write-LogOutput -LogType ERROR
+            "Cannot retry the query on the UI thread: the request context is no longer available." | Write-ContainedErrorLog
             Complete-ExecuteQueryResult -QueryResult $null -SaveResult $null -TempQueryDoId $null
             return
         }
@@ -284,7 +284,7 @@ function Invoke-ExecuteQueryOnUiThread {
     }
     catch {
         Reset-ExecuteQueryUiState
-        $_.Exception.Message | Write-LogOutput -LogType ERROR -ErrorObject $_
+        $_.Exception.Message | Write-ContainedErrorLog -ErrorObject $_
     }
 }
 
@@ -326,16 +326,17 @@ function Complete-ExecuteQueryPipeline {
             return
         }
 
-        # The steps the worker actually took, logged here because it could not log them itself. This
-        # is what keeps the log as informative as it was when every request was made inline.
-        foreach ($Private:Step in @($Outcome.Steps)) {
-            "Pipeline step {0}: {1} {2}" -f $Private:Step.Name, $Private:Step.Method, $Private:Step.Uri | Write-LogOutput -LogType DEBUG
-        }
+        # Everything the worker would have written to the log, replayed here at the levels it chose.
+        # A worker cannot log - no $Script: state, no log file, no window - so without this, moving
+        # the chain off the UI thread silently cost this application most of its diagnostic value.
+        # For a troubleshooting tool that is not an acceptable price for responsiveness.
+        #
+        # Redaction happens HERE, not in the worker: ConvertTo-RedactedLogString is a UI-thread
+        # function and stays one, so there is a single place that decides how much of a request or a
+        # response may be written down. The worker records what to log; this decides what is safe.
+        Write-ExecutePipelineLog -Log $Outcome.Log
 
-        if ($Outcome.SaveSkipped) {
-            "No changes detected! Saving not needed." | Write-LogOutput -LogType DEBUG
-        }
-        elseif ($null -ne $Outcome.SaveResult) {
+        if ($null -ne $Outcome.SaveResult -and -not $Outcome.SaveSkipped) {
             "Query saved!" | Write-LogOutput
         }
 
@@ -353,7 +354,7 @@ function Complete-ExecuteQueryPipeline {
                 return
             }
 
-            "The query pipeline failed at step '{0}': {1}" -f $Outcome.FailedStep, $Outcome.ErrorRecord.Exception.Message | Write-LogOutput -LogType ERROR -ErrorObject $Outcome.ErrorRecord
+            "The query pipeline failed at step '{0}': {1}" -f $Outcome.FailedStep, $Outcome.ErrorRecord.Exception.Message | Write-ContainedErrorLog -ErrorObject $Outcome.ErrorRecord
             Complete-ExecuteQueryResult -QueryResult $Outcome.ErrorRecord -SaveResult $Outcome.SaveResult -TempQueryDoId $null
             return
         }
@@ -364,7 +365,7 @@ function Complete-ExecuteQueryPipeline {
     }
     catch {
         Reset-ExecuteQueryUiState
-        $_.Exception.Message | Write-LogOutput -LogType ERROR -ErrorObject $_
+        $_.Exception.Message | Write-ContainedErrorLog -ErrorObject $_
     }
 }
 
@@ -464,6 +465,6 @@ function Complete-ExecuteQueryResult {
         # The temporary object is already gone by here - it is deleted before anything that can throw
         # - so this only has to put the UI back.
         Reset-ExecuteQueryUiState
-        $_.Exception.Message | Write-LogOutput -LogType ERROR -ErrorObject $_
+        $_.Exception.Message | Write-ContainedErrorLog -ErrorObject $_
     }
 }

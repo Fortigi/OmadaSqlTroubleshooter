@@ -79,6 +79,6 @@ function Stop-ExecuteQueryRequest {
         # Whatever went wrong, the tab must not be left in the executing state - that would leave the
         # user with a Cancel button that cancels nothing and no way back to Execute.
         Reset-ExecuteQueryUiState
-        $_.Exception.Message | Write-LogOutput -LogType ERROR -ErrorObject $_
+        $_.Exception.Message | Write-ContainedErrorLog -ErrorObject $_
     }
 }

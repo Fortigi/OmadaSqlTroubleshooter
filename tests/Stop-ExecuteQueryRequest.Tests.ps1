@@ -14,6 +14,7 @@ BeforeAll {
     . (Join-Path $PrivatePath -ChildPath "ConvertTo-RedactedLogString.ps1")
     . (Join-Path $PrivatePath -ChildPath "Set-TextBlockText.ps1")
     . (Join-Path $PrivatePath -ChildPath "Get-ActiveExecuteQueryRequest.ps1")
+    . (Join-Path $PrivatePath -ChildPath "Write-ContainedErrorLog.ps1")
     . (Join-Path $PrivatePath -ChildPath "Stop-ExecuteQueryRequest.ps1")
 
     $Script:Tracer = [System.Diagnostics.Trace]

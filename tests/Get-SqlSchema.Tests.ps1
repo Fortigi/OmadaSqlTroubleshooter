@@ -23,6 +23,7 @@ BeforeAll {
     . (Join-Path $PrivatePath -ChildPath "Build-OmadaRequestParameter.ps1")
     . (Join-Path $PrivatePath -ChildPath "Resolve-OmadaRequestFailure.ps1")
     . (Join-Path $PrivatePath -ChildPath "Invoke-OmadaPSWebRequestWrapper.ps1")
+    . (Join-Path $PrivatePath -ChildPath "Write-ContainedErrorLog.ps1")
     . (Join-Path $PrivatePath -ChildPath "Get-SqlSchema.ps1")
 
     . (Join-Path $PSScriptRoot -ChildPath "mock\OmadaMockRouter.ps1")
