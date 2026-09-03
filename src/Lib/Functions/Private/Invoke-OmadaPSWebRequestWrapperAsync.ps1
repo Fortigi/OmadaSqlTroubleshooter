@@ -100,17 +100,27 @@ function Invoke-OmadaPSWebRequestWrapperAsync {
                 return
             }
 
+            # What the caller will receive. A worker that ran a pipeline returns its own outcome
+            # object, and that object MUST survive the classification below: it carries the step
+            # trace and which step failed, which is the only description of what actually happened.
+            # Replacing it with the bare ErrorRecord - as this used to - left the execute completion
+            # with nothing to report, so a failed query surfaced as the misleading "Query did not
+            # return any results!" and the real error was never logged at all.
+            $Private:Payload = $Private:Outcome.Result
+
             try {
                 if ($null -ne $Private:Outcome.ErrorRecord) {
-                    # Same classification as the inline path. The two tenant-level branches throw,
-                    # which the poll timer catches and logs; the third returns the ErrorRecord, which
-                    # is what callers test with -is [ErrorRecord].
-                    $Pending | Add-Member -NotePropertyName "Outcome" -NotePropertyValue (Resolve-OmadaRequestFailure -ErrorRecord $Private:Outcome.ErrorRecord) -Force
+                    # Same classification as the inline path, for its side effects as much as its
+                    # value: the two tenant-level branches tear the tab down and throw, and the third
+                    # returns the ErrorRecord, which is what callers test with -is [ErrorRecord].
+                    $Private:Classified = Resolve-OmadaRequestFailure -ErrorRecord $Private:Outcome.ErrorRecord
+                    if ($null -eq $Private:Payload) {
+                        $Private:Payload = $Private:Classified
+                    }
                 }
                 else {
                     "Result: {0}" -f (ConvertTo-RedactedLogString -InputObject $Private:Outcome.Result) | Write-LogOutput -LogType VERBOSE
                     $Script:RunTimeData.RestMethodParam.ForceAuthentication = $false
-                    $Pending | Add-Member -NotePropertyName "Outcome" -NotePropertyValue $Private:Outcome.Result -Force
                 }
             }
             finally {
@@ -124,9 +134,10 @@ function Invoke-OmadaPSWebRequestWrapperAsync {
                 #
                 # The throw still propagates afterwards, so the "tenant-level failures throw"
                 # contract is unchanged; the poll timer catches and logs it as before.
-                if ($null -eq $Pending.Outcome) {
-                    $Pending | Add-Member -NotePropertyName "Outcome" -NotePropertyValue $Private:Outcome.ErrorRecord -Force
+                if ($null -eq $Private:Payload) {
+                    $Private:Payload = $Private:Outcome.ErrorRecord
                 }
+                $Pending | Add-Member -NotePropertyName "Outcome" -NotePropertyValue $Private:Payload -Force
                 & $Pending.Context.OnResult $Pending
             }
         }

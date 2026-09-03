@@ -95,11 +95,15 @@ function Invoke-ExecuteQuery {
 
                     "Retrieve query output, please wait..." | Write-LogOutput
 
+                    # The context travels on the pending item as well as into the worker, so a
+                    # completion that finds the worker could not run the chain can re-run it inline.
+                    # On the item rather than in module scope: two tabs can have a query in flight at
+                    # once, and a shared slot would hand one tab's retry the other tab's query.
                     $Private:Pending = Invoke-OmadaPSWebRequestWrapperAsync -Description $Script:ExecuteQueryRequestDescription -PipelineContext $Private:PipelineContext -Context @{
-                        DisplayName = $Private:PipelineContext.DisplayName
+                        PipelineContext = $Private:PipelineContext
                     } -OnResultScriptBlock {
                         param($Pending)
-                        Complete-ExecuteQueryPipeline -Outcome $Pending.Outcome
+                        Complete-ExecuteQueryPipeline -Outcome $Pending.Outcome -PipelineContext $Pending.Context.Caller.PipelineContext
                     }
 
                     if ($null -ne $Private:Pending) {
@@ -204,6 +208,72 @@ function Reset-ExecuteQueryUiState {
     }
 }
 
+function Invoke-ExecuteQueryOnUiThread {
+    <#
+    .SYNOPSIS
+    Re-run the execute chain synchronously after a background worker failed to run it at all, and
+    stop offering background execution for the rest of the session.
+
+    .DESCRIPTION
+    The half of issue #40's authentication policy that was designed but never built. The policy was:
+    interactive authentication happens on the UI thread, and "a 401 returned to the UI thread from a
+    worker is re-driven on the UI thread". Only the gate was implemented -
+    Test-OmadaBackgroundRequestEligible - which assumed a connected tab's session would be
+    recoverable in a worker from OmadaWeb.PS's encrypted cookie cache.
+
+    Live-tenant testing showed the assumption does not hold for every tenant and authentication
+    option: the worker's own OmadaWeb.PS instance could not establish a session, so every background
+    request failed. Because the failure was then reported through the empty-result path, the user saw
+    "Query did not return any results!" on every execute and the real error was never logged.
+
+    So the re-drive is built now, and it does two things:
+
+      - runs the identical chain inline, so the user gets their result. It is the same function the
+        worker runs, with the same context, so the requests and their order are identical - just
+        slower, and blocking, exactly as the application behaved before #40.
+      - disables background execution for the session, so the next query does not pay for another
+        doomed round-trip before falling back again.
+
+    Only ever called when NOTHING reached the tenant, so re-running cannot repeat work the server has
+    already done.
+
+    .PARAMETER PipelineContext
+    The context the failed request was dispatched with, carried on the pending item rather than held
+    in module scope - two tabs can have a query in flight at once, and a single shared slot would
+    hand one tab's retry the other tab's query.
+
+    .PARAMETER Reason
+    Why the worker could not run it, for the single warning Disable-OmadaBackgroundRequest writes.
+    #>
+    [CmdLetBinding()]
+    param(
+        [hashtable]$PipelineContext,
+        [string]$Reason
+    )
+
+    try {
+        Disable-OmadaBackgroundRequest -Reason $Reason
+
+        if ($null -eq $PipelineContext) {
+            # Nothing to re-run with. Reported rather than silently ignored: this would mean the
+            # context was lost between dispatch and completion, which is a bug here rather than a
+            # problem at the tenant.
+            "Cannot retry the query on the UI thread: the request context is no longer available." | Write-LogOutput -LogType ERROR
+            Complete-ExecuteQueryResult -QueryResult $null -SaveResult $null -TempQueryDoId $null
+            return
+        }
+
+        "Retrying the query on the UI thread." | Write-LogOutput -LogType DEBUG
+        $Private:RetryContext = $PipelineContext.Clone()
+        $Private:RetryContext.Parameters = Build-OmadaRequestParameter
+        Complete-ExecuteQueryPipeline -Outcome (Invoke-OmadaExecutePipeline -Context $Private:RetryContext)
+    }
+    catch {
+        Reset-ExecuteQueryUiState
+        $_.Exception.Message | Write-LogOutput -LogType ERROR -ErrorObject $_
+    }
+}
+
 function Complete-ExecuteQueryPipeline {
     <#
     .SYNOPSIS
@@ -221,18 +291,24 @@ function Complete-ExecuteQueryPipeline {
     .PARAMETER Outcome
     The pipeline's outcome hashtable - or an ErrorRecord, when the failure was one of the two
     tenant-level kinds Resolve-OmadaRequestFailure classifies and returns in place of a result.
+
+    .PARAMETER PipelineContext
+    The context the request was dispatched with. Only used to re-run the chain on the UI thread when
+    the worker could not run it at all; $null on the inline path, which has nothing to fall back to.
     #>
     [CmdLetBinding()]
     param(
-        $Outcome
+        $Outcome,
+        [hashtable]$PipelineContext
     )
 
     try {
-        # The classified-failure case: the request never got far enough to produce an outcome, and
-        # Set-SqlConnectionState has already torn the tab down. Complete-ExecuteQueryResult reports
-        # it the same way a failed single request has always been reported.
+        # The worker produced no outcome object at all - it could not run the chain. That is not a
+        # result, and reporting it as one is what made a failed query look like an empty one.
         if ($Outcome -is [System.Management.Automation.ErrorRecord] -or $null -eq $Outcome -or $null -eq $Outcome.Steps) {
-            Complete-ExecuteQueryResult -QueryResult $Outcome -SaveResult $null -TempQueryDoId $null
+            $Private:Reason = if ($Outcome -is [System.Management.Automation.ErrorRecord]) { $Outcome.Exception.Message } else { "the background worker returned no result" }
+            "The query could not be run on a background worker: {0}" -f $Private:Reason | Write-LogOutput -LogType DEBUG
+            Invoke-ExecuteQueryOnUiThread -PipelineContext $PipelineContext -Reason $Private:Reason
             return
         }
 
@@ -250,6 +326,19 @@ function Complete-ExecuteQueryPipeline {
         }
 
         if ($null -ne $Outcome.ErrorRecord) {
+            # Nothing reached the tenant: the very first request failed, so no query ran, nothing was
+            # saved and no temporary object exists. The worker could not do its job - almost always
+            # because its own OmadaWeb.PS instance has no session - and the UI thread can, so run it
+            # there rather than telling the user their query returned nothing.
+            #
+            # Gated on CompletedSteps precisely so this cannot re-run work the tenant already did. If
+            # any step succeeded, the failure is the tenant's answer and is reported as such.
+            if ([int]$Outcome.CompletedSteps -le 0) {
+                "The query could not be run on a background worker: {0}" -f $Outcome.ErrorRecord.Exception.Message | Write-LogOutput -LogType DEBUG
+                Invoke-ExecuteQueryOnUiThread -PipelineContext $PipelineContext -Reason $Outcome.ErrorRecord.Exception.Message
+                return
+            }
+
             "The query pipeline failed at step '{0}': {1}" -f $Outcome.FailedStep, $Outcome.ErrorRecord.Exception.Message | Write-LogOutput -LogType ERROR -ErrorObject $Outcome.ErrorRecord
             Complete-ExecuteQueryResult -QueryResult $Outcome.ErrorRecord -SaveResult $Outcome.SaveResult -TempQueryDoId $null
             return

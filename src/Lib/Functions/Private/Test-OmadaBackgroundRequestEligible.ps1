@@ -44,6 +44,14 @@ function Test-OmadaBackgroundRequestEligible {
         [hashtable]$Parameters
     )
 
+    # Settled by observation, and checked first: once a background request has been seen to fail
+    # without reaching the tenant, this session has proved that its workers cannot serve authenticated
+    # requests. Every later request goes straight down the synchronous path rather than paying for a
+    # doomed round-trip first. See Disable-OmadaBackgroundRequest.
+    if ($Script:OmadaBackgroundRequestsDisabled) {
+        return $false
+    }
+
     if (-not $Script:ConnectionStatus) {
         return $false
     }
