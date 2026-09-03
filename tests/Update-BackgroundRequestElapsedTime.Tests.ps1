@@ -10,6 +10,7 @@
 BeforeAll {
     $ParentPath = Split-Path -Path $PSScriptRoot -Parent
     $PrivatePath = Join-Path $ParentPath -ChildPath "src\Lib\Functions\Private"
+    . (Join-Path $PrivatePath -ChildPath "Format-ElapsedTime.ps1")
     . (Join-Path $PrivatePath -ChildPath "Update-BackgroundRequestElapsedTime.ps1")
 
     function script:New-TimePending {
