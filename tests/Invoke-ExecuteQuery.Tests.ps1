@@ -19,6 +19,7 @@ BeforeAll {
     . (Join-Path $PrivatePath -ChildPath "ConvertTo-RedactedLogString.ps1")
     . (Join-Path $PrivatePath -ChildPath "Get-LogResultShape.ps1")
     . (Join-Path $PrivatePath -ChildPath "Set-TextBlockText.ps1")
+    . (Join-Path $PrivatePath -ChildPath "Format-ElapsedTime.ps1")
     # Reset-ExecuteQueryUiState now also flips the Execute/Cancel button (issue #40 / C1-4). The real
     # chain is dot-sourced rather than stubbed: a missing collaborator would throw inside this
     # function's own catch and silently skip the rest of the teardown, which is exactly the failure

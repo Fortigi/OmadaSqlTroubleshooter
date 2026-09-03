@@ -17,10 +17,16 @@ $Script:WebViewCompletionPollTimer.Add_Tick({
         try {
             # Elapsed-time indicator for background requests (issue #40), driven from THIS timer
             # rather than a second one: this is already the only place that knows about pending work,
-            # and it is already suspended around modal dialogs. Every 20th tick is once a second,
-            # which is as often as a duration in seconds can visibly change.
+            # and it is already suspended around modal dialogs.
+            #
+            # Every 2nd tick, so 100 ms. This used to be every 20th - once a second - on the reasoning
+            # that a duration in seconds cannot visibly change more often than that. The reasoning was
+            # wrong, because the indicator has never been rendered in whole seconds: it shows tenths,
+            # so at 1 Hz it sat frozen and then jumped by ten of them. 100 ms matches the digit that
+            # is actually on screen. The work per tick is one string write per in-flight request, and
+            # there is at most one of those per tab.
             $Script:WebViewCompletionTickCount++
-            if ($Script:WebViewCompletionTickCount % 20 -eq 0) {
+            if ($Script:WebViewCompletionTickCount % 2 -eq 0) {
                 Update-BackgroundRequestElapsedTime -Pending $Script:PendingWebViewCompletions
             }
 

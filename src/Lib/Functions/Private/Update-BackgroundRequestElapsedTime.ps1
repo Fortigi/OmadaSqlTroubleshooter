@@ -50,7 +50,7 @@ function Update-BackgroundRequestElapsedTime {
 
                 # Formatted like the final value Reset-ExecuteQueryUiState writes from the stopwatch,
                 # so the indicator does not visibly change shape when the request completes.
-                $Private:TimeBlock.Text = ([DateTime]::UtcNow - $Item.StartedUtc).ToString()
+                $Private:TimeBlock.Text = Format-ElapsedTime -TimeSpan ([DateTime]::UtcNow - $Item.StartedUtc)
             }
             catch {
                 continue

@@ -207,7 +207,7 @@ function Reset-ExecuteQueryUiState {
             $Script:RunTimeData.StopWatch.Stop()
             if (-not $SkipStatusBarTime) {
                 "Elapsed time: {0}" -f $Script:RunTimeData.StopWatch.Elapsed.ToString() | Write-LogOutput -LogType DEBUG
-                $Script:MainForm.Elements.TextBlockStatusBarQueryTime.Text = $Script:RunTimeData.StopWatch.Elapsed.ToString()
+                $Script:MainForm.Elements.TextBlockStatusBarQueryTime.Text = Format-ElapsedTime -TimeSpan $Script:RunTimeData.StopWatch.Elapsed
             }
         }
     }
