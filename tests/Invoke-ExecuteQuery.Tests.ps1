@@ -80,6 +80,9 @@ BeforeAll {
         $script:QueryListRefreshes = 0
 
         $Script:RunTimeConfig = [PSCustomObject]@{ ApplicationName = "Test" }
+        # The tab is connected unless a test says otherwise: the teardown only re-enables the query
+        # controls for a connected tab.
+        $Script:ConnectionStatus = $true
         # No request outstanding, so the button state resolves to "Execute".
         $Script:PendingWebViewCompletions = [System.Collections.Generic.List[object]]::new()
         $Script:PopupWindowExecuteQuery = New-PopupStub
@@ -123,6 +126,30 @@ Describe "Reset-ExecuteQueryUiState" {
 
         $Script:MainForm.Elements.ButtonSaveQuery.IsEnabled | Should -BeTrue
         $Script:MainForm.Elements.ButtonExecuteQuery.IsEnabled | Should -BeTrue
+    }
+
+    It "does not re-enable the query controls for a tab that is no longer connected" {
+        # A query can outlive the connection it was issued on: the user can disconnect, or a 401 can
+        # tear the tab down through Set-SqlConnectionState, while the request is still in flight -
+        # and the completion runs afterwards regardless. Re-enabling unconditionally would hand a
+        # disconnected tab a live Execute and Save button, which is issue #65's "in-between tab
+        # state" arrived at from a new direction.
+        $Script:ConnectionStatus = $false
+
+        Reset-ExecuteQueryUiState
+
+        $Script:MainForm.Elements.ButtonSaveQuery.IsEnabled | Should -BeFalse
+        $Script:MainForm.Elements.ButtonExecuteQuery.IsEnabled | Should -BeFalse
+    }
+
+    It "still returns the button to Execute on a disconnected tab" {
+        # The label has to be corrected either way: a tab must never be left showing Cancel with
+        # nothing to cancel, whether or not it is still connected.
+        $Script:ConnectionStatus = $false
+
+        Reset-ExecuteQueryUiState
+
+        $Script:MainForm.Elements.ButtonExecuteQueryText.Text | Should -Be "_Execute"
     }
 
     It "puts the Execute/Cancel button back to Execute" {

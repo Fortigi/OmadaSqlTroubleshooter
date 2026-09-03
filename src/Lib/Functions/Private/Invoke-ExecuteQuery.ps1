@@ -196,9 +196,19 @@ function Reset-ExecuteQueryUiState {
     )
 
     try {
-        $Script:MainForm.Elements.ButtonSaveQuery.IsEnabled = $true
-        $Script:MainForm.Elements.ButtonExecuteQuery.IsEnabled = $true
-        # Back to "Execute": by the time any caller reaches this, the request is off the queue -
+        # Only for a tab that is still connected. A query can now outlive the connection it was
+        # issued on - the user can disconnect, or a 401 can tear the tab down through
+        # Set-SqlConnectionState, while the request is in flight - and the completion still runs
+        # afterwards. Re-enabling here unconditionally would hand a disconnected tab a live Execute
+        # and Save button: the "in-between tab state" of issue #65, arrived at from a new direction.
+        # Set-SqlQueryFunctionState remains the single writer of these when disconnected.
+        if ($Script:ConnectionStatus) {
+            $Script:MainForm.Elements.ButtonSaveQuery.IsEnabled = $true
+            $Script:MainForm.Elements.ButtonExecuteQuery.IsEnabled = $true
+        }
+
+        # Back to "Execute" either way: a tab must never be left showing Cancel with nothing to
+        # cancel, connected or not. By the time any caller reaches this the request is off the queue -
         # drained by the poll timer, or removed by Stop-ExecuteQueryRequest before it called here.
         Set-ExecuteQueryButtonState
 
