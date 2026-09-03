@@ -221,6 +221,19 @@ Describe "Complete-ExecuteQueryResult" {
         $Script:RunTimeData.QueryResult | Should -Be $Response
     }
 
+    It "treats a null result as no rows rather than binding a phantom one" {
+        # A null result used to fall through to the binding branch, where @($null.d.Rows) is a
+        # one-element array containing $null: the grid showed a phantom row and the output buttons
+        # were enabled for a result that does not exist. Null became far more reachable once a
+        # request could fail or be abandoned in a worker.
+        Complete-ExecuteQueryResult -QueryResult $null -SaveResult ([pscustomobject]@{ Id = 100; DisplayName = "TestQuery" }) -TempQueryDoId $null
+
+        $Script:MainForm.Elements.DataGridQueryResult.ItemsSource | Should -BeNullOrEmpty
+        $Script:MainForm.Elements.TextBlockStatusBarRows.Text | Should -Be "0 rows"
+        $Script:MainForm.Elements.ButtonShowOutput.IsEnabled | Should -BeFalse
+        $Script:MainForm.Elements.ButtonSaveOutputFile.IsEnabled | Should -BeFalse
+    }
+
     It "clears the grid and says '0 rows' for an empty result" {
         Complete-ExecuteQueryResult -QueryResult (New-ResultResponse -RowCount 0) -SaveResult ([pscustomobject]@{ Id = 100; DisplayName = "TestQuery" }) -TempQueryDoId $null
 

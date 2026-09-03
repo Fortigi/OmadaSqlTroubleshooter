@@ -29,18 +29,36 @@ function Update-BackgroundRequestElapsedTime {
         $Pending
     )
 
-    foreach ($Item in @($Pending)) {
-        if ($null -eq $Item -or $null -eq $Item.StartedUtc -or $Item.IsCancelled) {
-            continue
-        }
+    # Wrapped as a whole, and per item, because this runs from the completion poll timer's Tick: an
+    # exception escaping here would abort that Tick before it drained any completions, so one
+    # malformed queue item could stall every pending result behind a cosmetic status-bar update.
+    # A missing tab or element bag is a skip, never a failure.
+    try {
+        foreach ($Item in @($Pending)) {
+            try {
+                if ($null -eq $Item -or $null -eq $Item.StartedUtc -or $Item.IsCancelled) {
+                    continue
+                }
+                if ($null -eq $Item.TabSession -or $null -eq $Item.TabSession.Elements) {
+                    continue
+                }
 
-        $Private:TimeBlock = $Item.TabSession.Elements.TextBlockStatusBarQueryTime
-        if ($null -eq $Private:TimeBlock) {
-            continue
-        }
+                $Private:TimeBlock = $Item.TabSession.Elements.TextBlockStatusBarQueryTime
+                if ($null -eq $Private:TimeBlock) {
+                    continue
+                }
 
-        # Formatted like the final value Reset-ExecuteQueryUiState writes from the stopwatch, so the
-        # indicator does not visibly change shape at the moment the request completes.
-        $Private:TimeBlock.Text = ([DateTime]::UtcNow - $Item.StartedUtc).ToString()
+                # Formatted like the final value Reset-ExecuteQueryUiState writes from the stopwatch,
+                # so the indicator does not visibly change shape when the request completes.
+                $Private:TimeBlock.Text = ([DateTime]::UtcNow - $Item.StartedUtc).ToString()
+            }
+            catch {
+                continue
+            }
+        }
+    }
+    catch {
+        # Deliberately silent: this is a cosmetic indicator, and it runs twenty times a second.
+        # Logging a failure here would flood the log for something the user cannot act on.
     }
 }

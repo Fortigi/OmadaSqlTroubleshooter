@@ -36,6 +36,11 @@ BeforeAll {
 
     function Set-SqlConnectionState { param([bool]$Status = $true) }
 
+    # The real classification is dot-sourced above, and its Unauthorized branch calls Write-Error
+    # -ErrorAction Stop - which is exactly the throwing behaviour the finally in the completion block
+    # exists to survive. Stubbing it would test nothing.
+    function Set-SqlQueryFunctionState { param([bool]$Status = $true) }
+
     function Get-ActiveTabSession { return $script:StubTabSession }
 
     # Records what was dispatched and, when asked, completes it immediately so the completion block
@@ -214,6 +219,53 @@ Describe "Invoke-OmadaPSWebRequestWrapperAsync dispatches" {
         } | Out-Null
 
         $script:ResultBlockRuns | Should -Be 0
+    }
+
+    It "still runs the result block when the failure classification throws" {
+        # The wedge this guards against: Resolve-OmadaRequestFailure THROWS for the two tenant-level
+        # failures (Unauthorized, OData endpoint missing). The caller's result block is what closes
+        # the "Executing Query..." popup, re-enables the buttons and stops the stopwatch - and the
+        # pending item has already been removed from the queue by the poll timer, so if that block is
+        # skipped nothing will ever run it. The tab would stay stuck mid-execute after an expired
+        # session, which is the worst possible moment for it.
+        Initialize-AsyncTestState
+        $script:DispatchBehaviour = "CompleteInline"
+        $Unauthorized = [System.Management.Automation.ErrorRecord]::new(
+            [System.Net.Http.HttpRequestException]::new("denied", $null, [System.Net.HttpStatusCode]::Unauthorized),
+            "OmadaUnauthorized", [System.Management.Automation.ErrorCategory]::AuthenticationError, $null)
+        $script:WorkerOutcome = @{ Result = $null; ErrorRecord = $Unauthorized; IsCancelled = $false }
+        $script:ResultBlockRuns = 0
+
+        # The throw still propagates - that contract is unchanged - so the call is expected to fail.
+        try {
+            Invoke-OmadaPSWebRequestWrapperAsync -OnResultScriptBlock {
+                param($Pending)
+                $script:ResultBlockRuns++
+            } | Out-Null
+        }
+        catch { }
+
+        $script:ResultBlockRuns | Should -Be 1
+    }
+
+    It "hands the result block the ErrorRecord when the classification threw before setting an outcome" {
+        Initialize-AsyncTestState
+        $script:DispatchBehaviour = "CompleteInline"
+        $Unauthorized = [System.Management.Automation.ErrorRecord]::new(
+            [System.Net.Http.HttpRequestException]::new("denied", $null, [System.Net.HttpStatusCode]::Unauthorized),
+            "OmadaUnauthorized", [System.Management.Automation.ErrorCategory]::AuthenticationError, $null)
+        $script:WorkerOutcome = @{ Result = $null; ErrorRecord = $Unauthorized; IsCancelled = $false }
+        $script:SeenOutcome = "not set"
+
+        try {
+            Invoke-OmadaPSWebRequestWrapperAsync -OnResultScriptBlock {
+                param($Pending)
+                $script:SeenOutcome = $Pending.Outcome
+            } | Out-Null
+        }
+        catch { }
+
+        $script:SeenOutcome | Should -BeOfType [System.Management.Automation.ErrorRecord]
     }
 
     It "clears ForceAuthentication after a successful background request, as the inline path does" {

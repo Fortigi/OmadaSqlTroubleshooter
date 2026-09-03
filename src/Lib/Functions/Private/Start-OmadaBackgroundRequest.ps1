@@ -74,10 +74,20 @@ function Start-OmadaBackgroundRequest {
             return $null
         }
 
+        # Everything the worker will dot-source is checked here, not just the core: a missing file
+        # must mean "fall back to the UI thread", the way every other unavailability does. Checking
+        # only the core would dispatch a worker that then fails on its first line - turning a clean
+        # fallback into a failed request.
         $Private:PrivateFolder = Join-Path $Script:RunTimeConfig.ModuleFolder -ChildPath "Lib\Functions\Private"
-        if (-not (Test-Path -LiteralPath (Join-Path $Private:PrivateFolder -ChildPath "Invoke-OmadaRequestCore.ps1"))) {
-            "Background request core not found under '{0}'; running on the UI thread instead." -f $Private:PrivateFolder | Write-LogOutput -LogType WARNING -SkipDialog
-            return $null
+        $Private:RequiredWorkerFiles = @("Invoke-OmadaRequestCore.ps1")
+        if ($null -ne $PipelineContext) {
+            $Private:RequiredWorkerFiles += @("New-OmadaQueryRequest.ps1", "Invoke-OmadaExecutePipeline.ps1")
+        }
+        foreach ($Private:WorkerFile in $Private:RequiredWorkerFiles) {
+            if (-not (Test-Path -LiteralPath (Join-Path $Private:PrivateFolder -ChildPath $Private:WorkerFile))) {
+                "Background worker file '{0}' not found under '{1}'; running on the UI thread instead." -f $Private:WorkerFile, $Private:PrivateFolder | Write-LogOutput -LogType WARNING -SkipDialog
+                return $null
+            }
         }
 
         # The pipeline builds each step's request itself, but every step still goes out with the

@@ -85,4 +85,17 @@ Describe "Update-BackgroundRequestElapsedTime" {
         { Update-BackgroundRequestElapsedTime -Pending $null } | Should -Not -Throw
         { Update-BackgroundRequestElapsedTime -Pending @() } | Should -Not -Throw
     }
+
+    It "skips a malformed item and still updates the ones around it" {
+        # This runs from the completion poll timer's Tick. An exception escaping here would abort
+        # that Tick BEFORE it drained any completions, so one malformed queue item could stall every
+        # pending query result behind a cosmetic status-bar update.
+        $Good = New-TimePending
+        $NoTab = [pscustomobject]@{ StartedUtc = [DateTime]::UtcNow.AddSeconds(-5); IsCancelled = $false; TabSession = $null }
+        $NoElements = [pscustomobject]@{ StartedUtc = [DateTime]::UtcNow.AddSeconds(-5); IsCancelled = $false; TabSession = [pscustomobject]@{ Id = "x" } }
+
+        { Update-BackgroundRequestElapsedTime -Pending @($NoTab, $NoElements, $Good) } | Should -Not -Throw
+
+        $Good.TabSession.Elements.TextBlockStatusBarQueryTime.Text | Should -Not -Be "-"
+    }
 }

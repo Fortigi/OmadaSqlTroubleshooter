@@ -305,7 +305,12 @@ function Complete-ExecuteQueryResult {
 
         $Script:DataGridQueryResultColumnSelectionAnchor = $null
 
-        if ($null -ne $Script:RunTimeData.QueryResult -and ($Script:RunTimeData.QueryResult.d.Rows | Measure-Object).Count -le 0) {
+        # "-eq $null -or", not "-ne $null -and". A null result used to fall through to the binding
+        # branch, where @($null.d.Rows) is a one-element array containing $null: the grid was bound to
+        # a phantom row and the Show output / Save output buttons were enabled for a result that does
+        # not exist. Null became far more reachable once a request could fail or be abandoned in a
+        # worker, so it is now treated as what it is - no rows.
+        if ($null -eq $Script:RunTimeData.QueryResult -or ($Script:RunTimeData.QueryResult.d.Rows | Measure-Object).Count -le 0) {
             "Query did not return any results!" | Write-LogOutput -LogType WARNING
             $Script:MainForm.Elements.TextBlockStatusBarRows | Set-TextBlockText -Text "0 rows"
             $Script:MainForm.Elements.DataGridQueryResult.ItemsSource = $null

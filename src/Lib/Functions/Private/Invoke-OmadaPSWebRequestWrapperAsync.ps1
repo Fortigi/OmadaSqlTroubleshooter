@@ -100,19 +100,35 @@ function Invoke-OmadaPSWebRequestWrapperAsync {
                 return
             }
 
-            if ($null -ne $Private:Outcome.ErrorRecord) {
-                # Same classification as the inline path. The two tenant-level branches throw, which
-                # the poll timer catches and logs; the third returns the ErrorRecord, which is what
-                # callers test with -is [ErrorRecord].
-                $Pending | Add-Member -NotePropertyName "Outcome" -NotePropertyValue (Resolve-OmadaRequestFailure -ErrorRecord $Private:Outcome.ErrorRecord) -Force
+            try {
+                if ($null -ne $Private:Outcome.ErrorRecord) {
+                    # Same classification as the inline path. The two tenant-level branches throw,
+                    # which the poll timer catches and logs; the third returns the ErrorRecord, which
+                    # is what callers test with -is [ErrorRecord].
+                    $Pending | Add-Member -NotePropertyName "Outcome" -NotePropertyValue (Resolve-OmadaRequestFailure -ErrorRecord $Private:Outcome.ErrorRecord) -Force
+                }
+                else {
+                    "Result: {0}" -f (ConvertTo-RedactedLogString -InputObject $Private:Outcome.Result) | Write-LogOutput -LogType VERBOSE
+                    $Script:RunTimeData.RestMethodParam.ForceAuthentication = $false
+                    $Pending | Add-Member -NotePropertyName "Outcome" -NotePropertyValue $Private:Outcome.Result -Force
+                }
             }
-            else {
-                "Result: {0}" -f (ConvertTo-RedactedLogString -InputObject $Private:Outcome.Result) | Write-LogOutput -LogType VERBOSE
-                $Script:RunTimeData.RestMethodParam.ForceAuthentication = $false
-                $Pending | Add-Member -NotePropertyName "Outcome" -NotePropertyValue $Private:Outcome.Result -Force
+            finally {
+                # In a finally, and this is not defensive tidiness. Resolve-OmadaRequestFailure THROWS
+                # for the two tenant-level failures (Unauthorized, OData endpoint missing). Without
+                # this the caller's result block would be skipped for exactly those cases - and for an
+                # execute that block is what closes the "Executing Query..." popup, re-enables the
+                # buttons and stops the stopwatch. The item has already been removed from the queue by
+                # the poll timer, so nothing else would ever run it: the tab would simply stay stuck
+                # mid-execute after an expired session, which is the worst possible moment for it.
+                #
+                # The throw still propagates afterwards, so the "tenant-level failures throw"
+                # contract is unchanged; the poll timer catches and logs it as before.
+                if ($null -eq $Pending.Outcome) {
+                    $Pending | Add-Member -NotePropertyName "Outcome" -NotePropertyValue $Private:Outcome.ErrorRecord -Force
+                }
+                & $Pending.Context.OnResult $Pending
             }
-
-            & $Pending.Context.OnResult $Pending
         }
     }
     catch {
