@@ -49,13 +49,18 @@ function Invoke-OmadaExecutePipeline {
     )
 
     $Outcome = @{
-        SaveResult    = $null
-        SaveSkipped   = $false
-        TempQueryDoId = $null
-        QueryResult   = $null
-        ErrorRecord   = $null
-        FailedStep    = $null
-        Steps         = [System.Collections.Generic.List[object]]::new()
+        SaveResult     = $null
+        SaveSkipped    = $false
+        TempQueryDoId  = $null
+        QueryResult    = $null
+        ErrorRecord    = $null
+        FailedStep     = $null
+        Steps          = [System.Collections.Generic.List[object]]::new()
+        # How many requests came back WITHOUT an error. The caller uses this to tell "the worker
+        # could not talk to the tenant at all" from "the tenant refused something": only the first is
+        # safe to retry on the UI thread, because only then is it certain that nothing was changed
+        # server-side by the attempt.
+        CompletedSteps = 0
     }
 
     # One local helper rather than a call out to another file: this runs in a worker runspace, and
@@ -72,7 +77,11 @@ function Invoke-OmadaExecutePipeline {
             $Parameters.Body = $Request.Body
         }
         $Outcome.Steps.Add(@{ Name = $StepName; Method = $Request.Method; Uri = $Request.Uri })
-        return Invoke-OmadaRequestCore -Parameters $Parameters
+        $StepOutcome = Invoke-OmadaRequestCore -Parameters $Parameters
+        if ($null -eq $StepOutcome.ErrorRecord) {
+            $Outcome.CompletedSteps = $Outcome.CompletedSteps + 1
+        }
+        return $StepOutcome
     }
 
     try {

@@ -32,6 +32,49 @@ BeforeAll {
 
     function Get-ActiveTabSession { return [pscustomobject]@{ Id = "tab-A" } }
 
+    # --- Collaborators of the UI-thread re-drive ---------------------------------------------------
+    $script:DisableReasons = [System.Collections.Generic.List[string]]::new()
+    function Disable-OmadaBackgroundRequest {
+        param([string]$Reason)
+        $script:DisableReasons.Add([string]$Reason)
+    }
+
+    function Build-OmadaRequestParameter { return @{ SessionKey = "pool" } }
+
+    # Records what the inline retry was asked to run, and answers with whatever the test set up.
+    $script:InlinePipelineRuns = [System.Collections.Generic.List[object]]::new()
+    function Invoke-OmadaExecutePipeline {
+        param([hashtable]$Context)
+        $script:InlinePipelineRuns.Add($Context)
+        return $script:InlinePipelineOutcome
+    }
+
+    function script:New-PipelineOutcome {
+        param(
+            $QueryResult = $null,
+            $ErrorRecord = $null,
+            [int]$CompletedSteps = 1,
+            $SaveResult = ([pscustomobject]@{ Id = 100; DisplayName = "TestQuery" })
+        )
+        return @{
+            SaveResult     = $SaveResult
+            SaveSkipped    = $false
+            TempQueryDoId  = $null
+            QueryResult    = $QueryResult
+            ErrorRecord    = $ErrorRecord
+            FailedStep     = $(if ($null -ne $ErrorRecord) { "GetQueryObject" } else { $null })
+            Steps          = @(@{ Name = "GetQueryObject"; Method = "GET"; Uri = "https://tenant/x" })
+            CompletedSteps = $CompletedSteps
+        }
+    }
+
+    function script:New-TestErrorRecord {
+        param([string]$Message = "no session")
+        return [System.Management.Automation.ErrorRecord]::new(
+            [System.Exception]::new($Message), "TestFailure",
+            [System.Management.Automation.ErrorCategory]::ConnectionError, $null)
+    }
+
     function Write-LogOutput {
         param(
             [Parameter(ValueFromPipeline = $true)]$InputObject,
@@ -78,6 +121,9 @@ BeforeAll {
         $script:RemovedQueryObjects.Clear()
         $script:ConfigWrites.Clear()
         $script:QueryListRefreshes = 0
+        $script:DisableReasons.Clear()
+        $script:InlinePipelineRuns.Clear()
+        $script:InlinePipelineOutcome = New-PipelineOutcome -QueryResult (New-ResultResponse -RowCount 2)
 
         $Script:RunTimeConfig = [PSCustomObject]@{ ApplicationName = "Test" }
         # The tab is connected unless a test says otherwise: the teardown only re-enables the query
@@ -308,5 +354,133 @@ Describe "Complete-ExecuteQueryResult" {
 
         { Complete-ExecuteQueryResult -QueryResult $ErrorRecord -SaveResult ([pscustomobject]@{ Id = 100; DisplayName = "TestQuery" }) -TempQueryDoId $null } | Should -Not -Throw
         $Script:MainForm.Elements.ButtonExecuteQuery.IsEnabled | Should -BeTrue
+    }
+}
+
+Describe "Complete-ExecuteQueryPipeline falls back to the UI thread" {
+    # The bug this suite exists for, found on a live tenant: every background request failed because
+    # the worker's own OmadaWeb.PS could not establish a session, and the failure was reported through
+    # the empty-result path - so every single query said "Query did not return any results!" and the
+    # real error never reached the log at all.
+
+    BeforeEach {
+        Initialize-ExecuteQueryTestState
+        $script:RetryContext = @{ BaseUrl = "https://tenant.omada.cloud"; QueryDoId = 100 }
+    }
+
+    It "re-runs the query on the UI thread when the worker returned nothing" {
+        Complete-ExecuteQueryPipeline -Outcome $null -PipelineContext $script:RetryContext
+
+        $script:InlinePipelineRuns.Count | Should -Be 1
+        # And the user actually gets their result, rather than a warning about an empty one.
+        @($Script:MainForm.Elements.DataGridQueryResult.ItemsSource).Count | Should -Be 2
+    }
+
+    It "re-runs the query on the UI thread when the worker returned only an error" {
+        Complete-ExecuteQueryPipeline -Outcome (New-TestErrorRecord) -PipelineContext $script:RetryContext
+
+        $script:InlinePipelineRuns.Count | Should -Be 1
+        @($Script:MainForm.Elements.DataGridQueryResult.ItemsSource).Count | Should -Be 2
+    }
+
+    It "re-runs the query when the pipeline failed without reaching the tenant" {
+        # CompletedSteps 0: the very first request failed, so no query ran, nothing was saved and no
+        # temporary object exists. Retrying cannot repeat work the server already did.
+        $Failed = New-PipelineOutcome -ErrorRecord (New-TestErrorRecord) -CompletedSteps 0
+
+        Complete-ExecuteQueryPipeline -Outcome $Failed -PipelineContext $script:RetryContext
+
+        $script:InlinePipelineRuns.Count | Should -Be 1
+        @($Script:MainForm.Elements.DataGridQueryResult.ItemsSource).Count | Should -Be 2
+    }
+
+    It "does NOT re-run when a request had already reached the tenant" {
+        # The other side of the gate, and the one that protects the user's data: if any step
+        # succeeded, the failure is the tenant's answer. Re-running could execute the query twice.
+        $Failed = New-PipelineOutcome -ErrorRecord (New-TestErrorRecord "SQL error") -CompletedSteps 2
+
+        Complete-ExecuteQueryPipeline -Outcome $Failed -PipelineContext $script:RetryContext
+
+        $script:InlinePipelineRuns.Count | Should -Be 0
+    }
+
+    It "disables background execution for the session when it falls back" {
+        Complete-ExecuteQueryPipeline -Outcome (New-TestErrorRecord "no session") -PipelineContext $script:RetryContext
+
+        $script:DisableReasons.Count | Should -Be 1
+        $script:DisableReasons[0] | Should -Match "no session"
+    }
+
+    It "does not disable background execution for a genuine tenant failure" {
+        $Failed = New-PipelineOutcome -ErrorRecord (New-TestErrorRecord "SQL error") -CompletedSteps 2
+
+        Complete-ExecuteQueryPipeline -Outcome $Failed -PipelineContext $script:RetryContext
+
+        $script:DisableReasons.Count | Should -Be 0
+    }
+
+    It "retries with a COPY of the context, leaving the caller's untouched" {
+        # The retry adds the prepared transport splat. Mutating the caller's hashtable would leave a
+        # stale Parameters key on a context that may be reused.
+        Complete-ExecuteQueryPipeline -Outcome $null -PipelineContext $script:RetryContext
+
+        $script:RetryContext.ContainsKey("Parameters") | Should -BeFalse
+        $script:InlinePipelineRuns[0].ContainsKey("Parameters") | Should -BeTrue
+    }
+
+    It "reports the failure rather than doing nothing when there is no context to retry with" {
+        Complete-ExecuteQueryPipeline -Outcome $null -PipelineContext $null
+
+        $script:InlinePipelineRuns.Count | Should -Be 0
+        # Still leaves the tab usable: the popup closed and the buttons back.
+        $Script:MainForm.Elements.ButtonExecuteQuery.IsEnabled | Should -BeTrue
+    }
+
+    It "does not retry a second time when the inline run also fails" {
+        # Guards against a fallback loop: the inline outcome goes through the same completion, and
+        # must not send it round again.
+        $script:InlinePipelineOutcome = New-PipelineOutcome -ErrorRecord (New-TestErrorRecord) -CompletedSteps 0
+
+        Complete-ExecuteQueryPipeline -Outcome $null -PipelineContext $script:RetryContext
+
+        $script:InlinePipelineRuns.Count | Should -Be 1
+    }
+}
+
+Describe "Complete-ExecuteQueryPipeline does not retry a tab that was torn down" {
+    # Resolve-OmadaRequestFailure disconnects the tab through Set-SqlConnectionState for the two
+    # tenant-level failures (Unauthorized, OData endpoint missing) and then throws - and the
+    # completion still runs, because the async wrapper invokes it in a finally. Those are the
+    # tenant's answer, not a worker that could not do its job.
+
+    BeforeEach {
+        Initialize-ExecuteQueryTestState
+        $script:RetryContext = @{ BaseUrl = "https://tenant.omada.cloud"; QueryDoId = 100 }
+        $Script:ConnectionStatus = $false
+    }
+
+    It "does not re-run the query when the tab is no longer connected" {
+        Complete-ExecuteQueryPipeline -Outcome (New-TestErrorRecord "Access denied") -PipelineContext $script:RetryContext
+
+        $script:InlinePipelineRuns.Count | Should -Be 0
+    }
+
+    It "does not disable background execution over an expired session" {
+        # The wrong conclusion to draw: a 401 says nothing about whether workers can authenticate,
+        # and turning the feature off for the session because of one would be a permanent penalty
+        # for a transient condition.
+        Complete-ExecuteQueryPipeline -Outcome (New-TestErrorRecord "Access denied") -PipelineContext $script:RetryContext
+
+        $script:DisableReasons.Count | Should -Be 0
+    }
+
+    It "still leaves the tab in a usable state" {
+        Complete-ExecuteQueryPipeline -Outcome (New-TestErrorRecord "Access denied") -PipelineContext $script:RetryContext
+
+        # Disconnected, so the query controls stay disabled - but the popup is closed, the stopwatch
+        # stopped and the button reads Execute rather than Cancel.
+        $Script:PopupWindowExecuteQuery | Should -BeNullOrEmpty
+        $Script:MainForm.Elements.ButtonExecuteQueryText.Text | Should -Be "_Execute"
+        $Script:RunTimeData.StopWatch.IsRunning | Should -BeFalse
     }
 }
