@@ -6,6 +6,13 @@
 # directly rather than only through the E2E suite, which does not run in CI.
 
 BeforeAll {
+    # Complete-ExecuteQueryResult builds a real System.Windows.Controls.ComboBoxItem when a renamed
+    # query has to be re-selected. That type lives in PresentationFramework, which a headless CI pwsh
+    # does not load on its own - without this the call throws inside the function's own catch and the
+    # selection is silently never set, so the test passes locally (where WPF is already loaded) and
+    # fails in CI. Mirrors the Add-Type in Update-QueryList.Tests.ps1, which carries the same note.
+    Add-Type -AssemblyName PresentationFramework
+
     $ParentPath = Split-Path -Path $PSScriptRoot -Parent
     $PrivatePath = Join-Path $ParentPath -ChildPath "src\Lib\Functions\Private"
 
