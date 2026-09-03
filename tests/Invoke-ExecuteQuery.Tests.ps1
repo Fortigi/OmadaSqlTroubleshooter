@@ -193,6 +193,26 @@ Describe "Complete-ExecuteQueryResult" {
         $Script:RunTimeData.StopWatch.IsRunning | Should -BeFalse
     }
 
+    It "selects the renamed query in the dropdown instead of clearing the selection" {
+        # Regression guard. This block used to test a variable that had never been assigned, so its
+        # body was unreachable and the line after it selected $null - executing a renamed query
+        # silently emptied the query dropdown. Find-or-create, then select, as Save-Query does.
+        Complete-ExecuteQueryResult -QueryResult (New-ResultResponse) -SaveResult ([pscustomobject]@{ Id = 100; DisplayName = "RenamedQuery" }) -TempQueryDoId $null
+
+        $Script:MainForm.Elements.ComboBoxSelectQuery.SelectedItem | Should -Not -BeNullOrEmpty
+        $Script:MainForm.Elements.ComboBoxSelectQuery.SelectedItem.Content | Should -Be "TestQuery - 100"
+    }
+
+    It "reuses an existing dropdown entry rather than adding a duplicate" {
+        $Existing = [pscustomobject]@{ Content = "TestQuery - 100" }
+        [void]$Script:MainForm.Elements.ComboBoxSelectQuery.Items.Add($Existing)
+
+        Complete-ExecuteQueryResult -QueryResult (New-ResultResponse) -SaveResult ([pscustomobject]@{ Id = 100; DisplayName = "RenamedQuery" }) -TempQueryDoId $null
+
+        $Script:MainForm.Elements.ComboBoxSelectQuery.Items.Count | Should -Be 1
+        [object]::ReferenceEquals($Script:MainForm.Elements.ComboBoxSelectQuery.SelectedItem, $Existing) | Should -BeTrue
+    }
+
     It "refreshes the query list only when the display name actually changed" {
         Complete-ExecuteQueryResult -QueryResult (New-ResultResponse) -SaveResult ([pscustomobject]@{ Id = 100; DisplayName = "TestQuery" }) -TempQueryDoId $null
         $script:QueryListRefreshes | Should -Be 0

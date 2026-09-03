@@ -67,14 +67,14 @@ function Get-SqlSchemaObject {
             # failure, and abandonment when its tab is closed - and a key left behind on the
             # abandonment path would block that pool and database from ever fetching its schema again
             # for the rest of the session. The queue cannot get out of step with itself.
-            # "-not IsCompleted" matters: an item whose worker has finished but which the poll timer
-            # has not drained yet is NOT in flight. Its result has not reached the cache and never
-            # will until a completion runs, so treating it as in flight would refuse the fetch and
-            # leave the caller with no schema at all.
+            # Any matching item on the queue counts, including one whose worker has already finished
+            # but which the poll timer has not drained yet. Its completion is queued and about to
+            # populate the cache and push the schema to the editor, so the caller's intent is already
+            # being served - dispatching again in that window would be a duplicate request for
+            # exactly the answer that is moments away.
             if (@($Script:PendingWebViewCompletions | Where-Object {
                         $_.Description -eq $Script:SqlSchemaRequestDescription -and
-                        $_.Context.Caller.SchemaCacheKey -eq $SchemaCacheKey -and
-                        -not $_.Task.IsCompleted
+                        $_.Context.Caller.SchemaCacheKey -eq $SchemaCacheKey
                     }).Count -gt 0) {
                 "SQL schema for '{0}' is already being retrieved; not requesting it twice." -f $SchemaCacheKey | Write-LogOutput -LogType DEBUG
                 return

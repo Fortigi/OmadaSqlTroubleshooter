@@ -273,14 +273,23 @@ function Complete-ExecuteQueryResult {
                 "New display name, Current: {0}, New: {1}" -f $Script:RunTimeData.CurrentSqlQuery.DisplayName, $SaveResult.DisplayName | Write-LogOutput -LogType DEBUG
                 "Force update query list" | Write-LogOutput -LogType DEBUG
                 Update-QueryList -ForceRefresh
-                if ($null -ne $ComboBoxSelectQueryItem) {
-                    $ComboBoxSelectQueryItem = $Script:MainForm.Elements.ComboBoxSelectQuery.Items | Where-Object { $_.Content -like "*$($Script:AppConfig.CurrentSqlQuery.DoId)" }
 
-                    $ComboBoxSelectQueryItem = New-Object System.Windows.Controls.ComboBoxItem
-                    $ComboBoxSelectQueryItem.Content = $Script:AppConfig.CurrentSqlQuery.FullName
-                    $Script:MainForm.Elements.ComboBoxSelectQuery.Items.Add($ComboBoxSelectQueryItem) | Out-Null
+                # Find-or-create, then select - the pattern Save-Query and Complete-TabMaterialization
+                # already use. This block used to test "$null -ne $ComboBoxSelectQueryItem" against a
+                # variable that had never been assigned, so the body was unreachable and the line
+                # after it selected $null: executing a renamed query silently CLEARED the query
+                # dropdown instead of re-selecting the renamed entry.
+                $Private:ComboBoxSelectQueryItem = $Script:MainForm.Elements.ComboBoxSelectQuery.Items |
+                    Where-Object { $_.Content -like "*$($Script:AppConfig.CurrentSqlQuery.DoId)" } |
+                    Select-Object -First 1
+
+                if ($null -eq $Private:ComboBoxSelectQueryItem) {
+                    $Private:ComboBoxSelectQueryItem = New-Object System.Windows.Controls.ComboBoxItem
+                    $Private:ComboBoxSelectQueryItem.Content = $Script:AppConfig.CurrentSqlQuery.FullName
+                    $Script:MainForm.Elements.ComboBoxSelectQuery.Items.Add($Private:ComboBoxSelectQueryItem) | Out-Null
                 }
-                $Script:MainForm.Elements.ComboBoxSelectQuery.SelectedItem = $ComboBoxSelectQueryItem
+
+                $Script:MainForm.Elements.ComboBoxSelectQuery.SelectedItem = $Private:ComboBoxSelectQueryItem
             }
         }
 

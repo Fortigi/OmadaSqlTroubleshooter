@@ -6,7 +6,11 @@ E2ESuite -Name "SchemaCache" -Body {
     E2ECase -Name "the SQL schema is fetched once per pool + data connection and reused from cache" -Body {
         Reset-E2ETabsToOne
         Set-E2EConnectionFields
-        Invoke-E2EConnect
+        # Waited for, so the connect's own schema request has drained before the cache is emptied
+        # below. Left outstanding it would suppress BOTH calls, since a request for that key really
+        # would already be in flight - and the case would pass for the wrong reason, measuring the
+        # in-flight guard instead of the cache.
+        Invoke-E2EConnectAndWait
 
         # Provide the schema window objects Get-SqlSchemaObject writes into (it is normally driven by
         # the schema window). Created on the UI/dispatcher thread so WPF is happy.

@@ -66,6 +66,11 @@ $Script:WebViewCompletionPollTimer.Add_Tick({
                 if ($true -eq $Pending.IsBackgroundRequest -and $null -ne $Pending.TabSession -and
                     -not ($Script:Tabs | Where-Object { $_.Id -eq $Pending.TabSession.Id })) {
                     "Dropping a completion for a tab that no longer exists." | Write-LogOutput -LogType DEBUG
+                    # Disposed here because the completion block - which is what normally calls
+                    # Complete-OmadaBackgroundRequest, and disposing is what that does in its finally -
+                    # is precisely what this branch skips. Without it the worker's runspace is never
+                    # released back to the pool.
+                    try { $Pending.Shell.Dispose() } catch { }
                     continue
                 }
 
