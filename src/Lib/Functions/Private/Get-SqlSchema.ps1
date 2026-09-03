@@ -151,7 +151,7 @@ function Get-SqlSchemaObject {
         }
     }
     catch {
-        $_.Exception.Message | Write-LogOutput -LogType ERROR -ErrorObject $_
+        $_.Exception.Message | Write-ContainedErrorLog -ErrorObject $_
     }
 }
 
@@ -318,6 +318,6 @@ function Complete-SqlSchemaRetrieval {
             Request-SqlSyntaxValidation -TabSession (Get-ActiveTabSession)
     }
     catch {
-        $_.Exception.Message | Write-LogOutput -LogType ERROR -ErrorObject $_
+        $_.Exception.Message | Write-ContainedErrorLog -ErrorObject $_
     }
 }

@@ -141,6 +141,37 @@ Describe "Invoke-OmadaExecutePipeline - the ordinary run" {
 
         @($Outcome.Steps | ForEach-Object { $_.Name }) | Should -Be @("GetQueryObject", "SaveQuery", "ExecuteQuery")
     }
+
+    It "records the lines the UI thread has to write on its behalf" {
+        # Steps say WHAT ran; Log carries what a person reading the log needs to see - the URL, the
+        # body, the parameter set, the response. Before this, moving the chain into a worker silently
+        # emptied the log of everything an execute used to record.
+        $Outcome = Invoke-OmadaExecutePipeline -Context (New-PipelineContext -QueryText "SELECT 2")
+
+        @($Outcome.Log).Count | Should -BeGreaterThan 0
+        @($Outcome.Log | Where-Object { $_.Text -match "Retrieve query output" }).Count | Should -Be 1
+        @($Outcome.Log | Where-Object { $_.Text -match "Save query" }).Count | Should -Be 1
+        @($Outcome.Log | Where-Object { $_.Text -match "QueryUrl" }).Count | Should -BeGreaterThan 0
+    }
+
+    It "marks the request body as shape-only, so a query's content is never written verbatim" {
+        # Redaction happens on the UI thread, but the DECISION to log a body as a shape is made here.
+        # Getting this wrong would put user data in the log file.
+        $Outcome = Invoke-OmadaExecutePipeline -Context (New-PipelineContext)
+
+        $Private:BodyEntries = @($Outcome.Log | Where-Object { $_.Format -match "Body" })
+        @($Private:BodyEntries).Count | Should -BeGreaterThan 0
+        @($Private:BodyEntries | Where-Object { -not $_.ShapeOnly }).Count | Should -Be 0
+    }
+
+    It "carries a log out of a failed run as well" {
+        # Precisely when someone reads the log.
+        $script:Failures["execute"] = "500 (Internal Server Error)"
+        $Outcome = Invoke-OmadaExecutePipeline -Context (New-PipelineContext)
+
+        $Outcome.ErrorRecord | Should -Not -BeNullOrEmpty
+        @($Outcome.Log | Where-Object { $_.Text -match "QueryUrl" }).Count | Should -BeGreaterThan 0
+    }
 }
 
 Describe "Invoke-OmadaExecutePipeline - execute selection" {

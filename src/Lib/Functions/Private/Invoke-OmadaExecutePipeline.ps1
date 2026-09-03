@@ -40,7 +40,9 @@ function Invoke-OmadaExecutePipeline {
       QueryResult    the execute response
       ErrorRecord    the first failure, or $null
       FailedStep     which step failed, or $null
-      Steps          an ordered trace of @{ Name; Method; Uri } for the UI to log
+      CompletedSteps how many requests came back without an error
+      Steps          an ordered trace of @{ Name; Method; Uri }
+      Log            an ordered list of log entries for the UI thread to replay - see below
     #>
     [CmdletBinding()]
     param(
@@ -61,6 +63,24 @@ function Invoke-OmadaExecutePipeline {
         # safe to retry on the UI thread, because only then is it certain that nothing was changed
         # server-side by the attempt.
         CompletedSteps = 0
+        # What the worker WOULD have logged, had it been able to. Replayed verbatim on the UI thread
+        # by Complete-ExecuteQueryPipeline, at these levels, so the log of a background execute reads
+        # the same as it did when every request was made inline. Without this, moving the chain into a
+        # worker silently cost this application most of its diagnostic value - which for a
+        # troubleshooting tool is not an acceptable trade for responsiveness.
+        Log            = [System.Collections.Generic.List[object]]::new()
+    }
+
+    # Entries carry either finished text, or an object plus a format string. The object form exists
+    # because redaction (ConvertTo-RedactedLogString) is a UI-thread function and must stay one: the
+    # worker records WHAT to log, the UI thread decides how much of it may be written down.
+    $Log = {
+        param($Level, $Text)
+        $Outcome.Log.Add(@{ Level = $Level; Text = $Text })
+    }
+    $LogObject = {
+        param($Level, $Format, $Object, $ShapeOnly)
+        $Outcome.Log.Add(@{ Level = $Level; Format = $Format; Redact = $Object; ShapeOnly = [bool]$ShapeOnly })
     }
 
     # One local helper rather than a call out to another file: this runs in a worker runspace, and
@@ -76,10 +96,27 @@ function Invoke-OmadaExecutePipeline {
         else {
             $Parameters.Body = $Request.Body
         }
+
         $Outcome.Steps.Add(@{ Name = $StepName; Method = $Request.Method; Uri = $Request.Uri })
+
+        # The same three lines the inline path wrote before every request, in the same order and at
+        # the same levels.
+        & $Log "DEBUG" ("QueryUrl: {0}" -f $Request.Uri)
+        if ($null -ne $Request.Body) {
+            & $LogObject "VERBOSE" "Body: {0}" $Request.Body $true
+        }
+        & $LogObject "VERBOSE" "Parameters: {0}" $Parameters $false
+
         $StepOutcome = Invoke-OmadaRequestCore -Parameters $Parameters
+
         if ($null -eq $StepOutcome.ErrorRecord) {
             $Outcome.CompletedSteps = $Outcome.CompletedSteps + 1
+            & $LogObject "VERBOSE" "Result: {0}" $StepOutcome.Result $false
+        }
+        else {
+            # DEBUG, not ERROR: the pipeline reports its failure through the outcome, and the caller
+            # decides how loudly to say so. An ERROR written from here would be written twice.
+            & $Log "DEBUG" ("Step '{0}' failed: {1}" -f $StepName, $StepOutcome.ErrorRecord.Exception.Message)
         }
         return $StepOutcome
     }
@@ -90,6 +127,7 @@ function Invoke-OmadaExecutePipeline {
         # Save-Query has always compared the editor text against C_QUERY as well as against what this
         # session last saved.
         if (-not $Context.SkipSave) {
+            & $Log "INFO" ("Retrieve query {0}" -f $Context.QueryDoId)
             $Private:Fetch = & $Invoke "GetQueryObject" (@{
                     Method = "GET"
                     Uri    = "{0}/odata/dataobjects/C_P_SQLTROUBLESHOOTING({1})" -f $Context.BaseUrl, $Context.QueryDoId
@@ -108,10 +146,12 @@ function Invoke-OmadaExecutePipeline {
             if ($null -eq $Private:SaveRequest) {
                 # "No changes detected! Saving not needed." - the caller still needs the fetched
                 # object, because it carries the display name the completion reads.
+                & $Log "DEBUG" "No changes detected! Saving not needed."
                 $Outcome.SaveSkipped = $true
                 $Outcome.SaveResult = $Private:Fetch.Result
             }
             else {
+                & $Log "INFO" "Save query"
                 $Private:Save = & $Invoke "SaveQuery" $Private:SaveRequest
                 if ($null -ne $Private:Save.ErrorRecord) {
                     $Outcome.ErrorRecord = $Private:Save.ErrorRecord
@@ -124,6 +164,7 @@ function Invoke-OmadaExecutePipeline {
 
         # --- 2. The temporary object, for an execute-selection run ---------------------------------
         if (![string]::IsNullOrWhiteSpace($Context.SelectionText)) {
+            & $Log "DEBUG" "Execute selection mode: creating temporary query object"
             $Private:ReuseDoId = $null
 
             # A probe failure is not fatal, exactly as it is not on the UI thread: the existing
@@ -177,6 +218,7 @@ function Invoke-OmadaExecutePipeline {
         # --- 3. The query itself -------------------------------------------------------------------
         $Private:ExecuteContext = $Context.Clone()
         $Private:ExecuteContext.TargetQueryDoId = if ($null -ne $Outcome.TempQueryDoId) { $Outcome.TempQueryDoId } else { $Context.QueryDoId }
+        & $Log "INFO" "Retrieve query output, please wait..."
         $Private:Execute = & $Invoke "ExecuteQuery" (New-OmadaQueryRequest -Kind "ExecuteQuery" -Context $Private:ExecuteContext)
 
         if ($null -ne $Private:Execute.ErrorRecord) {
