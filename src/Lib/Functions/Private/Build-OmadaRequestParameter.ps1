@@ -25,6 +25,30 @@ function Build-OmadaRequestParameter {
 
     $Private:Parameters.UseWebView2 = $Private:Parameters.AuthenticationType -eq "Browser" ? $($Script:RunTimeConfig.UseWebView2Auth) : $false
 
+    # ForceAuthentication is passed ONLY when it is actually true, and this is not cosmetic.
+    #
+    # OmadaWeb.PS decides whether to load its encrypted cookie cache with
+    # "$BoundParams.Keys -notcontains 'ForceAuthentication'" - it tests whether the parameter was
+    # BOUND, not what it was set to. This application has always splatted ForceAuthentication = $false
+    # on every request, so that test was always false and the cookie cache was never read by anyone,
+    # ever. On the UI thread that is invisible: the module's in-memory session already holds the
+    # cookie after the first authentication.
+    #
+    # It stopped being invisible when requests moved to a worker runspace (issue #40). A worker has
+    # its own OmadaWeb.PS instance with an empty session table, so with the cache unreadable it had no
+    # choice but to authenticate - and an interactive WebView2 login in an MTA worker fails with
+    # "Couldn't find a compatible Webview2 Runtime installation to host WebViews". That was every
+    # background request on a live tenant.
+    #
+    # Removing the key restores the behaviour the cache was written for: a fresh runspace picks up the
+    # session the UI thread established. A genuinely stale cookie still fails safely - Test-OmadaConnection
+    # retries with ForceAuthentication = $true, which binds the parameter and forces a real login.
+    if ($true -ne $Private:Parameters.ForceAuthentication) {
+        if ($Private:Parameters.ContainsKey("ForceAuthentication")) {
+            $Private:Parameters.Remove("ForceAuthentication")
+        }
+    }
+
     if ($null -eq $Private:Parameters.Body) {
         if ($Private:Parameters.ContainsKey("Body")) {
             $Private:Parameters.Remove("Body")

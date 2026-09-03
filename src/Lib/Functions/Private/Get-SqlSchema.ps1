@@ -274,20 +274,37 @@ function Complete-SqlSchemaRetrieval {
 
         "Schema for Monaco editor: {0}" -f $SchemaObjectsJson | Write-LogOutput -LogType VERBOSE
         $OnCompletedScriptBlock = {
+            param($Pending)
             try {
-                # -ne, not "!... -eq". The original read !$Script:Task.Status -eq "RanToCompletion",
-                # where ! binds to the property first: a non-empty status string becomes $false, and
-                # $false -eq "RanToCompletion" is always $false - so the failure branch never ran and
-                # every editor push, successful or not, was logged as a success.
-                if ($Script:Task.Status -ne "RanToCompletion") {
-                    "Monaco Editor Task failed: {0}" -f $Script:Task.Status | Write-LogOutput -LogType ERROR -ErrorObject $_
+                # THIS push's task, taken from the queue item - not $Script:Task.
+                #
+                # $Script:Task is the ACTIVE tab's pending editor task, which by the time this runs is
+                # very often a different, still-running one: Set-ActiveTabContext swaps it per tab,
+                # and a schema push during start-up races the editor loads of every other restored
+                # tab. Reading it reported the wrong task's status, and reported it as a failure
+                # ("WaitingForActivation" is a perfectly normal transient state for a task that has
+                # not finished). At ERROR that also means a modal dialog per occurrence, which is the
+                # cascade of pop-ups seen when reconnecting several tabs at start-up.
+                #
+                # The poll timer only invokes this once $Pending.Task.IsCompleted, so the item's own
+                # task is by definition finished and its status is the real answer.
+                $Private:Task = $Pending.Task
+                if ($null -eq $Private:Task) {
+                    return
+                }
+
+                if ($Private:Task.Status -ne "RanToCompletion") {
+                    # WARNING -SkipDialog, never ERROR: failing to push IntelliSense metadata into
+                    # the editor costs the user completion hints, not their work, and it must not
+                    # interrupt them with a dialog - least of all several at once during start-up.
+                    "Monaco editor schema push did not complete: {0}" -f $Private:Task.Status | Write-LogOutput -LogType WARNING -SkipDialog
                 }
                 else {
                     "Monaco Editor Task completed successfully." | Write-LogOutput -LogType DEBUG
                 }
             }
             catch {
-                $Script:Task.Exception.Message | Write-LogOutput -LogType ERROR -ErrorObject $_
+                $_.Exception.Message | Write-LogOutput -LogType WARNING -SkipDialog
             }
         }
 

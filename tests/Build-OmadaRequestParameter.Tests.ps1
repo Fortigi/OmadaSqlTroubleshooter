@@ -73,6 +73,51 @@ Describe "Build-OmadaRequestParameter" {
         [object]::ReferenceEquals((Build-OmadaRequestParameter), $Script:RunTimeData.RestMethodParam) | Should -BeTrue
     }
 
+    Context "ForceAuthentication is passed only when it is true" {
+        # OmadaWeb.PS decides whether to load its encrypted cookie cache with
+        # "$BoundParams.Keys -notcontains 'ForceAuthentication'" - it tests whether the parameter was
+        # BOUND, not its value. Splatting $false on every request therefore meant the cache was never
+        # read by anyone, ever. Invisible on the UI thread, where the in-memory session already holds
+        # the cookie - and fatal in a worker runspace, which has no session and so was forced into an
+        # interactive WebView2 login that cannot work there.
+
+        It "removes the key when it is false" {
+            Initialize-PreparationState
+            $Script:RunTimeData.RestMethodParam.ForceAuthentication = $false
+
+            (Build-OmadaRequestParameter).ContainsKey("ForceAuthentication") | Should -BeFalse
+        }
+
+        It "removes the key when it is absent or null" {
+            Initialize-PreparationState
+            $Script:RunTimeData.RestMethodParam.ForceAuthentication = $null
+
+            (Build-OmadaRequestParameter).ContainsKey("ForceAuthentication") | Should -BeFalse
+        }
+
+        It "keeps the key when it is true, so a forced login still forces one" {
+            # Test-OmadaConnection sets this on retry precisely to bypass the cache. That has to keep
+            # working, or a stale cookie could never be replaced.
+            Initialize-PreparationState
+            $Script:RunTimeData.RestMethodParam.ForceAuthentication = $true
+
+            $Prepared = Build-OmadaRequestParameter
+            $Prepared.ContainsKey("ForceAuthentication") | Should -BeTrue
+            $Prepared.ForceAuthentication | Should -BeTrue
+        }
+
+        It "is idempotent across the app's set-false-after-success cycle" {
+            # The wrapper writes ForceAuthentication = $false back onto the live hashtable after every
+            # successful request, so preparation must be able to strip it again next time.
+            Initialize-PreparationState
+            $Script:RunTimeData.RestMethodParam.ForceAuthentication = $true
+            (Build-OmadaRequestParameter).ContainsKey("ForceAuthentication") | Should -BeTrue
+
+            $Script:RunTimeData.RestMethodParam.ForceAuthentication = $false
+            (Build-OmadaRequestParameter).ContainsKey("ForceAuthentication") | Should -BeFalse
+        }
+    }
+
     Context "SkipBodyRedaction capability check" {
         It "does not add the key when the installed OmadaWeb.PS does not declare it" {
             # Splatting a parameter a cmdlet does not have is a terminating error, so the key must
