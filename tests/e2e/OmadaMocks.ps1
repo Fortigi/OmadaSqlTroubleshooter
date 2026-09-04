@@ -208,15 +208,45 @@ function script:Open-ChoiceForm {
 }
 
 $script:E2EPopupMessages = [System.Collections.Generic.List[string]]::new()
+# Every "Executing Query..." popup the mock has handed out, so a scenario can assert that none was
+# left open - not merely that the tab's slot was cleared.
+$script:E2EExecutePopups = [System.Collections.Generic.List[object]]::new()
 
 function script:Show-PopupWindow {
     param(
         $Message
     )
     # Record the message so scenarios can assert which popups were shown (e.g. the first-open
-    # "Opening tab..." popup), but return $null so nothing enters a nested WPF message pump.
+    # "Opening tab..." popup).
     $script:E2EPopupMessages.Add([string]$Message)
-    return $null
+
+    # $null for every popup except the executing-query one.
+    #
+    # Returning $null keeps a real WPF window out of the run, which is the point - nothing here may
+    # enter a nested message pump. But it also made every assertion that a popup had been CLOSED
+    # vacuous: the slot was $null whether or not the code under test closed anything.
+    #
+    # Only the execute popup gets a stand-in, because only it is under test here (issue #40: it must
+    # belong to its own tab and must not be orphaned by a second execute). The other callers -
+    # opening a tab, connecting, refreshing queries - branch on the returned value in ways this suite
+    # already depends on, and handing them an object changes scenarios that have nothing to do with
+    # this. Narrow on purpose.
+    if ([string]$Message -ne "Executing Query...") {
+        return $null
+    }
+
+    # An ordinary PSCustomObject with three script methods: it pumps nothing, and "the popup was
+    # closed" becomes a claim the suite can actually falsify.
+    $Popup = [pscustomobject]@{ Message = [string]$Message; Visible = $false; Closed = $false }
+    $Popup | Add-Member -MemberType ScriptMethod -Name Show -Value { $this.Visible = $true } -Force
+    $Popup | Add-Member -MemberType ScriptMethod -Name Hide -Value { $this.Visible = $false } -Force
+    $Popup | Add-Member -MemberType ScriptMethod -Name Close -Value { $this.Closed = $true; $this.Visible = $false } -Force
+
+    # Every execute popup ever handed out is remembered, because clearing the tab's slot is NOT the
+    # same as closing the window - and the bug being guarded against is precisely a window nobody
+    # closed. Checking only the slot passes a build in which Close() is never called at all.
+    $script:E2EExecutePopups.Add($Popup)
+    return $Popup
 }
 
 # Suppress ALL modal log dialogs. The real Write-LogOutput pops a blocking WinForms/WPF MessageBox for

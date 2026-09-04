@@ -40,7 +40,11 @@ function Get-OmadaHttpStatusCode {
     }
 
     try {
-        $Private:Match = [regex]::Match([string]$ErrorRecord.Exception.Message, "status code does not indicate success:\s*(\d{3})")
+        # Case-insensitive: the wording comes from HttpClient and travels through however many layers
+        # of exception wrapping before it gets here, so pinning the casing would be betting the
+        # classification - and with it whether one tenant hiccup disables background execution - on
+        # a detail of someone else's message formatting.
+        $Private:Match = [regex]::Match([string]$ErrorRecord.Exception.Message, "status code does not indicate success:\s*(\d{3})", [System.Text.RegularExpressions.RegexOptions]::IgnoreCase)
         if ($Private:Match.Success) {
             return [int]$Private:Match.Groups[1].Value
         }

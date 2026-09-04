@@ -103,6 +103,17 @@ Describe "Get-OmadaHttpStatusCode" {
         Get-OmadaHttpStatusCode -ErrorRecord $Private:Record | Should -Be 503
     }
 
+    It "does not depend on the casing of someone else's message" {
+        # The wording comes from HttpClient and is wrapped by however many layers before it reaches
+        # here. Pinning the casing would bet the whole classification - and with it whether one tenant
+        # hiccup disables background execution - on a formatting detail.
+        $Private:Record = [System.Management.Automation.ErrorRecord]::new(
+            [System.Exception]::new("Response Status Code Does Not Indicate Success: 502 (Bad Gateway)."), "x",
+            [System.Management.Automation.ErrorCategory]::ConnectionError, $null)
+
+        Get-OmadaHttpStatusCode -ErrorRecord $Private:Record | Should -Be 502
+    }
+
     It "returns null when the failure is not an HTTP response" {
         $Private:Record = [System.Management.Automation.ErrorRecord]::new(
             [System.Exception]::new("Couldn't find a compatible Webview2 Runtime"), "x",
