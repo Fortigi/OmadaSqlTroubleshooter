@@ -91,6 +91,10 @@ function New-TabSession {
             TabItem          = $null
             ConnectionStatus = $false
             PendingTask      = $null
+            # The "Executing Query..." window, per tab. Module scope is what it used to be, and that
+            # made one tab's popup appear over every other tab and leaked a window that nothing could
+            # close once a second tab started a query. See Show-ExecuteQueryPopup.
+            ExecutePopup     = $null
             CurrentUrl       = $null
             AppConfig        = $(if ($null -ne $RestoreFrom) { $RestoreFrom } else { $DefaultTabConfig })
             RunTimeData      = [PSCustomObject]@{

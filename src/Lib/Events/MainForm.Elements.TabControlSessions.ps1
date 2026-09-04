@@ -59,6 +59,13 @@
 
                 Set-ActiveTabContext -TabSession $TabSession
 
+                # "Executing Query..." belongs to the tab that started the query, so it follows the
+                # tab on screen: shown when that tab is selected, hidden otherwise. Done here rather
+                # than in Set-ActiveTabContext because this is the only place the VISIBLE tab changes -
+                # async completions repoint context without touching SelectedItem, and driving
+                # visibility from those would flicker the popup for tabs the user is not looking at.
+                Sync-ExecuteQueryPopupVisibility
+
                 if (![string]::IsNullOrWhiteSpace($OutgoingTabId) -and $OutgoingTabId -ne $TabSession.Id) {
                     $Script:PreviousActiveTabId = $OutgoingTabId
                 }

@@ -32,11 +32,18 @@ BeforeAll {
     # assert nothing.
     . (Join-Path $PrivatePath -ChildPath "Write-ContainedErrorLog.ps1")
     . (Join-Path $PrivatePath -ChildPath "Write-ExecutePipelineLog.ps1")
+    # The real classifier, not a stub: deciding what a failure means IS the behaviour under test in
+    # the fallback suite below, and a stub would assert nothing.
+    . (Join-Path $PrivatePath -ChildPath "Get-OmadaHttpStatusCode.ps1")
+    . (Join-Path $PrivatePath -ChildPath "Resolve-ExecuteFallbackAction.ps1")
+    . (Join-Path $PrivatePath -ChildPath "Show-ExecuteQueryPopup.ps1")
     . (Join-Path $PrivatePath -ChildPath "Invoke-ExecuteQuery.ps1")
 
     $Script:Tracer = [System.Diagnostics.Trace]
 
-    function Get-ActiveTabSession { return [pscustomobject]@{ Id = "tab-A" } }
+    # The popup lives on the tab session now, so the teardown reaches it through here.
+    function Get-ActiveTabSession { return $Script:TestTabSession }
+    function Get-TabControlSessions { return [pscustomobject]@{ SelectedItem = $Script:TestTabSession.TabItem } }
 
     # --- Collaborators of the UI-thread re-drive ---------------------------------------------------
     $script:DisableReasons = [System.Collections.Generic.List[string]]::new()
@@ -139,7 +146,8 @@ BeforeAll {
         $Script:ConnectionStatus = $true
         # No request outstanding, so the button state resolves to "Execute".
         $Script:PendingWebViewCompletions = [System.Collections.Generic.List[object]]::new()
-        $Script:PopupWindowExecuteQuery = New-PopupStub
+        $Script:TestTabSession = [pscustomobject]@{ Id = "tab-A"; DisplayName = "Tab A"; TabItem = "item-A"; ExecutePopup = (New-PopupStub) }
+        $Script:Tabs = @($Script:TestTabSession)
         $Script:AppConfig = [PSCustomObject]@{
             CurrentSqlQuery = [PSCustomObject]@{ DoId = 100; FullName = "TestQuery - 100" }
         }
@@ -216,14 +224,14 @@ Describe "Reset-ExecuteQueryUiState" {
     }
 
     It "closes the 'Executing Query...' popup and forgets it" {
-        $Popup = $Script:PopupWindowExecuteQuery
+        $Popup = $Script:TestTabSession.ExecutePopup
 
         Reset-ExecuteQueryUiState
 
         $Popup.Closed | Should -BeTrue
         # Nulled as well as closed: a stale reference would be Close()d a second time by the next
         # execute's teardown.
-        $Script:PopupWindowExecuteQuery | Should -BeNullOrEmpty
+        $Script:TestTabSession.ExecutePopup | Should -BeNullOrEmpty
     }
 
     It "stops the stopwatch and writes its value to the status bar" {
@@ -248,7 +256,7 @@ Describe "Reset-ExecuteQueryUiState" {
     }
 
     It "does not throw when there is no popup and no stopwatch" {
-        $Script:PopupWindowExecuteQuery = $null
+        $Script:TestTabSession.ExecutePopup = $null
         $Script:RunTimeData.StopWatch = $null
 
         { Reset-ExecuteQueryUiState } | Should -Not -Throw
@@ -487,7 +495,7 @@ Describe "Complete-ExecuteQueryPipeline does not retry a tab that was torn down"
 
         # Disconnected, so the query controls stay disabled - but the popup is closed, the stopwatch
         # stopped and the button reads Execute rather than Cancel.
-        $Script:PopupWindowExecuteQuery | Should -BeNullOrEmpty
+        $Script:TestTabSession.ExecutePopup | Should -BeNullOrEmpty
         $Script:MainForm.Elements.ButtonExecuteQueryText.Text | Should -Be "_Execute"
         $Script:RunTimeData.StopWatch.IsRunning | Should -BeFalse
     }
@@ -617,5 +625,106 @@ Describe "Complete-ExecuteQueryPipeline reports a tenant failure once" {
 
         @($script:ReplayedLines) | Should -Contain "QueryUrl: https://tenant.omada.cloud/api/x"
         @($script:ErrorLines).Count | Should -Be 0
+    }
+}
+
+Describe "A tenant error does not cost the session its background worker" {
+    # Reported from a live session. One HTTP 502 from the tenant permanently disabled background
+    # execution, and every query afterwards then failed with "the request context is no longer
+    # available" - a message about a bug that had not happened, in place of the tenant error that had.
+
+    BeforeEach {
+        Initialize-ExecuteQueryTestState
+        $script:Context = @{ BaseUrl = "https://tenant.omada.cloud"; QueryDoId = 100 }
+        $script:BadGateway = New-PipelineOutcome -ErrorRecord (New-TestErrorRecord "Response status code does not indicate success: 502 (Bad Gateway).") -CompletedSteps 0
+    }
+
+    It "does not disable background execution over a 502" {
+        Complete-ExecuteQueryPipeline -Outcome $script:BadGateway -PipelineContext $script:Context
+
+        @($script:DisableReasons).Count | Should -Be 0
+    }
+
+    It "does not re-run a 502 on the UI thread, because it would get the same answer" {
+        Complete-ExecuteQueryPipeline -Outcome $script:BadGateway -PipelineContext $script:Context
+
+        @($script:InlinePipelineRuns).Count | Should -Be 0
+    }
+
+    It "still returns the tab to a usable state" {
+        Complete-ExecuteQueryPipeline -Outcome $script:BadGateway -PipelineContext $script:Context
+
+        $Script:MainForm.Elements.ButtonExecuteQuery.IsEnabled | Should -BeTrue
+        $Script:TestTabSession.ExecutePopup | Should -BeNullOrEmpty
+    }
+
+    It "still re-runs and disables when the worker genuinely cannot sign in" {
+        # The other side of the gate: this failure really does mean the worker is useless here.
+        $Private:Message = "Start-WebView2Login - Couldn't find a compatible Webview2 Runtime installation to host WebViews."
+        $Private:Failed = New-PipelineOutcome -ErrorRecord (New-TestErrorRecord $Private:Message) -CompletedSteps 0
+
+        Complete-ExecuteQueryPipeline -Outcome $Private:Failed -PipelineContext $script:Context
+
+        @($script:InlinePipelineRuns).Count | Should -Be 1
+        @($script:DisableReasons).Count | Should -Be 1
+    }
+
+    It "re-runs an expired session on the UI thread without writing off the worker" {
+        # A worker cannot sign in; the UI thread can. Once it has, the worker may work again - so
+        # disabling here would give up something that was about to start working.
+        $Private:Expired = New-PipelineOutcome -ErrorRecord (New-TestErrorRecord "Response status code does not indicate success: 401 (Unauthorized).") -CompletedSteps 0
+
+        Complete-ExecuteQueryPipeline -Outcome $Private:Expired -PipelineContext $script:Context
+
+        @($script:InlinePipelineRuns).Count | Should -Be 1
+        @($script:DisableReasons).Count | Should -Be 0
+    }
+}
+
+Describe "A chain that already ran on the UI thread does not try to fall back to it" {
+    # The second half of the reported failure. The inline path called back in with no context to
+    # retry from, so its own failure was reported as "the request context is no longer available"
+    # instead of the tenant error - and every subsequent execute repeated it, because background
+    # execution had been disabled and every query now took that path.
+
+    BeforeEach {
+        Initialize-ExecuteQueryTestState
+        $script:ErrorLines = [System.Collections.Generic.List[string]]::new()
+        Mock Write-LogOutput {
+            if ($LogType -eq "ERROR") { $script:ErrorLines.Add([string]$InputObject) }
+        }
+    }
+
+    It "does not report a missing request context when the inline run fails" {
+        $Private:Failed = New-PipelineOutcome -ErrorRecord (New-TestErrorRecord "Response status code does not indicate success: 502 (Bad Gateway).") -CompletedSteps 0
+
+        Complete-ExecuteQueryPipeline -Outcome $Private:Failed -AlreadyOnUiThread
+
+        ($script:ErrorLines -join " ") | Should -Not -Match "request context is no longer available"
+    }
+
+    It "reports the tenant's error instead" {
+        $Private:Failed = New-PipelineOutcome -ErrorRecord (New-TestErrorRecord "Response status code does not indicate success: 502 (Bad Gateway).") -CompletedSteps 0
+
+        Complete-ExecuteQueryPipeline -Outcome $Private:Failed -AlreadyOnUiThread
+
+        ($script:ErrorLines -join " ") | Should -Match "502"
+    }
+
+    It "never re-drives, whatever the failure looks like" {
+        $Private:Message = "Start-WebView2Login - Couldn't find a compatible Webview2 Runtime installation to host WebViews."
+        $Private:Failed = New-PipelineOutcome -ErrorRecord (New-TestErrorRecord $Private:Message) -CompletedSteps 0
+
+        Complete-ExecuteQueryPipeline -Outcome $Private:Failed -PipelineContext @{ BaseUrl = "x"; QueryDoId = 1 } -AlreadyOnUiThread
+
+        @($script:InlinePipelineRuns).Count | Should -Be 0
+        @($script:DisableReasons).Count | Should -Be 0
+    }
+
+    It "reports a worker that returned nothing rather than looping" {
+        Complete-ExecuteQueryPipeline -Outcome $null -AlreadyOnUiThread
+
+        @($script:InlinePipelineRuns).Count | Should -Be 0
+        $Script:MainForm.Elements.ButtonExecuteQuery.IsEnabled | Should -BeTrue
     }
 }

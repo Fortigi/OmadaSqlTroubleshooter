@@ -126,7 +126,10 @@ function Write-LogOutput {
                 $LogMessage.ShowWarning = $true
                 $LogMessageDialog.Show = $true
                 $LogMessageDialog.Text = "Warning:`r`n`r`n{0}" -f $LogMessageDialog.Text
-                $LogMessageDialog.Title = "Warning"
+                # Named after the tab it came from. With several tabs open - and queries now running
+                # in the background, so a message can arrive for a tab the user is not looking at -
+                # "Warning" alone does not say which query is being complained about.
+                $LogMessageDialog.Title = "Warning - {0}" -f $TabContext
                 $LogMessageDialog.Icon = [System.Windows.Forms.MessageBoxIcon]::Warning
                 $LogMessage.Color = "Yellow"
                 if ($null -ne $Script:PopUpWindowQueryRefresh) {
@@ -141,7 +144,8 @@ function Write-LogOutput {
                 catch {}
                 $LogMessage.ShowError = $true
                 $LogMessageDialog.Show = $true
-                $LogMessageDialog.Title = "Error"
+                # Named after the tab it came from - see the Warning branch above for why.
+                $LogMessageDialog.Title = "Error - {0}" -f $TabContext
                 try {
                     if ($Null -ne $ErrorObject) {
                         if ($null -ne $ErrorObject.Exception?.StatusCode) {
@@ -182,7 +186,27 @@ function Write-LogOutput {
             try {
                 if ($null -ne $Script:MainForm -and $null -ne $Script:MainForm.Definition -and $Script:MainForm.Definition.IsVisible) {
                     $TrimmedText = Limit-MessageBoxText -Text $LogMessageDialog.Text
-                    [System.Windows.Forms.MessageBox]::Show($TrimmedText, $LogMessageDialog.Title, [System.Windows.Forms.MessageBoxButtons]::OK, $LogMessageDialog.Icon)
+
+                    # Owned by the main window. Without an owner a WinForms MessageBox raised from a
+                    # WPF application is a top-level window with no relationship to it, so Windows is
+                    # free to order it behind the main form - which it did: an error about a failed
+                    # query appeared behind the application, and the application looked hung because
+                    # the dialog underneath it was modal. The owner also gives the dialog somewhere
+                    # sensible to centre itself.
+                    $Private:DialogOwner = Get-MainFormMessageBoxOwner
+                    try {
+                        if ($null -ne $Private:DialogOwner) {
+                            [System.Windows.Forms.MessageBox]::Show($Private:DialogOwner, $TrimmedText, $LogMessageDialog.Title, [System.Windows.Forms.MessageBoxButtons]::OK, $LogMessageDialog.Icon)
+                        }
+                        else {
+                            [System.Windows.Forms.MessageBox]::Show($TrimmedText, $LogMessageDialog.Title, [System.Windows.Forms.MessageBoxButtons]::OK, $LogMessageDialog.Icon)
+                        }
+                    }
+                    finally {
+                        if ($null -ne $Private:DialogOwner) {
+                            try { $Private:DialogOwner.ReleaseHandle() } catch { }
+                        }
+                    }
                     Restore-MainFormFocus
                 }
                 else {
