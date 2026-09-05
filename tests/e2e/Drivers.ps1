@@ -181,6 +181,36 @@ function script:New-E2EConnectedTab {
     return (Get-ActiveTabSession)
 }
 
+function script:Test-E2EExecutePopupClosed {
+    <#
+    Whether no tab is still showing an "Executing Query..." popup.
+
+    Asserted across every tab rather than just the active one, and that matters: the popup used to be
+    a single module-scope slot, and a second execute overwrote it - orphaning the first tab's window
+    so nothing could ever close it. A check that only looked at the active tab would miss exactly that.
+
+    These assertions used to read $Script:PopupWindowExecuteQuery, which no longer exists. That is not
+    a compile error in PowerShell - it is simply always $null - so they would have kept passing while
+    testing nothing at all.
+    #>
+    foreach ($Tab in @($Script:Tabs)) {
+        if ($null -ne $Tab -and $null -ne $Tab.ExecutePopup) {
+            return $false
+        }
+    }
+
+    # Clearing the tab's slot is not the same as closing the window, and the regression being guarded
+    # against is exactly a window that nobody closed. Asserting only the slot passes a build in which
+    # Close() is never called - verified by mutation, which is why this second check exists.
+    foreach ($Popup in @($script:E2EExecutePopups)) {
+        if ($null -ne $Popup -and -not $Popup.Closed) {
+            return $false
+        }
+    }
+
+    return $true
+}
+
 function script:Invoke-E2EFlushDispatcher {
     # Run all pending Background-and-higher dispatcher work (e.g. a deferred editor re-push) to
     # completion, synchronously, so a scenario can assert on its effect.
@@ -333,6 +363,12 @@ function script:Get-E2EChoices {
 
 function script:Clear-E2EPopups {
     $script:E2EPopupMessages.Clear()
+}
+
+function script:Clear-E2EExecutePopupHistory {
+    # Reset per case. Without it a window a previous case legitimately left open - one whose query is
+    # still in flight when that case ends - fails the NEXT case's "nothing was left open" check.
+    $script:E2EExecutePopups.Clear()
 }
 
 function script:Get-E2EPopups {

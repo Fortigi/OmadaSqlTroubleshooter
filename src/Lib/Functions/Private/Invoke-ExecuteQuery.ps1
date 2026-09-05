@@ -116,8 +116,13 @@ function Invoke-ExecuteQuery {
                     # No worker available, or the tab is not eligible for one: run the identical
                     # chain inline. Slower - it blocks, exactly as the app did before #40 - but the
                     # same requests in the same order, because it is literally the same function.
+                    #
+                    # -AlreadyOnUiThread because this is the UI thread: there is no fallback left, so
+                    # a failure here is reported as what it is. Without it, a tenant error on this
+                    # path came back as "the request context is no longer available" - a message about
+                    # a bug that had not happened, in place of the error that had.
                     $Private:PipelineContext.Parameters = Build-OmadaRequestParameter
-                    Complete-ExecuteQueryPipeline -Outcome (Invoke-OmadaExecutePipeline -Context $Private:PipelineContext)
+                    Complete-ExecuteQueryPipeline -Outcome (Invoke-OmadaExecutePipeline -Context $Private:PipelineContext) -AlreadyOnUiThread
                     return
                 }
                 elseif ($Script:Task.Status -eq "Faulted") {
@@ -198,10 +203,10 @@ function Reset-ExecuteQueryUiState {
         # drained by the poll timer, or removed by Stop-ExecuteQueryRequest before it called here.
         Set-ExecuteQueryButtonState
 
-        if ($null -ne $Script:PopupWindowExecuteQuery) {
-            $Script:PopupWindowExecuteQuery.Close()
-            $Script:PopupWindowExecuteQuery = $null
-        }
+        # The owning tab's popup, not a shared one. Reset-ExecuteQueryUiState always runs with that
+        # tab made active - the poll timer steps into it before invoking a completion - so this closes
+        # the window that belongs to the query that just finished, and leaves other tabs' alone.
+        Close-ExecuteQueryPopup
 
         if ($null -ne $Script:RunTimeData.StopWatch) {
             $Script:RunTimeData.StopWatch.Stop()
@@ -252,11 +257,22 @@ function Invoke-ExecuteQueryOnUiThread {
 
     .PARAMETER Reason
     Why the worker could not run it, for the single warning Disable-OmadaBackgroundRequest writes.
+
+    .PARAMETER Action
+    What Resolve-ExecuteFallbackAction concluded: "Retry" to re-run here and keep using workers, or
+    "RetryAndDisable" to re-run here and stop dispatching to workers for the session.
+
+    The distinction is the point. Disabling used to happen on every fallback, so an expired session -
+    which a worker genuinely cannot recover from, but which the UI thread fixes in one sign-in - cost
+    background execution for the rest of the day even though it would have worked again immediately
+    afterwards.
     #>
     [CmdLetBinding()]
     param(
         [hashtable]$PipelineContext,
-        [string]$Reason
+        [string]$Reason,
+        [ValidateSet("Retry", "RetryAndDisable")]
+        [string]$Action = "RetryAndDisable"
     )
 
     try {
@@ -274,13 +290,16 @@ function Invoke-ExecuteQueryOnUiThread {
             return
         }
 
-        Disable-OmadaBackgroundRequest -Reason $Reason
+        if ($Action -eq "RetryAndDisable") {
+            Disable-OmadaBackgroundRequest -Reason $Reason
+        }
 
         if ($null -eq $PipelineContext) {
-            # Nothing to re-run with. Reported rather than silently ignored: this would mean the
-            # context was lost between dispatch and completion, which is a bug here rather than a
-            # problem at the tenant.
-            "Cannot retry the query on the UI thread: the request context is no longer available." | Write-ContainedErrorLog
+            # Nothing to re-run with. A genuine bug if it ever happens on the background path, so it
+            # is still reported - but at DEBUG and without a dialog, because the user can neither act
+            # on it nor be helped by a modal in front of a query that is already lost. The failure
+            # that matters has been logged by the caller.
+            "Cannot retry the query on the UI thread: the request context is no longer available." | Write-LogOutput -LogType DEBUG
             Complete-ExecuteQueryResult -QueryResult $null -SaveResult $null -TempQueryDoId $null
             return
         }
@@ -288,7 +307,12 @@ function Invoke-ExecuteQueryOnUiThread {
         "Retrying the query on the UI thread." | Write-LogOutput -LogType DEBUG
         $Private:RetryContext = $PipelineContext.Clone()
         $Private:RetryContext.Parameters = Build-OmadaRequestParameter
-        Complete-ExecuteQueryPipeline -Outcome (Invoke-OmadaExecutePipeline -Context $Private:RetryContext)
+
+        # -AlreadyOnUiThread: this IS the UI thread, so the completion must report whatever comes back
+        # rather than trying to fall back to it again. Without it the retry's own failure came back
+        # here with no context and was reported as "the request context is no longer available",
+        # which described a bug that had not happened and hid the tenant error that had.
+        Complete-ExecuteQueryPipeline -Outcome (Invoke-OmadaExecutePipeline -Context $Private:RetryContext) -AlreadyOnUiThread
     }
     catch {
         Reset-ExecuteQueryUiState
@@ -316,12 +340,22 @@ function Complete-ExecuteQueryPipeline {
 
     .PARAMETER PipelineContext
     The context the request was dispatched with. Only used to re-run the chain on the UI thread when
-    the worker could not run it at all; $null on the inline path, which has nothing to fall back to.
+    the worker could not run it at all.
+
+    .PARAMETER AlreadyOnUiThread
+    Set when the outcome came from a chain that ran inline on the UI thread - the no-worker fallback,
+    or the retry itself. There is no "retry on the UI thread" left to do in that case: this IS the UI
+    thread, so a failure is reported rather than re-driven.
+
+    Without this the inline path reported a failure as "the request context is no longer available",
+    because it called back in with no context to retry from. That message was doubly misleading - it
+    described a bug that had not happened, and it hid the real error, which was the tenant's.
     #>
     [CmdLetBinding()]
     param(
         $Outcome,
-        [hashtable]$PipelineContext
+        [hashtable]$PipelineContext,
+        [switch]$AlreadyOnUiThread
     )
 
     try {
@@ -329,8 +363,15 @@ function Complete-ExecuteQueryPipeline {
         # result, and reporting it as one is what made a failed query look like an empty one.
         if ($Outcome -is [System.Management.Automation.ErrorRecord] -or $null -eq $Outcome -or $null -eq $Outcome.Steps) {
             $Private:Reason = if ($Outcome -is [System.Management.Automation.ErrorRecord]) { $Outcome.Exception.Message } else { "the background worker returned no result" }
+
+            if ($AlreadyOnUiThread) {
+                "The query could not be run on the UI thread either: {0}" -f $Private:Reason | Write-ContainedErrorLog
+                Complete-ExecuteQueryResult -QueryResult $null -SaveResult $null -TempQueryDoId $null
+                return
+            }
+
             "The query could not be run on a background worker: {0}" -f $Private:Reason | Write-LogOutput -LogType DEBUG
-            Invoke-ExecuteQueryOnUiThread -PipelineContext $PipelineContext -Reason $Private:Reason
+            Invoke-ExecuteQueryOnUiThread -PipelineContext $PipelineContext -Reason $Private:Reason -Action "RetryAndDisable"
             return
         }
 
@@ -349,16 +390,16 @@ function Complete-ExecuteQueryPipeline {
         }
 
         if ($null -ne $Outcome.ErrorRecord) {
-            # Nothing reached the tenant: the very first request failed, so no query ran, nothing was
-            # saved and no temporary object exists. The worker could not do its job - almost always
-            # because its own OmadaWeb.PS instance has no session - and the UI thread can, so run it
-            # there rather than telling the user their query returned nothing.
-            #
-            # Gated on CompletedSteps precisely so this cannot re-run work the tenant already did. If
-            # any step succeeded, the failure is the tenant's answer and is reported as such.
-            if ([int]$Outcome.CompletedSteps -le 0) {
+            # What a failure means depends on WHERE it happened, and getting that wrong was expensive:
+            # the first version re-drove and permanently disabled background execution whenever no
+            # step had completed, so a single HTTP 502 from the tenant cost the user a responsive
+            # window for the rest of the session. A status code coming back is proof the worker
+            # reached the tenant. Resolve-ExecuteFallbackAction holds that reasoning.
+            $Private:Action = if ($AlreadyOnUiThread) { "Report" } else { Resolve-ExecuteFallbackAction -Outcome $Outcome }
+
+            if ($Private:Action -ne "Report") {
                 "The query could not be run on a background worker: {0}" -f $Outcome.ErrorRecord.Exception.Message | Write-LogOutput -LogType DEBUG
-                Invoke-ExecuteQueryOnUiThread -PipelineContext $PipelineContext -Reason $Outcome.ErrorRecord.Exception.Message
+                Invoke-ExecuteQueryOnUiThread -PipelineContext $PipelineContext -Reason $Outcome.ErrorRecord.Exception.Message -Action $Private:Action
                 return
             }
 
