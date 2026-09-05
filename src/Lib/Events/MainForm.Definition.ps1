@@ -12,8 +12,24 @@ $Script:PendingWebViewCompletions = [System.Collections.Generic.List[object]]::n
 
 $Script:WebViewCompletionPollTimer = New-Object System.Windows.Threading.DispatcherTimer
 $Script:WebViewCompletionPollTimer.Interval = [TimeSpan]::FromMilliseconds(50)
+$Script:WebViewCompletionTickCount = 0
 $Script:WebViewCompletionPollTimer.Add_Tick({
         try {
+            # Elapsed-time indicator for background requests (issue #40), driven from THIS timer
+            # rather than a second one: this is already the only place that knows about pending work,
+            # and it is already suspended around modal dialogs.
+            #
+            # Every 2nd tick, so 100 ms. This used to be every 20th - once a second - on the reasoning
+            # that a duration in seconds cannot visibly change more often than that. The reasoning was
+            # wrong, because the indicator has never been rendered in whole seconds: it shows tenths,
+            # so at 1 Hz it sat frozen and then jumped by ten of them. 100 ms matches the digit that
+            # is actually on screen. The work per tick is one string write per in-flight request, and
+            # there is at most one of those per tab.
+            $Script:WebViewCompletionTickCount++
+            if ($Script:WebViewCompletionTickCount % 2 -eq 0) {
+                Update-BackgroundRequestElapsedTime -Pending $Script:PendingWebViewCompletions
+            }
+
             $Completed = @($Script:PendingWebViewCompletions | Where-Object { $_.Task.IsCompleted })
             foreach ($Pending in $Completed) {
                 [void]$Script:PendingWebViewCompletions.Remove($Pending)
@@ -46,6 +62,24 @@ $Script:WebViewCompletionPollTimer.Add_Tick({
                     continue
                 }
 
+                # Second line of defence behind Remove-PendingBackgroundRequest (issue #40). A
+                # completion whose tab has been closed must not run: Set-ActiveTabContext below would
+                # repoint every "current tab" global onto a tab that is gone, and the restore in the
+                # finally cannot undo it - Get-ActiveTabSession returns $null when the closed tab was
+                # the active one, so the restore is skipped and the app is left pointing at a dead
+                # tab. Only background requests are checked; a $null TabSession still means "the
+                # block manages its own context", which is a different and legitimate case.
+                if ($true -eq $Pending.IsBackgroundRequest -and $null -ne $Pending.TabSession -and
+                    -not ($Script:Tabs | Where-Object { $_.Id -eq $Pending.TabSession.Id })) {
+                    "Dropping a completion for a tab that no longer exists." | Write-LogOutput -LogType DEBUG
+                    # Disposed here because the completion block - which is what normally calls
+                    # Complete-OmadaBackgroundRequest, and disposing is what that does in its finally -
+                    # is precisely what this branch skips. Without it the worker's runspace is never
+                    # released back to the pool.
+                    try { $Pending.Shell.Dispose() } catch { }
+                    continue
+                }
+
                 if ($null -ne $Pending.TabSession) {
                     $PreviouslyActiveTab = Get-ActiveTabSession
                     try {
@@ -64,7 +98,14 @@ $Script:WebViewCompletionPollTimer.Add_Tick({
             }
         }
         catch {
-            $_.Exception.Message | Write-LogOutput -LogType ERROR -ErrorObject $_
+            # Contained, and this is the outermost guarantee that a completion cannot cascade.
+            # Write-LogOutput ends every ERROR with Write-Error, which under this application's
+            # ErrorActionPreference = Stop is terminating - so reporting an error from HERE would
+            # throw out of the Tick handler into the dispatcher's unhandled-exception handler, which
+            # logs another ERROR, which throws again. One tenant failure produced five stacked error
+            # dialogs and a log entry containing four nested copies of itself. There is nothing above
+            # a timer tick to unwind to, so an error reported here is reported and contained.
+            $_.Exception.Message | Write-ContainedErrorLog -ErrorObject $_
         }
     })
 $Script:WebViewCompletionPollTimer.Start()
@@ -174,6 +215,11 @@ $Script:MainForm.Definition.Add_Closing({
             if (Test-SqlSchemaFormIsVisible) {
                 $Script:SqlSchemaForm.Definition.Close()
             }
+
+            # Background request workers are real threads; left open they keep the process alive
+            # after the window has gone (issue #40). Best-effort, and last, so a failure here cannot
+            # cost the user their saved tab sessions or window measurements above.
+            Close-OmadaRequestPool
         }
         catch {
             $_.Exception.Message | Write-LogOutput -LogType ERROR -ErrorObject $_

@@ -34,6 +34,60 @@ function script:Invoke-E2EConnect {
     Invoke-E2EClick -ElementName "ButtonConnect"
 }
 
+function script:Test-E2EExecuteInFlight {
+    # Whether a tab has a query outstanding, read off the completion queue - the same record the app
+    # itself uses (Get-ActiveExecuteQueryRequest). Since C1-4 the Execute button stays ENABLED while a
+    # query runs, because it is the Cancel button, so IsEnabled is no longer a usable signal for this.
+    param($TabSession)
+    if ($null -eq $TabSession) { $TabSession = Get-ActiveTabSession }
+    return @($Script:PendingWebViewCompletions | Where-Object {
+            $_.Description -eq "Execute query" -and $null -ne $_.TabSession -and
+            $_.TabSession.Id -eq $TabSession.Id -and -not $_.IsCancelled
+        }).Count -gt 0
+}
+
+function script:Get-E2EExecuteButtonText {
+    param($TabSession)
+    $Elements = if ($null -ne $TabSession) { $TabSession.Elements } else { $Script:MainForm.Elements }
+    return [string]$Elements.ButtonExecuteQueryText.Text
+}
+
+function script:Wait-E2EAppSettled {
+    <#
+    Pump the dispatcher for a fixed period so work the APP started on its own - a WebView2
+    NavigationCompleted callback, a deferred editor push - has landed before a scenario acts.
+
+    Not the same thing as Wait-E2ENoPendingRequests, which waits on a condition. There is no
+    condition to wait on here: WebView2 posts its callbacks straight to the dispatcher rather than
+    onto the completion queue, and the harness leaves at least one editor task permanently pending,
+    so "the queue is empty" never becomes true. Only the first scenario of a run really needs this;
+    by the second, startup has long finished.
+    #>
+    param([int]$SettleMilliseconds = 500)
+    $Deadline = [DateTime]::UtcNow.AddMilliseconds($SettleMilliseconds)
+    while ([DateTime]::UtcNow -lt $Deadline) {
+        Invoke-E2EFlushDispatcher
+        Start-Sleep -Milliseconds 25
+    }
+}
+
+function script:Invoke-E2EGetSchemaAndWait {
+    # Retrieve the SQL schema and wait for it to land. Since issue #40 Get-SqlSchemaObject dispatches
+    # the fetch to a background worker and returns immediately, so anything asserting on the cache,
+    # the tree or the setSchema push has to wait for the completion.
+    param([double]$TimeoutSeconds = 15)
+    Get-SqlSchemaObject
+    Wait-E2ENoPendingRequests -TimeoutSeconds $TimeoutSeconds
+}
+
+function script:Invoke-E2EConnectAndWait {
+    # Connect and let the schema fetch land. Since issue #40 that fetch runs on a background worker,
+    # so a scenario asserting on the schema (or merely acting next) must wait for it.
+    param([double]$TimeoutSeconds = 15)
+    Invoke-E2EConnect
+    Wait-E2ENoPendingRequests -TimeoutSeconds $TimeoutSeconds
+}
+
 function script:Invoke-E2EExecute {
     Invoke-E2EClick -ElementName "ButtonExecuteQuery"
 }
@@ -60,10 +114,49 @@ function script:Reset-E2EScenario {
     $script:E2EFixtureOverride = $null
     $script:E2EChoiceReturn = $null
     $script:E2EChoices.Clear()
+    # Background requests complete immediately again unless a scenario asks for a slow one.
+    $script:E2ERequestDelayMs = 0
+}
+
+function script:Invoke-E2EExecuteAndWait {
+    <#
+    Click Execute and wait for the result to land. Since issue #40 the query round-trip runs on a
+    background worker, so the grid is NOT populated by the time the click returns - an assertion made
+    straight after Invoke-E2EExecute would be testing a race, not the feature. Every scenario that
+    cares about the outcome of an execute should go through here.
+    #>
+    param(
+        [double]$TimeoutSeconds = 15
+    )
+    $Tab = Get-ActiveTabSession
+    Invoke-E2EExecute
+    Wait-E2EUntil -TimeoutSeconds $TimeoutSeconds -Message "execute to complete" -Condition {
+        # The queue, not the button: since C1-4 the Execute button stays enabled during a query
+        # because it is the Cancel button. Waiting on the grid instead would hang forever on the
+        # perfectly legitimate "query returned no rows" path.
+        -not (Test-E2EExecuteInFlight -TabSession $Tab)
+    }
+    # The request leaves the queue just BEFORE its completion block runs, so one more pump makes sure
+    # the completion (grid binding, status bar, button reset) has actually happened.
+    Invoke-E2EFlushDispatcher
+}
+
+function script:Wait-E2ENoPendingRequests {
+    # Drain any background request still in flight, so one scenario's slow query cannot complete in
+    # the middle of the next one and repoint the tab under it.
+    param([double]$TimeoutSeconds = 15)
+    Wait-E2EUntil -TimeoutSeconds $TimeoutSeconds -Message "pending background requests to drain" -Condition {
+        @($Script:PendingWebViewCompletions | Where-Object { $null -ne $_.StartedUtc }).Count -eq 0
+    }
 }
 
 function script:Reset-E2EConnection {
     # Put the active tab back to a disconnected, clean state between scenarios that reuse one tab.
+    # Drained first: a request still in flight from the previous scenario would otherwise complete
+    # in the middle of this one, repointing the tab context and binding a stale result into its grid.
+    # A scenario that leaves work outstanding fails HERE, where the cause is obvious, rather than as
+    # a puzzling assertion failure in whichever scenario happens to run next.
+    Wait-E2ENoPendingRequests
     if ($Script:ConnectionStatus) {
         Invoke-E2EConnect   # ButtonConnect toggles to Disconnect when already connected
     }
@@ -82,13 +175,93 @@ function script:New-E2EConnectedTab {
     New-EmptyTabSession | Out-Null   # creates and activates a new tab
     Set-E2EConnectionFields -Url $Url -Auth $Auth
     Invoke-E2EConnect
+    # Connecting fetches the SQL schema, which is a background request since issue #40. Let it land
+    # before the caller acts, so it does not complete in the middle of the caller's first step.
+    Wait-E2ENoPendingRequests
     return (Get-ActiveTabSession)
+}
+
+function script:Test-E2EExecutePopupClosed {
+    <#
+    Whether no tab is still showing an "Executing Query..." popup.
+
+    Asserted across every tab rather than just the active one, and that matters: the popup used to be
+    a single module-scope slot, and a second execute overwrote it - orphaning the first tab's window
+    so nothing could ever close it. A check that only looked at the active tab would miss exactly that.
+
+    These assertions used to read $Script:PopupWindowExecuteQuery, which no longer exists. That is not
+    a compile error in PowerShell - it is simply always $null - so they would have kept passing while
+    testing nothing at all.
+    #>
+    foreach ($Tab in @($Script:Tabs)) {
+        if ($null -ne $Tab -and $null -ne $Tab.ExecutePopup) {
+            return $false
+        }
+    }
+
+    # Clearing the tab's slot is not the same as closing the window, and the regression being guarded
+    # against is exactly a window that nobody closed. Asserting only the slot passes a build in which
+    # Close() is never called - verified by mutation, which is why this second check exists.
+    foreach ($Popup in @($script:E2EExecutePopups)) {
+        if ($null -ne $Popup -and -not $Popup.Closed) {
+            return $false
+        }
+    }
+
+    return $true
 }
 
 function script:Invoke-E2EFlushDispatcher {
     # Run all pending Background-and-higher dispatcher work (e.g. a deferred editor re-push) to
     # completion, synchronously, so a scenario can assert on its effect.
     $Script:MainForm.Definition.Dispatcher.Invoke([System.Action] {}, [System.Windows.Threading.DispatcherPriority]::Background)
+}
+
+function script:Wait-E2EUntil {
+    <#
+    .SYNOPSIS
+    Pump the dispatcher until $Condition is true, or fail after -TimeoutSeconds.
+
+    .DESCRIPTION
+    The scenario-side counterpart to work that no longer finishes inside the click that started it.
+    While every backend seam completed inline, an assertion could follow Invoke-E2EExecute directly;
+    work that runs off the UI thread instead completes through the 50 ms WebViewCompletionPollTimer,
+    which only fires when the dispatcher is pumped - and a scenario running ON the dispatcher thread
+    is precisely what stops it from being pumped. So this loop yields (Invoke-E2EFlushDispatcher) and
+    re-tests, rather than sleeping.
+
+    Throws on timeout, which E2ECase records as a failure with -Message. Never assert on a result
+    without waiting for it first: a bare assertion after an asynchronous action reads as a pass/fail
+    of the feature when it is really a race.
+
+    .PARAMETER Condition
+    A scriptblock returning something truthy once the wait is over.
+
+    .EXAMPLE
+    Wait-E2EUntil { $null -ne $Script:MainForm.Elements.DataGridQueryResult.ItemsSource } -Message "grid populated"
+    #>
+    param(
+        [Parameter(Mandatory)][scriptblock]$Condition,
+        [double]$TimeoutSeconds = 10,
+        [string]$Message = "condition"
+    )
+    $Deadline = [DateTime]::UtcNow.AddSeconds($TimeoutSeconds)
+    while ([DateTime]::UtcNow -lt $Deadline) {
+        if (& $Condition) {
+            return $true
+        }
+        Invoke-E2EFlushDispatcher
+        # A short sleep after the flush, not instead of it: the flush drains work that is already
+        # queued, while the poll timer needs wall-clock time to reach its next 50 ms tick. Without
+        # this the loop spins hot and starves the very timer it is waiting for.
+        Start-Sleep -Milliseconds 25
+    }
+    # One last chance after the final flush, so a condition that became true during the last pump is
+    # not reported as a timeout.
+    if (& $Condition) {
+        return $true
+    }
+    throw ("Timed out after {0}s waiting for: {1}" -f $TimeoutSeconds, $Message)
 }
 
 function script:New-E2ERestoredTab {
@@ -154,6 +327,11 @@ function script:Reset-E2ETabsToOne {
     (Get-TabControlSessions).SelectedItem = $Script:Tabs[0].TabItem
     Reset-E2EConnection
     Reset-E2EScenario
+    # Settle before handing the scenario a clean tab. Since issue #40 a connect leaves a schema
+    # request in flight, and a scenario that starts while one is outstanding has it complete
+    # underneath its own first action - which repoints the tab context mid-step and makes the
+    # scenario's failures unrelated to what it is testing.
+    Wait-E2ENoPendingRequests
 }
 
 function script:Get-E2EActiveTabIndex {
@@ -185,6 +363,12 @@ function script:Get-E2EChoices {
 
 function script:Clear-E2EPopups {
     $script:E2EPopupMessages.Clear()
+}
+
+function script:Clear-E2EExecutePopupHistory {
+    # Reset per case. Without it a window a previous case legitimately left open - one whose query is
+    # still in flight when that case ends - fails the NEXT case's "nothing was left open" check.
+    $script:E2EExecutePopups.Clear()
 }
 
 function script:Get-E2EPopups {

@@ -1,3 +1,8 @@
+# The label a schema request carries on the completion queue. A constant because it is matched, not
+# just displayed: Get-SqlSchemaObject reads the queue through it to decide whether a fetch for the
+# same pool and database is already outstanding.
+$Script:SqlSchemaRequestDescription = "SQL schema"
+
 function Get-SqlSchemaObject {
     [CmdLetBinding()]
     param()
@@ -47,125 +52,98 @@ function Get-SqlSchemaObject {
 
             if ($Script:SqlSchemaCache.ContainsKey($SchemaCacheKey)) {
                 "Using cached SQL schema for '{0}'" -f $SchemaCacheKey | Write-LogOutput -LogType DEBUG
-                $ReturnValue = $Script:SqlSchemaCache[$SchemaCacheKey]
+                Complete-SqlSchemaRetrieval -SchemaResponse $Script:SqlSchemaCache[$SchemaCacheKey] -SchemaCacheKey $SchemaCacheKey
+                return
             }
-            else {
-                $Script:RunTimeData.RestMethodParam.Body = @{
-                    connectionId = $Script:AppConfig.CurrentDataConnection.DoId
+
+            # The cache alone stopped being enough once this fetch went off-thread (issue #40): the
+            # cache is only populated when the response LANDS, so two calls close together - a
+            # connect immediately followed by a data-connection change, say - would both miss it and
+            # both hit the tenant. This preserves the once-per-pool-per-database contract the cache
+            # was written for.
+            #
+            # Read straight off the completion queue rather than kept in a side table of "keys in
+            # flight". A side table has to be cleared on every path a request can leave by - success,
+            # failure, and abandonment when its tab is closed - and a key left behind on the
+            # abandonment path would block that pool and database from ever fetching its schema again
+            # for the rest of the session. The queue cannot get out of step with itself.
+            # Any matching item on the queue counts, including one whose worker has already finished
+            # but which the poll timer has not drained yet. Its completion is queued and about to
+            # populate the cache and push the schema to the editor, so the caller's intent is already
+            # being served - dispatching again in that window would be a duplicate request for
+            # exactly the answer that is moments away.
+            if (@($Script:PendingWebViewCompletions | Where-Object {
+                        $_.Description -eq $Script:SqlSchemaRequestDescription -and
+                        $_.Context.Caller.SchemaCacheKey -eq $SchemaCacheKey
+                    }).Count -gt 0) {
+                "SQL schema for '{0}' is already being retrieved; not requesting it twice." -f $SchemaCacheKey | Write-LogOutput -LogType DEBUG
+                return
+            }
+
+            $Script:RunTimeData.RestMethodParam.Body = @{
+                connectionId = $Script:AppConfig.CurrentDataConnection.DoId
+            }
+            $Script:RunTimeData.RestMethodParam.Method = "POST"
+
+            # Issue #40's first background caller, and deliberately the least risky one: the schema
+            # fetch is already cached, already tolerant of failure, binds no grid and creates no
+            # temporary object on the tenant - so it proves the machinery without putting a query
+            # result at stake. It is also the round-trip that freezes the window on connect.
+            #
+            # The completion block is plain (never .GetNewClosure()), so it reads the cache key from
+            # $Pending.Context.Caller instead of re-deriving it: by the time it runs, the user may
+            # have switched to a tab with a different SessionKey or data connection, and the key must
+            # be the one this request was issued for.
+            # The request itself travels on the context, not just the cache key. A retry cannot simply
+            # re-use $Script:RunTimeData.RestMethodParam: that hashtable is overwritten by whatever
+            # request the tab makes next, so by the time this completion runs it may describe an
+            # entirely different call. (That staleness is visible in the logs - the dispatch of an
+            # execute records the schema request's URI, because nothing had overwritten it yet.)
+            $Private:Pending = Invoke-OmadaPSWebRequestWrapperAsync -Description $Script:SqlSchemaRequestDescription -Context @{
+                SchemaCacheKey = $SchemaCacheKey
+                Uri            = $Script:RunTimeData.RestMethodParam.Uri
+                Method         = $Script:RunTimeData.RestMethodParam.Method
+                Body           = $Script:RunTimeData.RestMethodParam.Body
+            } -OnResultScriptBlock {
+                param($Pending)
+                # A worker that could not run the request at all is not an answer. Retry once on the
+                # UI thread, where authentication works - the same fallback the execute path takes,
+                # and for the same reason: a fresh worker runspace cannot always establish an
+                # OmadaWeb.PS session.
+                #
+                # Safe to retry whatever the cause: GetSqlSchema is POST-shaped but purely a read, so
+                # running it twice changes nothing on the tenant. (The execute path needs a far more
+                # careful gate for exactly this reason - see CompletedSteps there.)
+                #
+                # Not retried for a tab that is no longer connected: Resolve-OmadaRequestFailure tears
+                # the tab down for the two tenant-level failures before throwing, and those are the
+                # tenant's answer rather than a worker that could not do its job.
+                if (($null -eq $Pending.Outcome -or $Pending.Outcome -is [System.Management.Automation.ErrorRecord]) -and $Script:ConnectionStatus) {
+                    $Private:Reason = if ($null -eq $Pending.Outcome) { "the background worker returned no result" } else { $Pending.Outcome.Exception.Message }
+                    "The SQL schema could not be retrieved on a background worker: {0}" -f $Private:Reason | Write-LogOutput -LogType DEBUG
+                    Disable-OmadaBackgroundRequest -Reason $Private:Reason
+
+                    # Method carried alongside Uri and Body rather than hard-coded, so the retry
+                    # cannot drift from the request that was actually dispatched.
+                    "Retrying the SQL schema retrieval on the UI thread." | Write-LogOutput -LogType DEBUG
+                    $Script:RunTimeData.RestMethodParam.Uri = $Pending.Context.Caller.Uri
+                    $Script:RunTimeData.RestMethodParam.Method = $Pending.Context.Caller.Method
+                    $Script:RunTimeData.RestMethodParam.Body = $Pending.Context.Caller.Body
+                    Complete-SqlSchemaRetrieval -SchemaResponse (Invoke-OmadaPSWebRequestWrapper) -SchemaCacheKey $Pending.Context.Caller.SchemaCacheKey
+                    return
                 }
-                $Script:RunTimeData.RestMethodParam.Method = "POST"
-                $ReturnValue = Invoke-OmadaPSWebRequestWrapper
-
-                if ($null -ne $ReturnValue -and $ReturnValue -isnot [System.Management.Automation.ErrorRecord] -and $null -ne $ReturnValue.d) {
-                    $Script:SqlSchemaCache[$SchemaCacheKey] = $ReturnValue
-                }
+                Complete-SqlSchemaRetrieval -SchemaResponse $Pending.Outcome -SchemaCacheKey $Pending.Context.Caller.SchemaCacheKey
             }
 
-            if ($null -eq $ReturnValue -or $ReturnValue -is [System.Management.Automation.ErrorRecord] -or $null -eq $ReturnValue.d) {
-                "No SQL schema returned for data connection '{0}'." -f $Script:AppConfig.CurrentDataConnection.FullName | Write-LogOutput -LogType WARNING -SkipDialog
-                return $null
+            if ($null -ne $Private:Pending) {
+                # Dispatched. Everything after the response now happens in the completion block, and
+                # the item's presence on the queue is itself the "already in flight" record.
+                return
             }
 
-            # The schema window is optional: this function also feeds the editor's IntelliSense, which
-            # must work whether or not the user ever opens the SQL schema view. Only touch the window's
-            # title/TreeView when they actually exist (they are created by Open-SqlSchemaForm) - the
-            # setSchema push below always runs.
-            $UpdateSchemaWindow = ($null -ne $Script:SqlSchemaForm -and $null -ne $Script:SqlSchemaForm.Definition -and $null -ne $Script:TreeViewSqlSchema)
-
-            if ($UpdateSchemaWindow) {
-                $Script:SqlSchemaForm.Definition.Title = "Sql Schema - {0}" -f $Script:AppConfig.CurrentDataConnection.FullName
-            }
-
-            "Retrieved object {0}" -f $Script:RunTimeData.SqlQueryObject | Write-LogOutput -LogType VERBOSE
-
-            $SchemaObjects = @{}
-            if ($UpdateSchemaWindow) {
-                $Script:TreeViewSqlSchema.Items.Clear()
-            }
-
-            $Schemas = (($ReturnValue.d | Get-Member -MemberType NoteProperty).Name) | ForEach-Object { $_.Split(".", 2)[0] } | Select-Object -Unique
-            foreach ($Schema in $Schemas) {
-                $Tables = $ReturnValue.d | Get-Member -MemberType NoteProperty | Where-Object { $_.Name -like ("{0}.*" -f $Schema) }
-
-                $TreeViewSchemaItem = $null
-                if ($UpdateSchemaWindow) {
-                    $TreeViewSchemaItem = New-Object System.Windows.Controls.TreeViewItem
-                    $TreeViewSchemaItem.Header = $Schema
-                    $TreeViewSchemaItem.FontSize = 14
-                    $TreeViewSchemaItem.IsExpanded = $true
-                    $Script:TreeViewSqlSchema.Items.Add($TreeViewSchemaItem) | Out-Null
-                }
-
-                $TableObjects = @{}
-
-                foreach ($Table in $Tables) {
-
-                    $TableFullName = $Table.Name
-                    $TableName = $TableFullName.Split(".", 2)[1]
-
-                    $TreeViewTableItem = $null
-                    if ($UpdateSchemaWindow) {
-                        $TreeViewTableItem = New-Object System.Windows.Controls.TreeViewItem
-                        $TreeViewTableItem.Header = $TableName
-                        $TreeViewTableItem.FontSize = 14
-                        $TreeViewSchemaItem.Items.Add($TreeViewTableItem) | Out-Null
-                    }
-
-                    # Each raw entry is "ColumnName DataType"; keep both so the editor can show the
-                    # type in its completion detail. Split on the first run of whitespace (the type
-                    # itself may contain spaces, e.g. "nvarchar(50) NOT NULL", so keep the remainder
-                    # intact) and wrap in @() so a single-column table still serialises as a JSON
-                    # array rather than a lone object.
-                    $TableObjects.Add($TableName, @($ReturnValue.d.$TableFullName | ForEach-Object {
-                                $Parts = $_.Trim() -split "\s+", 2
-                                [PSCustomObject][Ordered]@{ n = $Parts[0]; t = if ($Parts.Count -gt 1) { $Parts[1].Trim() } else { "" } }
-                            }))
-
-                    if ($UpdateSchemaWindow) {
-                        foreach ($Column in $ReturnValue.d.$TableFullName) {
-                            $TreeViewColumnItem = New-Object System.Windows.Controls.TreeViewItem
-                            $TreeViewColumnItem.Header = $Column
-                            $TreeViewColumnItem.FontSize = 12
-                            $TreeViewTableItem.Items.Add($TreeViewColumnItem) | Out-Null
-                        }
-                    }
-                }
-                $SchemaObjects.Add($Schema, $TableObjects)
-            }
-
-            if ($UpdateSchemaWindow) {
-                # The tree was rebuilt from scratch above, so every node is visible again. Re-apply
-                # whatever the user has typed in the filter box, otherwise switching tab or data
-                # connection silently drops an active filter.
-                Update-SqlSchemaTreeFilter
-            }
-
-            $SchemaObjectsJson = $SchemaObjects | ConvertTo-Json -Depth 5
-
-            "Schema for Monaco editor: {0}" -f $SchemaObjectsJson | Write-LogOutput -LogType VERBOSE
-            $OnCompletedScriptBlock = {
-                try {
-                    if (!$Script:Task.Status -eq "RanToCompletion") {
-                        "Monaco Editor Task failed: {0}" -f $Script:Task.Status | Write-LogOutput -LogType ERROR -ErrorObject $_
-                    }
-                    else {
-                        "Monaco Editor Task completed successfully." | Write-LogOutput -LogType DEBUG
-                    }
-                }
-                catch {
-                    $Script:Task.Exception.Message | Write-LogOutput -LogType ERROR -ErrorObject $_
-                }
-            }
-
-            "Push schema to Monaco editor." | Write-LogOutput -LogType DEBUG
-            Invoke-ExecuteScriptAsync -ScriptToExecute "setSchema($SchemaObjectsJson);" -OnCompletedScriptBlock $OnCompletedScriptBlock
-
-            # Re-validate after a schema push. A new connection can invalidate the diagnostics that
-            # are currently on screen, and it is also the first moment a restored tab's editor
-            # content has ever been looked at. Debounced like every other trigger, so switching
-            # connection rapidly costs one parse, not one per switch.
-            Request-SqlSyntaxValidation -TabSession (Get-ActiveTabSession)
-
+            # Not eligible for a worker, or none available: exactly the pre-#40 behaviour.
+            $ReturnValue = Invoke-OmadaPSWebRequestWrapper
+            Complete-SqlSchemaRetrieval -SchemaResponse $ReturnValue -SchemaCacheKey $SchemaCacheKey
         }
         else {
             "SqlSchema DoID is not set! Cannot retrieve Sql schema!" | Write-LogOutput -LogType WARNING -SkipDialog
@@ -173,6 +151,173 @@ function Get-SqlSchemaObject {
         }
     }
     catch {
-        $_.Exception.Message | Write-LogOutput -LogType ERROR -ErrorObject $_
+        $_.Exception.Message | Write-ContainedErrorLog -ErrorObject $_
+    }
+}
+
+function Complete-SqlSchemaRetrieval {
+    <#
+    .SYNOPSIS
+    Everything that happens once a SQL schema response is in hand: cache it, rebuild the schema
+    window's tree, and push the schema to the Monaco editor for IntelliSense.
+
+    .DESCRIPTION
+    Split out of Get-SqlSchemaObject by issue #40 so the same work runs whether the response arrived
+    synchronously or from a background worker. It touches WPF elements and the editor, so it is UI
+    thread only - which it always is: the background path reaches it from the completion poll timer,
+    with the owning tab already made active by Set-ActiveTabContext.
+
+    .PARAMETER SchemaResponse
+    What the request produced: the response object, an ErrorRecord, or $null.
+
+    .PARAMETER SchemaCacheKey
+    The "<SessionKey>|<DataConnectionDoId>" key this response was fetched for. Passed in rather than
+    re-derived, because the active tab may have changed since the request was issued.
+    #>
+    [CmdLetBinding()]
+    param(
+        $SchemaResponse,
+
+        [Parameter(Mandatory = $true)]
+        [string]$SchemaCacheKey
+    )
+    try {
+        $ReturnValue = $SchemaResponse
+
+        if ($null -ne $ReturnValue -and $ReturnValue -isnot [System.Management.Automation.ErrorRecord] -and $null -ne $ReturnValue.d) {
+            if ($null -eq $Script:SqlSchemaCache) {
+                $Script:SqlSchemaCache = @{}
+            }
+            $Script:SqlSchemaCache[$SchemaCacheKey] = $ReturnValue
+        }
+
+        if ($null -eq $ReturnValue -or $ReturnValue -is [System.Management.Automation.ErrorRecord] -or $null -eq $ReturnValue.d) {
+            "No SQL schema returned for data connection '{0}'." -f $Script:AppConfig.CurrentDataConnection.FullName | Write-LogOutput -LogType WARNING -SkipDialog
+            return $null
+        }
+
+        # The schema window is optional: this function also feeds the editor's IntelliSense, which
+        # must work whether or not the user ever opens the SQL schema view. Only touch the window's
+        # title/TreeView when they actually exist (they are created by Open-SqlSchemaForm) - the
+        # setSchema push below always runs.
+        $UpdateSchemaWindow = ($null -ne $Script:SqlSchemaForm -and $null -ne $Script:SqlSchemaForm.Definition -and $null -ne $Script:TreeViewSqlSchema)
+
+        if ($UpdateSchemaWindow) {
+            $Script:SqlSchemaForm.Definition.Title = "Sql Schema - {0}" -f $Script:AppConfig.CurrentDataConnection.FullName
+        }
+
+        "Retrieved object {0}" -f $Script:RunTimeData.SqlQueryObject | Write-LogOutput -LogType VERBOSE
+
+        $SchemaObjects = @{}
+        if ($UpdateSchemaWindow) {
+            $Script:TreeViewSqlSchema.Items.Clear()
+        }
+
+        $Schemas = (($ReturnValue.d | Get-Member -MemberType NoteProperty).Name) | ForEach-Object { $_.Split(".", 2)[0] } | Select-Object -Unique
+        foreach ($Schema in $Schemas) {
+            $Tables = $ReturnValue.d | Get-Member -MemberType NoteProperty | Where-Object { $_.Name -like ("{0}.*" -f $Schema) }
+
+            $TreeViewSchemaItem = $null
+            if ($UpdateSchemaWindow) {
+                $TreeViewSchemaItem = New-Object System.Windows.Controls.TreeViewItem
+                $TreeViewSchemaItem.Header = $Schema
+                $TreeViewSchemaItem.FontSize = 14
+                $TreeViewSchemaItem.IsExpanded = $true
+                $Script:TreeViewSqlSchema.Items.Add($TreeViewSchemaItem) | Out-Null
+            }
+
+            $TableObjects = @{}
+
+            foreach ($Table in $Tables) {
+
+                $TableFullName = $Table.Name
+                $TableName = $TableFullName.Split(".", 2)[1]
+
+                $TreeViewTableItem = $null
+                if ($UpdateSchemaWindow) {
+                    $TreeViewTableItem = New-Object System.Windows.Controls.TreeViewItem
+                    $TreeViewTableItem.Header = $TableName
+                    $TreeViewTableItem.FontSize = 14
+                    $TreeViewSchemaItem.Items.Add($TreeViewTableItem) | Out-Null
+                }
+
+                # Each raw entry is "ColumnName DataType"; keep both so the editor can show the
+                # type in its completion detail. Split on the first run of whitespace (the type
+                # itself may contain spaces, e.g. "nvarchar(50) NOT NULL", so keep the remainder
+                # intact) and wrap in @() so a single-column table still serialises as a JSON
+                # array rather than a lone object.
+                $TableObjects.Add($TableName, @($ReturnValue.d.$TableFullName | ForEach-Object {
+                            $Parts = $_.Trim() -split "\s+", 2
+                            [PSCustomObject][Ordered]@{ n = $Parts[0]; t = if ($Parts.Count -gt 1) { $Parts[1].Trim() } else { "" } }
+                        }))
+
+                if ($UpdateSchemaWindow) {
+                    foreach ($Column in $ReturnValue.d.$TableFullName) {
+                        $TreeViewColumnItem = New-Object System.Windows.Controls.TreeViewItem
+                        $TreeViewColumnItem.Header = $Column
+                        $TreeViewColumnItem.FontSize = 12
+                        $TreeViewTableItem.Items.Add($TreeViewColumnItem) | Out-Null
+                    }
+                }
+            }
+            $SchemaObjects.Add($Schema, $TableObjects)
+        }
+
+        if ($UpdateSchemaWindow) {
+            # The tree was rebuilt from scratch above, so every node is visible again. Re-apply
+            # whatever the user has typed in the filter box, otherwise switching tab or data
+            # connection silently drops an active filter.
+            Update-SqlSchemaTreeFilter
+        }
+
+        $SchemaObjectsJson = $SchemaObjects | ConvertTo-Json -Depth 5
+
+        "Schema for Monaco editor: {0}" -f $SchemaObjectsJson | Write-LogOutput -LogType VERBOSE
+        $OnCompletedScriptBlock = {
+            param($Pending)
+            try {
+                # THIS push's task, taken from the queue item - not $Script:Task.
+                #
+                # $Script:Task is the ACTIVE tab's pending editor task, which by the time this runs is
+                # very often a different, still-running one: Set-ActiveTabContext swaps it per tab,
+                # and a schema push during start-up races the editor loads of every other restored
+                # tab. Reading it reported the wrong task's status, and reported it as a failure
+                # ("WaitingForActivation" is a perfectly normal transient state for a task that has
+                # not finished). At ERROR that also means a modal dialog per occurrence, which is the
+                # cascade of pop-ups seen when reconnecting several tabs at start-up.
+                #
+                # The poll timer only invokes this once $Pending.Task.IsCompleted, so the item's own
+                # task is by definition finished and its status is the real answer.
+                $Private:Task = $Pending.Task
+                if ($null -eq $Private:Task) {
+                    return
+                }
+
+                if ($Private:Task.Status -ne "RanToCompletion") {
+                    # WARNING -SkipDialog, never ERROR: failing to push IntelliSense metadata into
+                    # the editor costs the user completion hints, not their work, and it must not
+                    # interrupt them with a dialog - least of all several at once during start-up.
+                    "Monaco editor schema push did not complete: {0}" -f $Private:Task.Status | Write-LogOutput -LogType WARNING -SkipDialog
+                }
+                else {
+                    "Monaco Editor Task completed successfully." | Write-LogOutput -LogType DEBUG
+                }
+            }
+            catch {
+                $_.Exception.Message | Write-LogOutput -LogType WARNING -SkipDialog
+            }
+        }
+
+        "Push schema to Monaco editor." | Write-LogOutput -LogType DEBUG
+        Invoke-ExecuteScriptAsync -ScriptToExecute "setSchema($SchemaObjectsJson);" -OnCompletedScriptBlock $OnCompletedScriptBlock
+
+            # Re-validate after a schema push. A new connection can invalidate the diagnostics that
+            # are currently on screen, and it is also the first moment a restored tab's editor
+            # content has ever been looked at. Debounced like every other trigger, so switching
+            # connection rapidly costs one parse, not one per switch.
+            Request-SqlSyntaxValidation -TabSession (Get-ActiveTabSession)
+    }
+    catch {
+        $_.Exception.Message | Write-ContainedErrorLog -ErrorObject $_
     }
 }

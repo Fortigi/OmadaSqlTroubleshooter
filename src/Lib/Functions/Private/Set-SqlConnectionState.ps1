@@ -62,7 +62,7 @@ function Set-SqlConnectionState {
             $Script:MainForm.Elements.ButtonConnectText | Set-ButtonText -Value "_Connect"
             $Script:MainForm.Elements.TextBlockStatusBarUrl | Set-TextBlockText -Text "-"
             $Script:MainForm.Elements.TextBlockStatusBarDatabaseName | Set-TextBlockText -Text "-"
-            $Script:MainForm.Elements.TextBlockStatusBarQueryTime | Set-TextBlockText -Text "00:00:00.0000000"
+            $Script:MainForm.Elements.TextBlockStatusBarQueryTime | Set-TextBlockText -Text (Format-ElapsedTime -TimeSpan ([TimeSpan]::Zero))
             $Script:MainForm.Elements.TextBlockStatusBarRows | Set-TextBlockText -Text "0 rows"
             # The window title is refreshed from the active tab by Update-TabHeaderTitle below
             # (-> Update-ApplicationTitle); it will show "<name> - <connection> - <tenant> - No

@@ -7,48 +7,59 @@ function Invoke-OmadaPSWebRequestWrapper {
     # Invoke-OmadaRestMethod (OmadaWeb.PS) can show its own interactive WebView2/Browser login
     # popup when authentication is needed - a modal window this app does not own, but which pumps
     # this thread's messages while blocked exactly like our own dialogs (see
-    # Suspend-WebViewCompletionPolling.ps1). Without suspending here, the WebViewCompletionPollTimer
-    # can fire reentrantly during that popup and process a DIFFERENT tab's WebView2 completion,
-    # repointing $Script:MainForm.Elements/$Script:AppConfig/etc. mid-call - corrupting which tab's
-    # UI this function's own status updates (and any Set-SqlConnectionState a caller makes right
-    # after it returns) end up applying to. This is the single choke point every Omada REST call in
-    # this app goes through, so suspending here covers all of them.
-    Suspend-WebViewCompletionPolling
+    # Suspend-WebViewCompletionPolling.ps1). Without suspending, the WebViewCompletionPollTimer can
+    # fire reentrantly during that popup and process a DIFFERENT tab's WebView2 completion,
+    # repointing $Script:MainForm.Elements/$Script:AppConfig/etc. mid-call.
+    #
+    # Issue #40's last criterion asks for this suppression to be "simplified or removed where it is
+    # no longer needed". Removing it from here would be exactly backwards, and it is worth writing
+    # down why, because the plan for that slice assumed the opposite.
+    #
+    # Before #40 this was the single choke point every Omada request went through, so it covered all
+    # of them - most of which could never have opened a dialog. Now the requests that cannot open a
+    # dialog do not come through here at all: they go to a worker, and
+    # Invoke-OmadaPSWebRequestWrapperAsync suspends nothing, because there is nothing on the UI
+    # thread to protect. What is left calling this function is precisely the set of cases
+    # Test-OmadaBackgroundRequestEligible refuses to dispatch - a tab that has not authenticated, or
+    # a request that explicitly asks to authenticate again - which is to say: the login prompt now
+    # happens HERE, by design, and nowhere else. The suppression is more necessary than it was, not
+    # less.
+    #
+    # The simplification that IS available is narrowing it. It used to be held across parameter
+    # preparation, two rounds of redaction and logging, and the whole error classification - during
+    # all of which no dialog can appear, and every completion in the queue was needlessly delayed.
+    # It now covers just the call that can actually show a window. (Write-LogOutput and
+    # Set-SqlConnectionState open their own dialogs on some paths and suspend for themselves; the
+    # helper is idempotent, so a nested suspend is harmless either way.)
     try {
         if (!$Script:RunTimeData.SkipRetryRequest) {
-            $Private:Parameters = $Script:RunTimeData.RestMethodParam
-            #$Private:Parameters.AuthenticationType = $($Script:MainForm.Elements.ComboBoxSelectAuthenticationOption.SelectedItem.Content)
-            $Private:Parameters.UseWebView2 = $Private:Parameters.AuthenticationType -eq "Browser" ? $($Script:RunTimeConfig.UseWebView2Auth) : $false
-            if ($null -eq $Private:Parameters.Body) {
-                if ($Private:Parameters.ContainsKey("Body")) {
-                    $Private:Parameters.Remove("Body")
-                }
-            }
-            else {
-                if (!$Private:Parameters.ContainsKey("Body")) {
-                    $Private:Parameters.Add("Body", $null)
-                }
-
-                #$Private:Parameters.Body = $Private:Parameters.Body | ConvertTo-Json
-            }
-
-            # Keep the module's own verbose stream in step with this application's log, so the two
-            # do not contradict each other on the same request. Passed only when the installed
-            # OmadaWeb.PS actually declares the parameter: -SkipBodyRedaction is newer than the
-            # pinned minimum version, and splatting a parameter a cmdlet does not have is a
-            # terminating error. Capability-checked rather than version-gated, so this works the day
-            # the switch ships without forcing everyone onto a release that does not exist yet.
-            $Private:RestMethodCommand = Get-Command -Name Invoke-OmadaRestMethod -ErrorAction SilentlyContinue
-            if ($null -ne $Private:RestMethodCommand -and $Private:RestMethodCommand.Parameters.ContainsKey("SkipBodyRedaction")) {
-                $Private:Parameters.SkipBodyRedaction = [bool]$Script:SkipBodyRedaction
-            }
-            elseif ($Private:Parameters.ContainsKey("SkipBodyRedaction")) {
-                # The installed module was downgraded mid-session; drop the key rather than fail.
-                $Private:Parameters.Remove("SkipBodyRedaction")
-            }
+            # Preparation and failure classification live in Build-OmadaRequestParameter and
+            # Resolve-OmadaRequestFailure so the background path (issue #40,
+            # Invoke-OmadaPSWebRequestWrapperAsync) applies exactly the same rules. This function is
+            # still the synchronous choke point, and is still what runs when a request is not
+            # eligible for a worker or no worker could be had.
+            $Private:Parameters = Build-OmadaRequestParameter
 
             "Parameters: {0}" -f (ConvertTo-RedactedLogString -InputObject $Private:Parameters) | Write-LogOutput -LogType VERBOSE
-            $Private:Result = Invoke-OmadaRestMethod @Parameters
+
+            # The call itself lives in Invoke-OmadaRequestCore, which reads no $Script: state and
+            # writes no log - the one part of this function that can legally run in a worker runspace.
+            # The core returns the failure instead of throwing it, so this rethrows to keep the
+            # control flow identical: a rethrown ErrorRecord keeps its Exception, ErrorDetails and
+            # FullyQualifiedErrorId, which is all the classification reads.
+            Suspend-WebViewCompletionPolling
+            try {
+                $Private:Outcome = Invoke-OmadaRequestCore -Parameters $Private:Parameters
+            }
+            finally {
+                Resume-WebViewCompletionPolling
+            }
+
+            if ($null -ne $Private:Outcome.ErrorRecord) {
+                throw $Private:Outcome.ErrorRecord
+            }
+            $Private:Result = $Private:Outcome.Result
+
             # Deliberately no status-bar write here. A successful request is not the same thing as a
             # connected tab: this transport is also used by probes and by work that runs while a tab
             # is being connected, so writing "Connected" from here put the status bar ahead of - and
@@ -66,31 +77,6 @@ function Invoke-OmadaPSWebRequestWrapper {
         }
     }
     catch {
-        if (![string]::IsNullOrWhiteSpace($_.ErrorDetails?.Message) -and $_.ErrorDetails.Message -like "*Resource not found for the segment 'C_P_SQLTROUBLESHOOTING'*") {
-            $Message = "OData Endpoint for SQL Troubleshooting not enabled at tenant {0}.`n`r`n`rError returned by Omada:`n`r`n`r{1}" -f [system.uri]::New($Script:AppConfig.BaseUrl).Host, $_.ErrorDetails.Message
-            # Route the teardown through the state function, exactly as the Unauthorized branch below
-            # already does. This used to hand-write four status-bar fields while leaving
-            # $Script:ConnectionStatus untouched, so the button, the dropdowns and the Display name
-            # went on claiming the tab was connected. (The writes were in fact unreachable: the guard
-            # tested $Script:MainForm.Definitions, which does not exist - the member is Definition -
-            # so the status bar was never even updated on this error.)
-            Set-SqlConnectionState -Status $false
-            $Message | Write-Error -ErrorAction Stop -TargetObject $_
-            $Script:RunTimeData.SkipRetryRequest = $true
-        }
-        elseif ($null -ne $_.Exception?.Response?.StatusCode -and $_.Exception.Response.StatusCode -eq [System.Net.HttpStatusCode]::Unauthorized) {
-            $Message = "Access denied to {0}, message:`n`r{1}" -f [system.uri]::New($Script:AppConfig.BaseUrl).Host, $_.ErrorDetails.Message
-            Set-SqlConnectionState -Status $false
-            $Message | Write-Error -ErrorAction Stop -TargetObject $_
-            $Script:RunTimeData.SkipRetryRequest = $true
-        }
-        else {
-            # $Message = "Error occurred:`n`r{1}" -f [system.uri]::New($Script:AppConfig.BaseUrl).Host, $_.ErrorDetails.Message
-            # $Message | Write-Error -ErrorAction Stop -TargetObject $_
-            $_
-        }
-    }
-    finally {
-        Resume-WebViewCompletionPolling
+        Resolve-OmadaRequestFailure -ErrorRecord $_
     }
 }

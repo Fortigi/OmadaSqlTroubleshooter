@@ -77,4 +77,25 @@ Describe "Resolve-OmadaMockResponse" {
         $Response.StatusCode | Should -Be 200
         $Response.Body.Trim() | Should -Be "{}"
     }
+    It "reports no delay for a route whose manifest entry has no delayMs" {
+        $Response = Resolve-OmadaMockResponse -Path "https://tenant.omada.cloud/odata/dataobjects/C_P_SQLTROUBLESHOOTING" -Method "GET"
+        $Response.DelayMs | Should -Be 0
+    }
+}
+
+Describe "Get-OmadaMockRouteDelayMs" {
+    It "returns the declared delay" {
+        Get-OmadaMockRouteDelayMs -Route ([pscustomobject]@{ delayMs = 250 }) | Should -Be 250
+    }
+    It "returns 0 when the field is absent" {
+        Get-OmadaMockRouteDelayMs -Route ([pscustomobject]@{ file = "x.json" }) | Should -Be 0
+    }
+    It "returns 0 for a null route, a null value and a non-numeric value" {
+        Get-OmadaMockRouteDelayMs -Route $null | Should -Be 0
+        Get-OmadaMockRouteDelayMs -Route ([pscustomobject]@{ delayMs = $null }) | Should -Be 0
+        Get-OmadaMockRouteDelayMs -Route ([pscustomobject]@{ delayMs = "soon" }) | Should -Be 0
+    }
+    It "clamps a negative delay to 0" {
+        Get-OmadaMockRouteDelayMs -Route ([pscustomobject]@{ delayMs = -5 }) | Should -Be 0
+    }
 }

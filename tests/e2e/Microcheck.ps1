@@ -29,6 +29,13 @@ function script:E2ECase {
     )
     $Record = [pscustomobject]@{ Suite = $script:E2ECurrentSuite; Name = $Name; Passed = $true; Message = $null }
     try {
+        # Per-case state that would otherwise carry over. The executing-query popup history is
+        # asserted as "nothing was left open", and a case that legitimately ends with a query still
+        # in flight would fail the next one.
+        if (Get-Command Clear-E2EExecutePopupHistory -ErrorAction SilentlyContinue) {
+            Clear-E2EExecutePopupHistory
+        }
+
         & $Body
     }
     catch {

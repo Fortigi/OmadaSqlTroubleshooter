@@ -24,6 +24,11 @@ function Complete-TabClose {
 
         $ClosingIndex = $Script:Tabs.IndexOf($TabToClose)
 
+        # Before anything is disposed: drop this tab's in-flight background requests (issue #40).
+        # A completion that fires after the tab is gone repoints every "current tab" global onto a
+        # dead tab and writes into disposed elements - see Remove-PendingBackgroundRequest.
+        Remove-PendingBackgroundRequest -TabSession $TabToClose
+
         if ($null -ne $TabToClose.WebView.Object) {
             try {
                 $TabToClose.WebView.Object.Dispose()

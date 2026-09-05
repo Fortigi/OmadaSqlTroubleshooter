@@ -18,6 +18,15 @@ BeforeAll {
 
     . (Join-Path $PrivatePath -ChildPath "ConvertTo-RedactedLogString.ps1")
     . (Join-Path $PrivatePath -ChildPath "Set-TextBlockText.ps1")
+    # The wrapper now issues its request through the runspace-safe core (issue #40 / C1-1), so the
+    # real core is dot-sourced here rather than stubbed: these tests are the contract that the split
+    # changed nothing, which only holds if the actual call path is exercised.
+    . (Join-Path $PrivatePath -ChildPath "Invoke-OmadaRequestCore.ps1")
+    # Preparation and failure classification were extracted so the background path (issue #40)
+    # applies the same rules. The real ones are dot-sourced, not stubbed: these tests are the
+    # contract that the extraction changed nothing, which only holds if the actual code runs.
+    . (Join-Path $PrivatePath -ChildPath "Build-OmadaRequestParameter.ps1")
+    . (Join-Path $PrivatePath -ChildPath "Resolve-OmadaRequestFailure.ps1")
     . (Join-Path $PrivatePath -ChildPath "Invoke-OmadaPSWebRequestWrapper.ps1")
 
     $Script:Tracer = [System.Diagnostics.Trace]
@@ -32,9 +41,13 @@ BeforeAll {
         process { }
     }
 
-    function Suspend-WebViewCompletionPolling { }
+    # Recorded rather than no-ops: issue #40's last criterion is about WHERE this suppression is
+    # held, so the tests below assert on the order of these against the network call.
+    $script:PollingEvents = [System.Collections.Generic.List[string]]::new()
 
-    function Resume-WebViewCompletionPolling { }
+    function Suspend-WebViewCompletionPolling { $script:PollingEvents.Add("suspend") }
+
+    function Resume-WebViewCompletionPolling { $script:PollingEvents.Add("resume") }
 
     # The single network seam. Behaviour per test is steered by $script:RestMethodBehaviour.
     function Invoke-OmadaRestMethod {
@@ -42,6 +55,7 @@ BeforeAll {
         param(
             [Parameter(ValueFromRemainingArguments = $true)]$IgnoredRest
         )
+        $script:PollingEvents.Add("request")
         if ($script:RestMethodBehaviour -eq "ODataMissing") {
             $ErrorRecord = [System.Management.Automation.ErrorRecord]::new(
                 [System.Exception]::new("odata failure"), "OmadaODataMissing",
@@ -97,6 +111,7 @@ BeforeAll {
         # The tab is NOT connected: the whole point is that a successful request must not change that.
         $Script:ConnectionStatus = $false
         $script:ConnectionStateCalls.Clear()
+        $script:PollingEvents.Clear()
         $script:RestMethodBehaviour = "Success"
     }
 }
@@ -138,6 +153,45 @@ Describe "Invoke-OmadaPSWebRequestWrapper connection state" {
         # state machine, which updates button, status bar, dropdowns and Display name together.
         $script:ConnectionStateCalls.Count | Should -Be 1
         $script:ConnectionStateCalls[0] | Should -BeFalse
+    }
+}
+
+Describe "Invoke-OmadaPSWebRequestWrapper reentrancy suppression" {
+    # Issue #40's last criterion, "simplify or remove the reentrancy suppression where it is no
+    # longer needed". It is NOT removed here, and that is deliberate: since the eligibility gate
+    # sends everything that cannot open a dialog to a worker, what is left calling this function is
+    # exactly the set of cases where an interactive login CAN appear. The suppression is more
+    # necessary than it was, not less. What changed is how much it covers.
+
+    It "still suspends the completion poll timer around the network call" {
+        Initialize-WrapperTestState
+
+        Invoke-OmadaPSWebRequestWrapper | Out-Null
+
+        $script:PollingEvents | Should -Be @("suspend", "request", "resume")
+    }
+
+    It "resumes even when the request throws" {
+        Initialize-WrapperTestState
+        $script:RestMethodBehaviour = "ODataMissing"
+
+        { Invoke-OmadaPSWebRequestWrapper } | Should -Throw
+
+        # The classification that follows a failure opens dialogs of its own (Write-LogOutput,
+        # Set-SqlConnectionState), and each suspends for itself - so leaving the timer stopped across
+        # all of it, as this used to, delayed every queued completion for no reason.
+        $script:PollingEvents | Should -Be @("suspend", "request", "resume")
+    }
+
+    It "does not hold the suspension across a request that is never made" {
+        # SkipRetryRequest answers $null without touching the network, so there is nothing to
+        # protect and no reason to stop the timer at all.
+        Initialize-WrapperTestState
+        $Script:RunTimeData.SkipRetryRequest = $true
+
+        Invoke-OmadaPSWebRequestWrapper | Out-Null
+
+        $script:PollingEvents.Count | Should -Be 0
     }
 }
 

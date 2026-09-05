@@ -68,3 +68,101 @@ Describe "Mock server over HTTP" {
         [regex]::Matches($Response.Content, '<option.*?value="(\d+).*?data-uid="(.*?)".*?>(.*?)</option>').Count | Should -BeGreaterThan 0
     }
 }
+
+Describe "Get-OmadaMockEffectiveDelayMs" {
+    It "prefers a live route override over the manifest value" {
+        $Control = @{ RouteDelays = @{ "schema" = 750 } }
+        Get-OmadaMockEffectiveDelayMs -Response @{ RouteKey = "schema"; DelayMs = 10 } -Control $Control | Should -Be 750
+    }
+    It "applies a '*' override to a route with no override of its own" {
+        $Control = @{ RouteDelays = @{ "*" = 40 } }
+        Get-OmadaMockEffectiveDelayMs -Response @{ RouteKey = "probe"; DelayMs = 0 } -Control $Control | Should -Be 40
+    }
+    It "lets a route-specific override win over '*'" {
+        $Control = @{ RouteDelays = @{ "*" = 40; "probe" = 5 } }
+        Get-OmadaMockEffectiveDelayMs -Response @{ RouteKey = "probe" } -Control $Control | Should -Be 5
+    }
+    It "falls back to the manifest value when nothing is overridden" {
+        Get-OmadaMockEffectiveDelayMs -Response @{ RouteKey = "schema"; DelayMs = 120 } -Control @{ RouteDelays = @{} } | Should -Be 120
+    }
+    It "returns 0 with no control table and no manifest value" {
+        Get-OmadaMockEffectiveDelayMs -Response @{ RouteKey = "schema" } -Control $null | Should -Be 0
+    }
+}
+
+Describe "Mock server control table safety" {
+    It "hands the caller a synchronized control table and delay table" {
+        # Serving is concurrent, so both are read and written from several threads at once. A plain
+        # System.Collections.Hashtable is not safe under that.
+        $script:Handle.Control.IsSynchronized | Should -BeTrue
+        $script:Handle.Control.RouteDelays.IsSynchronized | Should -BeTrue
+    }
+
+    It "wraps a caller's unsynchronized control table without losing its writes" {
+        # Start-OmadaMockServer.ps1 used to pass a plain hashtable. Hashtable.Synchronized returns a
+        # locking wrapper over the SAME storage, so wrapping defensively is free: a caller still
+        # holding the original sees everything the loop writes, and vice versa.
+        $Plain = @{ Running = $true }
+        $Wrapped = [hashtable]::Synchronized($Plain)
+
+        $Wrapped["Started"] = $true
+        $Plain["Port"] = 1234
+
+        $Wrapped.IsSynchronized | Should -BeTrue
+        $Plain["Started"] | Should -BeTrue
+        $Wrapped["Port"] | Should -Be 1234
+    }
+}
+
+Describe "Mock server delay and concurrency" {
+    AfterEach {
+        Clear-OmadaMockRouteDelay -Handle $script:Handle
+    }
+
+    It "holds a delayed route for at least the requested time" {
+        Set-OmadaMockRouteDelay -Handle $script:Handle -RouteKey "probe" -DelayMs 600
+        $Stopwatch = [System.Diagnostics.Stopwatch]::StartNew()
+        Get-Mock -PathAndQuery "/odata/dataobjects/C_P_SQLTROUBLESHOOTING" | Out-Null
+        $Stopwatch.Stop()
+        # A margin below the requested delay absorbs timer granularity; the point of the assertion is
+        # that the delay was honoured at all, not that it was honoured to the millisecond.
+        $Stopwatch.ElapsedMilliseconds | Should -BeGreaterThan 450
+    }
+
+    It "answers an undelayed route quickly while a delay is set on a different route" {
+        Set-OmadaMockRouteDelay -Handle $script:Handle -RouteKey "probe" -DelayMs 3000
+        $Stopwatch = [System.Diagnostics.Stopwatch]::StartNew()
+        Get-Mock -PathAndQuery "/webservice/SyntaxHighlighting.asmx/GetSqlSchema" -Method "POST" -Body @{ connectionId = 4201 } | Out-Null
+        $Stopwatch.Stop()
+        $Stopwatch.ElapsedMilliseconds | Should -BeLessThan 1500
+    }
+
+    It "serves two delayed requests concurrently rather than one after the other" {
+        # The whole point of the worker pool. Serially these two 1 s requests take ~2 s; overlapped
+        # they take ~1 s. The 1.6 s bound is comfortably between the two so the test says which
+        # happened without being flaky on a loaded machine.
+        #
+        # HttpClient rather than two runspaces running Invoke-RestMethod: the two GetAsync tasks
+        # overlap with no runspace-startup cost inside the measured window, which is what keeps the
+        # bound meaningful instead of mostly measuring PowerShell's own warm-up.
+        Set-OmadaMockRouteDelay -Handle $script:Handle -RouteKey "probe" -DelayMs 1000
+
+        $Url = "$script:BaseUrl/odata/dataobjects/C_P_SQLTROUBLESHOOTING"
+        $HttpClient = [System.Net.Http.HttpClient]::new()
+        try {
+            $HttpClient.Timeout = [TimeSpan]::FromSeconds(30)
+            $Stopwatch = [System.Diagnostics.Stopwatch]::StartNew()
+            $Tasks = @($HttpClient.GetAsync($Url), $HttpClient.GetAsync($Url))
+            [System.Threading.Tasks.Task]::WaitAll($Tasks)
+            $Stopwatch.Stop()
+            foreach ($Task in $Tasks) {
+                [int]$Task.Result.StatusCode | Should -Be 200
+            }
+        }
+        finally {
+            $HttpClient.Dispose()
+        }
+
+        $Stopwatch.ElapsedMilliseconds | Should -BeLessThan 1600
+    }
+}

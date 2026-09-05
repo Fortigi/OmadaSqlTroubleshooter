@@ -25,6 +25,129 @@ function script:Invoke-OmadaPSWebRequestWrapper {
     return $Response
 }
 
+# --- The transport seam under the pipeline (issue #40, C1-5) --------------------------------------
+# Invoke-OmadaExecutePipeline issues its steps through Invoke-OmadaRequestCore, NOT through
+# Invoke-OmadaPSWebRequestWrapper - that is the whole point of the core, since the wrapper cannot run
+# in a worker. Without this override the pipeline would call the real OmadaWeb.PS and reach out to
+# whatever tenant URL the app had built. Shadowing it here means the scenarios run the REAL pipeline
+# - its sequencing, its step decisions, its temporary-object clean-up - over fixture responses.
+function script:Invoke-OmadaRequestCore {
+    param(
+        [hashtable]$Parameters
+    )
+    $script:E2ECalls.Add([pscustomobject]@{
+            Uri      = [string]$Parameters.Uri
+            Method   = [string]$Parameters.Method
+            Body     = $Parameters.Body
+            DataType = $(if ($Parameters.Body -is [System.Collections.IDictionary] -and $Parameters.Body.Contains("dataType")) { [string]$Parameters.Body["dataType"] } else { $null })
+        })
+    try {
+        $Response = Resolve-E2EFixture -Uri $Parameters.Uri -Method $Parameters.Method -Body $Parameters.Body
+        if ($Response -is [System.Exception]) {
+            return @{ Result = $null; ErrorRecord = [System.Management.Automation.ErrorRecord]::new(
+                    $Response, "E2EFixtureFailure", [System.Management.Automation.ErrorCategory]::ConnectionError, $null) }
+        }
+        if ($Response -is [System.Management.Automation.ErrorRecord]) {
+            return @{ Result = $null; ErrorRecord = $Response }
+        }
+        return @{ Result = $Response; ErrorRecord = $null }
+    }
+    catch {
+        return @{ Result = $null; ErrorRecord = $_ }
+    }
+}
+
+# --- The background dispatch seam (issue #40) -----------------------------------------------------
+# Requests now also run on worker runspaces. The shim above cannot cover those: a worker has its own
+# OmadaWeb.PS and would call the REAL Invoke-OmadaRestMethod, so an unmocked background request would
+# reach out to whatever tenant URL the app built.
+#
+# The seam is placed at Start-OmadaBackgroundRequest rather than at
+# Invoke-OmadaPSWebRequestWrapperAsync deliberately. Everything ABOVE it stays real - the eligibility
+# gate, the parameter preparation, the completion queue, Complete-OmadaBackgroundRequest, the error
+# classification and the 50 ms poll timer - which is precisely the machinery issue #40 adds and the
+# part a scenario needs to be exercising. Only the worker's contents are replaced: the fixture is
+# resolved HERE, on the UI thread (Resolve-E2EFixture is a harness function and could not run in a
+# worker anyway), and the worker itself just waits and hands it back.
+#
+# The wait is real, on a real runspace, so a scenario can genuinely observe an in-flight request:
+# set $script:E2ERequestDelayMs to make a query take time.
+$script:E2ERequestDelayMs = 0
+
+function script:Start-OmadaBackgroundRequest {
+    param(
+        [hashtable]$Parameters,
+        $TabSession,
+        [scriptblock]$OnCompletedScriptBlock,
+        $Context,
+        [hashtable]$PipelineContext,
+        [string]$Description
+    )
+
+    $Progress = [hashtable]::Synchronized(@{})
+    $Payload = @{ Result = $null; ErrorRecord = $null }
+
+    if ($null -ne $PipelineContext) {
+        # C1-5: the worker runs the whole dependent chain. The REAL Invoke-OmadaExecutePipeline is
+        # used here, on the UI thread, because it is runspace-safe and therefore also
+        # dispatcher-safe - so the scenarios exercise the actual sequencing, the actual step
+        # decisions and the actual temporary-object clean-up. Only the transport under it is the
+        # fixture, via Invoke-OmadaRequestCore's seam below.
+        $PipelineContext = $PipelineContext.Clone()
+        $PipelineContext.Parameters = $Parameters.Clone()
+        $PipelineContext.Progress = $Progress
+        $PipelineOutcome = Invoke-OmadaExecutePipeline -Context $PipelineContext
+        $Payload.Result = $PipelineOutcome
+        $Payload.ErrorRecord = $PipelineOutcome.ErrorRecord
+    }
+    else {
+        # Recorded in the same shape as the synchronous seam, so Get-E2ECallCount counts a background
+        # request exactly as it counts an inline one and existing assertions keep working.
+        $script:E2ECalls.Add([pscustomobject]@{
+                Uri      = [string]$Parameters.Uri
+                Method   = [string]$Parameters.Method
+                Body     = $Parameters.Body
+                DataType = $(if ($Parameters.Body -is [System.Collections.IDictionary] -and $Parameters.Body.Contains("dataType")) { [string]$Parameters.Body["dataType"] } else { $null })
+            })
+
+        try {
+            $Response = Resolve-E2EFixture -Uri $Parameters.Uri -Method $Parameters.Method -Body $Parameters.Body
+            if ($Response -is [System.Exception]) {
+                $Payload.ErrorRecord = [System.Management.Automation.ErrorRecord]::new(
+                    $Response, "E2EFixtureFailure", [System.Management.Automation.ErrorCategory]::ConnectionError, $null)
+            }
+            else {
+                $Payload.Result = $Response
+            }
+        }
+        catch {
+            $Payload.ErrorRecord = $_
+        }
+    }
+
+    $Shell = [powershell]::Create()
+    [void]$Shell.AddScript({
+            param($DelayMs, $Payload)
+            if ($DelayMs -gt 0) { Start-Sleep -Milliseconds $DelayMs }
+            return $Payload
+        }).AddArgument($script:E2ERequestDelayMs).AddArgument($Payload)
+
+    $Pending = [PSCustomObject]@{
+        Task                   = $Shell.BeginInvoke()
+        Shell                  = $Shell
+        TabSession             = $TabSession
+        OnCompletedScriptBlock = $OnCompletedScriptBlock
+        StartedUtc             = [DateTime]::UtcNow
+        IsCancelled            = $false
+        IsBackgroundRequest    = $true
+        Description            = $Description
+        Context                = $Context
+        Progress               = $Progress
+    }
+    $Script:PendingWebViewCompletions.Add($Pending)
+    return $Pending
+}
+
 # --- Editor read seam: reproduce the poll-timer contract synchronously -----------------------------
 # The real poll timer sets $Script:Task then invokes the completion block. Invoke-ExecuteQuery reads
 # $Script:Task.Result as a JSON string. We invoke the block inline so execute is fully synchronous.
@@ -85,15 +208,45 @@ function script:Open-ChoiceForm {
 }
 
 $script:E2EPopupMessages = [System.Collections.Generic.List[string]]::new()
+# Every "Executing Query..." popup the mock has handed out, so a scenario can assert that none was
+# left open - not merely that the tab's slot was cleared.
+$script:E2EExecutePopups = [System.Collections.Generic.List[object]]::new()
 
 function script:Show-PopupWindow {
     param(
         $Message
     )
     # Record the message so scenarios can assert which popups were shown (e.g. the first-open
-    # "Opening tab..." popup), but return $null so nothing enters a nested WPF message pump.
+    # "Opening tab..." popup).
     $script:E2EPopupMessages.Add([string]$Message)
-    return $null
+
+    # $null for every popup except the executing-query one.
+    #
+    # Returning $null keeps a real WPF window out of the run, which is the point - nothing here may
+    # enter a nested message pump. But it also made every assertion that a popup had been CLOSED
+    # vacuous: the slot was $null whether or not the code under test closed anything.
+    #
+    # Only the execute popup gets a stand-in, because only it is under test here (issue #40: it must
+    # belong to its own tab and must not be orphaned by a second execute). The other callers -
+    # opening a tab, connecting, refreshing queries - branch on the returned value in ways this suite
+    # already depends on, and handing them an object changes scenarios that have nothing to do with
+    # this. Narrow on purpose.
+    if ([string]$Message -ne "Executing Query...") {
+        return $null
+    }
+
+    # An ordinary PSCustomObject with three script methods: it pumps nothing, and "the popup was
+    # closed" becomes a claim the suite can actually falsify.
+    $Popup = [pscustomobject]@{ Message = [string]$Message; Visible = $false; Closed = $false }
+    $Popup | Add-Member -MemberType ScriptMethod -Name Show -Value { $this.Visible = $true } -Force
+    $Popup | Add-Member -MemberType ScriptMethod -Name Hide -Value { $this.Visible = $false } -Force
+    $Popup | Add-Member -MemberType ScriptMethod -Name Close -Value { $this.Closed = $true; $this.Visible = $false } -Force
+
+    # Every execute popup ever handed out is remembered, because clearing the tab's slot is NOT the
+    # same as closing the window - and the bug being guarded against is precisely a window nobody
+    # closed. Checking only the slot passes a build in which Close() is never called at all.
+    $script:E2EExecutePopups.Add($Popup)
+    return $Popup
 }
 
 # Suppress ALL modal log dialogs. The real Write-LogOutput pops a blocking WinForms/WPF MessageBox for
