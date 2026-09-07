@@ -106,6 +106,14 @@ function Complete-TabClose {
         }
     }
     catch {
-        $_.Exception.Message | Write-LogOutput -LogType ERROR -ErrorObject $_
+        # Contained. This is the outer guard of the whole tab-close operation, and Write-LogOutput
+        # ends an ERROR with Write-Error - terminating under the application's
+        # $ErrorActionPreference = Stop. Throwing from here would abandon a close half-done and
+        # unwind into the caller that asked for it, which is the failure this catch exists to
+        # prevent. The same reasoning as Remove-PendingBackgroundRequest, which this function calls.
+        #
+        # Still reported to the user, unlike the cleanup helpers: closing a tab is something they
+        # deliberately asked for, so a close that did not go cleanly is worth being told about.
+        $_.Exception.Message | Write-ContainedErrorLog -ErrorObject $_
     }
 }

@@ -53,6 +53,17 @@ function Set-ExecuteQueryButtonState {
         }
     }
     catch {
-        $_.Exception.Message | Write-LogOutput -LogType ERROR -ErrorObject $_
+        # WARNING with -SkipDialog, deliberately, rather than ERROR.
+        #
+        # Write-LogOutput ends an ERROR with Write-Error, which under this application's
+        # $ErrorActionPreference = Stop is terminating. This function is called from
+        # Initialize-UiComponents on every tab switch and from Reset-ExecuteQueryUiState during
+        # teardown, so an ERROR here would unwind a tab switch or abandon the rest of a teardown -
+        # leaving the tab half-restored - because a button glyph could not be set.
+        #
+        # Not silent either: failing to paint the button means the user cannot tell Execute from
+        # Cancel, which is worth seeing in the log. It just must not be fatal, and must not raise a
+        # modal on a path that runs several times per query.
+        "Could not update the Execute/Cancel button state: {0}" -f $_.Exception.Message | Write-LogOutput -LogType WARNING -SkipDialog
     }
 }

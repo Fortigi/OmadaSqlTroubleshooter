@@ -66,6 +66,16 @@ function Remove-PendingBackgroundRequest {
         }
     }
     catch {
-        $_.Exception.Message | Write-LogOutput -LogType ERROR -ErrorObject $_
+        # WARNING with -SkipDialog, deliberately, rather than ERROR.
+        #
+        # This is the tab-close cleanup guard, called from Complete-TabClose before the tab's
+        # elements are disposed. Write-LogOutput ends an ERROR with Write-Error, which under this
+        # application's $ErrorActionPreference = Stop is terminating - so an ERROR raised here would
+        # unwind the very teardown this function exists to make safe, and a modal would appear in the
+        # middle of a tab closing.
+        #
+        # Still reported: failing to drain a closed tab's queue can leak a worker runspace back to
+        # nothing, which is worth seeing. It just must not stop the tab from closing.
+        "Could not fully clean up background requests for the closed tab: {0}" -f $_.Exception.Message | Write-LogOutput -LogType WARNING -SkipDialog
     }
 }
