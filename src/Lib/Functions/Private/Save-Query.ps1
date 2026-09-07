@@ -35,21 +35,32 @@ function Save-Query {
             $Script:RunTimeData.RestMethodParam.Method = "PUT"
         }
 
-        # The diff rules and the URL come from New-OmadaQueryRequest, which is also what the
+        # The diff rules and the request BODY come from New-OmadaQueryRequest, which is also what the
         # background pipeline uses inside the worker (issue #40, C1-5). One definition of "what does
         # saving a query send, and when is there nothing to send" - two copies of that would drift,
         # and the drift would only show up against a real tenant.
-        $Private:SaveContext = @{
-            BaseUrl            = $Script:AppConfig.BaseUrl
-            QueryDoId          = $Script:AppConfig.CurrentSqlQuery.DoId
-            QueryText          = $Script:RunTimeData.QueryText
-            CurrentQueryText   = $Script:RunTimeData.CurrentQueryText
-            SavedQueryText     = $private:Result.C_QUERY
-            DisplayName        = $Script:MainForm.Elements.TextBoxDisplayName.Text
-            CurrentDisplayName = $Script:RunTimeData.CurrentSqlQuery.DisplayName
-            DataConnectionDoId = $Script:AppConfig.CurrentDataConnection.DoId
+        #
+        # The URI and method are NOT from there: both branches above set them on RestMethodParam,
+        # because they differ between creating (POST to the collection) and updating (PUT to the
+        # object), and the create branch has to probe for a name clash first.
+        #
+        # Built only for an existing query. A new one has nothing on the server to diff against, so
+        # the "nothing changed" answer cannot apply and the body is composed below instead - asking
+        # for a SaveExistingQuery request there would construct one just to discard it.
+        $Private:SaveRequest = $null
+        if (-not $NewQuery) {
+            $Private:SaveContext = @{
+                BaseUrl            = $Script:AppConfig.BaseUrl
+                QueryDoId          = $Script:AppConfig.CurrentSqlQuery.DoId
+                QueryText          = $Script:RunTimeData.QueryText
+                CurrentQueryText   = $Script:RunTimeData.CurrentQueryText
+                SavedQueryText     = $private:Result.C_QUERY
+                DisplayName        = $Script:MainForm.Elements.TextBoxDisplayName.Text
+                CurrentDisplayName = $Script:RunTimeData.CurrentSqlQuery.DisplayName
+                DataConnectionDoId = $Script:AppConfig.CurrentDataConnection.DoId
+            }
+            $Private:SaveRequest = New-OmadaQueryRequest -Kind "SaveExistingQuery" -Context $Private:SaveContext
         }
-        $Private:SaveRequest = New-OmadaQueryRequest -Kind "SaveExistingQuery" -Context $Private:SaveContext
 
         # A new query always has a body: there is nothing on the server to compare against, so the
         # "nothing changed" answer cannot apply. The URI and method for that case were set above.

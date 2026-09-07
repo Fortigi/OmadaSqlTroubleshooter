@@ -158,8 +158,18 @@ function Write-LogOutput {
                 try {
                     if ($Null -ne $ErrorObject) {
                         if ($null -ne $ErrorObject.Exception?.StatusCode) {
-                            $LogMessageDialog.Title += "{0} - ({1} - {2})" -f $LogMessageDialog.Title, $ErrorObject.Exception.StatusCode, $ErrorObject.Exception.Response.ReasonPhrase
-                            $LogMessageDialog.Text = "Failure {0} - {1} occurred:`r`n`r`n{2}" -f $LogMessageDialog.Text, $ErrorObject.Exception.StatusCode, $ErrorObject.Exception.Response.ReasonPhrase
+                            # Assignment, not "+=". The format string's {0} is the title itself, so
+                            # appending it produced the title twice:
+                            #   "Error - Mve: queryError - Mve: query - (500 - Internal Server Error)"
+                            $LogMessageDialog.Title = "{0} - ({1} - {2})" -f $LogMessageDialog.Title, $ErrorObject.Exception.StatusCode, $ErrorObject.Exception.Response.ReasonPhrase
+
+                            # Argument order. These three were passed message-first, so the user's
+                            # actual error landed in the status-code slot and the reason phrase
+                            # replaced the message body:
+                            #   "Failure The query pipeline failed - 500 occurred:
+                            #
+                            #    Internal Server Error"
+                            $LogMessageDialog.Text = "Failure {0} - {1} occurred:`r`n`r`n{2}" -f $ErrorObject.Exception.StatusCode, $ErrorObject.Exception.Response.ReasonPhrase, $LogMessageDialog.Text
                         }
                     }
                     else {
