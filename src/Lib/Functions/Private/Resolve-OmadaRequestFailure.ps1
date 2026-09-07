@@ -44,7 +44,9 @@ function Resolve-OmadaRequestFailure {
     )
 
     if (![string]::IsNullOrWhiteSpace($ErrorRecord.ErrorDetails?.Message) -and $ErrorRecord.ErrorDetails.Message -like "*Resource not found for the segment 'C_P_SQLTROUBLESHOOTING'*") {
-        $Message = "OData Endpoint for SQL Troubleshooting not enabled at tenant {0}.`n`r`n`rError returned by Omada:`n`r`n`r{1}" -f [system.uri]::New($Script:AppConfig.BaseUrl).Host, $ErrorRecord.ErrorDetails.Message
+        # CRLF, not LFCR. These read "`n`r", which is a line feed followed by a carriage return -
+        # backwards, and rendered as such by anything that treats CR as "return to column 0".
+        $Message = "OData Endpoint for SQL Troubleshooting not enabled at tenant {0}.`r`n`r`nError returned by Omada:`r`n`r`n{1}" -f [system.uri]::New($Script:AppConfig.BaseUrl).Host, $ErrorRecord.ErrorDetails.Message
         # Route the teardown through the state function, exactly as the Unauthorized branch below
         # already does. This used to hand-write four status-bar fields while leaving
         # $Script:ConnectionStatus untouched, so the button, the dropdowns and the Display name went
@@ -53,7 +55,7 @@ function Resolve-OmadaRequestFailure {
         $Message | Write-Error -ErrorAction Stop -TargetObject $ErrorRecord
     }
     elseif ($null -ne $ErrorRecord.Exception?.Response?.StatusCode -and $ErrorRecord.Exception.Response.StatusCode -eq [System.Net.HttpStatusCode]::Unauthorized) {
-        $Message = "Access denied to {0}, message:`n`r{1}" -f [system.uri]::New($Script:AppConfig.BaseUrl).Host, $ErrorRecord.ErrorDetails.Message
+        $Message = "Access denied to {0}, message:`r`n{1}" -f [system.uri]::New($Script:AppConfig.BaseUrl).Host, $ErrorRecord.ErrorDetails.Message
         Set-SqlConnectionState -Status $false
         $Message | Write-Error -ErrorAction Stop -TargetObject $ErrorRecord
     }

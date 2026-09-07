@@ -67,7 +67,17 @@ function Stop-ExecuteQueryRequest {
         }
         if ($null -ne $Private:TempQueryDoId) {
             "Removing the temporary query object left by the cancelled execution." | Write-LogOutput -LogType DEBUG
-            Remove-SqlQueryObject -DoId $Private:TempQueryDoId
+
+            # -Synchronous, and this is the one caller that needs it. The temporary object is named
+            # TMP_<InstanceGuid> and the pipeline REUSES it rather than creating a new one, so the
+            # same DoId comes back on the next execute-selection. A fire-and-forget delete left in
+            # flight here can land after the user has started that next execution and delete the
+            # object it is using - and "cancel, then immediately run it again" is precisely what a
+            # user does, so that is the likely ordering rather than an unlikely one.
+            #
+            # The cost is a brief block inside the Cancel handler, which is already the moment the
+            # user is waiting on.
+            Remove-SqlQueryObject -DoId $Private:TempQueryDoId -Synchronous
         }
 
         "Stopped waiting for the query. It may still be running on the server." | Write-LogOutput -LogType WARNING -SkipDialog
