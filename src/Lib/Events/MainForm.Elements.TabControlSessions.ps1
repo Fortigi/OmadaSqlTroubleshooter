@@ -66,6 +66,11 @@
                 # visibility from those would flicker the popup for tabs the user is not looking at.
                 Sync-ExecuteQueryPopupVisibility
 
+                # Anything that happened on this tab while it was off screen is reported now, in the
+                # context where it makes sense. Deliberately after Set-ActiveTabContext, so the tab is
+                # fully swapped in before a modal pumps the dispatcher.
+                Show-TabScopedMessage -TabSession $TabSession
+
                 if (![string]::IsNullOrWhiteSpace($OutgoingTabId) -and $OutgoingTabId -ne $TabSession.Id) {
                     $Script:PreviousActiveTabId = $OutgoingTabId
                 }

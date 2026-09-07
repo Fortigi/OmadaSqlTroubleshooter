@@ -19,7 +19,8 @@ BeforeAll {
             [Parameter(ValueFromPipeline = $true)]$InputObject,
             [string]$LogType,
             $ErrorObject,
-            [switch]$SkipDialog
+            [switch]$SkipDialog,
+            [switch]$TabScoped
         )
         process { }
     }

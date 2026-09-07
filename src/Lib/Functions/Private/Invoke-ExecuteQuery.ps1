@@ -134,7 +134,7 @@ function Invoke-ExecuteQuery {
                         $Private:TaskFailure = $Script:Task.Exception.GetBaseException().Message
                     }
 
-                    "Reading the editor's contents failed: {0}" -f $Private:TaskFailure | Write-ContainedErrorLog -ErrorObject $Script:Task.Exception
+                    "Reading the editor's contents failed: {0}" -f $Private:TaskFailure | Write-ContainedErrorLog -ErrorObject $Script:Task.Exception -TabScoped
                 }
                 else {
                     "Task result: {0}" -f $Script:Task.Status | Write-LogOutput -LogType DEBUG
@@ -146,14 +146,14 @@ function Invoke-ExecuteQuery {
                 # object for its whole lifetime and deletes it in its own finally, so this frame
                 # never holds one to leak.
                 Reset-ExecuteQueryUiState
-                $_.Exception.Message | Write-ContainedErrorLog -ErrorObject $_
+                $_.Exception.Message | Write-ContainedErrorLog -ErrorObject $_ -TabScoped
             }
         }
         Invoke-ExecuteScriptWithResultAsync -ScriptToExecute $ScriptToExecute -OnCompletedScriptBlock $OnCompletedScriptBlock
     }
     catch {
         Reset-ExecuteQueryUiState
-        $_.Exception.Message | Write-ContainedErrorLog -ErrorObject $_
+        $_.Exception.Message | Write-ContainedErrorLog -ErrorObject $_ -TabScoped
     }
 }
 
@@ -217,7 +217,7 @@ function Reset-ExecuteQueryUiState {
         }
     }
     catch {
-        $_.Exception.Message | Write-ContainedErrorLog -ErrorObject $_
+        $_.Exception.Message | Write-ContainedErrorLog -ErrorObject $_ -TabScoped
     }
 }
 
@@ -316,7 +316,7 @@ function Invoke-ExecuteQueryOnUiThread {
     }
     catch {
         Reset-ExecuteQueryUiState
-        $_.Exception.Message | Write-ContainedErrorLog -ErrorObject $_
+        $_.Exception.Message | Write-ContainedErrorLog -ErrorObject $_ -TabScoped
     }
 }
 
@@ -365,7 +365,7 @@ function Complete-ExecuteQueryPipeline {
             $Private:Reason = if ($Outcome -is [System.Management.Automation.ErrorRecord]) { $Outcome.Exception.Message } else { "the background worker returned no result" }
 
             if ($AlreadyOnUiThread) {
-                "The query could not be run on the UI thread either: {0}" -f $Private:Reason | Write-ContainedErrorLog
+                "The query could not be run on the UI thread either: {0}" -f $Private:Reason | Write-ContainedErrorLog -TabScoped
                 Complete-ExecuteQueryResult -QueryResult $null -SaveResult $null -TempQueryDoId $null
                 return
             }
@@ -403,7 +403,7 @@ function Complete-ExecuteQueryPipeline {
                 return
             }
 
-            "The query pipeline failed at step '{0}': {1}" -f $Outcome.FailedStep, $Outcome.ErrorRecord.Exception.Message | Write-ContainedErrorLog -ErrorObject $Outcome.ErrorRecord
+            "The query pipeline failed at step '{0}': {1}" -f $Outcome.FailedStep, $Outcome.ErrorRecord.Exception.Message | Write-ContainedErrorLog -ErrorObject $Outcome.ErrorRecord -TabScoped
             Complete-ExecuteQueryResult -QueryResult $Outcome.ErrorRecord -SaveResult $Outcome.SaveResult -TempQueryDoId $null
             return
         }
@@ -414,7 +414,7 @@ function Complete-ExecuteQueryPipeline {
     }
     catch {
         Reset-ExecuteQueryUiState
-        $_.Exception.Message | Write-ContainedErrorLog -ErrorObject $_
+        $_.Exception.Message | Write-ContainedErrorLog -ErrorObject $_ -TabScoped
     }
 }
 
@@ -464,7 +464,7 @@ function Complete-ExecuteQueryResult {
         # not exist. Null became far more reachable once a request could fail or be abandoned in a
         # worker, so it is now treated as what it is - no rows.
         if ($null -eq $Script:RunTimeData.QueryResult -or ($Script:RunTimeData.QueryResult.d.Rows | Measure-Object).Count -le 0) {
-            "Query did not return any results!" | Write-LogOutput -LogType WARNING
+            "Query did not return any results!" | Write-LogOutput -LogType WARNING -TabScoped
             $Script:MainForm.Elements.TextBlockStatusBarRows | Set-TextBlockText -Text "0 rows"
             $Script:MainForm.Elements.DataGridQueryResult.ItemsSource = $null
         }
@@ -514,6 +514,6 @@ function Complete-ExecuteQueryResult {
         # The temporary object is already gone by here - it is deleted before anything that can throw
         # - so this only has to put the UI back.
         Reset-ExecuteQueryUiState
-        $_.Exception.Message | Write-ContainedErrorLog -ErrorObject $_
+        $_.Exception.Message | Write-ContainedErrorLog -ErrorObject $_ -TabScoped
     }
 }
