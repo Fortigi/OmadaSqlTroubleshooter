@@ -27,18 +27,25 @@ function Write-ContainedErrorLog {
 
     .PARAMETER ErrorObject
     The originating error, passed through for the call stack Write-LogOutput records.
+
+    .PARAMETER TabScoped
+    The error belongs to one tab rather than to the application, so it is held until that tab is on
+    screen instead of interrupting whatever the user is doing elsewhere. Passed straight through to
+    Write-LogOutput, where the reasoning lives.
     #>
     [CmdLetBinding()]
     param(
         [Parameter(Mandatory = $true, ValueFromPipeline = $true)]
         [string]$Message,
 
-        $ErrorObject
+        $ErrorObject,
+
+        [switch]$TabScoped
     )
 
     process {
         try {
-            $Message | Write-LogOutput -LogType ERROR -ErrorObject $ErrorObject
+            $Message | Write-LogOutput -LogType ERROR -ErrorObject $ErrorObject -TabScoped:$TabScoped
         }
         catch {
             # Expected, and the entire point: Write-LogOutput has already written the line and shown

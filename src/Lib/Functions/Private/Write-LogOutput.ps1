@@ -6,7 +6,16 @@ function Write-LogOutput {
         $ErrorObject,
         [ValidateSet("DEBUG", "INFO", "ERROR", "VERBOSE", "WARNING", "FATAL", "LOG", "VERBOSE2")]
         [string]$LogType = "INFO",
-        [switch]$SkipDialog
+        [switch]$SkipDialog,
+        # The message belongs to one tab - a query result, a failed execute - rather than to the
+        # application. Since queries run in the background (issue #40) such a message can arrive for a
+        # tab the user is not looking at, and a modal about an invisible query interrupts whatever
+        # they are doing on the tab they ARE looking at. A tab-scoped message raised while its tab is
+        # off screen is therefore held and shown when that tab is next opened.
+        #
+        # Opt-in, so everything that has not been considered keeps today's behaviour: an application
+        # failure is not about a tab and must be seen wherever the user is.
+        [switch]$TabScoped
     )
 
     try {
@@ -178,38 +187,28 @@ function Write-LogOutput {
             $LogMessage.Text | Write-Verbose
         }
         if ($LogMessageDialog.Show -and !$SkipDialog) {
-            # A blocking dialog pumps this thread's messages while it's up, which can let
-            # $Script:WebViewCompletionPollTimer's Tick fire reentrantly nested inside it -
-            # suspend it for the duration so that can't happen (see
-            # Suspend-WebViewCompletionPolling.ps1 for why).
-            Suspend-WebViewCompletionPolling
-            try {
-                if ($null -ne $Script:MainForm -and $null -ne $Script:MainForm.Definition -and $Script:MainForm.Definition.IsVisible) {
-                    $TrimmedText = Limit-MessageBoxText -Text $LogMessageDialog.Text
-
-                    # Owned by the main window. Without an owner a WinForms MessageBox raised from a
-                    # WPF application is a top-level window with no relationship to it, so Windows is
-                    # free to order it behind the main form - which it did: an error about a failed
-                    # query appeared behind the application, and the application looked hung because
-                    # the dialog underneath it was modal. The owner also gives the dialog somewhere
-                    # sensible to centre itself.
-                    $Private:DialogOwner = Get-MainFormMessageBoxOwner
-                    try {
-                        if ($null -ne $Private:DialogOwner) {
-                            [System.Windows.Forms.MessageBox]::Show($Private:DialogOwner, $TrimmedText, $LogMessageDialog.Title, [System.Windows.Forms.MessageBoxButtons]::OK, $LogMessageDialog.Icon)
-                        }
-                        else {
-                            [System.Windows.Forms.MessageBox]::Show($TrimmedText, $LogMessageDialog.Title, [System.Windows.Forms.MessageBoxButtons]::OK, $LogMessageDialog.Icon)
-                        }
-                    }
-                    finally {
-                        if ($null -ne $Private:DialogOwner) {
-                            try { $Private:DialogOwner.ReleaseHandle() } catch { }
-                        }
-                    }
-                    Restore-MainFormFocus
+            if ($null -ne $Script:MainForm -and $null -ne $Script:MainForm.Definition -and $Script:MainForm.Definition.IsVisible) {
+                # A message that belongs to a tab the user is not looking at is held rather than
+                # shown. Interrupting work on the visible tab with a modal about an invisible query is
+                # what this avoids; it is shown when that tab is next opened, and it is in the log
+                # either way. An application-level failure is not tab-scoped and always shows.
+                if ($TabScoped -and -not (Test-ActiveTabIsOnScreen)) {
+                    Add-TabScopedMessage -TabSession (Get-ActiveTabSession) -Text $LogMessageDialog.Text -Title $LogMessageDialog.Title -Icon $LogMessageDialog.Icon
                 }
                 else {
+                    Show-LogMessageDialog -Text $LogMessageDialog.Text -Title $LogMessageDialog.Title -Icon $LogMessageDialog.Icon
+                }
+            }
+            else {
+                # No main window yet - startup, shutdown, or a console host. Nothing is tab-scoped
+                # here because there are no tabs to scope to, so this path is unchanged.
+                #
+                # A blocking dialog pumps this thread's messages while it's up, which can let
+                # $Script:WebViewCompletionPollTimer's Tick fire reentrantly nested inside it -
+                # suspend it for the duration so that can't happen (see
+                # Suspend-WebViewCompletionPolling.ps1 for why).
+                Suspend-WebViewCompletionPolling
+                try {
                     $MessageBoxImage = [System.Windows.MessageBoxImage]::Information
                     if ($LogMessage.ShowWarning) {
                         $LogMessage.Text | Write-Warning
@@ -224,9 +223,9 @@ function Write-LogOutput {
                     }
                     [System.Windows.MessageBox]::Show((Limit-MessageBoxText -Text $LogMessageDialog.Text), $LogMessageDialog.Title, [System.Windows.MessageBoxButton]::OK, $MessageBoxImage) | Out-Null
                 }
-            }
-            finally {
-                Resume-WebViewCompletionPolling
+                finally {
+                    Resume-WebViewCompletionPolling
+                }
             }
         }
         if ($LogMessage.ShowError) {

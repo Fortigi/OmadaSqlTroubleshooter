@@ -20,7 +20,8 @@ BeforeAll {
             [string]$Message,
             $ErrorObject,
             [string]$LogType = "INFO",
-            [switch]$SkipDialog
+            [switch]$SkipDialog,
+            [switch]$TabScoped
         )
     }
 
