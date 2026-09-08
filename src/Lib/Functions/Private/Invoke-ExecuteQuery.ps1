@@ -408,6 +408,16 @@ function Complete-ExecuteQueryPipeline {
             return
         }
 
+        # The chain succeeded. If background execution had been switched off - almost always because
+        # a worker met an expired session, which it cannot sign in to recover from - this is the
+        # evidence that a session exists again, so it is worth offering a worker the next query
+        # rather than staying on the UI thread for the rest of the session out of one stale
+        # conclusion. Enable-OmadaBackgroundRequest is a no-op when nothing was disabled, and bounds
+        # how often it will keep trying.
+        if ($AlreadyOnUiThread) {
+            Enable-OmadaBackgroundRequest
+        }
+
         # TempQueryDoId is passed as $null on purpose: the pipeline already deleted the temporary
         # object in its own finally, whatever the outcome. Passing it would delete it twice.
         Complete-ExecuteQueryResult -QueryResult $Outcome.QueryResult -SaveResult $Outcome.SaveResult -TempQueryDoId $null
