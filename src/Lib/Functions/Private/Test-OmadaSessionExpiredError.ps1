@@ -13,9 +13,18 @@ function Test-OmadaSessionExpiredError {
 
     Both are checked, because either can survive where the other does not. The id is a PREFIX match
     on purpose - PowerShell appends the name of every function a terminating error passes through,
-    so equality would break the moment the module added a layer. The exception type is checked by
-    name rather than with -is, so an error that crossed a runspace boundary and arrived
-    deserialized still matches.
+    so equality would break the moment the module added a layer.
+
+    The exception is matched through PSObject.TypeNames rather than GetType(), because an error that
+    crossed a runspace boundary arrives deserialized, and GetType() on a deserialized exception
+    returns System.Management.Automation.PSObject - not the original type. The real type survives in
+    TypeNames, prefixed:
+
+        Deserialized.System.Security.Authentication.AuthenticationException
+        Deserialized.System.SystemException
+        ...
+
+    TypeNames is present on a live exception too, unprefixed, so one check covers both.
 
     This is what a keep-alive needs to tell "the session is gone" from "the tenant had a bad
     moment": the first means stop, the second means try again later.
@@ -47,12 +56,21 @@ function Test-OmadaSessionExpiredError {
 
     try {
         $Private:Exception = $ErrorRecord.Exception
-        while ($null -ne $Private:Exception) {
-            # By name, not with -is: a deserialized exception is a PSObject wrapper whose type name
-            # is preserved but whose .NET type is not.
-            if ($Private:Exception.GetType().FullName -eq "System.Security.Authentication.AuthenticationException") {
-                return $true
+        $Private:Depth = 0
+
+        # Bounded: an exception chain should never be deep, and a cycle here would hang the poll
+        # timer this runs from.
+        while ($null -ne $Private:Exception -and $Private:Depth -lt 16) {
+            $Private:Depth++
+
+            foreach ($Private:TypeName in @($Private:Exception.PSObject.TypeNames)) {
+                # "Deserialized." prefix when the error crossed a runspace boundary, bare otherwise.
+                if ($Private:TypeName -eq "System.Security.Authentication.AuthenticationException" -or
+                    $Private:TypeName -eq "Deserialized.System.Security.Authentication.AuthenticationException") {
+                    return $true
+                }
             }
+
             $Private:Exception = $Private:Exception.InnerException
         }
     }

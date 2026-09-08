@@ -235,6 +235,35 @@ Describe "Invoke-OmadaSessionKeepAlive" {
         }
     }
 
+    Context "Giving up is not permanent" {
+        BeforeEach { $script:NextError = New-SessionExpiredError }
+
+        It "resumes for a session that has been signed into again" {
+            # SessionKey is a stable hash of the connection identity, so it is the SAME key after
+            # signing in again. Without a reset, one expiry would switch the keep-alive off for that
+            # tenant and identity for the rest of the application's life - which is precisely the
+            # silent expiry this feature exists to prevent.
+            Invoke-OmadaSessionKeepAlive
+            $script:NextError = $null
+
+            Reset-SessionKeepAlive
+            $Script:LastSessionKeepAliveUtc = [DateTime]::UtcNow.AddMinutes(-6)
+            $script:Requests.Clear()
+
+            Invoke-OmadaSessionKeepAlive
+
+            @($script:Requests).Count | Should -Be 1
+        }
+
+        It "does not ping immediately on reconnect, so a just-connected tab is left alone" {
+            Reset-SessionKeepAlive
+
+            Invoke-OmadaSessionKeepAlive
+
+            @($script:Requests).Count | Should -Be 0
+        }
+    }
+
     Context "When the tenant merely had a bad moment" {
         It "tries again next interval, because a 502 says nothing about the session" {
             $script:NextError = New-TransientError
@@ -270,8 +299,37 @@ Describe "Test-OmadaSessionExpiredError" {
         Test-OmadaSessionExpiredError -ErrorRecord $Private:Record | Should -BeTrue
     }
 
+    It "recognises an exception that crossed a runspace boundary" {
+        # GetType() on a deserialized exception returns System.Management.Automation.PSObject, not
+        # the original type - so a check written against GetType() silently never matches, and every
+        # expiry coming back from a worker would be classified as a transient failure and retried
+        # forever. The real type survives in PSObject.TypeNames, prefixed "Deserialized.".
+        $Private:Live = [System.Security.Authentication.AuthenticationException]::new("gone")
+        $Private:Deserialized = [System.Management.Automation.PSSerializer]::Deserialize(
+            [System.Management.Automation.PSSerializer]::Serialize($Private:Live))
+
+        # The premise, asserted so this test cannot quietly stop testing anything.
+        $Private:Deserialized.GetType().FullName | Should -Be "System.Management.Automation.PSObject"
+
+        $Private:Record = [System.Management.Automation.ErrorRecord]::new(
+            [System.Exception]::new("outer"), "SomethingElse",
+            [System.Management.Automation.ErrorCategory]::NotSpecified, $null)
+        $Private:Record.Exception | Add-Member -NotePropertyName InnerException -NotePropertyValue $Private:Deserialized -Force
+
+        Test-OmadaSessionExpiredError -ErrorRecord $Private:Record | Should -BeTrue
+    }
+
     It "does not mistake a transient failure for an expiry" {
         Test-OmadaSessionExpiredError -ErrorRecord (New-TransientError) | Should -BeFalse
+    }
+
+    It "does not hang on a self-referencing exception chain" {
+        # It runs from the poll timer; a cycle here would freeze the window.
+        $Private:Exception = [System.Exception]::new("loop")
+        $Private:Exception | Add-Member -NotePropertyName InnerException -NotePropertyValue $Private:Exception -Force
+        $Private:Record = [System.Management.Automation.ErrorRecord]::new($Private:Exception, "x", [System.Management.Automation.ErrorCategory]::NotSpecified, $null)
+
+        Test-OmadaSessionExpiredError -ErrorRecord $Private:Record | Should -BeFalse
     }
 
     It "is not confused by a null" {

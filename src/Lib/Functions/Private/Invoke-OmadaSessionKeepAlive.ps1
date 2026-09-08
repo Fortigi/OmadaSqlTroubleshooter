@@ -15,18 +15,26 @@ function Invoke-OmadaSessionKeepAlive {
 
     Three properties make it safe to run on a timer:
 
-    It cannot prompt. The request is made with OmadaWeb.PS's -NoInteractiveAuthentication (added for
-    this, Fortigi/OmadaWeb.PS#84), under which no code path can open a browser, a WebView2 window or
-    any other sign-in. Without that switch a keep-alive would be the worst possible thing to run
-    unattended: a login window appearing over whatever the user is doing, at a moment they did not
-    choose. With it, an expired session is a catchable error instead.
+    It cannot prompt. The request is made with OmadaWeb.PS's -NoInteractiveAuthentication - requested
+    for this in Fortigi/OmadaWeb.PS#84 and added by Fortigi/OmadaWeb.PS#85 - under which no code path
+    can open a browser, a WebView2 window or any other sign-in. Without that switch a keep-alive
+    would be the worst possible thing to run unattended: a login window appearing over whatever the
+    user is doing, at a moment they did not choose. With it, an expired session is a catchable error
+    instead.
 
     It is silent. Everything here logs at DEBUG and no path raises a dialog. A keep-alive the user
     notices has failed at its job.
 
     It gives up rather than retries. A session that cannot be revived is not going to be revived by
-    asking again in five minutes, so that session key is dropped and never pinged again. The
-    alternative is a request every interval, forever, against a tenant that has already said no.
+    asking again in five minutes, so that session key is dropped. The alternative is a request every
+    interval, forever, against a tenant that has already said no.
+
+    Giving up is NOT permanent, and that distinction matters. The abandonment is keyed by SessionKey,
+    which is a stable hash of the connection identity - so it is the same key after the user signs in
+    again. Left alone, one expiry would switch the keep-alive off for that tenant and identity for
+    the rest of the application's life, which is precisely the failure the keep-alive exists to
+    prevent. Set-SqlConnectionState clears it through Reset-SessionKeepAlive the moment a tab is
+    connected again.
 
     .NOTES
     Runs on the UI thread, deliberately. A worker runspace has its OWN OmadaWeb.PS session context,
@@ -95,6 +103,32 @@ function Invoke-OmadaSessionKeepAlive {
         # will sign in normally. Reported at DEBUG so it is still findable in a log.
         "Session keep-alive failed: {0}" -f $_.Exception.Message | Write-LogOutput -LogType DEBUG
     }
+}
+
+function Reset-SessionKeepAlive {
+    <#
+    .SYNOPSIS
+    Allow the keep-alive to resume for a session that has been signed into again.
+
+    .DESCRIPTION
+    Called from Set-SqlConnectionState when a tab becomes connected. Without it the abandonment in
+    Invoke-OmadaSessionKeepAlivePing is permanent for the life of the application: it is keyed by
+    SessionKey, which is a stable hash of the connection identity, so signing in again produces the
+    SAME key and the keep-alive would stay switched off for that tenant and identity - leaving the
+    user exposed to exactly the silent expiry this feature exists to prevent.
+
+    Clears every abandoned session rather than one, deliberately. A successful sign-in usually means
+    the credentials or the network came back, which is as likely to have fixed the others; and the
+    cost of being wrong is one cheap request per session at the next interval, which then abandons
+    again.
+
+    The interval timer is reset too, so a tab that has just connected is not pinged seconds later.
+    #>
+    [CmdLetBinding()]
+    param()
+
+    $Script:SessionKeepAliveAbandoned = @{}
+    $Script:LastSessionKeepAliveUtc = [DateTime]::UtcNow
 }
 
 function Invoke-OmadaSessionKeepAlivePing {
