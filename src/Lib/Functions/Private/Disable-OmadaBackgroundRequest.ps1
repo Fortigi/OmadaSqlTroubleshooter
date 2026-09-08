@@ -43,11 +43,26 @@ function Disable-OmadaBackgroundRequest {
 
     $Script:OmadaBackgroundRequestsDisabled = $true
 
-    # WARNING, once, and not a dialog: nothing is broken from the user's point of view - the query
-    # they asked for is about to run on the UI thread and succeed. What they lose is the window
-    # staying responsive while it does, and that is worth one line in the log rather than a popup
-    # interrupting them.
-    "Background query execution is not available for this connection; falling back to running queries on the UI thread for the rest of this session. The window will not stay responsive during a query. Reason: {0}" -f $Reason | Write-LogOutput -LogType WARNING -SkipDialog
+    # Not a dialog: nothing is broken from the user's point of view - the query they asked for is
+    # about to run on the UI thread and succeed. What they lose is the window staying responsive
+    # while it does, and that is worth a line in the log rather than a popup interrupting them.
+    #
+    # WARNING only the first time. The disable is recoverable now, so this function can be reached
+    # several times in a session; repeating the same warning on each fallback would be noise about a
+    # condition the user has already been told about and cannot act on. Later falls back at DEBUG.
+    #
+    # The text deliberately does NOT promise "for the rest of this session" any more, because that is
+    # no longer true - Enable-OmadaBackgroundRequest turns it back on once a query has succeeded on
+    # the UI thread.
+    $Private:Message = "Background query execution is not available at the moment; falling back to running queries on the UI thread, so the window will not stay responsive during a query. It will be offered again once a query has succeeded. Reason: {0}" -f $Reason
+
+    if ($Script:OmadaBackgroundRequestWarned) {
+        $Private:Message | Write-LogOutput -LogType DEBUG
+    }
+    else {
+        $Script:OmadaBackgroundRequestWarned = $true
+        $Private:Message | Write-LogOutput -LogType WARNING -SkipDialog
+    }
 
     # The pool's workers are of no further use, and they are real threads. Initialize-OmadaRequestPool
     # rebuilds one on demand, so closing it here does not stand in the way of re-enabling later.

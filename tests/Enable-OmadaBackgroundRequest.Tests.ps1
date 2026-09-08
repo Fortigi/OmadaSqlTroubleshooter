@@ -28,6 +28,7 @@ BeforeAll {
         $script:LogMessages.Clear()
         $script:PoolClosures = 0
         $Script:OmadaBackgroundRequestsDisabled = $false
+        $Script:OmadaBackgroundRequestWarned = $false
         $Script:OmadaBackgroundRequestReenableCount = 0
         $Script:OmadaBackgroundRequestReenableLimit = 3
         $Script:OmadaBackgroundRequestReenableExhausted = $false
@@ -110,6 +111,48 @@ Describe "Enable-OmadaBackgroundRequest" {
         $Script:ConnectionStatus = $false
 
         Test-Eligible | Should -BeFalse
+    }
+}
+
+Describe "The fallback warning matches what actually happens" {
+    BeforeEach { Initialize-ReenableTestState }
+
+    It "does not promise that background execution is gone for the session" {
+        # It used to say "for the rest of this session", which stopped being true the moment the
+        # disable became recoverable - and a message that overstates the damage is worse than none.
+        Disable-OmadaBackgroundRequest -Reason "worker could not sign in"
+
+        $Private:Warning = @($script:LogMessages | Where-Object { $_.LogType -eq "WARNING" })[0]
+        $Private:Warning.Message | Should -Not -Match "rest of this session"
+        $Private:Warning.Message | Should -Match "offered again"
+    }
+
+    It "still says what the user actually loses, and why" {
+        Disable-OmadaBackgroundRequest -Reason "worker could not sign in"
+
+        $Private:Warning = @($script:LogMessages | Where-Object { $_.LogType -eq "WARNING" })[0]
+        $Private:Warning.Message | Should -Match "will not stay responsive"
+        $Private:Warning.Message | Should -Match "worker could not sign in"
+    }
+
+    It "warns once per session, not once per fallback" {
+        # Recoverable means this can be reached several times. Repeating the same warning each time
+        # would be noise about a condition the user has been told about and cannot act on.
+        Disable-OmadaBackgroundRequest -Reason "first"
+        Enable-OmadaBackgroundRequest
+        Disable-OmadaBackgroundRequest -Reason "second"
+        Enable-OmadaBackgroundRequest
+        Disable-OmadaBackgroundRequest -Reason "third"
+
+        @($script:LogMessages | Where-Object { $_.LogType -eq "WARNING" }).Count | Should -Be 1
+    }
+
+    It "still records the later fallbacks, at DEBUG" {
+        Disable-OmadaBackgroundRequest -Reason "first"
+        Enable-OmadaBackgroundRequest
+        Disable-OmadaBackgroundRequest -Reason "second"
+
+        @($script:LogMessages | Where-Object { $_.LogType -eq "DEBUG" -and $_.Message -match "second" }).Count | Should -Be 1
     }
 }
 

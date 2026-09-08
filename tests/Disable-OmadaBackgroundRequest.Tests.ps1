@@ -33,6 +33,7 @@ BeforeAll {
         $script:LogMessages.Clear()
         $script:PoolClosures = 0
         $Script:OmadaBackgroundRequestsDisabled = $false
+        $Script:OmadaBackgroundRequestWarned = $false
         $Script:ConnectionStatus = $true
     }
 }
