@@ -52,6 +52,12 @@ BeforeAll {
         $script:DisableReasons.Add([string]$Reason)
     }
 
+    # A UI-thread success re-offers background execution for the next query - an expired session is
+    # of the moment, not a property of the tenant. Recorded rather than exercised here; the decision
+    # itself is asserted in Enable-OmadaBackgroundRequest.Tests.ps1.
+    $script:ReenableCalls = 0
+    function Enable-OmadaBackgroundRequest { $script:ReenableCalls++ }
+
     function Build-OmadaRequestParameter { return @{ SessionKey = "pool" } }
 
     # Records what the inline retry was asked to run, and answers with whatever the test set up.
