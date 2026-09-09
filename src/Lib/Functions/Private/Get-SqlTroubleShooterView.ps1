@@ -160,47 +160,58 @@ function Start-SqlTroubleShooterViewLookup {
                 Write-ExecutePipelineLog -Log $Private:Outcome.Log
             }
 
-            # A worker that could not run the lookup at all is not an answer. Retry once inline,
-            # where authentication works - the same fallback, and the same reasoning, as the schema
-            # fetch: both round-trips are reads, so running them again changes nothing on the tenant.
+            # What a failure MEANS is Resolve-ExecuteFallbackAction's decision, not this function's.
+            # Classifying it here instead - "no completed steps, so the worker is broken" - would
+            # reintroduce precisely the bug that function was written to fix: a tenant can answer
+            # with an HTTP error on the FIRST step (401, 403, 502), which leaves CompletedSteps at 0
+            # even though the worker plainly reached the tenant. That misreading once disabled
+            # background execution for a whole session over one transient 502.
             #
-            # CompletedSteps distinguishes "could not reach the tenant" from "the tenant refused
-            # something". Only the first is worth retrying; a tenant that answered will answer the
-            # same way again.
-            $Private:WorkerFailed = ($null -eq $Private:Outcome -or
-                $Private:Outcome -is [System.Management.Automation.ErrorRecord] -or
-                ($null -ne $Private:Outcome.ErrorRecord -and $Private:Outcome.CompletedSteps -eq 0))
-
-            if ($Private:WorkerFailed -and $Script:ConnectionStatus) {
-                $Private:Reason = if ($null -eq $Private:Outcome) {
-                    "the background worker returned no result"
-                }
-                elseif ($Private:Outcome -is [System.Management.Automation.ErrorRecord]) {
-                    $Private:Outcome.Exception.Message
+            # A status code proves the worker worked. That reasoning belongs in one place, and this
+            # is a second pipeline arriving at the same question - so it asks rather than re-deciding.
+            if ($null -eq $Private:Outcome -or $Private:Outcome -is [System.Management.Automation.ErrorRecord] -or $null -ne $Private:Outcome.ErrorRecord) {
+                # An ErrorRecord rather than an outcome means the wrapper classified a tenant-level
+                # failure. Presented in the shape the classifier reads, so it sees the failure itself
+                # rather than an object with no ErrorRecord - which it would read as "nothing came
+                # back at all".
+                $Private:Classifiable = if ($Private:Outcome -is [System.Management.Automation.ErrorRecord]) {
+                    @{ ErrorRecord = $Private:Outcome; CompletedSteps = 0 }
                 }
                 else {
-                    $Private:Outcome.ErrorRecord.Exception.Message
+                    $Private:Outcome
+                }
+
+                $Private:Failure = $Private:Classifiable.ErrorRecord
+                $Private:Reason = if ($null -eq $Private:Failure) { "the background worker returned no result" } else { $Private:Failure.Exception.Message }
+                $Private:Action = Resolve-ExecuteFallbackAction -Outcome $Private:Classifiable
+
+                if ($Private:Action -eq "Report" -or -not $Script:ConnectionStatus) {
+                    # The tenant answered, and re-running inline would send the identical request and
+                    # get the identical answer. The caller's own "no rows" handling is what that means.
+                    "Could not retrieve the SQL Troubleshooting view: {0}" -f $Private:Reason | Write-LogOutput -LogType WARNING -SkipDialog
+                    & $Pending.Context.Caller.OnResult @{ Rows = $null; DataObjectHtml = $null; RetryInline = $false } $Pending.Context.Caller.Context
+                    return
                 }
 
                 "The SQL Troubleshooting view could not be retrieved on a background worker: {0}" -f $Private:Reason | Write-LogOutput -LogType DEBUG
-                Disable-OmadaBackgroundRequest -Reason $Private:Reason
+
+                # Only on RetryAndDisable. Disabling is a one-way door for the session, so a 401 -
+                # which is Retry - must not take it: the UI thread signs in, and the worker then has
+                # a session to inherit.
+                if ($Private:Action -eq "RetryAndDisable") {
+                    Disable-OmadaBackgroundRequest -Reason $Private:Reason
+                }
 
                 # RetryInline rather than calling Get-SqlTroubleShooterView here: the caller's
                 # synchronous path may be more than this lookup (Update-DataConnectionList follows it
                 # with its own request), and it already exists for the not-dispatched case. Sending
                 # the caller down that same path keeps one definition of it instead of two that can
                 # drift.
+                #
+                # Safe to retry whatever the cause: both round-trips are reads, so running them again
+                # changes nothing on the tenant.
                 "The SQL Troubleshooting view lookup will be retried on the UI thread." | Write-LogOutput -LogType DEBUG
                 & $Pending.Context.Caller.OnResult @{ Rows = $null; DataObjectHtml = $null; RetryInline = $true } $Pending.Context.Caller.Context
-                return
-            }
-
-            # The tenant answered and refused, or answered and holds no such view. Both are answers,
-            # and the caller's own "no rows" handling is what they mean.
-            if ($Private:Outcome -is [System.Management.Automation.ErrorRecord] -or $null -ne $Private:Outcome.ErrorRecord) {
-                $Private:Failure = if ($Private:Outcome -is [System.Management.Automation.ErrorRecord]) { $Private:Outcome } else { $Private:Outcome.ErrorRecord }
-                "Could not retrieve the SQL Troubleshooting view: {0}" -f $Private:Failure.Exception.Message | Write-LogOutput -LogType WARNING -SkipDialog
-                & $Pending.Context.Caller.OnResult @{ Rows = $null; DataObjectHtml = $null; RetryInline = $false } $Pending.Context.Caller.Context
                 return
             }
 

@@ -21,6 +21,22 @@ BeforeAll {
         process { $script:LogMessages.Add([pscustomobject]@{ LogType = $LogType; Message = [string]$InputObject }) }
     }
 
+    # Real, not stubbed: what a worker failure MEANS is this function's decision, and the whole point
+    # of asking it is that the view lookup must not re-decide. A stub here would let the two drift
+    # apart silently - which is the misclassification it exists to prevent.
+    . (Join-Path $PrivatePath -ChildPath "Get-OmadaHttpStatusCode.ps1")
+    . (Join-Path $PrivatePath -ChildPath "Test-OmadaSessionExpiredError.ps1")
+    . (Join-Path $PrivatePath -ChildPath "Resolve-ExecuteFallbackAction.ps1")
+
+    # The shape a worker's HTTP failure actually arrives in: flattened across the runspace boundary,
+    # with the code recoverable from the message text. Get-OmadaHttpStatusCode reads it either way.
+    function script:New-HttpErrorRecord {
+        param([int]$StatusCode, [string]$Message)
+        return [System.Management.Automation.ErrorRecord]::new(
+            [System.Exception]::new(("Response status code does not indicate success: {0} ({1})." -f $StatusCode, $Message)),
+            "x", [System.Management.Automation.ErrorCategory]::ConnectionError, $null)
+    }
+
     function ConvertTo-RedactedLogString { param($InputObject, $MaxDepth, [switch]$ShapeOnly) return "<redacted>" }
     function Test-ConnectionRequirements { return $script:ConnectionReady }
     function Get-ActiveTabSession { return $script:ActiveTab }
@@ -300,19 +316,20 @@ Describe "Start-SqlTroubleShooterViewLookup" {
             } -Context @{}
         }
 
-        It "asks for an inline retry when the worker never reached the tenant" {
+        It "retries AND disables when the worker produced nothing at all" {
+            # No outcome is the only thing that proves a worker cannot serve a request.
             & $script:Dispatched.OnResult ([pscustomobject]@{
-                    Outcome = @{ ErrorRecord = [System.Management.Automation.ErrorRecord]::new([System.Exception]::new("no session"), "x", "NotSpecified", $null); CompletedSteps = 0; Log = @() }
+                    Outcome = $null
                     Context = @{ Caller = $script:Dispatched.Context }
                 })
 
             $script:Received.RetryInline | Should -BeTrue
-            $script:DisabledReason | Should -Be "no session"
+            $script:DisabledReason | Should -Not -BeNullOrEmpty
         }
 
         It "does NOT retry when the tenant answered and then refused" {
-            # CompletedSteps is what separates the two. A tenant that answered will answer the same
-            # way again, so retrying it inline just costs the user another round-trip.
+            # A tenant that answered will answer the same way again, so retrying inline just costs
+            # the user another round-trip.
             & $script:Dispatched.OnResult ([pscustomobject]@{
                     Outcome = @{ ErrorRecord = [System.Management.Automation.ErrorRecord]::new([System.Exception]::new("forbidden"), "x", "NotSpecified", $null); CompletedSteps = 1; Log = @() }
                     Context = @{ Caller = $script:Dispatched.Context }
@@ -321,6 +338,42 @@ Describe "Start-SqlTroubleShooterViewLookup" {
             $script:Received.RetryInline | Should -BeFalse
             $script:Received.Rows | Should -BeNullOrEmpty
             $script:DisabledReason | Should -BeNullOrEmpty
+        }
+
+        It "does not disable background execution over a first-step HTTP error" {
+            # THE regression this classification exists to prevent. A tenant can answer with an HTTP
+            # error on the FIRST step, which leaves CompletedSteps at 0 - but a status code proves the
+            # worker reached the tenant. Reading that as "the worker is broken" once disabled
+            # background execution for a whole session over one transient 502.
+            & $script:Dispatched.OnResult ([pscustomobject]@{
+                    Outcome = @{ ErrorRecord = (New-HttpErrorRecord -StatusCode 502 -Message "Bad Gateway"); CompletedSteps = 0; Log = @() }
+                    Context = @{ Caller = $script:Dispatched.Context }
+                })
+
+            $script:DisabledReason | Should -BeNullOrEmpty
+            $script:Received.RetryInline | Should -BeFalse
+        }
+
+        It "retries a 401 without disabling, because the UI thread can sign in" {
+            # Retry, not RetryAndDisable: the session expired, which says nothing about the worker.
+            # Once the UI thread has signed in, the worker has a session to inherit.
+            & $script:Dispatched.OnResult ([pscustomobject]@{
+                    Outcome = @{ ErrorRecord = (New-HttpErrorRecord -StatusCode 401 -Message "Unauthorized"); CompletedSteps = 0; Log = @() }
+                    Context = @{ Caller = $script:Dispatched.Context }
+                })
+
+            $script:Received.RetryInline | Should -BeTrue
+            $script:DisabledReason | Should -BeNullOrEmpty
+        }
+
+        It "asks Resolve-ExecuteFallbackAction rather than deciding for itself" {
+            # A source assertion, because the defect is a re-implementation rather than a wrong
+            # answer: a second copy of this reasoning would pass every behavioural test above on the
+            # day it was written and drift from the original afterwards.
+            $Private:Source = Get-Content -Path (Join-Path (Split-Path -Path $PSScriptRoot -Parent) "src\Lib\Functions\Private\Get-SqlTroubleShooterView.ps1") -Raw
+
+            $Private:Source | Should -Match 'Resolve-ExecuteFallbackAction -Outcome'
+            $Private:Source | Should -Not -Match 'CompletedSteps -eq 0'
         }
 
         It "hands the rows and the page over on success" {
