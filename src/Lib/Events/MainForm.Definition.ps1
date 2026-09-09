@@ -233,7 +233,12 @@ $Script:MainForm.Definition.Add_Closing({
             Close-OmadaRequestPool
         }
         catch {
-            $_.Exception.Message | Write-LogOutput -LogType ERROR -ErrorObject $_
+            # Contained, like every other cleanup path in this change (Complete-TabClose,
+            # Restore-MainFormFocus). A terminating log here unwinds out of the Closing handler, and
+            # the comment above says what that costs: worker threads left open keep the PROCESS alive
+            # after the window has gone. Failing to shut down cleanly must not be compounded by
+            # failing to report it - least of all with a modal dialog on the way out.
+            $_.Exception.Message | Write-ContainedErrorLog -ErrorObject $_
         }
     })
 

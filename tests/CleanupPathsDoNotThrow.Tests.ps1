@@ -46,3 +46,32 @@ Describe "Cleanup and teardown paths never log a terminating ERROR" {
         $Private:Source | Should -Match '(Write-ContainedErrorLog|-LogType\s+(WARNING|DEBUG))'
     }
 }
+
+Describe "The window's Closing handler never logs a terminating ERROR" {
+    # The same property, one directory over, and the one the four cases above missed. It is worth its
+    # own block because what it costs is different: the handler's last act is Close-OmadaRequestPool,
+    # and worker threads left open keep the PROCESS alive after the window has gone. A terminating
+    # log unwinding out of the handler is therefore not a lost message - it is an application that
+    # does not exit.
+    BeforeAll {
+        $script:ClosingSource = Get-Content -Path (Join-Path (Split-Path -Path $PSScriptRoot -Parent) "src\Lib\Events\MainForm.Definition.ps1") -Raw
+
+        # Just the Closing handler. The file holds other handlers where a terminating ERROR is the
+        # right answer, so matching the whole file would assert something untrue.
+        $script:ClosingHandler = ([regex]::Match($script:ClosingSource, '(?s)Add_Closing\(\{.*?\n    \}\)')).Value
+    }
+
+    It "finds the Closing handler to check" {
+        # Without this the two assertions below pass vacuously on an empty string.
+        $script:ClosingHandler | Should -Not -BeNullOrEmpty
+        $script:ClosingHandler | Should -Match 'Close-OmadaRequestPool'
+    }
+
+    It "does not raise a terminating ERROR while the window is closing" {
+        $script:ClosingHandler | Should -Not -Match '\-LogType\s+ERROR'
+    }
+
+    It "still reports a failed shutdown rather than swallowing it" {
+        $script:ClosingHandler | Should -Match 'Write-ContainedErrorLog'
+    }
+}

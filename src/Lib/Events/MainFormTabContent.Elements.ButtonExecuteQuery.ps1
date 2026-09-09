@@ -47,7 +47,13 @@ $Script:MainForm.Elements.ButtonExecuteQuery.Add_Click({
 
             if (!(Test-ConnectionRequirements) -or [string]::IsNullOrWhiteSpace($Script:AppConfig.CurrentSqlQuery.DoId)) {
                 "Omada Url not set or Query not selected, cannot retrieve data!" | Write-LogOutput -LogType WARNING
-                Close-ExecuteQueryPopup
+
+                # The full teardown, not just the popup. This branch has already disabled Save,
+                # Execute and the output buttons above, and closing the popup left them that way -
+                # so refusing to start an execute took the tab's Execute button with it, for a click
+                # that changed nothing. -SkipStatusBarTime is exactly what it is for: no request was
+                # issued, so there is no elapsed time worth showing.
+                Reset-ExecuteQueryUiState -SkipStatusBarTime
                 Restore-MainFormFocus
             }
             else {
