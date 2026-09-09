@@ -58,9 +58,17 @@ function Start-OmadaBackgroundRequest {
 
         $Context,
 
-        # When supplied, the worker runs the whole dependent execute chain (Invoke-OmadaExecutePipeline)
-        # instead of a single request, and returns its outcome as the Result. This is what makes C1-5
-        # possible with ONE completion rather than five - see the pipeline's own notes.
+        # When supplied, the worker runs a whole dependent chain instead of a single request, and
+        # returns its outcome as the Result. This is what makes C1-5 possible with ONE completion
+        # rather than five - see the pipeline's own notes.
+        #
+        # WHICH chain is data on the context, so that a second one can be added without this function
+        # growing a branch per caller (issue #90, slice A):
+        #   PipelineFunction  the runspace-safe entry point to call, defaulting to
+        #                     Invoke-OmadaExecutePipeline
+        #   PipelineFiles     the files the worker must dot-source for it, defaulting to the execute
+        #                     pipeline's
+        # Both default to the execute path, so #40's dispatch is unchanged by their absence.
         [hashtable]$PipelineContext,
 
         [string]$Description = "Omada request"
@@ -81,7 +89,10 @@ function Start-OmadaBackgroundRequest {
         $Private:PrivateFolder = Join-Path $Script:RunTimeConfig.ModuleFolder -ChildPath "Lib\Functions\Private"
         $Private:RequiredWorkerFiles = @("Invoke-OmadaRequestCore.ps1")
         if ($null -ne $PipelineContext) {
-            $Private:RequiredWorkerFiles += @("New-OmadaQueryRequest.ps1", "Invoke-OmadaExecutePipeline.ps1")
+            # The chain's OWN files, not the execute pipeline's. Checking a fixed pair here would
+            # have left a second chain's files unchecked - dispatching a worker that then fails on
+            # its first line, which is exactly what this guard exists to prevent.
+            $Private:RequiredWorkerFiles += Get-OmadaPipelineWorkerFile -PipelineContext $PipelineContext
         }
         foreach ($Private:WorkerFile in $Private:RequiredWorkerFiles) {
             if (-not (Test-Path -LiteralPath (Join-Path $Private:PrivateFolder -ChildPath $Private:WorkerFile))) {
@@ -114,6 +125,13 @@ function Start-OmadaBackgroundRequest {
         # the pipeline, and only for the temporary object's id: cancellation kills the worker outright
         # so its own clean-up never runs, and the UI has to know which object to remove.
         $Private:Progress = [hashtable]::Synchronized(@{})
+
+        # Resolved HERE, on the UI thread, rather than inside the worker block: the defaults are the
+        # execute pipeline's, so a caller that says nothing gets exactly the dispatch it got before
+        # this became configurable, and the worker block itself needs no knowledge of which chains
+        # exist.
+        $Private:PipelineFunction = Get-OmadaPipelineWorkerFunction -PipelineContext $PipelineContext
+        $Private:PipelineFiles = Get-OmadaPipelineWorkerFile -PipelineContext $PipelineContext
         if ($null -ne $PipelineContext) {
             $PipelineContext = $PipelineContext.Clone()
             $PipelineContext.Parameters = $Parameters.Clone()
@@ -127,11 +145,12 @@ function Start-OmadaBackgroundRequest {
         # copy of every function, and those files are already the things the unit tests execute.
         # $TransportScriptPath is the mock seam - see Install-OmadaMockTransport.
         [void]$Private:Shell.AddScript({
-                param($PrivateFolder, $RequestParameters, $PipelineContext, $TransportScriptPath, $TransportContext)
+                param($PrivateFolder, $RequestParameters, $PipelineContext, $TransportScriptPath, $TransportContext, $PipelineFunction, $PipelineFiles)
                 . (Join-Path $PrivateFolder "Invoke-OmadaRequestCore.ps1")
                 if ($null -ne $PipelineContext) {
-                    . (Join-Path $PrivateFolder "New-OmadaQueryRequest.ps1")
-                    . (Join-Path $PrivateFolder "Invoke-OmadaExecutePipeline.ps1")
+                    foreach ($PipelineFile in $PipelineFiles) {
+                        . (Join-Path $PrivateFolder $PipelineFile)
+                    }
                 }
                 if (![string]::IsNullOrWhiteSpace($TransportScriptPath) -and (Test-Path -LiteralPath $TransportScriptPath)) {
                     . $TransportScriptPath
@@ -141,7 +160,7 @@ function Start-OmadaBackgroundRequest {
                     }
                 }
                 if ($null -ne $PipelineContext) {
-                    $PipelineOutcome = Invoke-OmadaExecutePipeline -Context $PipelineContext
+                    $PipelineOutcome = & $PipelineFunction -Context $PipelineContext
                     # Reported in the transport's own shape so the UI-side plumbing needs no special
                     # case: the whole outcome is the Result, and the pipeline's first failure is also
                     # surfaced as the ErrorRecord so Resolve-OmadaRequestFailure still classifies an
@@ -149,7 +168,7 @@ function Start-OmadaBackgroundRequest {
                     return @{ Result = $PipelineOutcome; ErrorRecord = $PipelineOutcome.ErrorRecord }
                 }
                 return (Invoke-OmadaRequestCore -Parameters $RequestParameters)
-            }).AddArgument($Private:PrivateFolder).AddArgument($Parameters.Clone()).AddArgument($PipelineContext).AddArgument($Script:OmadaRequestWorkerTransportPath).AddArgument($Script:OmadaRequestWorkerTransportContext)
+            }).AddArgument($Private:PrivateFolder).AddArgument($Parameters.Clone()).AddArgument($PipelineContext).AddArgument($Script:OmadaRequestWorkerTransportPath).AddArgument($Script:OmadaRequestWorkerTransportContext).AddArgument($Private:PipelineFunction).AddArgument($Private:PipelineFiles)
 
         $Private:AsyncResult = $Private:Shell.BeginInvoke()
 

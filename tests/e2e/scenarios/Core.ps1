@@ -7,7 +7,10 @@ E2ESuite -Name "Connect" -Body {
         Reset-E2EConnection
 
         Set-E2EConnectionFields
-        Invoke-E2EConnect
+        # AndWait since issue #90: the data connection list is fetched on a background worker now, so
+        # the dropdown this case asserts on is populated by a completion rather than before the click
+        # returns. The same reason Invoke-E2EConnectAndWait was added for the schema fetch in #40.
+        Invoke-E2EConnectAndWait
 
         $Elements = Get-E2EElements
         E2EAssertTrue $Script:ConnectionStatus "ConnectionStatus should be true after a successful connect"
@@ -22,7 +25,9 @@ E2ESuite -Name "Execute" -Body {
         Reset-E2EScenario
         Reset-E2EConnection
         Set-E2EConnectionFields
-        Invoke-E2EConnect
+        # AndWait since issue #90: connect's list fetches land on completions now, and one arriving
+        # mid-execute is exactly what "exactly one execute should have fired" is there to catch.
+        Invoke-E2EConnectAndWait
 
         $Item = Select-E2EQuery
         E2EAssertTrue ($null -ne $Item) "Query item 'TestQuery - 100' should exist in the dropdown"
