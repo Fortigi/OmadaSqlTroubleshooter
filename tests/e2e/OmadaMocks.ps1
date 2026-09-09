@@ -88,15 +88,23 @@ function script:Start-OmadaBackgroundRequest {
     $Payload = @{ Result = $null; ErrorRecord = $null }
 
     if ($null -ne $PipelineContext) {
-        # C1-5: the worker runs the whole dependent chain. The REAL Invoke-OmadaExecutePipeline is
-        # used here, on the UI thread, because it is runspace-safe and therefore also
-        # dispatcher-safe - so the scenarios exercise the actual sequencing, the actual step
-        # decisions and the actual temporary-object clean-up. Only the transport under it is the
-        # fixture, via Invoke-OmadaRequestCore's seam below.
+        # C1-5: the worker runs the whole dependent chain. The REAL pipeline is used here, on the UI
+        # thread, because it is runspace-safe and therefore also dispatcher-safe - so the scenarios
+        # exercise the actual sequencing, the actual step decisions and the actual temporary-object
+        # clean-up. Only the transport under it is the fixture, via Invoke-OmadaRequestCore's seam
+        # below.
+        #
+        # WHICH pipeline comes from the context, mirroring the real Start-OmadaBackgroundRequest
+        # (issue #90). Hard-coding the execute pipeline here made every OTHER chain silently run the
+        # execute one instead: the view lookup came back with an execute-shaped outcome, so the data
+        # connection dropdown was never populated and the failure looked like a defect in the code
+        # under test rather than in this stand-in.
+        $Private:PipelineFunction = Get-OmadaPipelineWorkerFunction -PipelineContext $PipelineContext
+
         $PipelineContext = $PipelineContext.Clone()
         $PipelineContext.Parameters = $Parameters.Clone()
         $PipelineContext.Progress = $Progress
-        $PipelineOutcome = Invoke-OmadaExecutePipeline -Context $PipelineContext
+        $PipelineOutcome = & $Private:PipelineFunction -Context $PipelineContext
         $Payload.Result = $PipelineOutcome
         $Payload.ErrorRecord = $PipelineOutcome.ErrorRecord
     }

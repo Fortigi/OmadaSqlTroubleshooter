@@ -82,7 +82,9 @@ E2ESuite -Name "SchemaCache" -Body {
     E2ECase -Name "picking a data connection in the ComboBox retrieves the schema without the schema window" -Body {
         Reset-E2ETabsToOne
         Set-E2EConnectionFields
-        Invoke-E2EConnect
+        # AndWait since issue #90: this case reads the data connection dropdown, which is populated
+        # by a completion now rather than before the click returns.
+        Invoke-E2EConnectAndWait
 
         $Script:TreeViewSqlSchema = $null
         $Script:SqlSchemaForm = $null

@@ -31,7 +31,11 @@ function Resolve-ExecuteFallbackAction {
     a one-way door for the session, so it is taken only on evidence, not on the absence of it.
 
     .PARAMETER Outcome
-    The pipeline outcome from Invoke-OmadaExecutePipeline, or $null when the worker returned nothing.
+    A pipeline outcome - anything carrying ErrorRecord and CompletedSteps - or $null when the worker
+    returned nothing. Named for the execute path it was written for, but the question it answers is
+    "what does this worker failure mean?", which is not execute-specific: issue #90's view lookup
+    asks it too, and asks rather than deciding for itself precisely so the 502 misclassification
+    described above cannot be reinvented one pipeline at a time.
 
     .OUTPUTS
     [string] one of "Report", "Retry", "RetryAndDisable".

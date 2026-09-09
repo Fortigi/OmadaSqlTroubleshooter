@@ -17,6 +17,10 @@ BeforeAll {
     # would let that silently stop happening. It reads only the installed module's capabilities.
     . (Join-Path $PrivatePath -ChildPath "Test-OmadaRestMethodParameter.ps1")
     . (Join-Path $PrivatePath -ChildPath "Add-OmadaNonInteractiveAuthentication.ps1")
+    # Real, not stubbed: it is pure, and it decides which chain a worker runs. Stubbing it would let
+    # the dispatch and the pre-flight file check disagree about that without any test noticing -
+    # which is the exact regression these helpers were extracted to prevent.
+    . (Join-Path $PrivatePath -ChildPath "Get-OmadaPipelineWorkerFunction.ps1")
     . (Join-Path $PrivatePath -ChildPath "Start-OmadaBackgroundRequest.ps1")
 
     $Script:Tracer = [System.Diagnostics.Trace]
