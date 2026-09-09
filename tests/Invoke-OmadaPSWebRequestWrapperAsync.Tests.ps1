@@ -12,6 +12,7 @@ BeforeAll {
     $PrivatePath = Join-Path $ParentPath -ChildPath "src\Lib\Functions\Private"
 
     . (Join-Path $PrivatePath -ChildPath "ConvertTo-RedactedLogString.ps1")
+    . (Join-Path $PrivatePath -ChildPath "Test-OmadaRestMethodParameter.ps1")
     . (Join-Path $PrivatePath -ChildPath "Build-OmadaRequestParameter.ps1")
     . (Join-Path $PrivatePath -ChildPath "Test-OmadaBackgroundRequestEligible.ps1")
     . (Join-Path $PrivatePath -ChildPath "Resolve-OmadaRequestFailure.ps1")

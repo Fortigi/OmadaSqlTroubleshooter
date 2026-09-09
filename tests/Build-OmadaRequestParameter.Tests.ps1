@@ -7,6 +7,10 @@
 BeforeAll {
     $ParentPath = Split-Path -Path $PSScriptRoot -Parent
     $PrivatePath = Join-Path $ParentPath -ChildPath "src\Lib\Functions\Private"
+    # Real, not stubbed: it is the one answer to "does the installed module support this parameter?",
+    # and the cases below steer it honestly by declaring an Invoke-OmadaRestMethod with or without
+    # the switch - which is what the probe actually reads.
+    . (Join-Path $PrivatePath -ChildPath "Test-OmadaRestMethodParameter.ps1")
     . (Join-Path $PrivatePath -ChildPath "Build-OmadaRequestParameter.ps1")
 
     function script:Initialize-PreparationState {
@@ -155,6 +159,16 @@ Describe "Build-OmadaRequestParameter" {
             }
 
             (Build-OmadaRequestParameter).ContainsKey("SkipBodyRedaction") | Should -BeFalse
+        }
+
+        It "asks the shared probe rather than reaching for Get-Command itself" {
+            # This was the application's first capability check, and it grew a SECOND one (#99)
+            # before it grew a shared answer. Two ways of asking the same question is how they end up
+            # disagreeing - so the duplication is asserted away rather than left to be noticed.
+            $Private:Source = Get-Content -Path (Join-Path (Join-Path (Split-Path -Path $PSScriptRoot -Parent) "src\Lib\Functions\Private") "Build-OmadaRequestParameter.ps1") -Raw
+
+            $Private:Source | Should -Match 'Test-OmadaRestMethodParameter -Name "SkipBodyRedaction"'
+            $Private:Source | Should -Not -Match 'Get-Command -Name Invoke-OmadaRestMethod'
         }
     }
 }

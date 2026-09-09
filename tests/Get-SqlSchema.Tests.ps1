@@ -20,6 +20,7 @@ BeforeAll {
     # Get-SqlSchemaObject's own catch, and the "zero requests" assertion then passes for entirely the
     # wrong reason.
     . (Join-Path $PrivatePath -ChildPath "Invoke-OmadaRequestCore.ps1")
+    . (Join-Path $PrivatePath -ChildPath "Test-OmadaRestMethodParameter.ps1")
     . (Join-Path $PrivatePath -ChildPath "Build-OmadaRequestParameter.ps1")
     . (Join-Path $PrivatePath -ChildPath "Resolve-OmadaRequestFailure.ps1")
     . (Join-Path $PrivatePath -ChildPath "Invoke-OmadaPSWebRequestWrapper.ps1")

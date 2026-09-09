@@ -30,6 +30,7 @@ BeforeAll {
     # Suspend/Resume stubs below exist - a missing one throws CommandNotFound inside the caller's own
     # catch, and a "no request was made" assertion then passes for entirely the wrong reason.
     . (Join-Path $PrivatePath -ChildPath "Invoke-OmadaRequestCore.ps1")
+    . (Join-Path $PrivatePath -ChildPath "Test-OmadaRestMethodParameter.ps1")
     . (Join-Path $PrivatePath -ChildPath "Build-OmadaRequestParameter.ps1")
     . (Join-Path $PrivatePath -ChildPath "Resolve-OmadaRequestFailure.ps1")
     . (Join-Path $PrivatePath -ChildPath "Invoke-OmadaPSWebRequestWrapper.ps1")

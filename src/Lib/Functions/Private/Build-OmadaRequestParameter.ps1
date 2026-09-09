@@ -66,8 +66,11 @@ function Build-OmadaRequestParameter {
     # splatting a parameter a cmdlet does not have is a terminating error. Capability-checked rather
     # than version-gated, so this works the day the switch ships without forcing everyone onto a
     # release that does not exist yet.
-    $Private:RestMethodCommand = Get-Command -Name Invoke-OmadaRestMethod -ErrorAction SilentlyContinue
-    if ($null -ne $Private:RestMethodCommand -and $Private:RestMethodCommand.Parameters.ContainsKey("SkipBodyRedaction")) {
+    # Asked through Test-OmadaRestMethodParameter rather than probing Get-Command here. This was the
+    # first capability check in the application and it grew a second one (#99) before it grew a
+    # shared answer; two ways of asking the same question is how they end up disagreeing - and the
+    # helper also answers "no" for a probe that throws, which the inline version did not.
+    if (Test-OmadaRestMethodParameter -Name "SkipBodyRedaction") {
         $Private:Parameters.SkipBodyRedaction = [bool]$Script:SkipBodyRedaction
     }
     elseif ($Private:Parameters.ContainsKey("SkipBodyRedaction")) {
