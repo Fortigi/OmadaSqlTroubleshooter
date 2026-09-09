@@ -135,7 +135,7 @@ function Start-SqlTroubleShooterViewLookup {
 
         # Both the caller's block and the caller's data travel on the context, and are read back from
         # it in the completion. Invoke-OmadaPSWebRequestWrapperAsync nests whatever is passed here
-        # under .Caller, so these are reached as $Pending.Context.Caller.OnRows / .Context.
+        # under .Caller, so these are reached as $Pending.Context.Caller.OnResult / .Context.
         return Invoke-OmadaPSWebRequestWrapperAsync -Description $Script:SqlTroubleShooterViewRequestDescription -Context @{
             OnResult              = $OnResultScriptBlock
             Context               = $Context
