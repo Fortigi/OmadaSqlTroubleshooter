@@ -110,6 +110,20 @@ Describe "Invoke-OmadaViewLookupPipeline" {
             $Private:Outcome.Rows[0].Id | Should -Be 900
         }
 
+        It "takes one view even when the tenant holds two of that name" {
+            # Without -First 1 the match is an array, and "{0}" -f an array formats as
+            # System.Object[] - an invalid viewId and pageQueryString. The inline path in
+            # Get-SqlTroubleShooterView must agree; a source assertion below keeps it honest.
+            $script:Responses["find-view"] = New-ViewResponse -Views @(
+                [pscustomobject]@{ Id = 42; Name = "SQL Troubleshooting" },
+                [pscustomobject]@{ Id = 43; Name = "SQL Troubleshooting" }
+            )
+
+            $null = Invoke-OmadaViewLookupPipeline -Context (New-Context)
+
+            ($script:Calls | Where-Object { $_.Key -eq "view-rows" }).Body.dataTypeArgs.viewId | Should -Be "42"
+        }
+
         It "picks the view by exact name, not by the search match" {
             # The search is a contains-match, so the response legitimately holds other views. Taking
             # the first row would pass on any fixture where the wanted view happens to come first.
@@ -274,6 +288,14 @@ Describe "Invoke-OmadaViewLookupPipeline" {
 
             $Private:Outcome.Steps.Name | Should -Be @("FindView", "FetchViewRows", "FetchDataConnectionPage")
         }
+    }
+
+    It "does not disagree with the inline path about picking one view" {
+        # The two paths build the same requests by construction (New-OmadaPagingRequest); this is the
+        # one decision made OUTSIDE the builder, so it is the one place they can still drift.
+        $Private:Inline = Get-Content -Path (Join-Path $script:PrivatePath "Get-SqlTroubleShooterView.ps1") -Raw
+
+        $Private:Inline | Should -Match 'Where-Object \{ \$_\.Name -eq "SQL Troubleshooting" \} \| Select-Object -First 1'
     }
 
     It "is runspace-safe - no script state, no logging, no WPF" {

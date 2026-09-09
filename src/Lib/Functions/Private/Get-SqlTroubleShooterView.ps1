@@ -22,7 +22,11 @@ function Get-SqlTroubleShooterView {
         $ViewResult = Get-OmadaGetPagingDataObject -SearchString "SQL Troubleshooting" -DataType "Views" -DataTypeArgs @{OwnerShipType = "Both" }
         $View = $null
         if ($null -ne $ViewResult -and $ViewResult.d.Records -gt 0) {
-            $View = $ViewResult.d.Rows | Where-Object { $_.Name -eq "SQL Troubleshooting" }
+            # -First 1, matching Invoke-OmadaViewLookupPipeline. A tenant holding two views of this
+            # name would otherwise make $View an array here, and "{0}" -f an array formats as
+            # System.Object[] - an invalid viewId and pageQueryString. The two paths must not differ
+            # on this: one definition of the request is the whole point of New-OmadaPagingRequest.
+            $View = $ViewResult.d.Rows | Where-Object { $_.Name -eq "SQL Troubleshooting" } | Select-Object -First 1
         }
         $Private:Result = $null
         if ($null -ne $View) {
@@ -100,21 +104,44 @@ function Start-SqlTroubleShooterViewLookup {
         # failure AND abandonment when the tab closes, and an entry left behind on that last path
         # would block the tab from ever looking the view up again. The queue cannot get out of step
         # with itself. (The same reasoning, and the same shape, as Get-SqlSchemaObject's guard.)
+        #
+        # It returns the OUTSTANDING item, never $null. $null is this function's "not dispatched, do
+        # what you did before" answer, and the caller's "before" is the three blocking round-trips
+        # this whole slice exists to remove - so answering $null here would defeat the guard AND put
+        # the freeze back, which is worse than the duplicate request it was meant to prevent.
+        #
+        # Matched on shape as well as tab: a lookup running WITHOUT the data connection page cannot
+        # satisfy a caller that needs it, and joining it would leave that caller waiting for data the
+        # worker was never asked to fetch.
+        #
+        # The joining caller's own result block does not run - the outstanding request's does, and
+        # for the same shape on the same tab it does the same work. What it does not carry is the
+        # second caller's context, so where those differ the first call's wins. Today that is only
+        # -NotShowPopupWindow, i.e. whether a popup appears during a refresh that is already
+        # happening.
         $Private:TabSession = Get-ActiveTabSession
-        if ($null -ne $Private:TabSession -and @($Script:PendingWebViewCompletions | Where-Object {
+        if ($null -ne $Private:TabSession) {
+            $Private:Outstanding = @($Script:PendingWebViewCompletions | Where-Object {
                     $_.Description -eq $Script:SqlTroubleShooterViewRequestDescription -and
-                    $_.TabSession.Id -eq $Private:TabSession.Id
-                }).Count -gt 0) {
-            "The SQL Troubleshooting view is already being retrieved for this tab; not requesting it twice." | Write-LogOutput -LogType DEBUG
-            return $null
+                    $_.TabSession.Id -eq $Private:TabSession.Id -and
+                    [bool]$_.Context.Caller.IncludeDataObjectHtml -eq [bool]$IncludeDataObjectHtml
+                }) | Select-Object -First 1
+
+            if ($null -ne $Private:Outstanding) {
+                "The SQL Troubleshooting view is already being retrieved for this tab; joining that request rather than making a second one." | Write-LogOutput -LogType DEBUG
+                return $Private:Outstanding
+            }
         }
 
         # Both the caller's block and the caller's data travel on the context, and are read back from
         # it in the completion. Invoke-OmadaPSWebRequestWrapperAsync nests whatever is passed here
         # under .Caller, so these are reached as $Pending.Context.Caller.OnRows / .Context.
         return Invoke-OmadaPSWebRequestWrapperAsync -Description $Script:SqlTroubleShooterViewRequestDescription -Context @{
-            OnResult = $OnResultScriptBlock
-            Context  = $Context
+            OnResult              = $OnResultScriptBlock
+            Context               = $Context
+            # Recorded so the in-flight guard above can tell whether an outstanding lookup is the
+            # same SHAPE, not merely the same description on the same tab.
+            IncludeDataObjectHtml = [bool]$IncludeDataObjectHtml
         } -PipelineContext @{
             PipelineFunction      = "Invoke-OmadaViewLookupPipeline"
             PipelineFiles         = @("New-OmadaPagingRequest.ps1", "Invoke-OmadaViewLookupPipeline.ps1")

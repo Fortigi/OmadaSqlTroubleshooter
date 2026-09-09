@@ -79,8 +79,11 @@ function Get-DataConnectionPageInline {
     [CmdLetBinding()]
     param()
 
-    $Private:SqlQueryViewContents = Get-SqlTroubleShooterView
-    if ($null -eq $Private:SqlQueryViewContents) {
+    # Count, not a null check. A view that exists but holds nothing comes back as an empty array,
+    # which is not $null - and indexing [0] into it throws under StrictMode ("Index was outside the
+    # bounds of the array"), so the intended "no rows" outcome would arrive as an error instead.
+    $Private:SqlQueryViewContents = @(Get-SqlTroubleShooterView)
+    if ($Private:SqlQueryViewContents.Count -eq 0) {
         return @{ HasRows = $false; Html = $null }
     }
 

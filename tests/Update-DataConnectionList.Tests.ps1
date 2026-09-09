@@ -150,6 +150,17 @@ Describe "Update-DataConnectionList" {
             $script:Rendered[0].Html | Should -Be "<html>inline page</html>"
         }
 
+        It "treats a view that exists but holds no rows as no rows, without throwing" {
+            # An empty view comes back as an empty ARRAY, which is not $null - and indexing [0] into
+            # it throws under StrictMode, so the intended outcome would have arrived as an error.
+            $script:WorkerAvailable = $false
+            $script:InlineViewRows = @()
+
+            { Update-DataConnectionList } | Should -Not -Throw
+            $script:Rendered[0].HasRows | Should -BeFalse
+            $script:InlinePageCalls | Should -Be 0
+        }
+
         It "tells the worker which row property holds the data object id" {
             # The attribute mapping is UI-thread state; a worker runspace has none, so it has to
             # travel on the context or the third step opens DOID= nothing.
@@ -201,30 +212,75 @@ Describe "Update-DataConnectionList" {
 Describe "Start-SqlTroubleShooterViewLookup" {
     BeforeEach { Initialize-TestState }
 
-    It "does not ask for the same lookup twice for one tab" {
-        # Update-DataConnectionList and Update-QueryList are called one after the other on connect,
-        # and the answer is the same for both.
+    Context "When a lookup is already in flight" {
+        BeforeEach {
+            $script:Outstanding = [pscustomobject]@{
+                Description = $Script:SqlTroubleShooterViewRequestDescription
+                TabSession  = [pscustomobject]@{ Id = "tab-1" }
+                Context     = @{ Caller = @{ IncludeDataObjectHtml = $false } }
+            }
+            $Script:PendingWebViewCompletions.Add($script:Outstanding)
+        }
+
+        It "does not ask for the same lookup twice for one tab" {
+            $null = Start-SqlTroubleShooterViewLookup -OnResultScriptBlock { } -Context @{}
+
+            $script:Dispatched | Should -BeNullOrEmpty
+        }
+
+        It "returns the outstanding request, NEVER null" {
+            # $null is this function's "not dispatched, do what you did before" answer, and the
+            # caller's "before" is the three blocking round-trips this slice exists to remove.
+            # Answering $null here would defeat the guard AND put the freeze back - worse than the
+            # duplicate request the guard was meant to prevent.
+            $Private:Pending = Start-SqlTroubleShooterViewLookup -OnResultScriptBlock { } -Context @{}
+
+            $Private:Pending | Should -Not -BeNullOrEmpty
+            $Private:Pending | Should -Be $script:Outstanding
+        }
+
+        It "does ask when the outstanding lookup belongs to another tab" {
+            # Per tab, not per session: each tab has its own connection and its own dropdown to fill.
+            $script:Outstanding.TabSession = [pscustomobject]@{ Id = "tab-2" }
+
+            $null = Start-SqlTroubleShooterViewLookup -OnResultScriptBlock { } -Context @{}
+
+            $script:Dispatched | Should -Not -BeNullOrEmpty
+        }
+
+        It "does ask when the outstanding lookup is a different shape" {
+            # A lookup running WITHOUT the data connection page cannot satisfy a caller that needs
+            # it: joining would leave that caller waiting for data the worker was never asked to
+            # fetch. This is the case slice B creates, where Update-QueryList wants the rows only.
+            $null = Start-SqlTroubleShooterViewLookup -IncludeDataObjectHtml -OnResultScriptBlock { } -Context @{}
+
+            $script:Dispatched | Should -Not -BeNullOrEmpty
+            $script:Dispatched.PipelineContext.IncludeDataObjectHtml | Should -BeTrue
+        }
+    }
+
+    It "records its shape, so the in-flight guard can compare it" {
+        $null = Start-SqlTroubleShooterViewLookup -IncludeDataObjectHtml -OnResultScriptBlock { } -Context @{}
+
+        $script:Dispatched.Context.IncludeDataObjectHtml | Should -BeTrue
+    }
+
+    It "does not run the blocking path when it joins an outstanding request" {
+        # The whole point, end to end: a second Update-DataConnectionList while one is in flight must
+        # not reach the UI thread's three round-trips.
+        Update-DataConnectionList
         $Script:PendingWebViewCompletions.Add([pscustomobject]@{
                 Description = $Script:SqlTroubleShooterViewRequestDescription
                 TabSession  = [pscustomobject]@{ Id = "tab-1" }
+                Context     = @{ Caller = @{ IncludeDataObjectHtml = $true } }
             })
+        $script:InlineViewCalls = 0
+        $script:InlinePageCalls = 0
 
-        $Private:Pending = Start-SqlTroubleShooterViewLookup -OnResultScriptBlock { } -Context @{}
+        Update-DataConnectionList
 
-        $Private:Pending | Should -BeNullOrEmpty
-        $script:Dispatched | Should -BeNullOrEmpty
-    }
-
-    It "does ask when the outstanding lookup belongs to another tab" {
-        # Per tab, not per session: each tab has its own connection and its own dropdown to fill.
-        $Script:PendingWebViewCompletions.Add([pscustomobject]@{
-                Description = $Script:SqlTroubleShooterViewRequestDescription
-                TabSession  = [pscustomobject]@{ Id = "tab-2" }
-            })
-
-        $null = Start-SqlTroubleShooterViewLookup -OnResultScriptBlock { } -Context @{}
-
-        $script:Dispatched | Should -Not -BeNullOrEmpty
+        $script:InlineViewCalls | Should -Be 0
+        $script:InlinePageCalls | Should -Be 0
     }
 
     It "leaves the third step out when the caller does not want it" {
