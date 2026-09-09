@@ -93,6 +93,15 @@ function Start-OmadaBackgroundRequest {
             # have left a second chain's files unchecked - dispatching a worker that then fails on
             # its first line, which is exactly what this guard exists to prevent.
             $Private:RequiredWorkerFiles += Get-OmadaPipelineWorkerFile -PipelineContext $PipelineContext
+
+            # And the entry point has to be IN those files. Checking only that the files exist left a
+            # typo in the function name to be discovered inside the worker, which is the one outcome
+            # this whole path is designed not to have: an unavailable chain must mean "run it inline
+            # instead", not "dispatch a job that dies".
+            if (-not (Test-OmadaPipelineWorkerChain -PipelineFunction (Get-OmadaPipelineWorkerFunction -PipelineContext $PipelineContext) -PipelineFiles $Private:RequiredWorkerFiles)) {
+                "Background worker chain '{0}' is not defined by any of its files; running on the UI thread instead." -f (Get-OmadaPipelineWorkerFunction -PipelineContext $PipelineContext) | Write-LogOutput -LogType WARNING -SkipDialog
+                return $null
+            }
         }
         foreach ($Private:WorkerFile in $Private:RequiredWorkerFiles) {
             if (-not (Test-Path -LiteralPath (Join-Path $Private:PrivateFolder -ChildPath $Private:WorkerFile))) {

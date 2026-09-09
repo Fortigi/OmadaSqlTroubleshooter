@@ -32,6 +32,48 @@ Describe "Get-OmadaPipelineWorkerFunction" {
         Get-OmadaPipelineWorkerFunction -PipelineContext @{ PipelineFunction = "" } | Should -Be "Invoke-OmadaExecutePipeline"
         Get-OmadaPipelineWorkerFunction -PipelineContext @{ PipelineFunction = "   " } | Should -Be "Invoke-OmadaExecutePipeline"
     }
+
+    It "trims a padded name, which IsNullOrWhiteSpace accepts but the call operator does not" {
+        Get-OmadaPipelineWorkerFunction -PipelineContext @{ PipelineFunction = "  Invoke-OmadaViewLookupPipeline  " } | Should -Be "Invoke-OmadaViewLookupPipeline"
+    }
+}
+
+Describe "Test-OmadaPipelineWorkerChain" {
+    # The gap: the pre-flight check confirms the FILES exist and nothing confirmed the FUNCTION was
+    # in them, so a typo passed every check and died inside the worker - turning a clean "run it
+    # inline instead" into a background job that fails.
+    It "accepts an entry point defined by one of its files" {
+        Test-OmadaPipelineWorkerChain -PipelineFunction "Invoke-OmadaViewLookupPipeline" -PipelineFiles @("New-OmadaPagingRequest.ps1", "Invoke-OmadaViewLookupPipeline.ps1") | Should -BeTrue
+    }
+
+    It "rejects a typo" {
+        Test-OmadaPipelineWorkerChain -PipelineFunction "Invoke-OmadaViewLookupPipelin" -PipelineFiles @("Invoke-OmadaViewLookupPipeline.ps1") | Should -BeFalse
+    }
+
+    It "rejects a chain whose entry point file was left out of the list" {
+        Test-OmadaPipelineWorkerChain -PipelineFunction "Invoke-OmadaViewLookupPipeline" -PipelineFiles @("New-OmadaPagingRequest.ps1") | Should -BeFalse
+    }
+
+    It "accepts the default chain, so #40's dispatch still goes to a worker" {
+        # If this ever returns false, every background execute silently runs inline instead.
+        Test-OmadaPipelineWorkerChain -PipelineFunction (Get-OmadaPipelineWorkerFunction -PipelineContext $null) -PipelineFiles (Get-OmadaPipelineWorkerFile -PipelineContext $null) | Should -BeTrue
+    }
+
+    It "accepts the view lookup's chain as the code actually declares it" {
+        # Reads the real declaration rather than a restated copy of it, so a rename that updates the
+        # function but not the file list fails here.
+        $Private:Source = Get-Content -Path (Join-Path $script:PrivatePath "Get-SqlTroubleShooterView.ps1") -Raw
+        $Private:Function = ([regex]::Match($Private:Source, 'PipelineFunction\s*=\s*"([^"]+)"')).Groups[1].Value
+        $Private:Files = @([regex]::Matches($Private:Source, '"([A-Za-z-]+\.ps1)"') | ForEach-Object { $_.Groups[1].Value })
+
+        $Private:Function | Should -Not -BeNullOrEmpty
+        Test-OmadaPipelineWorkerChain -PipelineFunction $Private:Function -PipelineFiles $Private:Files | Should -BeTrue
+    }
+
+    It "says no rather than throwing when there is nothing to check" {
+        Test-OmadaPipelineWorkerChain -PipelineFunction "" -PipelineFiles @("x.ps1") | Should -BeFalse
+        Test-OmadaPipelineWorkerChain -PipelineFunction "Invoke-X" -PipelineFiles $null | Should -BeFalse
+    }
 }
 
 Describe "Get-OmadaPipelineWorkerFile" {
@@ -47,6 +89,14 @@ Describe "Get-OmadaPipelineWorkerFile" {
 
     It "ignores an empty list rather than dot-sourcing nothing" {
         Get-OmadaPipelineWorkerFile -PipelineContext @{ PipelineFiles = @() } | Should -Be @("New-OmadaQueryRequest.ps1", "Invoke-OmadaExecutePipeline.ps1")
+    }
+
+    It "drops empty entries, which would throw on Join-Path before anything could check them" {
+        Get-OmadaPipelineWorkerFile -PipelineContext @{ PipelineFiles = @("Invoke-OmadaViewLookupPipeline.ps1", $null, "  ") } | Should -Be @("Invoke-OmadaViewLookupPipeline.ps1")
+    }
+
+    It "falls back to the default when every entry was empty" {
+        Get-OmadaPipelineWorkerFile -PipelineContext @{ PipelineFiles = @($null, "") } | Should -Be @("New-OmadaQueryRequest.ps1", "Invoke-OmadaExecutePipeline.ps1")
     }
 
     It "names files that exist, for <_>" -ForEach @(
