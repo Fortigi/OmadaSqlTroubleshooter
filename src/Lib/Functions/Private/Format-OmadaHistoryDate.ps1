@@ -32,5 +32,9 @@ function Format-OmadaHistoryDate {
         return "(unknown)"
     }
 
-    return ([DateTime]$Value).ToString("yyyy-MM-dd HH:mm:ss")
+    # InvariantCulture explicitly: a fixed format string is not a fixed rendering. The CALENDAR and
+    # the digits still come from the current culture, so the same moment renders as 2569-08-25 on
+    # th-TH (Buddhist era) and 1448-03-12 on ar-SA (Hijri). This is a log and export format, and it
+    # sits directly on top of a bug caused by an unwritten culture assumption.
+    return ([DateTime]$Value).ToString("yyyy-MM-dd HH:mm:ss", [System.Globalization.CultureInfo]::InvariantCulture)
 }

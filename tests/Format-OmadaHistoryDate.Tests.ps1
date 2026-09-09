@@ -28,12 +28,19 @@ Describe "Format-OmadaHistoryDate" {
         Format-OmadaHistoryDate -Value $null | Should -Be "(unknown)"
     }
 
-    It "renders the same way whatever the culture" {
-        # The format string is invariant by construction, but the assertion is cheap and the whole
-        # bug this sits on top of was a culture assumption nobody had written down.
+    # A fixed format string is NOT a fixed rendering - the calendar and the digits still come from
+    # the current culture. These are the cultures that prove it: nl-NL cannot, because it shares the
+    # Gregorian calendar and ASCII digits with en-US, so an nl-NL test would pass on the culture-
+    # sensitive code and claim to have checked this.
+    It "renders the same way under <Culture>, whose calendar is not Gregorian" -ForEach @(
+        @{ Culture = "th-TH" }  # Buddhist era - the year would read 2569
+        @{ Culture = "ar-SA" }  # Hijri - the whole date would read 1448-03-12
+        @{ Culture = "nl-NL" }
+        @{ Culture = "en-US" }
+    ) {
         $Private:Previous = [System.Threading.Thread]::CurrentThread.CurrentCulture
         try {
-            [System.Threading.Thread]::CurrentThread.CurrentCulture = [System.Globalization.CultureInfo]::GetCultureInfo("nl-NL")
+            [System.Threading.Thread]::CurrentThread.CurrentCulture = [System.Globalization.CultureInfo]::GetCultureInfo($Culture)
             Format-OmadaHistoryDate -Value ([DateTime]::new(2026, 8, 25, 12, 3, 4)) | Should -Be "2026-08-25 12:03:04"
         }
         finally {
