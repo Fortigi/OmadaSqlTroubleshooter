@@ -8,9 +8,9 @@ function Test-OmadaRestMethodParameter {
     Get-Command - which Pester itself uses, making it an unreliable thing to intercept.
 
     The probe matters because PowerShell REJECTS an unknown parameter rather than ignoring it. Passing
-    a parameter that a older module does not declare turns a working request into a failed one, so
-    every optional parameter this application adds has to be asked about first. Build-OmadaRequestParameter
-    does the same for SkipBodyRedaction.
+    a parameter that an older module does not declare turns a working request into a failed one, so
+    every optional parameter this application adds has to be asked about first.
+    Build-OmadaRequestParameter does the same for SkipBodyRedaction.
 
     Dynamic parameters count: OmadaWeb.PS declares most of its own through New-DynamicParam, and they
     do appear in Get-Command's .Parameters - verified against both 2026.7.9.9 and 2026.9.9.

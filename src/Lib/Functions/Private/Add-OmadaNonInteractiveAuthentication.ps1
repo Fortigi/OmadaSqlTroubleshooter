@@ -48,26 +48,36 @@ function Add-OmadaNonInteractiveAuthentication {
 
     $Private:Result = $Parameters.Clone()
 
+    # Assume not supported until the probe says otherwise, so that every way of NOT getting an answer
+    # - a false, or a throw - lands on the same safe behaviour. Deciding this in two places is how the
+    # catch below came to leave a pre-existing key in place, which is the one outcome that actually
+    # breaks a request rather than merely failing to improve it.
+    $Private:Supported = $false
+
     try {
-        if (-not (Test-OmadaRestMethodParameter -Name "NoInteractiveAuthentication")) {
-            # Older module. Leave the splat alone rather than send a parameter it will reject.
-            if ($Private:Result.ContainsKey("NoInteractiveAuthentication")) {
-                $Private:Result.Remove("NoInteractiveAuthentication")
-            }
-
-            return $Private:Result
-        }
-
-        $Private:Result.NoInteractiveAuthentication = $true
-
-        if ($Private:Result.ContainsKey("ForceAuthentication")) {
-            $Private:Result.Remove("ForceAuthentication")
-        }
+        $Private:Supported = Test-OmadaRestMethodParameter -Name "NoInteractiveAuthentication"
     }
     catch {
         # A capability check that cannot run must not stop the query. The worst case is the behaviour
         # this function was written to improve, which the fallback classification already handles.
         "Could not determine whether OmadaWeb.PS supports -NoInteractiveAuthentication: {0}" -f $_.Exception.Message | Write-LogOutput -LogType DEBUG
+    }
+
+    if (-not $Private:Supported) {
+        # Older module, or an unanswerable question. Strip the key rather than send a parameter that
+        # would be rejected - PowerShell errors on an unknown parameter, so leaving a stale one here
+        # would fail every background request instead of merely behaving as before.
+        if ($Private:Result.ContainsKey("NoInteractiveAuthentication")) {
+            $Private:Result.Remove("NoInteractiveAuthentication")
+        }
+
+        return $Private:Result
+    }
+
+    $Private:Result.NoInteractiveAuthentication = $true
+
+    if ($Private:Result.ContainsKey("ForceAuthentication")) {
+        $Private:Result.Remove("ForceAuthentication")
     }
 
     return $Private:Result

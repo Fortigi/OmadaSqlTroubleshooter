@@ -123,6 +123,20 @@ Describe "Add-OmadaNonInteractiveAuthentication" {
 
             $Private:Result.ContainsKey("NoInteractiveAuthentication") | Should -BeFalse
         }
+
+        It "strips a key that was already there, rather than passing on one it could not verify" {
+            # The version of this test that only checked a splat WITHOUT the key passed against code
+            # that left a pre-existing one in place - so it proved nothing about the case that
+            # actually breaks a request. An unverifiable capability has to reach the same safe
+            # behaviour as a verified absence, by every route including a throw.
+            Mock Test-OmadaRestMethodParameter { throw "module not loadable" }
+            $Private:Splat = New-Splat
+            $Private:Splat.NoInteractiveAuthentication = $true
+
+            $Private:Result = Add-OmadaNonInteractiveAuthentication -Parameters $Private:Splat
+
+            $Private:Result.ContainsKey("NoInteractiveAuthentication") | Should -BeFalse
+        }
     }
 }
 
