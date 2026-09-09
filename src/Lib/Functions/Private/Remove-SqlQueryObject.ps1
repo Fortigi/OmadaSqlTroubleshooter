@@ -70,7 +70,22 @@ function Remove-SqlQueryObject {
             }
         }
 
-        Invoke-OmadaPSWebRequestWrapper | Out-Null
+        # The result is inspected, not discarded. Invoke-OmadaPSWebRequestWrapper THROWS only for the
+        # two classified tenant failures; an unclassified one comes back as an ErrorRecord, so piping
+        # to Out-Null and logging success below reported a deletion that had not happened.
+        #
+        # That is worse here than a wrong log line. This is the path -Synchronous exists for: the
+        # cancel path, where the caller needs the TMP_<guid> object gone before anything can claim its
+        # DoId. A false "deleted successfully" leaves the object on the tenant and says otherwise -
+        # in a troubleshooting tool, whose log is the thing a user reaches for.
+        #
+        # The asynchronous branch above already got this right; this is the same check.
+        $Private:Result = Invoke-OmadaPSWebRequestWrapper
+        if ($Private:Result -is [System.Management.Automation.ErrorRecord]) {
+            "Failed to delete query object {0}: {1}" -f $DoId, $Private:Result.Exception.Message | Write-LogOutput -LogType WARNING -SkipDialog
+            return
+        }
+
         "Query object {0} deleted successfully." -f $DoId | Write-LogOutput -LogType DEBUG
     }
     catch {
