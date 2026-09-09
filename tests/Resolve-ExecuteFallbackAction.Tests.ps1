@@ -8,6 +8,7 @@ BeforeAll {
     $ParentPath = Split-Path -Path $PSScriptRoot -Parent
     $PrivatePath = Join-Path $ParentPath -ChildPath "src\Lib\Functions\Private"
     . (Join-Path $PrivatePath -ChildPath "Get-OmadaHttpStatusCode.ps1")
+    . (Join-Path $PrivatePath -ChildPath "Test-OmadaSessionExpiredError.ps1")
     . (Join-Path $PrivatePath -ChildPath "Resolve-ExecuteFallbackAction.ps1")
 
     function script:New-Outcome {
@@ -58,6 +59,48 @@ Describe "Resolve-ExecuteFallbackAction" {
             # Re-running could execute the query a second time against the tenant.
             New-Outcome -Message "something failed later" -CompletedSteps 2 |
                 ForEach-Object { Resolve-ExecuteFallbackAction -Outcome $_ } | Should -Be "Report"
+        }
+    }
+
+    Context "The session had gone and the worker refused to sign in" {
+        # What a worker now reports instead of exploding: it carries -NoInteractiveAuthentication, so
+        # OmadaWeb.PS raises a typed error rather than opening a browser it has no desktop for.
+
+        function script:New-SessionExpiredOutcome {
+            param([int]$CompletedSteps = 0)
+            $Private:Exception = [System.Security.Authentication.AuthenticationException]::new("The Omada session has expired and -NoInteractiveAuthentication was specified")
+            return @{
+                CompletedSteps = $CompletedSteps
+                ErrorRecord    = [System.Management.Automation.ErrorRecord]::new(
+                    $Private:Exception, "OmadaSessionExpired,Invoke-OmadaRequest",
+                    [System.Management.Automation.ErrorCategory]::AuthenticationError, "https://tenant.omada.cloud")
+            }
+        }
+
+        It "retries on the UI thread, which is the one place that can sign in" {
+            Resolve-ExecuteFallbackAction -Outcome (New-SessionExpiredOutcome) | Should -Be "Retry"
+        }
+
+        It "does NOT write off the worker" {
+            # The distinction that matters: an expired session says nothing about whether the worker
+            # can run requests. Once the UI thread has signed in there is a session to inherit, and
+            # disabling here would give up something that is about to start working - which is exactly
+            # what happened in the live session that prompted this.
+            Resolve-ExecuteFallbackAction -Outcome (New-SessionExpiredOutcome) | Should -Not -Be "RetryAndDisable"
+        }
+
+        It "is preferred over the bare status code, being the more precise answer" {
+            # The module raises this for a 401 as well as for no cookie at all, so "401 with no
+            # sign-in attempted" beats "401".
+            $Private:Outcome = New-SessionExpiredOutcome
+            $Private:Outcome.ErrorRecord.Exception | Add-Member -NotePropertyName Response -NotePropertyValue ([pscustomobject]@{ StatusCode = 401 }) -Force
+
+            Resolve-ExecuteFallbackAction -Outcome $Private:Outcome | Should -Be "Retry"
+        }
+
+        It "still reports rather than retries once a step has completed" {
+            # Re-running could execute the query a second time against the tenant, expiry or not.
+            Resolve-ExecuteFallbackAction -Outcome (New-SessionExpiredOutcome -CompletedSteps 2) | Should -Be "Report"
         }
     }
 

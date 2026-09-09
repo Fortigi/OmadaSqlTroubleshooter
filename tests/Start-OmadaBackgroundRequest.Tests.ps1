@@ -13,6 +13,10 @@ BeforeAll {
     $PrivatePath = Join-Path $ParentPath -ChildPath "src\Lib\Functions\Private"
 
     . (Join-Path $PrivatePath -ChildPath "ConvertTo-RedactedLogString.ps1")
+    # Real, not stubbed: a worker's requests must carry -NoInteractiveAuthentication, and a stub here
+    # would let that silently stop happening. It reads only the installed module's capabilities.
+    . (Join-Path $PrivatePath -ChildPath "Test-OmadaRestMethodParameter.ps1")
+    . (Join-Path $PrivatePath -ChildPath "Add-OmadaNonInteractiveAuthentication.ps1")
     . (Join-Path $PrivatePath -ChildPath "Start-OmadaBackgroundRequest.ps1")
 
     $Script:Tracer = [System.Diagnostics.Trace]

@@ -55,6 +55,17 @@ function Resolve-ExecuteFallbackAction {
         return "Report"
     }
 
+    # The session had gone and the worker refused to sign in, which is what it is told to do
+    # (-NoInteractiveAuthentication, added to worker requests in Start-OmadaBackgroundRequest). That
+    # is a statement about the SESSION, not about the worker: the UI thread signs in, and the worker
+    # then has a session to inherit. Retry, and emphatically do not disable.
+    #
+    # Checked before the status code because the module raises this for a 401 as well as for no cookie
+    # at all, and "401 with no sign-in attempted" is a more precise answer than "401".
+    if (Test-OmadaSessionExpiredError -ErrorRecord $Outcome.ErrorRecord) {
+        return "Retry"
+    }
+
     $Private:StatusCode = Get-OmadaHttpStatusCode -ErrorRecord $Outcome.ErrorRecord
     if ($null -ne $Private:StatusCode) {
         # A status code means a round trip completed. The worker is fine.
@@ -65,9 +76,18 @@ function Resolve-ExecuteFallbackAction {
         return "Report"
     }
 
-    # No status code. Look for the failures that mean this worker can never run a request: they all
-    # come from a worker being pushed into an interactive sign-in it cannot perform. Matched on text
-    # because the exception arrives flattened across the runspace boundary.
+    # No status code, and not a session expiry. What remains are the failures that mean this worker
+    # can never run a request: they all come from a worker being pushed into an interactive sign-in it
+    # cannot perform.
+    #
+    # These should no longer be reachable - a worker now carries -NoInteractiveAuthentication, so it
+    # never reaches a sign-in to fail at. They are kept for the case that switch is not available:
+    # the application's minimum OmadaWeb.PS is 2026.07.09.9, which predates it, and on that version
+    # Add-OmadaNonInteractiveAuthentication deliberately leaves the splat alone. There, this text is
+    # still the only signal there is.
+    #
+    # Matched on text because the exception arrives flattened across the runspace boundary - which is
+    # exactly the brittleness the typed check above replaces wherever the switch is available.
     $Private:Message = [string]$Outcome.ErrorRecord.Exception.Message
     $Private:WorkerFailurePattern = @(
         "WebView2RuntimeNotFoundException"
