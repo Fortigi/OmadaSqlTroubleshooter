@@ -51,7 +51,7 @@ $Script:SqlHistoryForm.Elements.ButtonExportHistory.Add_Click({
                         $TextContent += ""
 
                         foreach ($Item in $HistoryData) {
-                            $TextContent += "Change Date: $($Item.ChangeDate.ToString('yyyy-MM-dd HH:mm:ss'))"
+                            $TextContent += "Change Date: $(Format-OmadaHistoryDate -Value $Item.ChangeDate)"
                             $TextContent += "Changed By: $($Item.ChangedBy)"
                             $TextContent += "Change Type: $($Item.ChangeType)"
                             $TextContent += "Object: $($Item.SqlObjectName)"

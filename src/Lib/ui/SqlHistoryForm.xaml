@@ -163,7 +163,7 @@
                           IsReadOnly="True">
                     <DataGrid.Columns>
                         <DataGridTextColumn Header="Change Date"
-                                            Binding="{Binding ChangeDate, StringFormat=yyyy-MM-dd HH:mm:ss}"
+                                            Binding="{Binding ChangeDate, StringFormat=yyyy-MM-dd HH:mm:ss, TargetNullValue='(unknown)'}"
                                             MinWidth="100"/>
                         <DataGridTextColumn Header="Changed By"
                                             Binding="{Binding ChangedBy}"

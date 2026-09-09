@@ -71,7 +71,13 @@ function Get-SqlHistory {
                         NewValue      = $null -ne $ChangedField.NewValue ? [System.Web.HttpUtility]::HtmlDecode($ChangedField.NewValue) : $null
                         ChangedBy     = $Row.Who
                         ChangeType    = $Row.What
-                        ChangeDate    = (Get-Date ($Row.When))
+                        # Not Get-Date: that binds to a [DateTime] parameter and so converts using
+                        # the CURRENT culture, and this value is a string the SERVER formatted. On a
+                        # machine whose culture is not month-first, "8/25/2026 12:03 PM" is read as
+                        # day 8 of month 25, the binding fails, and the failure propagates out of
+                        # this loop to the outer catch - losing the ENTIRE history list over one
+                        # timestamp (issue #95). A date that cannot be read is now just a null date.
+                        ChangeDate    = ConvertTo-OmadaHistoryDate -Value $Row.When
                     }
                     $SqlHistoryObjects += $SqlHistoryObject
 
