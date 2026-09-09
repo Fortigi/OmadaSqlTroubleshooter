@@ -90,6 +90,21 @@ function Start-OmadaBackgroundRequest {
             }
         }
 
+        # A worker must never try to sign in. It has no desktop, and its pool is MTA on purpose, so an
+        # interactive sign-in there fails as a WebView2RuntimeNotFoundException - which is what a live
+        # session showed: the first query after a seventy-minute idle blew up that way, and background
+        # execution switched itself off.
+        #
+        # Under -NoInteractiveAuthentication (Fortigi/OmadaWeb.PS#85) no code path can open a browser,
+        # and an expired or missing session comes back as a typed, catchable error instead. That turns
+        # the worker's commonest failure from an explosion into an answer.
+        #
+        # Applied HERE rather than in Build-OmadaRequestParameter because it must apply to the worker
+        # ONLY: the UI thread is exactly where signing in is supposed to happen. Both worker paths
+        # clone from these two lines - the pipeline through $PipelineContext.Parameters, a single
+        # request through the AddArgument below - so one place covers both.
+        $Parameters = Add-OmadaNonInteractiveAuthentication -Parameters $Parameters
+
         # The pipeline builds each step's request itself, but every step still goes out with the
         # session's own transport settings - SessionKey, authentication, redaction - so it is handed
         # the same prepared splat a single request would have used. Cloned, and into a clone of the

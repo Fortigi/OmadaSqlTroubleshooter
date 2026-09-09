@@ -35,6 +35,7 @@ BeforeAll {
     # The real classifier, not a stub: deciding what a failure means IS the behaviour under test in
     # the fallback suite below, and a stub would assert nothing.
     . (Join-Path $PrivatePath -ChildPath "Get-OmadaHttpStatusCode.ps1")
+    . (Join-Path $PrivatePath -ChildPath "Test-OmadaSessionExpiredError.ps1")
     . (Join-Path $PrivatePath -ChildPath "Resolve-ExecuteFallbackAction.ps1")
     . (Join-Path $PrivatePath -ChildPath "Show-ExecuteQueryPopup.ps1")
     . (Join-Path $PrivatePath -ChildPath "Invoke-ExecuteQuery.ps1")
