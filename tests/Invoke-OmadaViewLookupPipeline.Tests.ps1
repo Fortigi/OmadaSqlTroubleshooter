@@ -184,6 +184,21 @@ Describe "Invoke-OmadaViewLookupPipeline" {
             @($script:Calls | Where-Object { $_.Key -eq "page" }).Count | Should -Be 0
         }
 
+        It "reports an empty view as an empty array, never as null" {
+            # A jqGrid payload for a view with nothing in it has a null .d.Rows, and @($null).Count is
+            # 1 - so a caller asking "did I get rows?" the obvious way was told yes. Normalising here
+            # means no caller has to know that.
+            Reset-Transport
+            $script:Responses["view-rows"] = [pscustomobject]@{ d = [pscustomobject]@{ Rows = $null } }
+
+            $Private:Outcome = Invoke-OmadaViewLookupPipeline -Context (New-Context)
+
+            # Compared, not piped: Should unrolls the pipeline, so an empty array arrives as nothing
+            # and the assertion would be about $null either way.
+            ($null -eq $Private:Outcome.Rows) | Should -BeFalse
+            @($Private:Outcome.Rows).Count | Should -Be 0
+        }
+
         It "does not fetch it when the view returned no rows" {
             Reset-Transport -NoRows
 

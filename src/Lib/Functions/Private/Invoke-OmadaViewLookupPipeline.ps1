@@ -163,7 +163,11 @@ function Invoke-OmadaViewLookupPipeline {
             return $Outcome
         }
 
-        $Outcome.Rows = $Private:Rows.Result.d.Rows
+        # Normalised to an array, and never left as $null. A jqGrid payload for a view with nothing in
+        # it has a null .d.Rows, and @($null).Count is 1 - so "did I get rows?" answered yes for an
+        # empty view, and the caller reported it as a failed fetch and disabled the dropdown. Callers
+        # should not have to know that; the outcome carries an array or an empty array.
+        $Outcome.Rows = @($Private:Rows.Result.d.Rows | Where-Object { $null -ne $_ })
 
         # --- 3. The data connection page, when the caller wants it ---------------------------------
         if (-not $Context.IncludeDataObjectHtml) {

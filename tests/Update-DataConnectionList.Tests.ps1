@@ -207,6 +207,15 @@ Describe "Update-DataConnectionList" {
             $script:Rendered[0].Html | Should -Be "<html>inline page</html>"
         }
 
+        It "reports a null row set as no rows, not as one row" {
+            # @($null).Count is 1, so the obvious wrapping answers "yes, there are rows" for none at
+            # all - and the renderer then reports a failed fetch and disables the dropdown. This is
+            # the worker-path twin of the empty-array bug on the inline path.
+            Invoke-Completion -Outcome (New-WorkerOutcome -Rows $null -CompletedSteps 2)
+
+            $script:Rendered[0].HasRows | Should -BeFalse
+        }
+
         It "reports no rows as no rows, not as a failed page fetch" {
             # The distinction the original code made and that both arrive here as a null page: a view
             # with no rows left the dropdown untouched and said nothing, a FAILED fetch warned and

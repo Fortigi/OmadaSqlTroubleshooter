@@ -45,7 +45,11 @@ function Update-DataConnectionList {
                 return
             }
 
-            Complete-DataConnectionListUpdate -DataObjectHtml $Result.DataObjectHtml -HasRows:(@($Result.Rows).Count -gt 0) -NotShowPopupWindow:$CallerContext.NotShowPopupWindow
+            # Filtered, not just wrapped: @($null).Count is 1, so a plain @($Result.Rows).Count -gt 0
+            # answers "yes, there are rows" for no rows at all - and the renderer then reports a
+            # failed fetch and disables the dropdown. The pipeline normalises its own Rows, but the
+            # completion's other paths pass $null deliberately, so this has to be honest about that.
+            Complete-DataConnectionListUpdate -DataObjectHtml $Result.DataObjectHtml -HasRows:(@($Result.Rows | Where-Object { $null -ne $_ }).Count -gt 0) -NotShowPopupWindow:$CallerContext.NotShowPopupWindow
         }
 
         if ($null -ne $Private:Pending) {
