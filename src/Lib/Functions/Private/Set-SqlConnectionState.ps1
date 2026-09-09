@@ -18,6 +18,14 @@ function Set-SqlConnectionState {
             # position: the only handler that consults it is ComboBoxSelectQuery's DropDownOpened,
             # which is a user gesture and never fires programmatically.
             $Script:ConnectionStatus = $true
+
+            # The tab has a live session again, so the keep-alive should resume for it (issue #89).
+            # Without this the abandonment is permanent: it is keyed by SessionKey, which is a stable
+            # hash of the connection identity and is therefore the SAME key after signing in again -
+            # so one expiry would switch the keep-alive off for that tenant and identity for the rest
+            # of the application's life, which is the very failure the keep-alive exists to prevent.
+            Reset-SessionKeepAlive
+
             $Script:MainForm.Elements.ButtonReset.IsEnabled = $true
             $Script:MainForm.Elements.ComboBoxSelectAuthenticationOption.IsEnabled = $false
             $Script:MainForm.Elements.TextBoxUserName.IsEnabled = $false

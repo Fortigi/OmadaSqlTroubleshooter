@@ -30,6 +30,17 @@ $Script:WebViewCompletionPollTimer.Add_Tick({
                 Update-BackgroundRequestElapsedTime -Pending $Script:PendingWebViewCompletions
             }
 
+            # Session keep-alive (issue #89), driven from this timer for the same reasons as the
+            # indicator above. Checked every 20th tick - once a second - rather than on every tick,
+            # because the answer is a wall-clock comparison against an interval measured in minutes
+            # and there is nothing to gain from asking it twenty times a second.
+            #
+            # It cannot prompt: the request uses OmadaWeb.PS's -NoInteractiveAuthentication, so no
+            # path under it can open a sign-in window. That is what makes it safe on a timer at all.
+            if ($Script:WebViewCompletionTickCount % 20 -eq 0) {
+                Invoke-OmadaSessionKeepAlive
+            }
+
             $Completed = @($Script:PendingWebViewCompletions | Where-Object { $_.Task.IsCompleted })
             foreach ($Pending in $Completed) {
                 [void]$Script:PendingWebViewCompletions.Remove($Pending)

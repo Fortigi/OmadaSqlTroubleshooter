@@ -99,5 +99,10 @@
   {
     "Name": "SqlParserVersion",
     "Type": "String"
+  },
+  {
+    "Name": "SessionKeepAliveMinutes",
+    "Type": "Int",
+    "DefaultValue": 5
   }
 ]
