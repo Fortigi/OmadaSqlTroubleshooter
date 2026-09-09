@@ -80,8 +80,12 @@ function Get-DataConnectionPageInline {
     param()
 
     # Count, not a null check. A view that exists but holds nothing comes back as an empty array,
-    # which is not $null - and indexing [0] into it throws under StrictMode ("Index was outside the
-    # bounds of the array"), so the intended "no rows" outcome would arrive as an error instead.
+    # which is not $null - so the null check let it straight through. Nothing throws: this codebase
+    # never enables Set-StrictMode (see ConvertTo-TabSessionConfig), so @()[0] is $null and so is the
+    # id read off it. The request was then built as "dataobjdlg.aspx?DOID=" with no id at all, sent,
+    # and its answer reported as "Failed to retrieve data connections!" - which disables the dropdown
+    # and the schema button. A wasted round-trip producing the wrong outcome, where the right one is
+    # to leave the list alone, as the original code did for this case.
     $Private:SqlQueryViewContents = @(Get-SqlTroubleShooterView)
     if ($Private:SqlQueryViewContents.Count -eq 0) {
         return @{ HasRows = $false; Html = $null }

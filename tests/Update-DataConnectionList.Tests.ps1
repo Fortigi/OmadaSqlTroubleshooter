@@ -151,8 +151,10 @@ Describe "Update-DataConnectionList" {
         }
 
         It "treats a view that exists but holds no rows as no rows, without throwing" {
-            # An empty view comes back as an empty ARRAY, which is not $null - and indexing [0] into
-            # it throws under StrictMode, so the intended outcome would have arrived as an error.
+            # An empty view comes back as an empty ARRAY, which is not $null, so a null check let it
+            # through. Nothing throws (this codebase never enables Set-StrictMode) - it sent a
+            # request with no DOID and reported the answer as a failed fetch, which disables the
+            # dropdown. Hence the assertion that no page request is made at all.
             $script:WorkerAvailable = $false
             $script:InlineViewRows = @()
 
