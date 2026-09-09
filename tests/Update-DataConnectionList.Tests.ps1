@@ -166,6 +166,20 @@ Describe "Update-DataConnectionList" {
             $script:Rendered[0].Html | Should -Be "<html>inline page</html>"
         }
 
+        It "treats a NULL row set from the inline lookup as no rows" {
+            # The third appearance of @($null).Count -eq 1 in this change, and the one that survived
+            # the first fix: a jqGrid payload for an empty view has a null .d.Rows, so the inline
+            # lookup returned $null, the count said 1, and the request went out as "DOID=" with no id
+            # - reported back as a failed fetch, disabling the dropdown.
+            $script:WorkerAvailable = $false
+            $script:InlineViewRows = $null
+
+            Update-DataConnectionList
+
+            $script:Rendered[0].HasRows | Should -BeFalse
+            $script:InlinePageCalls | Should -Be 0
+        }
+
         It "treats a view that exists but holds no rows as no rows, without throwing" {
             # An empty view comes back as an empty ARRAY, which is not $null, so a null check let it
             # through. Nothing throws (this codebase never enables Set-StrictMode) - it sent a

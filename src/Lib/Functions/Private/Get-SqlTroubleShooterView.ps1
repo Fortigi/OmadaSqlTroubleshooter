@@ -38,7 +38,11 @@ function Get-SqlTroubleShooterView {
             }
 
             $Private:Result = Get-OmadaGetPagingDataObject -DataType "DataObjects" -DataTypeArgs $DataTypeArgs
-            $Private:Result = $Private:Result.d.Rows
+            # Normalised to an array, matching Invoke-OmadaViewLookupPipeline. A jqGrid payload for a
+            # view holding nothing has a NULL .d.Rows, and @($null).Count is 1 - so every caller
+            # asking "did I get rows?" the obvious way was told yes for no rows at all. Answering it
+            # here means no caller has to know that.
+            $Private:Result = @($Private:Result.d.Rows | Where-Object { $null -ne $_ })
         }
         return $Private:Result
 

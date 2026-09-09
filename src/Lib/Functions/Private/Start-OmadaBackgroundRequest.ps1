@@ -94,12 +94,15 @@ function Start-OmadaBackgroundRequest {
             # its first line, which is exactly what this guard exists to prevent.
             $Private:RequiredWorkerFiles += Get-OmadaPipelineWorkerFile -PipelineContext $PipelineContext
 
-            # And the entry point has to be IN those files. Checking only that the files exist left a
-            # typo in the function name to be discovered inside the worker, which is the one outcome
-            # this whole path is designed not to have: an unavailable chain must mean "run it inline
-            # instead", not "dispatch a job that dies".
-            if (-not (Test-OmadaPipelineWorkerChain -PipelineFunction (Get-OmadaPipelineWorkerFunction -PipelineContext $PipelineContext) -PipelineFiles $Private:RequiredWorkerFiles)) {
-                "Background worker chain '{0}' is not defined by any of its files; running on the UI thread instead." -f (Get-OmadaPipelineWorkerFunction -PipelineContext $PipelineContext) | Write-LogOutput -LogType WARNING -SkipDialog
+            # And the file that would DEFINE the entry point has to be among them. Checking only that
+            # the listed files exist left a typo in the function name to be discovered inside the
+            # worker, which is the one outcome this whole path is designed not to have: an
+            # unavailable chain must mean "run it inline instead", not "dispatch a job that dies".
+            $Private:ChainFunction = Get-OmadaPipelineWorkerFunction -PipelineContext $PipelineContext
+            if (-not (Test-OmadaPipelineWorkerChain -PipelineFunction $Private:ChainFunction -PipelineFiles $Private:RequiredWorkerFiles)) {
+                # Says what was actually checked - a file name, not the file's contents - so the
+                # reason is actionable when this fires.
+                "Background worker chain '{0}' has no matching '{0}.ps1' among the files it lists; running on the UI thread instead." -f $Private:ChainFunction | Write-LogOutput -LogType WARNING -SkipDialog
                 return $null
             }
         }

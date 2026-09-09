@@ -305,6 +305,14 @@ Describe "Invoke-OmadaViewLookupPipeline" {
         }
     }
 
+    It "does not disagree with the inline path about an empty row set either" {
+        # Both paths normalise .d.Rows to an array, because a null one counted as a single row and
+        # every caller downstream believed it.
+        $Private:Inline = Get-Content -Path (Join-Path $script:PrivatePath "Get-SqlTroubleShooterView.ps1") -Raw
+
+        $Private:Inline | Should -Match '@\(\$Private:Result\.d\.Rows \| Where-Object \{ \$null -ne \$_ \}\)'
+    }
+
     It "does not disagree with the inline path about picking one view" {
         # The two paths build the same requests by construction (New-OmadaPagingRequest); this is the
         # one decision made OUTSIDE the builder, so it is the one place they can still drift.

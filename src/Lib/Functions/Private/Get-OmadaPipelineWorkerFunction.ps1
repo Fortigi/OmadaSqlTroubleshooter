@@ -70,20 +70,26 @@ function Get-OmadaPipelineWorkerFile {
 function Test-OmadaPipelineWorkerChain {
     <#
     .SYNOPSIS
-    Whether the named entry point is actually defined by one of the named files.
+    Whether the chain's file list includes the file that, by this repository's naming convention,
+    would define the named entry point.
 
     .DESCRIPTION
     The gap this closes: the pre-flight check in Start-OmadaBackgroundRequest confirms the FILES
-    exist, and nothing confirms the FUNCTION is in them. A typo in PipelineFunction therefore passed
+    exist, and nothing related them to the FUNCTION. A typo in PipelineFunction therefore passed
     every check and died inside the worker - turning what the whole fallback design promises to be a
     clean "run it inline instead" into a background job that fails.
 
     Unavailability of any kind has to mean the same thing here, which is why this is a pre-flight
     test rather than a runtime error: slower is better than broken.
 
-    Matched by the repository's one-public-function-per-file convention, so
-    Invoke-OmadaViewLookupPipeline must be accompanied by Invoke-OmadaViewLookupPipeline.ps1. The
-    chain's other files - request builders and the like - are not the entry point and are not
+    It is a NAME check, not a parse: it asks whether "<PipelineFunction>.ps1" is in the list, relying
+    on the repository's one-public-function-per-file convention. It therefore catches a typo and a
+    file left out of the list, which are the mistakes that actually happen; it does not open the file
+    and would not notice a function renamed inside one that still has its old name. Reading the
+    file's contents here would mean parsing PowerShell on the dispatch path for a guard against a
+    mistake the test suite already fails on.
+
+    The chain's other files - request builders and the like - are not the entry point and are not
     matched.
 
     .PARAMETER PipelineFunction

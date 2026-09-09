@@ -90,7 +90,10 @@ function Get-DataConnectionPageInline {
     # and its answer reported as "Failed to retrieve data connections!" - which disables the dropdown
     # and the schema button. A wasted round-trip producing the wrong outcome, where the right one is
     # to leave the list alone, as the original code did for this case.
-    $Private:SqlQueryViewContents = @(Get-SqlTroubleShooterView)
+    # Filtered as well as wrapped. Get-SqlTroubleShooterView normalises its own result now, but this
+    # is the third place in this change where @($null).Count -eq 1 turned no rows into one - so the
+    # count is taken over something that cannot contain a null rather than trusting the shape.
+    $Private:SqlQueryViewContents = @(Get-SqlTroubleShooterView | Where-Object { $null -ne $_ })
     if ($Private:SqlQueryViewContents.Count -eq 0) {
         return @{ HasRows = $false; Html = $null }
     }
