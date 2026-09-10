@@ -111,6 +111,85 @@ Describe "Get-OmadaPipelineWorkerFile" {
     }
 }
 
+Describe "Get-OmadaWorkerRuntimeFile" {
+    # The list the BUILD ships. A worker runspace imports OmadaWeb.PS and nothing else, so it cannot
+    # see anything merged into the psm1 and loads these from disk by path. The package shipped
+    # without them once: every dispatch failed its pre-flight check and fell back to the UI thread,
+    # so background execution, the Cancel button and the live elapsed time were all absent from the
+    # released module while every test passed - because dev and E2E both run from src/.
+    It "includes the core, which every worker dot-sources whatever chain it runs" {
+        Get-OmadaWorkerRuntimeFile | Should -Contain "Invoke-OmadaRequestCore.ps1"
+    }
+
+    It "includes every file of <_>" -ForEach @("Invoke-OmadaExecutePipeline", "Invoke-OmadaViewLookupPipeline") {
+        $Private:Shipped = Get-OmadaWorkerRuntimeFile
+
+        foreach ($Private:File in (Get-OmadaPipelineWorkerFile -PipelineContext @{ PipelineFunction = $_; PipelineFiles = $null })) {
+            $Private:Shipped | Should -Contain $Private:File
+        }
+    }
+
+    It "covers the view lookup's chain, which is the one the default list does not" {
+        # The regression guard with teeth: the default chain would ship anyway. A SECOND chain is
+        # what a hand-maintained list forgets.
+        Get-OmadaWorkerRuntimeFile | Should -Contain "Invoke-OmadaViewLookupPipeline.ps1"
+        Get-OmadaWorkerRuntimeFile | Should -Contain "New-OmadaPagingRequest.ps1"
+    }
+
+    It "lists each file once, however many chains name it" {
+        $Private:Shipped = @(Get-OmadaWorkerRuntimeFile)
+
+        ($Private:Shipped | Select-Object -Unique).Count | Should -Be $Private:Shipped.Count
+    }
+
+    It "names only files that exist in source" {
+        foreach ($Private:File in (Get-OmadaWorkerRuntimeFile)) {
+            Join-Path $script:PrivatePath $Private:File | Should -Exist
+        }
+    }
+
+    It "is where the default chain's file list comes from, rather than a second copy" {
+        # If these ever diverge, the dispatch loads one thing and the build ships another.
+        Get-OmadaPipelineWorkerFile -PipelineContext $null | Should -Be $Script:OmadaWorkerChainFile["Invoke-OmadaExecutePipeline"]
+    }
+}
+
+Describe "The build ships what a worker loads" {
+    # Asserted on the build script, because the build has not run when this suite does - the psake
+    # chain is Analyze, Test, Build. The real guard is the post-condition INSIDE the build, which
+    # fails it outright; this makes sure that guard, and the copy it guards, still exist.
+    BeforeAll {
+        $script:BuildScript = Get-Content -Path (Join-Path (Split-Path -Path $PSScriptRoot -Parent) "build\psakeBuild.ps1") -Raw
+    }
+
+    It "copies the worker's files into the package" {
+        $script:BuildScript | Should -Match 'Copy background worker functions'
+        $script:BuildScript | Should -Match 'Get-OmadaWorkerRuntimeFile'
+    }
+
+    It "takes the list from the module rather than repeating it in the build" {
+        # A hand-maintained copy here is the thing that silently stops matching the code.
+        $script:BuildScript | Should -Match 'Get-OmadaPipelineWorkerFunction\.ps1'
+        $script:BuildScript | Should -Not -Match 'Invoke-OmadaViewLookupPipeline\.ps1"'
+    }
+
+    It "fails the build when a file did not make it into the package" {
+        # Not a warning: a package missing these starts perfectly well and quietly does less, which
+        # is exactly how this shipped unnoticed.
+        $script:BuildScript | Should -Match 'was not copied to .+The published module would run every query on the UI thread'
+    }
+
+    It "copies after the functions merge, which empties that folder" {
+        # Ordering is load-bearing: the merge deletes lib\functions recursively before writing, so a
+        # copy placed earlier is deleted again and the bug comes back looking like a build flake.
+        $Private:MergeAt = $script:BuildScript.IndexOf('$LibSource = "functions"')
+        $Private:CopyAt = $script:BuildScript.IndexOf('Copy background worker functions')
+
+        $Private:MergeAt | Should -BeGreaterThan 0
+        $Private:CopyAt | Should -BeGreaterThan $Private:MergeAt
+    }
+}
+
 Describe "Everyone asks the same question" {
     # The regression that made these functions necessary. Each of the three places must go through
     # them rather than deciding for itself.

@@ -7,6 +7,55 @@
 # during this slice: the harness answered "execute pipeline" while the dispatch answered "view
 # lookup", so the view lookup came back with an execute-shaped outcome and the failure looked like a
 # defect in the code under test.
+#
+# There turned out to be a FOURTH consumer, and missing it cost the whole feature: the BUILD. A worker
+# runspace imports OmadaWeb.PS and nothing else, so it has never loaded this module and cannot see any
+# function merged into the psm1 - which is why it dot-sources these files from disk instead. The
+# package shipped without them, so every dispatch failed its pre-flight check and fell back to the UI
+# thread. Background execution, the Cancel button and the live elapsed time were all absent from the
+# released module while passing every test, because dev and E2E both run from src/.
+#
+# So the chains are declared here, once, and the build reads this file to know what to ship. Adding a
+# chain to this table is what makes it shippable; there is no second list to remember.
+$Script:OmadaWorkerChainFile = [ordered]@{
+    "Invoke-OmadaExecutePipeline"    = @("New-OmadaQueryRequest.ps1", "Invoke-OmadaExecutePipeline.ps1")
+    "Invoke-OmadaViewLookupPipeline" = @("New-OmadaPagingRequest.ps1", "Invoke-OmadaViewLookupPipeline.ps1")
+}
+
+# Dot-sourced by every worker, whatever chain it runs - it is the one statement that actually talks to
+# Omada.
+$Script:OmadaWorkerCoreFile = "Invoke-OmadaRequestCore.ps1"
+
+function Get-OmadaWorkerRuntimeFile {
+    <#
+    .SYNOPSIS
+    Every file a background worker can need, for any chain.
+
+    .DESCRIPTION
+    The build's shipping list, and the thing a post-condition checks against the built package. Read
+    from the same table the dispatch resolves chains through, so a chain that is dispatchable is
+    shippable by construction rather than by someone remembering both.
+
+    .OUTPUTS
+    [string[]] file names relative to Lib\Functions\Private, without duplicates.
+    #>
+    [CmdletBinding()]
+    [OutputType([string[]])]
+    param()
+
+    $Private:Files = [System.Collections.Generic.List[string]]::new()
+    $Private:Files.Add($Script:OmadaWorkerCoreFile)
+
+    foreach ($Private:Chain in $Script:OmadaWorkerChainFile.Keys) {
+        foreach ($Private:File in $Script:OmadaWorkerChainFile[$Private:Chain]) {
+            if (-not $Private:Files.Contains($Private:File)) {
+                $Private:Files.Add($Private:File)
+            }
+        }
+    }
+
+    return $Private:Files.ToArray()
+}
 
 function Get-OmadaPipelineWorkerFunction {
     <#
@@ -64,7 +113,9 @@ function Get-OmadaPipelineWorkerFile {
         }
     }
 
-    return @("New-OmadaQueryRequest.ps1", "Invoke-OmadaExecutePipeline.ps1")
+    # From the table rather than repeated here: the default is a chain like any other, and a second
+    # copy of its file list is a second thing to update when it changes.
+    return @($Script:OmadaWorkerChainFile["Invoke-OmadaExecutePipeline"])
 }
 
 function Test-OmadaPipelineWorkerChain {
