@@ -32,5 +32,11 @@ $Dir = Get-OmadaMockFixturesDir -FixturesDir $FixturesDir
 "  fixtures: $Dir" | Write-Host
 "  press Ctrl+C to stop" | Write-Host
 
-$Control = @{ Running = $true; Started = $false; Error = $null }
+# Synchronized: the accept loop and the serving workers all read and write this concurrently.
+$Control = [hashtable]::Synchronized(@{
+        Running     = $true
+        Started     = $false
+        Error       = $null
+        RouteDelays = [hashtable]::Synchronized(@{})
+    })
 Invoke-OmadaMockListenerLoop -BindAddress $BindAddress -Port $Port -FixturesDir $Dir -Control $Control

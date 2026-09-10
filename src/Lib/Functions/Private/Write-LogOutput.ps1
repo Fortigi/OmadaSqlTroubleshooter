@@ -6,7 +6,16 @@ function Write-LogOutput {
         $ErrorObject,
         [ValidateSet("DEBUG", "INFO", "ERROR", "VERBOSE", "WARNING", "FATAL", "LOG", "VERBOSE2")]
         [string]$LogType = "INFO",
-        [switch]$SkipDialog
+        [switch]$SkipDialog,
+        # The message belongs to one tab - a query result, a failed execute - rather than to the
+        # application. Since queries run in the background (issue #40) such a message can arrive for a
+        # tab the user is not looking at, and a modal about an invisible query interrupts whatever
+        # they are doing on the tab they ARE looking at. A tab-scoped message raised while its tab is
+        # off screen is therefore held and shown when that tab is next opened.
+        #
+        # Opt-in, so everything that has not been considered keeps today's behaviour: an application
+        # failure is not about a tab and must be seen wherever the user is.
+        [switch]$TabScoped
     )
 
     try {
@@ -126,7 +135,10 @@ function Write-LogOutput {
                 $LogMessage.ShowWarning = $true
                 $LogMessageDialog.Show = $true
                 $LogMessageDialog.Text = "Warning:`r`n`r`n{0}" -f $LogMessageDialog.Text
-                $LogMessageDialog.Title = "Warning"
+                # Named after the tab it came from. With several tabs open - and queries now running
+                # in the background, so a message can arrive for a tab the user is not looking at -
+                # "Warning" alone does not say which query is being complained about.
+                $LogMessageDialog.Title = "Warning - {0}" -f $TabContext
                 $LogMessageDialog.Icon = [System.Windows.Forms.MessageBoxIcon]::Warning
                 $LogMessage.Color = "Yellow"
                 if ($null -ne $Script:PopUpWindowQueryRefresh) {
@@ -141,12 +153,23 @@ function Write-LogOutput {
                 catch {}
                 $LogMessage.ShowError = $true
                 $LogMessageDialog.Show = $true
-                $LogMessageDialog.Title = "Error"
+                # Named after the tab it came from - see the Warning branch above for why.
+                $LogMessageDialog.Title = "Error - {0}" -f $TabContext
                 try {
                     if ($Null -ne $ErrorObject) {
                         if ($null -ne $ErrorObject.Exception?.StatusCode) {
-                            $LogMessageDialog.Title += "{0} - ({1} - {2})" -f $LogMessageDialog.Title, $ErrorObject.Exception.StatusCode, $ErrorObject.Exception.Response.ReasonPhrase
-                            $LogMessageDialog.Text = "Failure {0} - {1} occurred:`r`n`r`n{2}" -f $LogMessageDialog.Text, $ErrorObject.Exception.StatusCode, $ErrorObject.Exception.Response.ReasonPhrase
+                            # Assignment, not "+=". The format string's {0} is the title itself, so
+                            # appending it produced the title twice:
+                            #   "Error - Mve: queryError - Mve: query - (500 - Internal Server Error)"
+                            $LogMessageDialog.Title = "{0} - ({1} - {2})" -f $LogMessageDialog.Title, $ErrorObject.Exception.StatusCode, $ErrorObject.Exception.Response.ReasonPhrase
+
+                            # Argument order. These three were passed message-first, so the user's
+                            # actual error landed in the status-code slot and the reason phrase
+                            # replaced the message body:
+                            #   "Failure The query pipeline failed - 500 occurred:
+                            #
+                            #    Internal Server Error"
+                            $LogMessageDialog.Text = "Failure {0} - {1} occurred:`r`n`r`n{2}" -f $ErrorObject.Exception.StatusCode, $ErrorObject.Exception.Response.ReasonPhrase, $LogMessageDialog.Text
                         }
                     }
                     else {
@@ -174,18 +197,28 @@ function Write-LogOutput {
             $LogMessage.Text | Write-Verbose
         }
         if ($LogMessageDialog.Show -and !$SkipDialog) {
-            # A blocking dialog pumps this thread's messages while it's up, which can let
-            # $Script:WebViewCompletionPollTimer's Tick fire reentrantly nested inside it -
-            # suspend it for the duration so that can't happen (see
-            # Suspend-WebViewCompletionPolling.ps1 for why).
-            Suspend-WebViewCompletionPolling
-            try {
-                if ($null -ne $Script:MainForm -and $null -ne $Script:MainForm.Definition -and $Script:MainForm.Definition.IsVisible) {
-                    $TrimmedText = Limit-MessageBoxText -Text $LogMessageDialog.Text
-                    [System.Windows.Forms.MessageBox]::Show($TrimmedText, $LogMessageDialog.Title, [System.Windows.Forms.MessageBoxButtons]::OK, $LogMessageDialog.Icon)
-                    Restore-MainFormFocus
+            if ($null -ne $Script:MainForm -and $null -ne $Script:MainForm.Definition -and $Script:MainForm.Definition.IsVisible) {
+                # A message that belongs to a tab the user is not looking at is held rather than
+                # shown. Interrupting work on the visible tab with a modal about an invisible query is
+                # what this avoids; it is shown when that tab is next opened, and it is in the log
+                # either way. An application-level failure is not tab-scoped and always shows.
+                if ($TabScoped -and -not (Test-ActiveTabIsOnScreen)) {
+                    Add-TabScopedMessage -TabSession (Get-ActiveTabSession) -Text $LogMessageDialog.Text -Title $LogMessageDialog.Title -Icon $LogMessageDialog.Icon
                 }
                 else {
+                    Show-LogMessageDialog -Text $LogMessageDialog.Text -Title $LogMessageDialog.Title -Icon $LogMessageDialog.Icon
+                }
+            }
+            else {
+                # No main window yet - startup, shutdown, or a console host. Nothing is tab-scoped
+                # here because there are no tabs to scope to, so this path is unchanged.
+                #
+                # A blocking dialog pumps this thread's messages while it's up, which can let
+                # $Script:WebViewCompletionPollTimer's Tick fire reentrantly nested inside it -
+                # suspend it for the duration so that can't happen (see
+                # Suspend-WebViewCompletionPolling.ps1 for why).
+                Suspend-WebViewCompletionPolling
+                try {
                     $MessageBoxImage = [System.Windows.MessageBoxImage]::Information
                     if ($LogMessage.ShowWarning) {
                         $LogMessage.Text | Write-Warning
@@ -200,9 +233,9 @@ function Write-LogOutput {
                     }
                     [System.Windows.MessageBox]::Show((Limit-MessageBoxText -Text $LogMessageDialog.Text), $LogMessageDialog.Title, [System.Windows.MessageBoxButton]::OK, $MessageBoxImage) | Out-Null
                 }
-            }
-            finally {
-                Resume-WebViewCompletionPolling
+                finally {
+                    Resume-WebViewCompletionPolling
+                }
             }
         }
         if ($LogMessage.ShowError) {

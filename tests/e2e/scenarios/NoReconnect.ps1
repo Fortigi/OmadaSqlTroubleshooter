@@ -133,8 +133,17 @@ E2ESuite -Name "NoReconnectStartup" -Body {
         New-E2EPersistedTabStore -TabCount 1 | Out-Null
         Initialize-E2ERestoreRun -NoReconnect $false
         $script:E2EChoiceReturn = 2
+        # "Retrieves its schema" is only observable from a COLD cache. The schema cache is keyed by
+        # pool SessionKey + data connection and lives for the whole session, and every scenario in
+        # this run connects to the same tenant with the same identity - so by the time this one runs
+        # the key is warm and a correct connect issues no request at all. Emptying it here is what
+        # makes the assertion about the connect path rather than about which scenarios ran first.
+        $Script:SqlSchemaCache = @{}
 
         Restore-TabSessions
+        # The schema fetch a successful reconnect triggers is a background request since issue #40,
+        # so the call it makes is not on the record until the request has actually been issued.
+        Wait-E2ENoPendingRequests
 
         E2EAssertEqual 1 (Get-E2EChoices -TitleLike "Reconnect?").Count "the reconnect prompt should be shown"
         E2EAssertTrue ($Script:ConnectionStatus) "accepting the prompt must connect the restored tab"

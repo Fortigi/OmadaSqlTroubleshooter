@@ -147,6 +147,12 @@ function Invoke-OmadaSqlTroubleshooter {
     }
     #endregion
 
+    # Which OmadaWeb.PS and which assemblies this session is actually running. Written here because
+    # it is the first point where the log level and the log file are both settled, and before
+    # anything that might fail in a way these versions explain - so a log sent in for diagnosis
+    # always says what produced it.
+    Write-LoadedComponentLog
+
     #region wpf
     $null  = Open-SplashScreenForm
     "Loading Main Form Object" | Write-LogOutput -LogType DEBUG

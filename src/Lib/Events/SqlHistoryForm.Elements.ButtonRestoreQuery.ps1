@@ -20,7 +20,7 @@ $Script:SqlHistoryForm.Elements.ButtonRestoreQuery.Add_Click({
             Suspend-WebViewCompletionPolling
             try {
                 $Result = [System.Windows.MessageBox]::Show(
-                    "Are you sure you want to restore this query version?`n`nChanged by: $($SelectedItem.ChangedBy)`nChange date: $($SelectedItem.ChangeDate.ToString('yyyy-MM-dd HH:mm:ss'))",
+                    "Are you sure you want to restore this query version?`n`nChanged by: $($SelectedItem.ChangedBy)`nChange date: $(Format-OmadaHistoryDate -Value $SelectedItem.ChangeDate)",
                     "Confirm Query Restore",
                     [System.Windows.MessageBoxButton]::YesNo,
                     [System.Windows.MessageBoxImage]::Question
@@ -43,7 +43,7 @@ $Script:SqlHistoryForm.Elements.ButtonRestoreQuery.Add_Click({
                         $Script:RunTimeData.CurrentQueryText = $SelectedItem.OldValue
                         "Query restored to editor!" | Write-LogOutput
                     }
-                    "Query restored from history: {0}" -f $SelectedItem.ChangeDate.ToString('yyyy-MM-dd HH:mm:ss') | Write-LogOutput
+                    "Query restored from history: {0}" -f (Format-OmadaHistoryDate -Value $SelectedItem.ChangeDate) | Write-LogOutput
 
                     $Script:SqlHistoryForm.Definition.Close()
                 }

@@ -28,7 +28,8 @@ BeforeAll {
             [Parameter(ValueFromPipeline = $true)]$Message,
             [string]$LogType = "INFO",
             $ErrorObject,
-            [switch]$SkipDialog
+            [switch]$SkipDialog,
+            [switch]$TabScoped
         )
         process {
             $script:LoggedMessage.Add([PSCustomObject]@{ Message = [string]$Message; LogType = $LogType })

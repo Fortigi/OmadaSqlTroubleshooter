@@ -31,9 +31,31 @@ Exit code is `0` when every scenario passes, non-zero otherwise. A JUnit report 
   the real Connect/Execute/New buttons, and assert on real app state (connection status, the query and
   data-connection dropdowns, `DataGridQueryResult.ItemsSource`, the tab list, etc.).
 
-Because the single backend seam (`Invoke-OmadaPSWebRequestWrapper`) and the editor read/write seams are
-mocked to complete synchronously, each button click runs its whole handler chain inline — so the suite
-is deterministic and needs no dispatcher pumping or a rendered Monaco/WebView2 editor.
+The editor read/write seams and the synchronous backend seam (`Invoke-OmadaPSWebRequestWrapper`) are
+mocked to complete inline, so most button clicks still run their whole handler chain before
+`RaiseEvent` returns and need no rendered Monaco/WebView2 editor.
+
+**Execution is the exception, and deliberately so.** Since issue #40 the query round-trip and the
+schema fetch run on a background worker, so they do **not** finish inside the click that started
+them. The seam for those is `Start-OmadaBackgroundRequest` (see `OmadaMocks.ps1`), placed there on
+purpose: everything above it stays real — the eligibility gate, the parameter preparation, the shared
+completion queue, `Complete-OmadaBackgroundRequest`, the error classification and the 50 ms poll
+timer — and only the worker's contents are replaced. The fixture is resolved on the UI thread and the
+worker waits `$script:E2ERequestDelayMs` before handing it back, so a scenario can create a genuinely
+slow query and observe an in-flight one.
+
+That means a scenario must **wait** rather than assert straight after the click:
+
+| Helper | Use it for |
+|---|---|
+| `Invoke-E2EExecuteAndWait` | Click Execute and wait for the result to land |
+| `Invoke-E2EConnectAndWait` | Connect and let the schema fetch land |
+| `Invoke-E2EGetSchemaAndWait` | `Get-SqlSchemaObject` and wait |
+| `Wait-E2ENoPendingRequests` | Drain everything in flight (also run by `Reset-E2ETabsToOne`) |
+| `Wait-E2EUntil` | Any other condition; pumps the dispatcher and re-tests, throws on timeout |
+| `Wait-E2EAppSettled` | Let the app's own start-up callbacks land; only the first scenario of a run needs it |
+
+Asserting on the outcome of an execute without waiting tests a race, not the feature.
 
 ## Files
 

@@ -21,12 +21,51 @@ $script:OmadaMockBaseUrl = $null
 # Every request the app makes reaches the mock instance through the shim below, so recording them
 # here gives a test an exact, complete picture of what did (or did not) hit the tenant. Tests that
 # assert a code path performs NO authenticated request read this log.
-$script:OmadaMockRequestLog = [System.Collections.Generic.List[object]]::new()
+# Synchronized, and an ArrayList rather than a List[object], because issue #40 lets requests run in
+# worker runspaces: the workers append to this same instance so Get-OmadaMockRequestLog in the app's
+# runspace sees every request, whichever thread made it.
+$script:OmadaMockRequestLog = [System.Collections.ArrayList]::Synchronized([System.Collections.ArrayList]::new())
 
 function Install-OmadaMockTransport {
     [CmdletBinding()]
     param([string]$MockBaseUrl)
     $script:OmadaMockBaseUrl = $MockBaseUrl
+
+    # Issue #40: requests now also run in worker runspaces, which have their own copy of OmadaWeb.PS
+    # and would therefore call the REAL Invoke-OmadaRestMethod - reaching past this shim to whatever
+    # tenant URL the app built. Registering this file and its configuration on the two
+    # $Script:OmadaRequestWorkerTransport* variables tells Start-OmadaBackgroundRequest to dot-source
+    # it in the worker and call Initialize-OmadaRequestWorkerTransport there, so the shim covers the
+    # background path exactly as it covers the inline one.
+    #
+    # The request log is handed over as a synchronized list rather than each runspace keeping its
+    # own, so Get-OmadaMockRequestLog in the app's runspace still sees every request - including the
+    # ones a worker made. Tests that assert a code path issued (or did not issue) a call depend on
+    # that being one list.
+    $Script:OmadaRequestWorkerTransportPath = $PSCommandPath
+    $Script:OmadaRequestWorkerTransportContext = @{
+        MockBaseUrl = $MockBaseUrl
+        RequestLog  = $script:OmadaMockRequestLog
+    }
+}
+
+function Initialize-OmadaRequestWorkerTransport {
+    <#
+    .SYNOPSIS
+    Called inside a background worker runspace, after this file has been dot-sourced there, to point
+    the worker's shim at the same mock server and the same shared request log as the app's runspace.
+
+    .DESCRIPTION
+    The name is the contract Start-OmadaBackgroundRequest looks for; it calls this only when the
+    function exists, so a normal (non-mock) run has no idea any of this is here.
+    #>
+    [CmdletBinding()]
+    param($Context)
+    if ($null -eq $Context) { return }
+    $script:OmadaMockBaseUrl = $Context.MockBaseUrl
+    if ($null -ne $Context.RequestLog) {
+        $script:OmadaMockRequestLog = $Context.RequestLog
+    }
 }
 
 function Clear-OmadaMockRequestLog {
@@ -72,7 +111,9 @@ function script:Invoke-OmadaRestMethod {
 
     # Recorded before the call goes out, so a request that fails still counts as "the app talked to
     # the tenant" - which is exactly what a zero-request assertion has to catch.
-    $script:OmadaMockRequestLog.Add([PSCustomObject]@{
+    # [void]: ArrayList.Add returns the new index, which would otherwise land in this function's
+    # output stream and be returned to the caller alongside the actual response.
+    [void]$script:OmadaMockRequestLog.Add([PSCustomObject]@{
             Uri    = $TargetUri
             Method = $HttpMethod
             Body   = $Body

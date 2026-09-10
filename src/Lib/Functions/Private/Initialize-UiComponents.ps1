@@ -41,4 +41,10 @@ function Initialize-UiComponents {
 
     #Initialize UI DataGridQueryResult column selection anchor
     $Script:DataGridQueryResultColumnSelectionAnchor = $null
+
+    # Execute/Cancel (issue #40). Set-ActiveTabContext calls this on every tab switch, so switching to
+    # a tab whose query is still running shows Cancel, and switching away and back does not lose it.
+    # Derived from the completion queue, so it is correct here without any per-tab flag to keep in
+    # step - which is the same reason Test-ConnectionButton can be called freely.
+    Set-ExecuteQueryButtonState
 }

@@ -91,6 +91,14 @@ function New-TabSession {
             TabItem          = $null
             ConnectionStatus = $false
             PendingTask      = $null
+            # The "Executing Query..." window, per tab. Module scope is what it used to be, and that
+            # made one tab's popup appear over every other tab and leaked a window that nothing could
+            # close once a second tab started a query. See Show-ExecuteQueryPopup.
+            ExecutePopup     = $null
+            # Warnings and errors that belong to this tab and were raised while it was off screen.
+            # Shown when the tab is next opened, so a background query's failure does not interrupt
+            # whatever the user is doing on a different tab. See Add-TabScopedMessage.
+            PendingMessages  = [System.Collections.Generic.List[object]]::new()
             CurrentUrl       = $null
             AppConfig        = $(if ($null -ne $RestoreFrom) { $RestoreFrom } else { $DefaultTabConfig })
             RunTimeData      = [PSCustomObject]@{

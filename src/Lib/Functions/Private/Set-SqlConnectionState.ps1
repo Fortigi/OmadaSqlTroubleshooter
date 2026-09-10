@@ -18,6 +18,14 @@ function Set-SqlConnectionState {
             # position: the only handler that consults it is ComboBoxSelectQuery's DropDownOpened,
             # which is a user gesture and never fires programmatically.
             $Script:ConnectionStatus = $true
+
+            # The tab has a live session again, so the keep-alive should resume for it (issue #89).
+            # Without this the abandonment is permanent: it is keyed by SessionKey, which is a stable
+            # hash of the connection identity and is therefore the SAME key after signing in again -
+            # so one expiry would switch the keep-alive off for that tenant and identity for the rest
+            # of the application's life, which is the very failure the keep-alive exists to prevent.
+            Reset-SessionKeepAlive
+
             $Script:MainForm.Elements.ButtonReset.IsEnabled = $true
             $Script:MainForm.Elements.ComboBoxSelectAuthenticationOption.IsEnabled = $false
             $Script:MainForm.Elements.TextBoxUserName.IsEnabled = $false
@@ -62,7 +70,7 @@ function Set-SqlConnectionState {
             $Script:MainForm.Elements.ButtonConnectText | Set-ButtonText -Value "_Connect"
             $Script:MainForm.Elements.TextBlockStatusBarUrl | Set-TextBlockText -Text "-"
             $Script:MainForm.Elements.TextBlockStatusBarDatabaseName | Set-TextBlockText -Text "-"
-            $Script:MainForm.Elements.TextBlockStatusBarQueryTime | Set-TextBlockText -Text "00:00:00.0000000"
+            $Script:MainForm.Elements.TextBlockStatusBarQueryTime | Set-TextBlockText -Text (Format-ElapsedTime -TimeSpan ([TimeSpan]::Zero))
             $Script:MainForm.Elements.TextBlockStatusBarRows | Set-TextBlockText -Text "0 rows"
             # The window title is refreshed from the active tab by Update-TabHeaderTitle below
             # (-> Update-ApplicationTitle); it will show "<name> - <connection> - <tenant> - No
