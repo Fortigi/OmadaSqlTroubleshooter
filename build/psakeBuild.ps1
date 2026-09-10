@@ -414,6 +414,43 @@ Task Build -Depends Test, Dependencies, TestAssemblies {
         }
         (Get-Content (Join-Path $OutputDir -ChildPath $TargetFilePath) -Raw) -replace "(\r?\n\s*){3,}", "`r`n" -replace "`r?`n", "`r`n" | Invoke-Formatter -Settings $FormattingSettings | Set-Content -Path (Join-Path $OutputDir -ChildPath $TargetFilePath) -Encoding UTF8 -Force
 
+        # The background worker's own copy of the functions it dot-sources, shipped as FILES.
+        #
+        # This is not a duplicate of the merge above, because it is not for the same runspace. A
+        # worker imports OmadaWeb.PS and nothing else - it has never loaded this module, so nothing
+        # merged into the psm1 exists there, and it loads what it needs from disk by path
+        # (Start-OmadaBackgroundRequest). Without these files the pre-flight check fails, every
+        # dispatch falls back to the UI thread, and background execution, the Cancel button and the
+        # live elapsed time are all silently absent from the released module.
+        #
+        # AFTER the functions merge, deliberately: that step empties lib\functions recursively before
+        # writing, so copying earlier would delete these again.
+        #
+        # The list comes from the module's own chain table rather than being maintained here, so a
+        # chain that can be dispatched is shippable by construction. Dot-sourced rather than parsed:
+        # the file holds function definitions and that table, and nothing else.
+        "Copy background worker functions" | Write-Host
+        . (Join-Path $ModuleSource -ChildPath "lib\functions\private\Get-OmadaPipelineWorkerFunction.ps1")
+        $WorkerTargetPath = Join-Path $OutputDir -ChildPath "Lib\Functions\Private"
+        New-Item $WorkerTargetPath -ItemType Directory -Force | Out-Null
+        foreach ($WorkerFile in (Get-OmadaWorkerRuntimeFile)) {
+            $WorkerSourcePath = Join-Path $ModuleSource -ChildPath ("lib\functions\private\{0}" -f $WorkerFile)
+            if (-not (Test-Path $WorkerSourcePath -PathType Leaf)) {
+                "Background worker file '{0}' is named by the chain table but does not exist at '{1}'." -f $WorkerFile, $WorkerSourcePath | Write-Error -ErrorAction Stop
+            }
+            Copy-Item -Path $WorkerSourcePath -Destination (Join-Path $WorkerTargetPath -ChildPath $WorkerFile) -Force
+        }
+
+        # A post-condition, like the dependency lock's above and for the same reason: a package that
+        # is missing these starts perfectly well and quietly does less. The failure this guards
+        # against shipped once already, so it fails the BUILD rather than waiting to be noticed.
+        foreach ($WorkerFile in (Get-OmadaWorkerRuntimeFile)) {
+            $WorkerOutputPath = Join-Path $WorkerTargetPath -ChildPath $WorkerFile
+            if (-not (Test-Path $WorkerOutputPath -PathType Leaf)) {
+                "Background worker file '{0}' was not copied to '{1}'. The published module would run every query on the UI thread, with no Cancel button and no elapsed time." -f $WorkerFile, $WorkerTargetPath | Write-Error -ErrorAction Stop
+            }
+        }
+
         $LibSource = "events"
         $SourceChildPath = "lib\{0}" -f $LibSource
         $TargetChildPath = "lib\{0}" -f $LibSource
