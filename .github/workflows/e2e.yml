@@ -1,0 +1,107 @@
+name: E2E Suite
+
+# The end-to-end suite launches the real application against the fully mocked Omada backend in
+# tests/mock, so it needs no tenant, no credentials and no interaction - but it does need a
+# Windows runner and it is slow, which is why it runs on a schedule rather than on every push.
+# Trigger it by hand from the Actions tab (or from a PR branch) with "Run workflow".
+on:
+  schedule:
+    # 03:41 UTC - well clear of the 01:17 nightly build, so the two never contend for a runner.
+    - cron: '41 3 * * *'
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+  checks: write
+  issues: write
+
+jobs:
+  e2e:
+    name: End-to-end (real app, mocked backend)
+    runs-on: windows-latest
+    timeout-minutes: 30
+    defaults:
+      run:
+        shell: pwsh
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install modules
+        run: ./build/InstallModules.ps1
+
+      - name: Run end-to-end suite
+        run: ./build/build.ps1 -Task E2E
+
+      - name: Check for results
+        id: results
+        if: always()
+        run: |
+          $exists = Test-Path 'buildoutput/E2EResults.xml'
+          "exists=$exists" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+
+      - name: Publish results
+        uses: dorny/test-reporter@v1
+        if: always() && steps.results.outputs.exists == 'True'
+        with:
+          name: E2E Scenarios
+          path: buildoutput/E2EResults.xml
+          reporter: java-junit
+
+      - name: Upload results
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: E2EResults
+          path: buildoutput/E2EResults.xml
+          if-no-files-found: warn
+
+  report-failure:
+    name: Report a failed scheduled run
+    needs: e2e
+    # Only the scheduled lane files an issue. A failed manual run is already in front of whoever
+    # started it, and a red lane nobody is watching is exactly what this job exists to prevent.
+    if: always() && needs.e2e.result == 'failure' && github.event_name == 'schedule'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Open or update the tracking issue
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const title = 'E2E suite is failing';
+            const runUrl = `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`;
+            const body = [
+              `The scheduled end-to-end suite failed on \`${context.sha.substring(0, 7)}\`.`,
+              '',
+              `Run: ${runUrl}`,
+              '',
+              'The suite runs the real application against the mocked backend in `tests/mock`, so a',
+              'failure here is a real regression in the app, not a flaky external dependency.',
+              'Reproduce locally with `./build/build.ps1 -Task E2E`.'
+            ].join('\n');
+
+            const existing = await github.rest.issues.listForRepo({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              state: 'open',
+              labels: 'e2e'
+            });
+            const open = existing.data.find(issue => issue.title === title);
+
+            if (open) {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: open.number,
+                body
+              });
+            } else {
+              await github.rest.issues.create({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                title,
+                body,
+                labels: ['e2e']
+              });
+            }
