@@ -1,6 +1,6 @@
 #Requires -Version 7.0
-# Tests for the configuration and the graceful-degradation switch of the client-side T-SQL syntax
-# pass (issue #61, acceptance criteria 6 and 7).
+# Tests for the configuration and the graceful-degradation switch of the three client-side validation
+# passes (issue #61, acceptance criteria 6, 7, A7 and A8).
 
 BeforeAll {
     $ParentPath = Split-Path -Path $PSScriptRoot -Parent
@@ -38,6 +38,8 @@ Describe 'Global configuration schema' -Tag 'Unit' {
 
     It 'Should declare <Name> as <Type> with a default of <Default>' -ForEach @(
         @{ Name = 'EnableSyntaxValidation'; Type = 'Bool'; Default = $true }
+        @{ Name = 'EnableSchemaValidation'; Type = 'Bool'; Default = $true }
+        @{ Name = 'EnableOmadaCompatibilityValidation'; Type = 'Bool'; Default = $true }
         @{ Name = 'ValidationDebounceMilliseconds'; Type = 'Int'; Default = 400 }
         @{ Name = 'WarnOnExecuteWithErrors'; Type = 'Bool'; Default = $true }
     ) {
@@ -46,6 +48,16 @@ Describe 'Global configuration schema' -Tag 'Unit' {
         $Property | Should -Not -BeNullOrEmpty -Because "issue #61 section 4 requires '$Name'"
         $Property.Type | Should -Be $Type
         $Property.DefaultValue | Should -Be $Default
+    }
+
+    It 'Should declare OmadaCompatibilityRuleSeverity for the per-rule overrides' {
+        # Issue #61 section 3.6: suppression is configuration, not a code edit. A PSObject because the
+        # value is a set of rule-id/severity pairs, and Add-ConfigProperty gives an attribute-less
+        # PSObject the empty object the issue specifies as its default.
+        $Property = $Script:SchemaProperty | Where-Object { $_.Name -eq 'OmadaCompatibilityRuleSeverity' } | Select-Object -First 1
+
+        $Property | Should -Not -BeNullOrEmpty
+        $Property.Type | Should -Be 'PSObject'
     }
 
     It 'Should declare SqlParserVersion so the parser version is configurable' {
@@ -71,20 +83,32 @@ Describe 'Get-SqlValidationSetting' -Tag 'Unit' {
             $Setting = Get-SqlValidationSetting
 
             $Setting.Enabled | Should -BeTrue
+            $Setting.SchemaEnabled | Should -BeTrue
+            $Setting.OmadaEnabled | Should -BeTrue
             $Setting.DebounceMilliseconds | Should -Be 400
             $Setting.WarnOnExecuteWithErrors | Should -BeTrue
             $Setting.ParserVersion | Should -BeNullOrEmpty
+            $Setting.RuleSeverity | Should -BeNullOrEmpty
         }
     }
 
     Context 'When the parser is unavailable' {
         # Acceptance criterion 6. The one WARNING is emitted once at startup; from here on the
         # feature is simply off, whatever the user's setting says.
-        It 'Should be disabled even when the user switched validation on' {
+        It 'Should disable every pass even when the user switched them all on' {
+            # All three read the tree the parser produces, so without it none of them can run
+            # (acceptance criteria 6 and A8).
             $Script:SqlSyntaxValidationAvailable = $false
-            $Script:AppGlobalConfig = [PSCustomObject]@{ EnableSyntaxValidation = $true }
+            $Script:AppGlobalConfig = [PSCustomObject]@{
+                EnableSyntaxValidation             = $true
+                EnableSchemaValidation             = $true
+                EnableOmadaCompatibilityValidation = $true
+            }
 
-            (Get-SqlValidationSetting).Enabled | Should -BeFalse
+            $Setting = Get-SqlValidationSetting
+            $Setting.Enabled | Should -BeFalse
+            $Setting.SchemaEnabled | Should -BeFalse
+            $Setting.OmadaEnabled | Should -BeFalse
         }
 
         It 'Should be disabled when availability was never resolved at all' {
@@ -94,12 +118,30 @@ Describe 'Get-SqlValidationSetting' -Tag 'Unit' {
         }
     }
 
-    Context 'When the user has switched the pass off' {
-        # Acceptance criterion 7.
-        It 'Should report the pass as disabled' {
-            $Script:AppGlobalConfig = [PSCustomObject]@{ EnableSyntaxValidation = $false }
+    Context 'When the user has switched a pass off' {
+        # Acceptance criteria 7 and A8: each pass switches off independently of the other two.
+        It 'Should report <Property> as disabled without touching the others' -ForEach @(
+            @{ Property = 'EnableSyntaxValidation'; Off = 'Enabled'; StillOn = @('SchemaEnabled', 'OmadaEnabled') }
+            @{ Property = 'EnableSchemaValidation'; Off = 'SchemaEnabled'; StillOn = @('Enabled', 'OmadaEnabled') }
+            @{ Property = 'EnableOmadaCompatibilityValidation'; Off = 'OmadaEnabled'; StillOn = @('Enabled', 'SchemaEnabled') }
+        ) {
+            $Script:AppGlobalConfig = [PSCustomObject]@{ $Property = $false }
 
-            (Get-SqlValidationSetting).Enabled | Should -BeFalse
+            $Setting = Get-SqlValidationSetting
+            $Setting.$Off | Should -BeFalse
+            foreach ($Other in $StillOn) {
+                $Setting.$Other | Should -BeTrue -Because "switching off '$Property' must not switch off '$Other'"
+            }
+        }
+    }
+
+    Context 'The per-rule severity overrides' {
+        It 'Should pass the stored overrides through untouched' {
+            # Not normalised here: Resolve-OmadaCompatibilityRuleSeverity is the one place that decides
+            # what an override means, and it has each rule's own default to fall back to.
+            $Script:AppGlobalConfig = [PSCustomObject]@{ OmadaCompatibilityRuleSeverity = [PSCustomObject]@{ OMD001 = 'Off' } }
+
+            (Get-SqlValidationSetting).RuleSeverity.OMD001 | Should -Be 'Off'
         }
     }
 

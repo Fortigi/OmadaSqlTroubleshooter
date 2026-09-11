@@ -4,12 +4,15 @@ function Get-SqlValidationSetting {
         Resolves the effective client-side validation settings from the global configuration.
 
     .DESCRIPTION
-        Three things decide whether the syntax pass runs, and they are resolved in one place so no
-        call site has to repeat them:
+        Three things decide whether a pass runs, and they are resolved in one place so no call site
+        has to repeat them:
 
-          * the user's EnableSyntaxValidation setting;
+          * the user's EnableSyntaxValidation, EnableSchemaValidation and
+            EnableOmadaCompatibilityValidation settings, which are independent of each other
+            (issue #61 acceptance criteria 7 and A8);
           * whether the ScriptDom assembly actually loaded ($Script:SqlSyntaxValidationAvailable,
-            set once at startup by Initialize-OmadaSqlTroubleShooter);
+            set once at startup by Initialize-OmadaSqlTroubleShooter) - all three passes read the
+            same syntax tree, so without a parser none of them can run;
           * the schema defaults, for a configuration file written before these properties existed.
 
         A stored ValidationDebounceMilliseconds that is absent, -1 (the value Add-ConfigProperty
@@ -17,8 +20,8 @@ function Get-SqlValidationSetting {
         rather than to zero, because zero would mean "validate on every keystroke".
 
     .OUTPUTS
-        [PSCustomObject] with Enabled, DebounceMilliseconds, WarnOnExecuteWithErrors and
-        ParserVersion.
+        [PSCustomObject] with Enabled, SchemaEnabled, OmadaEnabled, DebounceMilliseconds,
+        WarnOnExecuteWithErrors, ParserVersion and RuleSeverity.
     #>
     [CmdLetBinding()]
     param()
@@ -30,10 +33,23 @@ function Get-SqlValidationSetting {
         $Enabled = [bool]$Script:AppGlobalConfig.EnableSyntaxValidation
     }
 
-    # An unavailable parser overrides the setting: the feature cannot run, whatever the user asked
-    # for. The single WARNING about that was already emitted at startup.
+    $SchemaEnabled = $true
+    if ($null -ne $Script:AppGlobalConfig -and $null -ne $Script:AppGlobalConfig.EnableSchemaValidation) {
+        $SchemaEnabled = [bool]$Script:AppGlobalConfig.EnableSchemaValidation
+    }
+
+    $OmadaEnabled = $true
+    if ($null -ne $Script:AppGlobalConfig -and $null -ne $Script:AppGlobalConfig.EnableOmadaCompatibilityValidation) {
+        $OmadaEnabled = [bool]$Script:AppGlobalConfig.EnableOmadaCompatibilityValidation
+    }
+
+    # An unavailable parser overrides every setting: all three passes read the tree it produces, so
+    # the feature cannot run whatever the user asked for. The single WARNING about that was already
+    # emitted at startup.
     if ($Script:SqlSyntaxValidationAvailable -ne $true) {
         $Enabled = $false
+        $SchemaEnabled = $false
+        $OmadaEnabled = $false
     }
 
     $DebounceDefault = Get-ConfigSchemaDefault -Property "ValidationDebounceMilliseconds"
@@ -59,10 +75,21 @@ function Get-SqlValidationSetting {
         $ParserVersion = [string]$Script:AppGlobalConfig.SqlParserVersion
     }
 
+    # Passed through as stored, not normalised here: Resolve-OmadaCompatibilityRuleSeverity is the one
+    # place that decides what an override means, including what an unrecognised value means, and it
+    # has the rule's own default in hand to fall back to.
+    $RuleSeverity = $null
+    if ($null -ne $Script:AppGlobalConfig -and $null -ne $Script:AppGlobalConfig.OmadaCompatibilityRuleSeverity) {
+        $RuleSeverity = $Script:AppGlobalConfig.OmadaCompatibilityRuleSeverity
+    }
+
     return [PSCustomObject]@{
         Enabled                 = $Enabled
+        SchemaEnabled           = $SchemaEnabled
+        OmadaEnabled            = $OmadaEnabled
         DebounceMilliseconds    = $Debounce
         WarnOnExecuteWithErrors = $WarnOnExecute
         ParserVersion           = $ParserVersion
+        RuleSeverity            = $RuleSeverity
     }
 }

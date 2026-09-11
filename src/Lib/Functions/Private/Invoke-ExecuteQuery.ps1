@@ -20,26 +20,27 @@ function Invoke-ExecuteQuery {
                     $Script:RunTimeData.QueryText = $Private:EditorData.fullText
                     $Private:SelectionText = $Private:EditorData.selectedText
 
-                    # Client-side syntax gate (issue #61). Checks the text that will actually run -
-                    # the selection when there is one - refreshes the editor's markers from it, and
-                    # asks once before spending a round trip on a batch SQL Server will reject
-                    # before it touches a table. It NEVER blocks: parser version and server version
-                    # can legitimately disagree, so declining is a choice, not an error.
+                    # Client-side validation gate (issue #61). Checks the text that will actually run -
+                    # the selection when there is one - refreshes the editor's markers from all three
+                    # passes, and asks once before spending a round trip on a query that cannot
+                    # succeed. It NEVER blocks: the parser can disagree with the server's version, the
+                    # schema cache can be stale, and the compatibility rules encode observed behaviour
+                    # of someone else's product. Declining is a choice, not an error.
                     $Private:TextToValidate = $Private:EditorData.fullText
                     if (![string]::IsNullOrWhiteSpace($Private:SelectionText)) {
                         $Private:TextToValidate = $Private:SelectionText
                     }
 
                     $Private:ValidationSetting = Get-SqlValidationSetting
-                    if ($Private:ValidationSetting.Enabled) {
-                        $Private:SyntaxResult = Get-SqlSyntaxDiagnostic -SqlText $Private:TextToValidate -ParserVersion $Private:ValidationSetting.ParserVersion
+                    if ($Private:ValidationSetting.Enabled -or $Private:ValidationSetting.SchemaEnabled -or $Private:ValidationSetting.OmadaEnabled) {
+                        $Private:ValidationResult = Get-SqlDiagnostic -SqlText $Private:TextToValidate -Setting $Private:ValidationSetting
 
-                        # Markers are refreshed either way. A parse that could not run clears them:
-                        # anything still on screen came from an earlier parse of different text, and
+                        # Markers are refreshed either way. A check that could not run clears them:
+                        # anything still on screen came from an earlier check of different text, and
                         # a stale squiggle is indistinguishable from a live one.
                         $Private:SyntaxDiagnostic = @()
-                        if ($Private:SyntaxResult.Status -eq "Ok") {
-                            $Private:SyntaxDiagnostic = $Private:SyntaxResult.Diagnostic
+                        if ($Private:ValidationResult.Status -eq "Ok") {
+                            $Private:SyntaxDiagnostic = $Private:ValidationResult.Diagnostic
 
                             # The parser numbered the selection from line 1. The markers go onto the
                             # whole model, so without this every squiggle for an executed selection
@@ -51,13 +52,18 @@ function Invoke-ExecuteQuery {
 
                         Invoke-ExecuteScriptAsync -ScriptToExecute (ConvertTo-EditorDiagnosticScript -Diagnostic $Private:SyntaxDiagnostic)
 
-                        # Only a completed parse can ask a question. A parse that did not run has
-                        # nothing to warn about and must not stand between the user and their query.
-                        if (($Private:SyntaxDiagnostic | Measure-Object).Count -gt 0 -and $Private:ValidationSetting.WarnOnExecuteWithErrors) {
-                            "Query has {0} syntax diagnostic(s); asking before executing." -f ($Private:SyntaxDiagnostic | Measure-Object).Count | Write-LogOutput -LogType DEBUG
-                            $Private:Confirmed = Open-ChoiceForm -Title "Syntax errors" -Message (Get-SqlSyntaxWarningMessage -Diagnostic $Private:SyntaxDiagnostic) -LeftButtonText "Execute anyway" -RightButtonText "Cancel"
+                        # Not every marker asks a question. Schema warnings never do - they are a guess
+                        # against a cache that may be stale - and an Info-level compatibility rule is
+                        # an observation about naming, not a reason to stop. Only a completed check can
+                        # ask at all: one that did not run has nothing to warn about and must not stand
+                        # between the user and their query.
+                        $Private:BlockingDiagnostic = @($Private:SyntaxDiagnostic | Where-Object { Test-SqlDiagnosticBlocksExecution -Diagnostic $_ })
+
+                        if ($Private:BlockingDiagnostic.Count -gt 0 -and $Private:ValidationSetting.WarnOnExecuteWithErrors) {
+                            "Query has {0} blocking diagnostic(s); asking before executing." -f $Private:BlockingDiagnostic.Count | Write-LogOutput -LogType DEBUG
+                            $Private:Confirmed = Open-ChoiceForm -Title "Check the query" -Message (Get-SqlSyntaxWarningMessage -Diagnostic $Private:BlockingDiagnostic) -LeftButtonText "Execute anyway" -RightButtonText "Cancel"
                             if ($Private:Confirmed -ne $true) {
-                                "Execution cancelled by the user after the syntax check." | Write-LogOutput -LogType DEBUG
+                                "Execution cancelled by the user after the client-side check." | Write-LogOutput -LogType DEBUG
                                 Reset-ExecuteQueryUiState
                                 return
                             }
