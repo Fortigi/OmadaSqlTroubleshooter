@@ -104,5 +104,25 @@
     "Name": "SessionKeepAliveMinutes",
     "Type": "Int",
     "DefaultValue": 5
+  },
+  {
+    "Name": "ArrayCopyUseColumnSchema",
+    "Type": "Bool",
+    "DefaultValue": true
+  },
+  {
+    "Name": "ArrayCopyPowerShellTypedLiterals",
+    "Type": "Bool",
+    "DefaultValue": true
+  },
+  {
+    "Name": "ArrayCopyNullHandling",
+    "Type": "String",
+    "DefaultValue": "Emit"
+  },
+  {
+    "Name": "ArrayCopyMaxValues",
+    "Type": "Int",
+    "DefaultValue": 1000
   }
 ]
