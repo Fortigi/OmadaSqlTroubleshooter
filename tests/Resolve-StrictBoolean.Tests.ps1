@@ -59,6 +59,17 @@ Describe "Resolve-StrictBoolean" {
     }
 
     Context "Everything it cannot vouch for resolves to null, so the caller can fall back" {
+        It "returns null for a <Name>, which is not a truth value" -ForEach @(
+            @{ Name = "double"; Value = [double]1 }
+            @{ Name = "double zero"; Value = [double]0 }
+            @{ Name = "single"; Value = [single]1 }
+        ) {
+            # Deliberate, and pinned so the documented accepted types stay true: 1e-300 is not
+            # meaningfully "true" and rounding would decide the answer. Nothing produces a bit as a
+            # float, so accepting one would only widen the guess this function exists to refuse.
+            Resolve-StrictBoolean -Value $Value | Should -BeNullOrEmpty
+        }
+
         It "returns null for <Name>" -ForEach @(
             @{ Name = "null"; Value = $null }
             @{ Name = "DBNull"; Value = [System.DBNull]::Value }

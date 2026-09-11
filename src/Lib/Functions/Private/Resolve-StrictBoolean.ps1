@@ -20,10 +20,13 @@ function Resolve-StrictBoolean {
 
           * a real [bool];
           * a string that [bool]::TryParse accepts ("true"/"false", any casing);
-          * a number, where 0 is false and anything else is true - which is how a bit column's
-            value arrives when it is carried as 0/1.
+          * an INTEGER or [decimal], where 0 is false and anything else is true - which is how a
+            bit column's value arrives when it is carried as 0/1.
 
-        Everything else, including the empty string, resolves to $null.
+        Everything else resolves to $null, including the empty string and - deliberately - [double]
+        and [single]. A floating point value is not a truth value: 1e-300 is not meaningfully "true"
+        and rounding decides the answer. Nothing produces a bit as a float, so accepting one would
+        only widen the guess this function exists to refuse.
 
     .PARAMETER Value
         The value to resolve.
