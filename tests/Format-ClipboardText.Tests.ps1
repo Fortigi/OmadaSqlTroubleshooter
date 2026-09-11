@@ -74,6 +74,15 @@ Describe 'Format-ClipboardText' {
         It 'should still emit a header-only selection' {
             Format-ClipboardText -Row @() -Header @("Id", "Name") | Should -Be "Id`tName"
         }
+
+        It 'should return nothing for a header-only selection in an array format' -ForEach @(
+            @{ Format = "SqlArray" }
+            @{ Format = "PowerShellArray" }
+        ) {
+            # An array literal is built from values, and a header is not one. Without the guard
+            # the header alone made the text look non-empty and produced an empty literal.
+            Format-ClipboardText -Row @() -Header @("Id", "Name") -OutputFormat $Format | Should -BeNullOrEmpty
+        }
     }
 
     Context 'SqlArray' {

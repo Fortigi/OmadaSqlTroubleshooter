@@ -108,13 +108,17 @@ jobs:
               'Reproduce locally with `./build/build.ps1 -Task E2E`.'
             ].join('\n');
 
+            // Matched on the title alone. Filtering by an 'e2e' label would find nothing until
+            // the label exists in the repository, and a lookup that always comes back empty
+            // means a fresh issue filed every single night instead of one that gets updated.
+            // The label is still applied on creation - the REST API creates it on first use.
             const existing = await github.rest.issues.listForRepo({
               owner: context.repo.owner,
               repo: context.repo.repo,
               state: 'open',
-              labels: 'e2e'
+              per_page: 100
             });
-            const open = existing.data.find(issue => issue.title === title);
+            const open = existing.data.find(issue => issue.title === title && !issue.pull_request);
 
             if (open) {
               await github.rest.issues.createComment({

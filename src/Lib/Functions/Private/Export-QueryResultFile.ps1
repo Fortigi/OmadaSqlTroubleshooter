@@ -38,16 +38,22 @@ function Export-QueryResultFile {
         [string]$Path
     )
 
+    # A result with no rows at all - $null, or a wrapper without the "d.rows" shape - is an empty
+    # export, not a failure. The Where-Object is doing real work and is not defensive noise:
+    # @($null) is an array of one $null, not an empty array, and Export-Csv refuses a null
+    # -InputObject, so without it "nothing to save" writes an error record instead of a file.
+    $Row = @($QueryResult.d.rows | Where-Object { $null -ne $_ })
+
     if ($Path -like "*.json") {
         $QueryResult | ConvertTo-Json -Depth 15 | Set-Content $Path -Encoding UTF8
     }
     elseif ($Path -like "*.csv") {
-        $QueryResult.d.rows | Export-Csv -Path $Path -Delimiter ";" -NoTypeInformation -Encoding UTF8
+        $Row | Export-Csv -Path $Path -Delimiter ";" -NoTypeInformation -Encoding UTF8
     }
     elseif ($Path -like "*.xml") {
         $QueryResult | Export-Clixml -Path $Path -Depth 15
     }
     else {
-        ($QueryResult.d.rows | Format-Table -AutoSize | Out-String -Width 10000000).Trim() | Set-Content $Path -Encoding UTF8
+        ($Row | Format-Table -AutoSize | Out-String -Width 10000000).Trim() | Set-Content $Path -Encoding UTF8
     }
 }

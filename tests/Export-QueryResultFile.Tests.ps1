@@ -312,10 +312,33 @@ Describe 'Export-QueryResultFile' {
             { Export-QueryResultFile -QueryResult (New-QueryResult -Rows @()) -Path "" } | Should -Throw
         }
 
-        It 'should accept a null QueryResult without throwing' {
-            $Path = New-TestFilePath -Extension ".json"
+        It 'should treat a null QueryResult as an empty export in every format' -ForEach @(
+            @{ Extension = ".json" }
+            @{ Extension = ".csv" }
+            @{ Extension = ".xml" }
+            @{ Extension = ".txt" }
+        ) {
+            # Export-Csv refuses a null -InputObject, so without a guard "nothing to save" failed
+            # on exactly one of the four formats. Asserted on the error stream rather than only
+            # with -Not -Throw: the failure was a non-terminating error record, which a throw
+            # check sails straight past.
+            $Path = New-TestFilePath -Extension $Extension
             try {
-                { Export-QueryResultFile -QueryResult $null -Path $Path } | Should -Not -Throw
+                $Errors = $null
+                { Export-QueryResultFile -QueryResult $null -Path $Path -ErrorVariable Errors } | Should -Not -Throw
+                $Errors | Should -BeNullOrEmpty
+            }
+            finally {
+                Remove-Item -Path $Path -ErrorAction SilentlyContinue
+            }
+        }
+
+        It 'should treat a result without the d.rows shape as an empty export' {
+            $Path = New-TestFilePath -Extension ".csv"
+            try {
+                $Errors = $null
+                { Export-QueryResultFile -QueryResult ([PSCustomObject]@{ unexpected = "shape" }) -Path $Path -ErrorVariable Errors } | Should -Not -Throw
+                $Errors | Should -BeNullOrEmpty
             }
             finally {
                 Remove-Item -Path $Path -ErrorAction SilentlyContinue

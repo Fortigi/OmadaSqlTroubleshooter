@@ -72,10 +72,21 @@ function Format-ClipboardText {
         return
     }
 
-    # An "integer" here is what can be pasted into a SQL IN (...) or a PowerShell array without
-    # quotes. Anything else - a decimal, an exponent, a leading zero or plus sign, a date - has to
-    # keep its quotes or the pasted literal would no longer mean the same value.
+    # An "integer" here is only what matches ^-?\d+$: optional minus, then digits. A decimal, an
+    # exponent, a leading plus, surrounding whitespace, a thousands separator or anything
+    # non-numeric keeps its quotes, because pasting it unquoted would not mean the same value.
+    # A leading zero does NOT keep its quotes - "007" matches, and pastes as the integer 7. That
+    # is right for a numeric key and wrong for a zero-padded string key; it is long-standing
+    # behaviour, pinned by a test in tests\Format-ClipboardText.Tests.ps1 rather than changed here.
     $AllValuesAreIntegers = ($CellValues | Where-Object { $_ -notmatch "^-?\d+$" }).Count -eq 0
+
+    # An array literal is built from values, and the header is not one. With no values there is
+    # nothing to paste, so say so rather than handing back an empty "(\r\n    \r\n)" - which a
+    # header-only selection would otherwise produce, since the header alone makes $ClipboardText
+    # non-empty above.
+    if ($OutputFormat -ne "Default" -and $CellValues.Count -eq 0) {
+        return
+    }
 
     switch ($OutputFormat) {
         "SqlArray" {
