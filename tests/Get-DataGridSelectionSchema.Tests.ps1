@@ -53,6 +53,26 @@ Describe "Get-DataGridSelectionSchema" {
         It "returns an empty result for a null grid" {
             @(Get-DataGridSelectionSchema -DataGrid $null).Count | Should -Be 0
         }
+
+        It "honours an explicit null instead of falling back to the query result grid" {
+            # Without this, the assertion above passes for the wrong reason: $Script:MainForm is
+            # simply unset in a test session, so the fallback also yields nothing. With a real grid
+            # present, an explicit -DataGrid $null must still mean "no grid" - an omitted parameter
+            # is what asks for the default, and the two are indistinguishable from the value alone.
+            $Script:MainForm = [PSCustomObject]@{
+                Elements = [PSCustomObject]@{
+                    DataGridQueryResult = New-GridStub -Column @{ Header = "Id"; SortMemberPath = "Id"; DisplayIndex = 0 }
+                }
+            }
+
+            try {
+                @(Get-DataGridSelectionSchema -DataGrid $null).Count | Should -Be 0
+                @(Get-DataGridSelectionSchema).Count | Should -Be 1 -Because "an omitted parameter is what selects the default grid"
+            }
+            finally {
+                $Script:MainForm = $null
+            }
+        }
     }
 
     Context "The property name comes from the binding path, not the header" {

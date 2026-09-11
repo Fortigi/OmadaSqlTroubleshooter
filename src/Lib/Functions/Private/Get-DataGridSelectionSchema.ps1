@@ -44,7 +44,10 @@ function Get-DataGridSelectionSchema {
 
     $Script:Tracer::WriteLine(("{0}: Function: {1} - Caller: {2}({3}) - Command: {4} - Parameters: {5}" -f $($Script:RunTimeConfig.ApplicationName), $($MyInvocation.MyCommand.Name), $($MyInvocation.ScriptName).Split("\")[-1], $($MyInvocation.ScriptLineNumber), $MyInvocation.Statement, "<suppressed: carries grid content>"))
 
-    if ($null -eq $DataGrid) {
+    # ContainsKey, not a $null test: an OMITTED -DataGrid means "the query result grid", while an
+    # explicitly passed $null means "no grid" and must not silently resolve to a different one. The
+    # two are indistinguishable from the parameter's value alone.
+    if (-not $PSBoundParameters.ContainsKey("DataGrid")) {
         $DataGrid = $Script:MainForm.Elements.DataGridQueryResult
     }
 
