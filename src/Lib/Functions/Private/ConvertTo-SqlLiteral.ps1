@@ -84,7 +84,19 @@ function ConvertTo-SqlLiteral {
             # 1/0, never 'True'/'False'. A bit column compared against the string 'False' is a
             # conversion error, and that is the good outcome - the bad one is a column typed wide
             # enough to accept it and match nothing.
-            if ([bool]$BaseValue) {
+            #
+            # Resolve-StrictBoolean rather than a [bool] cast: the cast is truthiness, so
+            # [bool]'False' is $true and the literal would come out as 1 - the exact inversion this
+            # issue is about. That matters once Kind can be Boolean because the COLUMN is a bit
+            # while the value arrives as text, which is what the SqlType seam enables.
+            $BooleanValue = Resolve-StrictBoolean -Value $BaseValue
+            if ($null -eq $BooleanValue) {
+                # Not a boolean this function can vouch for. Quote it and let the server reject it,
+                # rather than guess a bit value that may be the opposite of the truth.
+                return (Format-SqlStringLiteral -Text ([string]::Format($Invariant, "{0}", $BaseValue)) -SqlType $SqlType)
+            }
+
+            if ($BooleanValue) {
                 return "1"
             }
 

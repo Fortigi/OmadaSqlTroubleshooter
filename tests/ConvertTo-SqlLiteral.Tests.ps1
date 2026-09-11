@@ -15,6 +15,7 @@ BeforeAll {
     $ParentPath = Split-Path -Path $PSScriptRoot -Parent
     $PrivatePath = Join-Path $ParentPath -ChildPath "src\Lib\Functions\Private"
 
+    . (Join-Path $PrivatePath -ChildPath "Resolve-StrictBoolean.ps1")
     . (Join-Path $PrivatePath -ChildPath "Get-QueryResultValueKind.ps1")
     . (Join-Path $PrivatePath -ChildPath "ConvertTo-SqlLiteral.ps1")
 
@@ -205,6 +206,31 @@ Describe "ConvertTo-SqlLiteral" {
         It "does not prefix a date, time or GUID literal" {
             ConvertTo-SqlLiteral -Value ([datetime]"2019-11-20T13:55:09") | Should -Not -Match "^N"
             ConvertTo-SqlLiteral -Value ([guid]::Empty) | Should -Not -Match "^N"
+        }
+    }
+
+    Context "A Boolean kind holding text is never guessed at (review of PR #106)" {
+        It "emits 0 for the string 'False' rather than 1" {
+            # [bool]'False' is $true in PowerShell, so a plain cast here would emit 1 for a value
+            # that says False - the same silent inversion this whole issue is about. This is
+            # reachable once Kind is Boolean because the COLUMN is a bit while the value is text,
+            # which is what the SqlType seam enables.
+            ConvertTo-SqlLiteral -Value "False" -SqlType "bit" | Should -BeExactly "0"
+        }
+
+        It "emits 1 for the string 'True'" {
+            ConvertTo-SqlLiteral -Value "True" -SqlType "bit" | Should -BeExactly "1"
+        }
+
+        It "falls back to a quoted literal for a bit column holding something that is not a boolean" {
+            # Quoting is recoverable - the server rejects it. Guessing a bit value is not, because
+            # nothing downstream can tell it went wrong.
+            ConvertTo-SqlLiteral -Value "maybe" -SqlType "bit" | Should -BeExactly "'maybe'"
+        }
+
+        It "still emits 0 and 1 for real booleans" {
+            ConvertTo-SqlLiteral -Value $false -SqlType "bit" | Should -BeExactly "0"
+            ConvertTo-SqlLiteral -Value $true -SqlType "bit" | Should -BeExactly "1"
         }
     }
 

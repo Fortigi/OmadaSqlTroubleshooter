@@ -10,6 +10,7 @@ BeforeAll {
     $ParentPath = Split-Path -Path $PSScriptRoot -Parent
     $PrivatePath = Join-Path $ParentPath -ChildPath "src\Lib\Functions\Private"
 
+    . (Join-Path $PrivatePath -ChildPath "Resolve-StrictBoolean.ps1")
     . (Join-Path $PrivatePath -ChildPath "Get-ArrayCopySetting.ps1")
 
     $Script:Tracer = [System.Diagnostics.Trace]
@@ -114,6 +115,34 @@ Describe "Get-ArrayCopySetting" {
             # negative threshold would warn on every single copy.
             $Script:AppGlobalConfig = [PSCustomObject]@{ ArrayCopyMaxValues = $Stored }
             (Get-ArrayCopySetting).MaxValues | Should -Be 1000
+        }
+
+        It "reads a hand-edited <Property> of `"false`" as false, not as true (review of PR #106)" -ForEach @(
+            @{ Property = "ArrayCopyUseColumnSchema" }
+            @{ Property = "ArrayCopyPowerShellTypedLiterals" }
+        ) {
+            # A configuration file is a text file people edit. "false" is a non-empty string, so a
+            # plain [bool] cast reads it as $true and switches the setting ON exactly when the user
+            # wrote that they wanted it off.
+            $Script:AppGlobalConfig = [PSCustomObject]@{ $Property = "false" }
+            $Setting = Get-ArrayCopySetting
+
+            if ($Property -eq "ArrayCopyUseColumnSchema") {
+                $Setting.UseColumnSchema | Should -BeFalse
+            }
+            else {
+                $Setting.PowerShellTypedLiterals | Should -BeFalse
+            }
+        }
+
+        It "reads a hand-edited `"true`" as true" {
+            $Script:AppGlobalConfig = [PSCustomObject]@{ ArrayCopyUseColumnSchema = "true" }
+            (Get-ArrayCopySetting).UseColumnSchema | Should -BeTrue
+        }
+
+        It "ignores an unparseable boolean and keeps the schema default" {
+            $Script:AppGlobalConfig = [PSCustomObject]@{ ArrayCopyUseColumnSchema = "sometimes" }
+            (Get-ArrayCopySetting).UseColumnSchema | Should -BeTrue
         }
 
         It "keeps the defaults when the configuration object does not exist at all" {

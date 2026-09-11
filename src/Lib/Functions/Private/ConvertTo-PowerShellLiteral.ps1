@@ -86,7 +86,16 @@ function ConvertTo-PowerShellLiteral {
 
     switch ($Kind) {
         "Boolean" {
-            if ([bool]$BaseValue) {
+            # Resolve-StrictBoolean rather than a [bool] cast, for the reason spelled out in
+            # ConvertTo-SqlLiteral: [bool]'False' is $true, so the cast would emit $true for a value
+            # that says False. Emitting a quoted string instead is recoverable; emitting the
+            # inverted boolean is not, because nothing downstream can tell it went wrong.
+            $BooleanValue = Resolve-StrictBoolean -Value $BaseValue
+            if ($null -eq $BooleanValue) {
+                return (Format-PowerShellStringLiteral -Text ([string]::Format($Invariant, "{0}", $BaseValue)))
+            }
+
+            if ($BooleanValue) {
                 return "`$true"
             }
 

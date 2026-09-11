@@ -104,13 +104,20 @@ function Resolve-ArrayCopyBooleanSetting {
 
     $Resolved = $Fallback
 
-    $SchemaDefault = Get-ConfigSchemaDefault -Property $Property
+    # Resolve-StrictBoolean, not a [bool] cast. The cast is truthiness: a hand-edited "false" in the
+    # configuration file is a non-empty string, so [bool] would read it as $true and switch the
+    # setting ON precisely when the user wrote that they wanted it off. An unparseable value keeps
+    # the previous step's answer instead of silently inverting it.
+    $SchemaDefault = Resolve-StrictBoolean -Value (Get-ConfigSchemaDefault -Property $Property)
     if ($null -ne $SchemaDefault) {
-        $Resolved = [bool]$SchemaDefault
+        $Resolved = $SchemaDefault
     }
 
-    if ($null -ne $Script:AppGlobalConfig -and $null -ne $Script:AppGlobalConfig.$Property) {
-        $Resolved = [bool]$Script:AppGlobalConfig.$Property
+    if ($null -ne $Script:AppGlobalConfig) {
+        $Stored = Resolve-StrictBoolean -Value $Script:AppGlobalConfig.$Property
+        if ($null -ne $Stored) {
+            $Resolved = $Stored
+        }
     }
 
     return $Resolved

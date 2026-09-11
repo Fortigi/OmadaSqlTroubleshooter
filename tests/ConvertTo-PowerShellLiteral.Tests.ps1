@@ -11,6 +11,7 @@ BeforeAll {
     $ParentPath = Split-Path -Path $PSScriptRoot -Parent
     $PrivatePath = Join-Path $ParentPath -ChildPath "src\Lib\Functions\Private"
 
+    . (Join-Path $PrivatePath -ChildPath "Resolve-StrictBoolean.ps1")
     . (Join-Path $PrivatePath -ChildPath "Get-QueryResultValueKind.ps1")
     . (Join-Path $PrivatePath -ChildPath "ConvertTo-SqlLiteral.ps1")
     . (Join-Path $PrivatePath -ChildPath "ConvertTo-PowerShellLiteral.ps1")
@@ -117,6 +118,28 @@ Describe "ConvertTo-PowerShellLiteral" {
         It "keeps a backtick literal" {
             $Value = 'a`nb'
             Invoke-Literal -Literal (ConvertTo-PowerShellLiteral -Value $Value) | Should -BeExactly $Value
+        }
+    }
+
+    Context "A Boolean kind holding text is never guessed at (review of PR #106)" {
+        It "emits `$false for the string 'False' rather than `$true" {
+            # [bool]'False' is $true, so a plain cast would emit $true here. In PowerShell that is
+            # doubly bad: the pasted script would then take the opposite branch with no error.
+            ConvertTo-PowerShellLiteral -Value "False" -SqlType "bit" | Should -BeExactly "`$false"
+        }
+
+        It "emits `$true for the string 'True'" {
+            ConvertTo-PowerShellLiteral -Value "True" -SqlType "bit" | Should -BeExactly "`$true"
+        }
+
+        It "falls back to a quoted literal for a bit column holding something that is not a boolean" {
+            ConvertTo-PowerShellLiteral -Value "maybe" -SqlType "bit" | Should -BeExactly "'maybe'"
+        }
+
+        It "round-trips the string 'False' to a `$false that is actually falsy" {
+            $RoundTrip = Invoke-Literal -Literal (ConvertTo-PowerShellLiteral -Value "False" -SqlType "bit")
+            $RoundTrip | Should -BeOfType [bool]
+            if ($RoundTrip) { throw "a bit column holding 'False' must not evaluate as true" }
         }
     }
 

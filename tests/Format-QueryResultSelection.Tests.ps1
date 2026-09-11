@@ -10,6 +10,7 @@ BeforeAll {
     $ParentPath = Split-Path -Path $PSScriptRoot -Parent
     $PrivatePath = Join-Path $ParentPath -ChildPath "src\Lib\Functions\Private"
 
+    . (Join-Path $PrivatePath -ChildPath "Resolve-StrictBoolean.ps1")
     . (Join-Path $PrivatePath -ChildPath "Get-QueryResultValueKind.ps1")
     . (Join-Path $PrivatePath -ChildPath "ConvertTo-SqlLiteral.ps1")
     . (Join-Path $PrivatePath -ChildPath "ConvertTo-PowerShellLiteral.ps1")
