@@ -9,25 +9,37 @@ function Invoke-ExecuteScriptAsync {
     [CmdLetBinding()]
     param(
         $ScriptToExecute,
-        $OnCompletedScriptBlock,
-        [switch]$SkipTrace
+        $OnCompletedScriptBlock
     )
     try {
-        # SkipTrace exists for one caller: the diagnostics push of issue #61. The preamble below
-        # writes ConvertTo-RedactedLogString -InputObject $PSBoundParameters, and $ScriptToExecute is
-        # the whole JavaScript payload. For a setDiagnostics(...) call that payload carries the
-        # diagnostic messages themselves - the parser's "Incorrect syntax near 'Person'.", the schema
-        # pass naming a tenant's table and column, a rule quoting the user's own alias - so tracing it
-        # copies query-derived identifiers into the trace on every debounced keystroke, which is
-        # exactly what issue #61 section 5 and acceptance criteria 8 and A10 forbid. Redaction does
-        # not help: ConvertTo-RedactedLogString masks credentials and result data, not identifiers
-        # taken from a query.
+        # THE PAYLOAD IS TRACED BY SHAPE, NEVER BY CONTENT. The preamble every other function here
+        # opens with writes ConvertTo-RedactedLogString of its bound parameters, and this function's
+        # parameter is a whole JavaScript payload made out of the user's and the tenant's own text:
         #
-        # Everything else still traces as before; the switch narrows nothing but the one payload that
-        # is made of the user's own text.
-        if (-not $SkipTrace) {
-            $Script:Tracer::WriteLine(("{0}: Function: {1} - Caller: {2}({3}) - Command: {4} - Parameters: {5}" -f $($Script:RunTimeConfig.ApplicationName), $($MyInvocation.MyCommand.Name), $($MyInvocation.ScriptName).Split("\")[-1], $($MyInvocation.ScriptLineNumber), $MyInvocation.Statement, (ConvertTo-RedactedLogString -InputObject $PSBoundParameters -MaxDepth 1)))
+        #   setEditorValue('...')    the query, verbatim
+        #   setSchema({...})         every table and column name in the customer's database
+        #   setDiagnostics([...])    the diagnostic messages, which quote the script - the parser's
+        #                            "Incorrect syntax near 'Person'.", the schema pass naming a table
+        #                            and a column, a rule quoting the user's own alias
+        #
+        # Redaction does not help: ConvertTo-RedactedLogString masks credentials and result data, not
+        # identifiers lifted out of a query or a schema. So the trace records the call and the size
+        # and stops there - which is what issue #61 section 5 and acceptance criteria 8 and A10
+        # require, and what the deliberate absence of a preamble everywhere else on the validation
+        # path exists to protect.
+        #
+        # Done here rather than at the call sites on purpose. A per-caller opt-out only protects the
+        # callers who remember it, and the next one to push editor content would leak by omission.
+        #
+        # The length is kept because it is the part that is actually useful when debugging this seam:
+        # an empty push, a truncated one, or a schema that grew unexpectedly all show up in it, and
+        # none of them needs the text.
+        $Private:TracedParameter = [Ordered]@{
+            ScriptToExecute        = "<{0} characters>" -f ([string]$ScriptToExecute).Length
+            OnCompletedScriptBlock = if ($null -eq $OnCompletedScriptBlock) { "<none>" } else { "<scriptblock>" }
         }
+        $Script:Tracer::WriteLine(("{0}: Function: {1} - Caller: {2}({3}) - Command: {4} - Parameters: {5}" -f $($Script:RunTimeConfig.ApplicationName), $($MyInvocation.MyCommand.Name), $($MyInvocation.ScriptName).Split("\")[-1], $($MyInvocation.ScriptLineNumber), $MyInvocation.Statement, (ConvertTo-RedactedLogString -InputObject $Private:TracedParameter -MaxDepth 1)))
+
         if ($null -ne $Script:Webview.Object) {
             # CoreWebView2 must be checked too, not just IsLoaded: while a tab is being torn down
             # (e.g. Close All disposing tabs), a focus-driven editor push can land on a WebView2

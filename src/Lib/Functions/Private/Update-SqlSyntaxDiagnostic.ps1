@@ -56,9 +56,7 @@ function Update-SqlSyntaxDiagnostic {
                 $Diagnostic = $Result.Diagnostic
             }
 
-            # -SkipTrace: the payload IS the diagnostics, and their messages quote the user's query.
-            # See Invoke-ExecuteScriptAsync for why the preamble cannot see this one call.
-            Invoke-ExecuteScriptAsync -SkipTrace -ScriptToExecute (ConvertTo-EditorDiagnosticScript -Diagnostic $Diagnostic)
+            Invoke-ExecuteScriptAsync -ScriptToExecute (ConvertTo-EditorDiagnosticScript -Diagnostic $Diagnostic)
             return
         }
 

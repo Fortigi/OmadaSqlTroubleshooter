@@ -390,15 +390,9 @@ Describe 'Update-SqlSyntaxDiagnostic' -Tag 'Unit' {
 
         $script:PushedEditorScripts = [System.Collections.Generic.List[string]]::new()
 
-        # SkipTrace is recorded, not ignored: the diagnostics payload carries the user's own
-        # identifiers, so it must reach the editor WITHOUT passing through the tracer preamble
-        # (issue #61 acceptance criteria 8 and A10).
-        $script:PushedWithSkipTrace = [System.Collections.Generic.List[bool]]::new()
-
         function Invoke-ExecuteScriptAsync {
-            param($ScriptToExecute, $OnCompletedScriptBlock, [switch]$SkipTrace)
+            param($ScriptToExecute, $OnCompletedScriptBlock)
             $script:PushedEditorScripts.Add([string]$ScriptToExecute)
-            $script:PushedWithSkipTrace.Add([bool]$SkipTrace)
         }
 
         function Invoke-ExecuteScriptWithResultAsync {
@@ -423,7 +417,6 @@ Describe 'Update-SqlSyntaxDiagnostic' -Tag 'Unit' {
 
     BeforeEach {
         $script:PushedEditorScripts.Clear()
-        $script:PushedWithSkipTrace.Clear()
         $script:ValidationSetting = [PSCustomObject]@{
             Enabled                 = $true
             SchemaEnabled           = $true
@@ -433,24 +426,6 @@ Describe 'Update-SqlSyntaxDiagnostic' -Tag 'Unit' {
             ParserVersion           = $null
             RuleSeverity            = $null
         }
-    }
-
-    It 'Should push the diagnostics without tracing the payload' {
-        # The payload is the diagnostic messages, and those quote the script: the parser's
-        # "Incorrect syntax near 'Person'.", the schema pass naming a tenant table and column, a rule
-        # quoting the user's alias. Invoke-ExecuteScriptAsync traces its bound parameters through
-        # ConvertTo-RedactedLogString, which masks credentials and result data - not identifiers taken
-        # from a query - so this one call has to opt out.
-        $script:SyntaxResult = [PSCustomObject]@{
-            Status        = "Ok"
-            ParserVersion = "TSql180Parser"
-            Diagnostic    = @([PSCustomObject]@{ Line = 1; Column = 11; EndLine = 1; EndColumn = 15; Severity = "Error"; Message = "Incorrect syntax near 'FROM'."; Source = "T-SQL syntax" })
-        }
-
-        Update-SqlSyntaxDiagnostic -SqlText "SELECT a, FROM dbo.Person"
-
-        @($script:PushedWithSkipTrace).Count | Should -Be 1
-        $script:PushedWithSkipTrace[0] | Should -BeTrue -Because "the diagnostics payload must never reach the tracer"
     }
 
     It 'Should push the diagnostics it found' {
