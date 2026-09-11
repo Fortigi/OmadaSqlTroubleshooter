@@ -37,12 +37,16 @@ BeforeAll {
     . (Join-Path $PrivatePath -ChildPath "Get-OmadaHttpStatusCode.ps1")
     . (Join-Path $PrivatePath -ChildPath "Test-OmadaSessionExpiredError.ps1")
     . (Join-Path $PrivatePath -ChildPath "Resolve-ExecuteFallbackAction.ps1")
-    . (Join-Path $PrivatePath -ChildPath "Show-ExecuteQueryPopup.ps1")
+    # The real pane and status-bar writers, not stubs: "what the user is told when a query ends"
+    # IS the behaviour these suites assert, and a stub would assert nothing.
+    . (Join-Path $PrivatePath -ChildPath "Write-TabMessage.ps1")
+    . (Join-Path $PrivatePath -ChildPath "Set-TabStatusMessage.ps1")
     . (Join-Path $PrivatePath -ChildPath "Invoke-ExecuteQuery.ps1")
 
     $Script:Tracer = [System.Diagnostics.Trace]
 
-    # The popup lives on the tab session now, so the teardown reaches it through here.
+    # The Messages pane and the status bar live on the tab session now, so the teardown reaches
+    # them through here.
     function Get-ActiveTabSession { return $Script:TestTabSession }
     function Get-TabControlSessions { return [pscustomobject]@{ SelectedItem = $Script:TestTabSession.TabItem } }
 
@@ -134,10 +138,15 @@ BeforeAll {
         process { $InputObject }
     }
 
-    function script:New-PopupStub {
-        $Popup = [pscustomobject]@{ Closed = $false }
-        $Popup | Add-Member -MemberType ScriptMethod -Name Close -Value { $this.Closed = $true }
-        return $Popup
+    # The per-tab half of the UI: the Messages pane's TextBox, the tab control that selects between
+    # Results and Messages, and the status bar's message block. Plain objects on purpose - these tests
+    # run headless in CI, where System.Windows.* cannot be resolved.
+    function script:New-TabElementStub {
+        return @{
+            TextBoxQueryMessages      = [pscustomobject]@{ Text = "" }
+            TabControlQueryOutput     = [pscustomobject]@{ SelectedIndex = 0 }
+            TextBlockStatusBarMessage = [pscustomobject]@{ Name = "TextBlockStatusBarMessage"; Text = "" }
+        }
     }
 
     function script:Initialize-ExecuteQueryTestState {
@@ -154,7 +163,13 @@ BeforeAll {
         $Script:ConnectionStatus = $true
         # No request outstanding, so the button state resolves to "Execute".
         $Script:PendingWebViewCompletions = [System.Collections.Generic.List[object]]::new()
-        $Script:TestTabSession = [pscustomobject]@{ Id = "tab-A"; DisplayName = "Tab A"; TabItem = "item-A"; ExecutePopup = (New-PopupStub) }
+        $Script:TestTabSession = [pscustomobject]@{
+            Id            = "tab-A"
+            DisplayName   = "Tab A"
+            TabItem       = "item-A"
+            Elements      = (New-TabElementStub)
+            QueryMessages = [System.Collections.Generic.List[string]]::new()
+        }
         $Script:Tabs = @($Script:TestTabSession)
         $Script:AppConfig = [PSCustomObject]@{
             CurrentSqlQuery = [PSCustomObject]@{ DoId = 100; FullName = "TestQuery - 100" }
@@ -163,6 +178,7 @@ BeforeAll {
             QueryResult     = $null
             StopWatch       = [System.Diagnostics.Stopwatch]::StartNew()
             CurrentSqlQuery = [PSCustomObject]@{ DisplayName = "TestQuery" }
+            LastRowsRead    = 0
         }
         $Script:MainForm = @{
             Elements = @{
@@ -231,15 +247,44 @@ Describe "Reset-ExecuteQueryUiState" {
         $Script:MainForm.Elements.ButtonExecuteQueryText.Text | Should -Be "_Execute"
     }
 
-    It "closes the 'Executing Query...' popup and forgets it" {
-        $Popup = $Script:TestTabSession.ExecutePopup
+    It "records the rows read and the completion time in the Messages pane" {
+        # Issue #93 asks for both on EVERY execute. Asserted on the teardown because that is the one
+        # path every outcome funnels through, which is what makes "always" true rather than a claim
+        # about the paths someone remembered.
+        $Script:RunTimeData.LastRowsRead = 7
 
         Reset-ExecuteQueryUiState
 
-        $Popup.Closed | Should -BeTrue
-        # Nulled as well as closed: a stale reference would be Close()d a second time by the next
-        # execute's teardown.
-        $Script:TestTabSession.ExecutePopup | Should -BeNullOrEmpty
+        $Script:TestTabSession.QueryMessages | Should -Contain "Rows read: 7"
+        ($Script:TestTabSession.QueryMessages -join " ") | Should -Match 'Completion time: \d{2}:\d{2}:\d{2}'
+    }
+
+    It "writes the summary into the pane's text box, not only the list behind it" {
+        $Script:RunTimeData.LastRowsRead = 3
+
+        Reset-ExecuteQueryUiState
+
+        $Script:TestTabSession.Elements.TextBoxQueryMessages.Text | Should -Match "Rows read: 3"
+    }
+
+    It "reports whatever row count the execute actually recorded, not a fixed one" {
+        # The teardown summarises from LastRowsRead rather than re-deriving rows it cannot see. The
+        # corollary - that the value has to be zeroed when an execute STARTS, or a cancelled run
+        # inherits the previous query's count - is asserted against the click handler in
+        # TabScopedMessagesGoToThePane.Tests.ps1, which is where that code lives.
+        $Script:RunTimeData.LastRowsRead = 1204
+
+        Reset-ExecuteQueryUiState
+
+        ($Script:TestTabSession.QueryMessages -join " ") | Should -Match 'Rows read: 1[.,]204'
+    }
+
+    It "does not pull the user to Messages for an execute that merely finished" {
+        # Focus follows failure, not completion: a successful query still has to land the user on
+        # their data. Only an ERROR moves the selection, and that happens through Write-LogOutput.
+        Reset-ExecuteQueryUiState
+
+        $Script:TestTabSession.Elements.TabControlQueryOutput.SelectedIndex | Should -Be 0
     }
 
     It "stops the stopwatch and writes its value to the status bar" {
@@ -256,6 +301,14 @@ Describe "Reset-ExecuteQueryUiState" {
         $Script:MainForm.Elements.TextBlockStatusBarQueryTime.Text | Should -Be "-"
     }
 
+    It "summarises nothing for a run that never issued a request" {
+        # -SkipStatusBarTime marks exactly that case. "Rows read: 0, completion time 00:00:00" for a
+        # click that was refused before it started would be a reading of a query that never ran.
+        Reset-ExecuteQueryUiState -SkipStatusBarTime
+
+        $Script:TestTabSession.QueryMessages.Count | Should -Be 0
+    }
+
     It "leaves the results grid untouched" {
         # A failed or abandoned execute must not blank a perfectly good previous result.
         Reset-ExecuteQueryUiState
@@ -263,8 +316,7 @@ Describe "Reset-ExecuteQueryUiState" {
         $Script:MainForm.Elements.DataGridQueryResult.ItemsSource | Should -Be "previous"
     }
 
-    It "does not throw when there is no popup and no stopwatch" {
-        $Script:TestTabSession.ExecutePopup = $null
+    It "does not throw when there is no stopwatch" {
         $Script:RunTimeData.StopWatch = $null
 
         { Reset-ExecuteQueryUiState } | Should -Not -Throw
@@ -501,9 +553,9 @@ Describe "Complete-ExecuteQueryPipeline does not retry a tab that was torn down"
     It "still leaves the tab in a usable state" {
         Complete-ExecuteQueryPipeline -Outcome (New-TestErrorRecord "Access denied") -PipelineContext $script:RetryContext
 
-        # Disconnected, so the query controls stay disabled - but the popup is closed, the stopwatch
-        # stopped and the button reads Execute rather than Cancel.
-        $Script:TestTabSession.ExecutePopup | Should -BeNullOrEmpty
+        # Disconnected, so the query controls stay disabled - but the stopwatch is stopped, the
+        # button reads Execute rather than Cancel, and the failure is on the tab's status bar.
+        $Script:TestTabSession.Elements.TextBlockStatusBarMessage.Text | Should -Match "errors"
         $Script:MainForm.Elements.ButtonExecuteQueryText.Text | Should -Be "_Execute"
         $Script:RunTimeData.StopWatch.IsRunning | Should -BeFalse
     }
@@ -663,7 +715,7 @@ Describe "A tenant error does not cost the session its background worker" {
         Complete-ExecuteQueryPipeline -Outcome $script:BadGateway -PipelineContext $script:Context
 
         $Script:MainForm.Elements.ButtonExecuteQuery.IsEnabled | Should -BeTrue
-        $Script:TestTabSession.ExecutePopup | Should -BeNullOrEmpty
+        $Script:TestTabSession.QueryMessages.Count | Should -BeGreaterThan 0
     }
 
     It "still re-runs and disables when the worker genuinely cannot sign in" {

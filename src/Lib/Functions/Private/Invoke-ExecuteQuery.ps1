@@ -175,7 +175,8 @@ function Reset-ExecuteQueryUiState {
     <#
     .SYNOPSIS
     Return the active tab to a state where the user can execute again: buttons re-enabled, the
-    "Executing Query..." popup closed, the stopwatch stopped and its final value on the status bar.
+    stopwatch stopped, its final value on the status bar, and the execute summarised in the
+    Messages pane.
 
     .DESCRIPTION
     The same teardown was written out five times across Invoke-ExecuteQuery, in slightly different
@@ -212,16 +213,23 @@ function Reset-ExecuteQueryUiState {
         # drained by the poll timer, or removed by Stop-ExecuteQueryRequest before it called here.
         Set-ExecuteQueryButtonState
 
-        # The owning tab's popup, not a shared one. Reset-ExecuteQueryUiState always runs with that
-        # tab made active - the poll timer steps into it before invoking a completion - so this closes
-        # the window that belongs to the query that just finished, and leaves other tabs' alone.
-        Close-ExecuteQueryPopup
-
         if ($null -ne $Script:RunTimeData.StopWatch) {
             $Script:RunTimeData.StopWatch.Stop()
             if (-not $SkipStatusBarTime) {
                 "Elapsed time: {0}" -f $Script:RunTimeData.StopWatch.Elapsed.ToString() | Write-LogOutput -LogType DEBUG
-                $Script:MainForm.Elements.TextBlockStatusBarQueryTime.Text = Format-ElapsedTime -TimeSpan $Script:RunTimeData.StopWatch.Elapsed
+                $Private:Elapsed = Format-ElapsedTime -TimeSpan $Script:RunTimeData.StopWatch.Elapsed
+                $Script:MainForm.Elements.TextBlockStatusBarQueryTime.Text = $Private:Elapsed
+
+                # Rows read and completion time land in the Messages pane on EVERY execute, success or
+                # failure (issue #93). That is what separates "the query returned nothing" from "the
+                # query failed" - the ambiguity issue #44 describes - because today both leave an
+                # empty grid and nothing else to tell them apart.
+                #
+                # Here rather than in Complete-ExecuteQueryResult because this is the single teardown
+                # every path funnels through, including the failures that never reach a result. It
+                # also runs with the owning tab made active: the poll timer steps into it before
+                # invoking a completion, so the summary lands on the tab that ran the query.
+                Write-TabExecuteSummary -RowsRead $Script:RunTimeData.LastRowsRead -Elapsed $Private:Elapsed
             }
         }
     }
@@ -295,7 +303,7 @@ function Invoke-ExecuteQueryOnUiThread {
         # query was in flight.
         if (-not $Script:ConnectionStatus) {
             "Not retrying the query on the UI thread: the tab is no longer connected." | Write-LogOutput -LogType DEBUG
-            Complete-ExecuteQueryResult -QueryResult $null -SaveResult $null -TempQueryDoId $null
+            Complete-ExecuteQueryResult -QueryResult $null -SaveResult $null -TempQueryDoId $null -Failed
             return
         }
 
@@ -309,7 +317,7 @@ function Invoke-ExecuteQueryOnUiThread {
             # on it nor be helped by a modal in front of a query that is already lost. The failure
             # that matters has been logged by the caller.
             "Cannot retry the query on the UI thread: the request context is no longer available." | Write-LogOutput -LogType DEBUG
-            Complete-ExecuteQueryResult -QueryResult $null -SaveResult $null -TempQueryDoId $null
+            Complete-ExecuteQueryResult -QueryResult $null -SaveResult $null -TempQueryDoId $null -Failed
             return
         }
 
@@ -375,7 +383,7 @@ function Complete-ExecuteQueryPipeline {
 
             if ($AlreadyOnUiThread) {
                 "The query could not be run on the UI thread either: {0}" -f $Private:Reason | Write-ContainedErrorLog -TabScoped
-                Complete-ExecuteQueryResult -QueryResult $null -SaveResult $null -TempQueryDoId $null
+                Complete-ExecuteQueryResult -QueryResult $null -SaveResult $null -TempQueryDoId $null -Failed
                 return
             }
 
@@ -413,7 +421,7 @@ function Complete-ExecuteQueryPipeline {
             }
 
             "The query pipeline failed at step '{0}': {1}" -f $Outcome.FailedStep, $Outcome.ErrorRecord.Exception.Message | Write-ContainedErrorLog -ErrorObject $Outcome.ErrorRecord -TabScoped
-            Complete-ExecuteQueryResult -QueryResult $Outcome.ErrorRecord -SaveResult $Outcome.SaveResult -TempQueryDoId $null
+            Complete-ExecuteQueryResult -QueryResult $Outcome.ErrorRecord -SaveResult $Outcome.SaveResult -TempQueryDoId $null -Failed
             return
         }
 
@@ -460,12 +468,23 @@ function Complete-ExecuteQueryResult {
     The temporary TMP_<guid> object created for an "execute selection" run, or $null. Deleted here,
     and deleted whatever the outcome - a result that never arrived still leaves an object behind on
     the tenant.
+
+    .PARAMETER Failed
+    This is a failed execute rather than one that merely found no rows. Stated by the caller, which
+    knows, rather than inferred here from the shape of $QueryResult: both cases arrive with nothing to
+    bind to the grid, and sniffing the type to tell them apart would make the difference between "your
+    query ran and found nothing" and "your query failed" depend on what a pipeline outcome happened to
+    be carrying. That distinction is the whole point of issue #44, so it does not get to be a guess.
+
+    The error detail itself is already in the Messages pane by the time this runs -
+    Write-ContainedErrorLog -TabScoped put it there. This only decides what the status bar says.
     #>
     [CmdLetBinding()]
     param(
         $QueryResult,
         $SaveResult,
-        $TempQueryDoId
+        $TempQueryDoId,
+        [switch]$Failed
     )
 
     try {
@@ -483,7 +502,10 @@ function Complete-ExecuteQueryResult {
         # not exist. Null became far more reachable once a request could fail or be abandoned in a
         # worker, so it is now treated as what it is - no rows.
         if ($null -eq $Script:RunTimeData.QueryResult -or ($Script:RunTimeData.QueryResult.d.Rows | Measure-Object).Count -le 0) {
-            "Query did not return any results!" | Write-LogOutput -LogType WARNING -TabScoped
+            if (-not $Failed) {
+                "Query did not return any results!" | Write-LogOutput -LogType WARNING -TabScoped
+            }
+            $Script:RunTimeData.LastRowsRead = 0
             $Script:MainForm.Elements.TextBlockStatusBarRows | Set-TextBlockText -Text "0 rows"
             $Script:MainForm.Elements.DataGridQueryResult.ItemsSource = $null
         }
@@ -501,6 +523,7 @@ function Complete-ExecuteQueryResult {
             $Script:MainForm.Elements.ButtonSaveOutputFile.IsEnabled = $true
             "{0} record(s) retrieved!" -f $Script:RunTimeData.QueryResult.d.Records | Write-LogOutput
 
+            $Script:RunTimeData.LastRowsRead = [Int]$Script:RunTimeData.QueryResult.d.Records
             $Script:MainForm.Elements.TextBlockStatusBarRows | Set-TextBlockText -Text ("{0:n0} rows" -f [Int]$Script:RunTimeData.QueryResult.d.Records)
             $SaveResult.Id, $SaveResult.DisplayName | Set-ConfigProperty -Property "CurrentSqlQuery"
             if ($SaveResult.DisplayName -ne $Script:RunTimeData.CurrentSqlQuery.DisplayName) {
@@ -525,6 +548,16 @@ function Complete-ExecuteQueryResult {
 
                 $Script:MainForm.Elements.ComboBoxSelectQuery.SelectedItem = $Private:ComboBoxSelectQueryItem
             }
+        }
+
+        # The last state change, on this tab's status bar. Both messages point at the pane rather
+        # than carrying the detail themselves: the bar is one line in a 30px strip, and a SQL Server
+        # error is neither short enough to fit nor useful when truncated.
+        if ($Failed) {
+            Set-TabStatusMessage -Message "Query completed with errors - see Messages"
+        }
+        else {
+            Set-TabStatusMessage -Message ("Query '{0}' executed successfully - see Messages" -f $Script:AppConfig.CurrentSqlQuery.DisplayName)
         }
 
         Reset-ExecuteQueryUiState

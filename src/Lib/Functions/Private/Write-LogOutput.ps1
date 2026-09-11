@@ -141,9 +141,6 @@ function Write-LogOutput {
                 $LogMessageDialog.Title = "Warning - {0}" -f $TabContext
                 $LogMessageDialog.Icon = [System.Windows.Forms.MessageBoxIcon]::Warning
                 $LogMessage.Color = "Yellow"
-                if ($null -ne $Script:PopUpWindowQueryRefresh) {
-                    $Script:PopUpWindowQueryRefresh.Close()
-                }
             }
             { $_ -in @("ERROR", "FATAL") -and $LogMessage.Show } {
                 try {
@@ -179,9 +176,6 @@ function Write-LogOutput {
                 catch {}
                 $LogMessageDialog.Icon = [System.Windows.Forms.MessageBoxIcon]::Error
                 $LogMessage.Color = "Red"
-                if ($null -ne $Script:PopUpWindowQueryRefresh) {
-                    $Script:PopUpWindowQueryRefresh.Close()
-                }
             }
             { $_ -eq "LOG" -and $LogMessage.Show } {}
             default {}
@@ -198,12 +192,25 @@ function Write-LogOutput {
         }
         if ($LogMessageDialog.Show -and !$SkipDialog) {
             if ($null -ne $Script:MainForm -and $null -ne $Script:MainForm.Definition -and $Script:MainForm.Definition.IsVisible) {
-                # A message that belongs to a tab the user is not looking at is held rather than
-                # shown. Interrupting work on the visible tab with a modal about an invisible query is
-                # what this avoids; it is shown when that tab is next opened, and it is in the log
-                # either way. An application-level failure is not tab-scoped and always shows.
-                if ($TabScoped -and -not (Test-ActiveTabIsOnScreen)) {
-                    Add-TabScopedMessage -TabSession (Get-ActiveTabSession) -Text $LogMessageDialog.Text -Title $LogMessageDialog.Title -Icon $LogMessageDialog.Icon
+                # A message that belongs to a tab goes to that tab's Messages pane and raises no
+                # dialog at all (issue #93). A modal stopped the user, had to be dismissed before they
+                # could look at the query that caused it, and was gone once dismissed; the pane keeps
+                # the text beside the SQL that produced it, selectable and copyable.
+                #
+                # Nothing needs holding any more either. The pane IS per tab and durable, so a failure
+                # raised while its tab is off screen is simply waiting there when the user opens it -
+                # which is what Add-TabScopedMessage's queue existed to simulate.
+                #
+                # An application-level failure is not tab-scoped and still interrupts: it is not about
+                # a tab, the user may have no tab open, and it must be seen wherever they are.
+                #
+                # Focus follows severity, and only severity. An ERROR pulls the pane to the front
+                # because a failure the user cannot see is the thing this issue set out to fix. A
+                # WARNING does not: the commonest one by far is "Query did not return any results",
+                # which is a successful execute, and issue #93 asks for Results to stay selected on
+                # success so a query that worked still lands the user on their data.
+                if ($TabScoped) {
+                    Add-TabMessage -TabSession (Get-ActiveTabSession) -Text $LogMessageDialog.Text -Focus:$LogMessage.ShowError
                 }
                 else {
                     Show-LogMessageDialog -Text $LogMessageDialog.Text -Title $LogMessageDialog.Title -Icon $LogMessageDialog.Icon

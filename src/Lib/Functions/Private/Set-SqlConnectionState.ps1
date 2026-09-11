@@ -34,23 +34,19 @@ function Set-SqlConnectionState {
             $Script:MainForm.Elements.TextBoxAppIdUri.IsEnabled = $false
             $Script:MainForm.Elements.TextBoxEntraIdTenantId.IsEnabled = $false
             $Script:MainForm.Elements.TextBoxUrl.IsEnabled = $false
-            $Script:MainForm.Elements.TextBlockStatusBarConnectionStatus | Set-TextBlockText -Text "Connected"
+            Set-TabStatusMessage -Message "Connected"
             $Script:MainForm.Elements.ButtonConnectText | Set-ButtonText -Value "Dis_connect"
             $Script:MainForm.Elements.TextBlockStatusBarUrl.Text = ([System.Uri]::new($Script:MainForm.Elements.TextBoxUrl.Text)).Authority
 
             if (($Script:MainForm.Elements.ComboBoxSelectDataConnection.Items | Measure-Object).Count -le 1 -or ($Script:MainForm.Elements.ComboBoxSelectQuery.Items | Measure-Object).Count -le 1 -and $null -ne $Script:RunTimeConfig.ReconnectStatus -and $Script:RunTimeConfig.ReconnectStatus -ge 2) {
-                if ($null -ne $Script:MainForm -and $Script:MainForm.Definition -and $Script:MainForm.Definition.IsVisible) {
-                    $ConnectingWindow = Show-PopupWindow -Message "Connecting to Omada..."
-                }
+                Set-TabStatusMessage -Message "Connecting to Omada..."
                 if ($null -ne $Script:Webview.Object.CoreWebView2 -and ($Script:MainForm.Elements.ComboBoxSelectDataConnection.Items | Measure-Object).Count -lt 8) {
                     Update-DataConnectionList -NotShowPopupWindow
                 }
                 if ($null -ne $Script:Webview.Object.CoreWebView2 -and ($Script:MainForm.Elements.ComboBoxSelectQuery.Items | Measure-Object).Count -le 1) {
                     Update-QueryList -NotShowPopupWindow
                 }
-                if ($null -ne $ConnectingWindow) {
-                    $ConnectingWindow.Close()
-                }
+                Set-TabStatusMessage -Message "Connected"
             }
             # The window title is refreshed from the active tab by Update-TabHeaderTitle below
             # (-> Update-ApplicationTitle), so it stays in the new "<name> - <connection> - <tenant>"
@@ -66,7 +62,7 @@ function Set-SqlConnectionState {
             $Script:MainForm.Elements.TextBoxAppIdUri.IsEnabled = $true
             $Script:MainForm.Elements.TextBoxEntraIdTenantId.IsEnabled = $true
             $Script:MainForm.Elements.TextBoxUrl.IsEnabled = $true
-            $Script:MainForm.Elements.TextBlockStatusBarConnectionStatus | Set-TextBlockText -Text "Disconnected"
+            Set-TabStatusMessage -Message "Disconnected"
             $Script:MainForm.Elements.ButtonConnectText | Set-ButtonText -Value "_Connect"
             $Script:MainForm.Elements.TextBlockStatusBarUrl | Set-TextBlockText -Text "-"
             $Script:MainForm.Elements.TextBlockStatusBarDatabaseName | Set-TextBlockText -Text "-"

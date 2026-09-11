@@ -146,7 +146,7 @@ E2ESuite -Name "AsyncExecute" -Body {
             E2EAssertEqual "_Execute" (Get-E2EExecuteButtonText) "the button must be back to Execute after a failure"
             E2EAssertTrue $Elements.ButtonExecuteQuery.IsEnabled "Execute must be re-enabled after a failure"
             E2EAssertTrue $Elements.ButtonSaveQuery.IsEnabled "Save must be re-enabled after a failure"
-            E2EAssertTrue (Test-E2EExecutePopupClosed) "no tab may be left showing the 'Executing Query...' popup after a failure"
+            E2EAssertTrue (Test-E2EExecuteStatusSettled) "no tab may be left claiming a query is still executing after a failure"
             # Note, deliberately not asserted as desirable: a failed execute still reports "0 rows"
             # and clears the grid, exactly as it did before this change. That is the "empty result vs
             # failed query" ambiguity of issue #44, and fixing it here would be scope drift. What

@@ -43,7 +43,7 @@ E2ESuite -Name "CancelExecute" -Body {
         E2EAssertEqual "_Execute" (Get-E2EExecuteButtonText) "the button must go back to Execute in the same click"
         E2EAssertTrue $Elements.ButtonExecuteQuery.IsEnabled "Execute must be usable again"
         E2EAssertTrue $Elements.ButtonSaveQuery.IsEnabled "Save must be usable again"
-        E2EAssertTrue (Test-E2EExecutePopupClosed) "no tab may be left showing the 'Executing Query...' popup"
+        E2EAssertTrue (Test-E2EExecuteStatusSettled) "no tab may be left claiming a query is still executing"
     }
 
     E2ECase -Name "cancelling does not blank a previous result" -Body {

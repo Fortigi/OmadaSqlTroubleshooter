@@ -155,13 +155,18 @@ function Complete-DataConnectionListUpdate {
         }
 
         if (!$NotShowPopupWindow) {
-            $UpdateDataConnectionsWindow = Show-PopupWindow -Message "Updating Data Connections..."
+            # Reached from the completion poll timer since #101, which steps into the tab the work
+            # was started for before invoking the completion - so the default active tab is the
+            # right one, and a refresh started on tab A cannot write into tab B's status bar.
+            # No -Render: see Update-QueryList. This one is reached from the completion poll timer
+            # itself since #101, so pumping here would re-enter the very timer that invoked it.
+            Set-TabStatusMessage -Message "Updating data connections..."
         }
 
-        # try/finally around everything after the popup is shown. The close used to sit on the
-        # success path only, so anything that threw while rebuilding or sorting the items left the
-        # popup on screen for the rest of the session - the catch below would log it and the user
-        # would be looking at a progress window over an application that had stopped working on it.
+        # try/finally around everything after the status message is written. The reset used to sit on
+        # the success path only, so anything that threw while rebuilding or sorting the items left the
+        # bar claiming an update was still running for the rest of the session - the catch below would
+        # log it and the user would be looking at progress text over work that had stopped.
         try {
             $SelectedDataConnection = $Script:MainForm.Elements.ComboBoxSelectDataConnection.SelectedItem.Content
             "Stored current selected data connection (if not empty): {0}" -f $SelectedDataConnection | Write-LogOutput -LogType DEBUG
@@ -204,8 +209,8 @@ function Complete-DataConnectionListUpdate {
             "{0} data connections processed!" -f ($Script:MainForm.Elements.ComboBoxSelectDataConnection.Items | Measure-Object).Count | Write-LogOutput
         }
         finally {
-            if ($null -ne $UpdateDataConnectionsWindow) {
-                $UpdateDataConnectionsWindow.Close()
+            if (!$NotShowPopupWindow) {
+                Reset-TabStatusMessage
             }
         }
     }
