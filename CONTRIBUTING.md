@@ -23,9 +23,11 @@ The same applies, in spirit, to a feature: land it with tests for the behaviour 
 
 If a fix genuinely cannot be tested — it lives in code that only runs against a live tenant, or
 only inside a rendered WebView2 control — say so in the pull request and explain why, rather than
-leaving the reviewer to wonder. Often the answer is to extract the logic away from the UI first;
-`Format-ClipboardText` and `Export-QueryResultFile` are both examples of a pure seam pulled out of
-a WPF-bound function precisely so it could be tested.
+leaving the reviewer to wonder. Often the answer is to extract the logic away from the UI first.
+`Export-QueryResultFile` is the file-format dispatch lifted out of a `SaveFileDialog`, and
+`Format-QueryResultSelection` with its `ConvertTo-SqlLiteral` / `ConvertTo-PowerShellLiteral`
+helpers is the clipboard formatting lifted out of a `DataGrid` — both pulled into pure functions
+precisely so they could be tested.
 
 ## Where the tests live
 

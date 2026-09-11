@@ -103,9 +103,14 @@ jobs:
               '',
               `Run: ${runUrl}`,
               '',
-              'The suite runs the real application against the mocked backend in `tests/mock`, so a',
-              'failure here is a real regression in the app, not a flaky external dependency.',
-              'Reproduce locally with `./build/build.ps1 -Task E2E`.'
+              'The suite runs the real application against the mocked backend in `tests/mock`, so',
+              'nothing external can have caused this. Reproduce locally with',
+              '`./build/build.ps1 -Task E2E`.',
+              '',
+              'Before treating it as a regression, check what failed. The scenarios wait on the app',
+              'with fixed timeouts, and a runner under load has produced a batch of timeout',
+              'failures with nothing actually broken. A handful of `Timed out after ...` messages',
+              'is worth a re-run first; anything that failed on an assertion is not.'
             ].join('\n');
 
             // Matched on the title alone. Filtering by an 'e2e' label would find nothing until
