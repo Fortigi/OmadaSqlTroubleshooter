@@ -40,6 +40,24 @@ jobs:
       - name: Install modules
         run: ./build/InstallModules.ps1
 
+      # The suite imports the real module, and OmadaSqlTroubleshooter.psm1 refuses to load without
+      # OmadaWeb.PS. Installed here rather than in build/InstallModules.ps1, which exists for the
+      # build tooling: the unit tests dot-source individual functions and never import the module,
+      # so adding a gallery install there would slow every PR validation run for nothing.
+      # The minimum version is the one the module itself enforces on import.
+      - name: Install the OmadaWeb.PS runtime dependency
+        run: |
+          $MinimumVersion = '2026.07.09.9'
+          if (-not (Get-Module -ListAvailable -Name OmadaWeb.PS | Where-Object { $_.Version -ge [version]$MinimumVersion })) {
+            "Installing OmadaWeb.PS >= $MinimumVersion" | Write-Host
+            Install-Module -Name OmadaWeb.PS -MinimumVersion $MinimumVersion -Scope CurrentUser -Force -AllowClobber
+          }
+          $Installed = Get-Module -ListAvailable -Name OmadaWeb.PS | Sort-Object Version -Descending | Select-Object -First 1
+          if ($null -eq $Installed) {
+            throw "OmadaWeb.PS could not be installed; the end-to-end suite cannot import the module."
+          }
+          "Using OmadaWeb.PS {0}" -f $Installed.Version | Write-Host
+
       - name: Run end-to-end suite
         run: ./build/build.ps1 -Task E2E
 
