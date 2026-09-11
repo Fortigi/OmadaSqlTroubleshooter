@@ -46,7 +46,7 @@ permission set; the client-side checks exist to explain the boundary at the mome
 | Data manipulation — `INSERT`, `UPDATE`, `DELETE`, `MERGE`, `TRUNCATE` | `SELECT`, in all its forms |
 | Data definition — `CREATE`, `ALTER`, `DROP` | Reads from tables and views |
 | Stored procedures and dynamic SQL — `EXEC`, `sp_executesql` | **Common table expressions**, including multiple and nested |
-| Temporary tables — `#t`, `##t`, `SELECT … INTO` | Derived tables, `JOIN`, `APPLY`, set operators |
+| Temporary tables — `#t`, `##t`, `SELECT … INTO #t` | Derived tables, `JOIN`, `APPLY`, set operators |
 | | Window functions, `PIVOT`/`UNPIVOT`, `CASE`, built-in functions |
 
 One rule is worth knowing before you write a query rather than after: **every column in the result
@@ -60,7 +60,9 @@ SELECT uid, COUNT(*) AS [Count] FROM dbo.SomeTable GROUP BY uid   -- returns row
 ```
 
 Temporary tables are the other common surprise. Use a common table expression instead — CTEs are
-supported and are the sanctioned replacement.
+supported and are the sanctioned replacement. (`SELECT … INTO` writes a table, so it belongs with the
+data-definition row above whatever the target is called; only the `#t` form is flagged as a temporary
+table.)
 
 #### Results & Export
 - View results in a PowerShell GridView
