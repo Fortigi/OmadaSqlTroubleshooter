@@ -109,11 +109,17 @@ function Copy-DataGridToClipboard {
         }
 
         $ClipboardText = $Lines -join "`r`n"
-        if ([string]::IsNullOrWhiteSpace($ClipboardText)) {
-            return
-        }
 
         if ($OutputFormat -eq "Default") {
+            # The whitespace guard belongs to this format alone, because here the rendered text IS
+            # the output and copying nothing but blank lines is not worth clobbering the clipboard
+            # for. It must NOT gate the array formats: a NULL-only column renders as blank, so a
+            # shared guard would discard the selection before the typed formatter ever saw it and
+            # "Copy as SQL array" would silently produce nothing instead of (NULL, NULL).
+            if ([string]::IsNullOrWhiteSpace($ClipboardText)) {
+                return
+            }
+
             [System.Windows.Clipboard]::SetText($ClipboardText)
             return
         }

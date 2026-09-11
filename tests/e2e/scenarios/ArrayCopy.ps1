@@ -193,6 +193,67 @@ E2ESuite -Name "ArrayCopy" -Body {
         E2EAssertTrue ($script:E2EEditorText -like "*IN (*900,*") "the executed query should carry the unquoted integer list"
     }
 
+    E2ECase -Name "copying a NULL-only column as an array reaches the clipboard (regression: the blank-text guard)" -Body {
+        # Regression guard for a real bug found in review of PR #106.
+        #
+        # A NULL-only column renders as blank text, and Copy-DataGridToClipboard used to run a
+        # shared IsNullOrWhiteSpace check over that rendered text for EVERY output format. The
+        # selection was therefore discarded before the typed formatter ran, and "Copy as SQL array"
+        # on a NULL column silently produced nothing at all - breaking acceptance criterion 6 in
+        # exactly the one function the unit tests do not cover.
+        #
+        # This is the case that has to drive the real Copy-DataGridToClipboard end to end, clipboard
+        # included, because the bug lived entirely in the part the pure functions do not see.
+        Initialize-ArrayCopyGrid
+        $Grid = Get-ArrayCopyGrid
+        Select-ArrayCopyCell -Grid $Grid -ColumnHeader @("ParentID")
+
+        $RenderedText = ""
+        foreach ($Item in $Grid.Items) {
+            $Column = Get-ArrayCopyColumn -Grid $Grid -Header "ParentID"
+            $RenderedText += "{0}" -f $Column.OnCopyingCellClipboardContent($Item)
+        }
+        E2EAssertTrue ([string]::IsNullOrWhiteSpace($RenderedText)) "the fixture's NULL column must render blank, or this case is not exercising the bug"
+
+        [System.Windows.Clipboard]::SetText("sentinel-not-overwritten")
+        Copy-DataGridToClipboard -OutputFormat "SqlArray"
+        Invoke-E2EFlushDispatcher | Out-Null
+
+        $Copied = [System.Windows.Clipboard]::GetText()
+        E2EAssertEqual "(`r`n    NULL,`r`n    NULL`r`n)" $Copied "a NULL-only column should still reach the clipboard as a typed NULL list"
+    }
+
+    E2ECase -Name "copying a normal column as an array still reaches the clipboard" -Body {
+        Initialize-ArrayCopyGrid
+        $Grid = Get-ArrayCopyGrid
+        Select-ArrayCopyCell -Grid $Grid -ColumnHeader @("Id")
+
+        [System.Windows.Clipboard]::SetText("sentinel-not-overwritten")
+        Copy-DataGridToClipboard -OutputFormat "SqlArray"
+        Invoke-E2EFlushDispatcher | Out-Null
+
+        E2EAssertEqual "(`r`n    900,`r`n    901`r`n)" ([System.Windows.Clipboard]::GetText()) "an int column should copy as an unquoted list"
+
+        Copy-DataGridToClipboard -OutputFormat "PowerShellArray"
+        Invoke-E2EFlushDispatcher | Out-Null
+
+        E2EAssertEqual "@(`r`n    900,`r`n    901`r`n)" ([System.Windows.Clipboard]::GetText()) "an int column should copy as a PowerShell array"
+    }
+
+    E2ECase -Name "the Default format still refuses to clobber the clipboard with blank text" -Body {
+        # The other half of the fix: the whitespace guard is still in force where the rendered text
+        # really is the output.
+        Initialize-ArrayCopyGrid
+        $Grid = Get-ArrayCopyGrid
+        Select-ArrayCopyCell -Grid $Grid -ColumnHeader @("ParentID")
+
+        [System.Windows.Clipboard]::SetText("sentinel-not-overwritten")
+        Copy-DataGridToClipboard
+        Invoke-E2EFlushDispatcher | Out-Null
+
+        E2EAssertEqual "sentinel-not-overwritten" ([System.Windows.Clipboard]::GetText()) "a blank Default copy should leave the clipboard alone"
+    }
+
     E2ECase -Name "ArrayCopyUseColumnSchema = false restores the pre-#103 output (criterion 11)" -Body {
         # The escape hatch, exercised through the same rendered-text values Copy-DataGridToClipboard
         # feeds it.
