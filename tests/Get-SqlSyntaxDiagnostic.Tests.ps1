@@ -1,19 +1,22 @@
 #Requires -Version 7.0
-# Tests for the T-SQL syntax pass of issue #61 - the first of the two validation passes described
-# there. The schema pass (Get-SqlSchemaDiagnostic) is NOT delivered by this change and has no tests
-# here.
+# Tests for the T-SQL syntax pass of issue #61 - the first of the three validation passes described
+# there. The schema pass lives in Get-SqlSchemaDiagnostic.Tests.ps1 and the Omada compatibility pass
+# in Get-OmadaCompatibilityDiagnostic.Tests.ps1.
 #
 # The parse assertions run against the real, pinned ScriptDom assembly rather than a stand-in,
 # because the whole point of the dependency is that it produces SQL Server's own wording. A fake
-# parser would let the tests agree with a message the server never sends. The assembly is resolved
-# from the module's own Bin folder when it is already installed there, and downloaded from the
-# pinned URL - and verified against the pinned SHA-256 - otherwise.
+# parser would let the tests agree with a message the server never sends. ScriptDomTestAssembly.ps1
+# resolves it from the module's own Bin folder when it is already installed there, and downloads it
+# from the pinned URL - verified against the pinned SHA-256 - otherwise.
 
 BeforeAll {
     $ParentPath = Split-Path -Path $PSScriptRoot -Parent
     $PrivatePath = Join-Path $ParentPath -ChildPath "src\Lib\Functions\Private"
 
+    . (Join-Path $PSScriptRoot -ChildPath "ScriptDomTestAssembly.ps1")
+
     . (Join-Path $PrivatePath -ChildPath "Get-SqlParserType.ps1")
+    . (Join-Path $PrivatePath -ChildPath "Get-SqlScriptFragment.ps1")
     . (Join-Path $PrivatePath -ChildPath "Get-SqlDiagnosticEndColumn.ps1")
     . (Join-Path $PrivatePath -ChildPath "Get-SqlSyntaxDiagnostic.ps1")
     . (Join-Path $PrivatePath -ChildPath "ConvertTo-EditorDiagnosticScript.ps1")
@@ -36,64 +39,9 @@ BeforeAll {
         }
     }
 
-    function Get-ScriptDomAssemblyPath {
-        <#
-            Resolves a ScriptDom assembly to test against. Prefers a copy the module has already
-            installed on this machine; otherwise downloads the pinned package into a version-stamped
-            cache folder and verifies the bytes against the pinned SHA-256 before using them - the
-            same guarantee Invoke-DownloadFile gives at run time.
-        #>
-        $Lock = Import-PowerShellDataFile -Path (Join-Path $ParentPath -ChildPath "src\DependencyLock.psd1")
-        $Artifact = @($Lock.Artifacts | Where-Object { $_.Id -eq "Microsoft.SqlServer.TransactSql.ScriptDom" })[0]
-        if ($null -eq $Artifact) {
-            return $null
-        }
-
-        $Installed = Join-Path ([System.Environment]::GetFolderPath("LocalApplicationData")) "OmadaSqlTroubleshooter\Bin\Microsoft.SqlServer.TransactSql.ScriptDom.dll"
-        if (Test-Path $Installed -PathType Leaf) {
-            return $Installed
-        }
-
-        $CacheRoot = Join-Path ([System.IO.Path]::GetTempPath()) ("OmadaSqlTroubleshooter.ScriptDom.{0}" -f $Artifact.Version)
-        $Cached = Join-Path $CacheRoot "Microsoft.SqlServer.TransactSql.ScriptDom.dll"
-        if (Test-Path $Cached -PathType Leaf) {
-            return $Cached
-        }
-
-        try {
-            New-Item -Path $CacheRoot -ItemType Directory -Force | Out-Null
-            $Package = Join-Path $CacheRoot "package.zip"
-            Invoke-WebRequest -Uri $Artifact.Url -OutFile $Package
-
-            $ActualHash = (Get-FileHash -Path $Package -Algorithm SHA256).Hash.ToLowerInvariant()
-            if ($ActualHash -ne $Artifact.Sha256) {
-                Remove-Item -Path $Package -Force -ErrorAction SilentlyContinue
-                return $null
-            }
-
-            $Expanded = Join-Path $CacheRoot "expanded"
-            Expand-Archive -Path $Package -DestinationPath $Expanded -Force
-            $Source = Get-ChildItem -Path $Expanded -Filter "Microsoft.SqlServer.TransactSql.ScriptDom.dll" -Recurse |
-                Where-Object { $_.Directory.Name -eq "net8.0" } |
-                Select-Object -First 1
-            if ($null -eq $Source) {
-                return $null
-            }
-
-            Copy-Item -Path $Source.FullName -Destination $Cached -Force
-            Remove-Item -Path $Expanded -Recurse -Force -ErrorAction SilentlyContinue
-            Remove-Item -Path $Package -Force -ErrorAction SilentlyContinue
-            return $Cached
-        }
-        catch {
-            return $null
-        }
-    }
-
-    $script:ScriptDomPath = Get-ScriptDomAssemblyPath
-    if ($null -ne $script:ScriptDomPath) {
-        [void][Reflection.Assembly]::LoadFrom($script:ScriptDomPath)
-    }
+    # The pinned assembly is resolved and loaded by the shared helper: the same download-and-verify
+    # serves the schema and compatibility passes, which need exactly the same real parser.
+    $script:ScriptDomPath = Install-ScriptDomForTest -RepositoryRoot $ParentPath
 
     # Once loaded, an assembly cannot be unloaded from a PowerShell session, so the "ScriptDom is
     # missing" case is exercised by making the resolver report nothing rather than by unloading
@@ -457,8 +405,12 @@ Describe 'Update-SqlSyntaxDiagnostic' -Tag 'Unit' {
 
         function Get-SqlValidationSetting { return $script:ValidationSetting }
 
-        function Get-SqlSyntaxDiagnostic {
-            param([string]$SqlText, [string]$ParserVersion, [string]$Source)
+        # The orchestrator, not the syntax pass: Update-SqlSyntaxDiagnostic now runs all three passes
+        # through Get-SqlDiagnostic from a single parse. What it does with the RESULT - push it, clear
+        # on a check that could not run, stay away from the editor when everything is off - is what
+        # this block is about, and stubbing here keeps it about that.
+        function Get-SqlDiagnostic {
+            param([string]$SqlText, $Setting, $SchemaModel)
             return $script:SyntaxResult
         }
     }
@@ -467,9 +419,12 @@ Describe 'Update-SqlSyntaxDiagnostic' -Tag 'Unit' {
         $script:PushedEditorScripts.Clear()
         $script:ValidationSetting = [PSCustomObject]@{
             Enabled                 = $true
+            SchemaEnabled           = $true
+            OmadaEnabled            = $true
             DebounceMilliseconds    = 400
             WarnOnExecuteWithErrors = $true
             ParserVersion           = $null
+            RuleSeverity            = $null
         }
     }
 
@@ -507,8 +462,11 @@ Describe 'Update-SqlSyntaxDiagnostic' -Tag 'Unit' {
 
     It 'Should push nothing at all when the pass is switched off' {
         # Distinct from "could not parse": the user asked for no validation, so the editor is left
-        # exactly as it is and no script is sent to it.
+        # exactly as it is and no script is sent to it. All three passes have to be off - one still
+        # enabled is still a reason to refresh the markers.
         $script:ValidationSetting.Enabled = $false
+        $script:ValidationSetting.SchemaEnabled = $false
+        $script:ValidationSetting.OmadaEnabled = $false
         $script:SyntaxResult = [PSCustomObject]@{ Status = "Ok"; ParserVersion = "TSql180Parser"; Diagnostic = @() }
 
         Update-SqlSyntaxDiagnostic -SqlText "SELECT a, FROM dbo.Person"
