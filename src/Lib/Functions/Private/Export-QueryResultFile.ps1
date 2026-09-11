@@ -45,18 +45,18 @@ function Export-QueryResultFile {
     # refuses a null -InputObject, so without it "nothing to save" writes an error record.
     # JSON and CliXml do not use this - they serialize the whole wrapper as it was given, which
     # is the point of those two formats.
-    $Row = @($QueryResult.d.rows | Where-Object { $null -ne $_ })
+    $Rows = @($QueryResult.d.rows | Where-Object { $null -ne $_ })
 
     if ($Path -like "*.json") {
         $QueryResult | ConvertTo-Json -Depth 15 | Set-Content $Path -Encoding UTF8
     }
     elseif ($Path -like "*.csv") {
-        $Row | Export-Csv -Path $Path -Delimiter ";" -NoTypeInformation -Encoding UTF8
+        $Rows | Export-Csv -Path $Path -Delimiter ";" -NoTypeInformation -Encoding UTF8
     }
     elseif ($Path -like "*.xml") {
         $QueryResult | Export-Clixml -Path $Path -Depth 15
     }
     else {
-        ($Row | Format-Table -AutoSize | Out-String -Width 10000000).Trim() | Set-Content $Path -Encoding UTF8
+        ($Rows | Format-Table -AutoSize | Out-String -Width 10000000).Trim() | Set-Content $Path -Encoding UTF8
     }
 }
