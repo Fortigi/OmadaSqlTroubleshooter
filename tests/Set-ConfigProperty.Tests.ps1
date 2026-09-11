@@ -210,10 +210,38 @@ Describe 'Set-ConfigProperty - global config reconciliation' {
             ($Written.TabCapacity + 1) | Should -Be 5
         }
 
-        It 'should store a Bool as a boolean even when a string is supplied' {
+        It 'should store a Bool as a boolean' {
             $ConfigFile = Initialize-ConfigTestState -NoFile
 
-            "yes" | Set-ConfigProperty -Property "LogFormWordWrap"
+            $true | Set-ConfigProperty -Property "LogFormWordWrap"
+
+            (Get-WrittenConfig -Path $ConfigFile).LogFormWordWrap | Should -Be $true
+        }
+
+        It 'should turn a false-looking string into $true, which is a trap rather than a promise' -ForEach @(
+            @{ Supplied = "False" }
+            @{ Supplied = "false" }
+            @{ Supplied = "0" }
+            @{ Supplied = "no" }
+        ) {
+            # Documents a latent pitfall, and is deliberately not an endorsement. The Bool branch
+            # of Set-ConfigProperty casts with [bool], which is PowerShell truthiness rather than
+            # parsing: every non-empty string is $true, so a value that means "no" becomes "yes".
+            #
+            # Unreachable today - every caller of a Bool property passes a real $true/$false, and
+            # a value read back from the config file is already typed by ConvertFrom-Json. It
+            # would bite the first time one arrives as text, from a hand-edited file or a control
+            # that hands over its string.
+            #
+            # The repository already has the answer in Resolve-StrictBoolean, which parses instead
+            # of guessing and returns $null when it cannot vouch for the value. Switching this
+            # branch to it is a behaviour change (today "no" stores $true; afterwards it would
+            # need a deliberate fallback), so it is left for its own change rather than smuggled
+            # into a test-coverage PR. This test is here so that change is a one-line edit with a
+            # failing test to prove it worked.
+            $ConfigFile = Initialize-ConfigTestState -NoFile
+
+            $Supplied | Set-ConfigProperty -Property "LogFormWordWrap"
 
             (Get-WrittenConfig -Path $ConfigFile).LogFormWordWrap | Should -Be $true
         }
