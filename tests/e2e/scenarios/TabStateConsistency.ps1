@@ -12,7 +12,7 @@ function script:Get-E2EUiState {
     return [PSCustomObject]@{
         ConnectionFlag         = [bool]$Script:ConnectionStatus
         ButtonText             = [string]$Elements.ButtonConnectText.Text
-        StatusBar              = [string]$Elements.TextBlockStatusBarConnectionStatus.Text
+        StatusBar              = [string]$Elements.TextBlockStatusBarMessage.Text
         QueryDropdown          = [bool]$Elements.ComboBoxSelectQuery.IsEnabled
         DataConnectionDropdown = [bool]$Elements.ComboBoxSelectDataConnection.IsEnabled
         DisplayName            = [bool]$Elements.TextBoxDisplayName.IsEnabled

@@ -59,17 +59,11 @@
 
                 Set-ActiveTabContext -TabSession $TabSession
 
-                # "Executing Query..." belongs to the tab that started the query, so it follows the
-                # tab on screen: shown when that tab is selected, hidden otherwise. Done here rather
-                # than in Set-ActiveTabContext because this is the only place the VISIBLE tab changes -
-                # async completions repoint context without touching SelectedItem, and driving
-                # visibility from those would flicker the popup for tabs the user is not looking at.
-                Sync-ExecuteQueryPopupVisibility
-
-                # Anything that happened on this tab while it was off screen is reported now, in the
-                # context where it makes sense. Deliberately after Set-ActiveTabContext, so the tab is
-                # fully swapped in before a modal pumps the dispatcher.
-                Show-TabScopedMessage -TabSession $TabSession
+                # Nothing to sync or replay on a tab switch any more (issue #93). "Executing query..."
+                # is now text in this tab's own status bar and its messages are in this tab's own
+                # Messages pane, so both are already correct for whichever tab is selected - there is
+                # no shared floating window to follow the selection, and no queue of held dialogs to
+                # drain, because the pane never needed the message to be dismissed in the first place.
 
                 if (![string]::IsNullOrWhiteSpace($OutgoingTabId) -and $OutgoingTabId -ne $TabSession.Id) {
                     $Script:PreviousActiveTabId = $OutgoingTabId
@@ -83,20 +77,19 @@
                 # Complete-TabMaterialization is idempotent.
                 if (-not $Script:SuppressEditorSync -and -not $TabSession.IsMaterialized) {
                     # First time this restored/deferred tab is opened this session: building its editor
-                    # and reconnecting takes a moment, so show a popup explaining the wait. Complete-
+                    # and reconnecting takes a moment, so say so on its status bar. Complete-
                     # TabMaterialization only runs once per tab (its IsMaterialized guard), so this
-                    # popup only ever appears the first time each tab is opened.
-                    $OpeningPopup = Show-PopupWindow -Message ("Opening tab '{0}', please wait..." -f $TabSession.DisplayName)
-                    if ($null -ne $OpeningPopup) {
-                        $OpeningPopup.Dispatcher.Invoke([System.Action] {}, [System.Windows.Threading.DispatcherPriority]::Render) | Out-Null
-                    }
+                    # only ever appears the first time each tab is opened.
+                    #
+                    # -Render because the next line blocks the UI thread: without a pump the message
+                    # would still be queued when the freeze starts and the bar would show the previous
+                    # state throughout it.
+                    Set-TabStatusMessage -TabSession $TabSession -Message ("Opening tab '{0}', please wait..." -f $TabSession.DisplayName) -Render
                     try {
                         Complete-TabMaterialization -TabSession $TabSession
                     }
                     finally {
-                        if ($null -ne $OpeningPopup) {
-                            $OpeningPopup.Close()
-                        }
+                        Reset-TabStatusMessage -TabSession $TabSession
                     }
                 }
 

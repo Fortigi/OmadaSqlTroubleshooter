@@ -82,15 +82,13 @@ function Restore-TabSessions {
                     $ActiveTab = $RestoredTabs[0]
                 }
 
-                # Materializing (reconnecting) the active tab blocks the UI thread for a bit; show the
-                # same style of popup used elsewhere so startup does not look hung. Only one tab
-                # connects now, so this wraps a single reconnect rather than all of them.
-                $RestoreDataPopup = $null
+                # Materializing (reconnecting) the active tab blocks the UI thread for a bit; say so
+                # on that tab's status bar so startup does not look hung. Only one tab connects now,
+                # so this wraps a single reconnect rather than all of them. -Render for the same
+                # reason the popup pumped: the message must be painted before the thread stops
+                # yielding, or it arrives only once the wait it describes is already over.
                 if ($ActiveTab.PendingAutoConnect) {
-                    $RestoreDataPopup = Show-PopupWindow -Message "Retrieving data, please wait..."
-                    if ($null -ne $RestoreDataPopup) {
-                        $RestoreDataPopup.Dispatcher.Invoke([System.Action] {}, [System.Windows.Threading.DispatcherPriority]::Render) | Out-Null
-                    }
+                    Set-TabStatusMessage -TabSession $ActiveTab -Message "Retrieving data, please wait..." -Render
                 }
                 try {
                     # Selecting the active TabItem fires SelectionChanged -> Complete-TabMaterialization,
@@ -100,8 +98,8 @@ function Restore-TabSessions {
                     Complete-TabMaterialization -TabSession $ActiveTab
                 }
                 finally {
-                    if ($null -ne $RestoreDataPopup) {
-                        $RestoreDataPopup.Close()
+                    if ($ActiveTab.PendingAutoConnect) {
+                        Reset-TabStatusMessage -TabSession $ActiveTab
                     }
                 }
                 return
