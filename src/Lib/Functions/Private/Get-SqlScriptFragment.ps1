@@ -26,7 +26,9 @@ function Get-SqlScriptFragment {
         that need a trustworthy tree check ParseError themselves.
 
     .PARAMETER SqlText
-        The script to parse. Null, empty and whitespace-only input are valid and yield an empty tree.
+        The script to parse. Null, empty and whitespace-only input are valid and yield Status Ok with
+        Fragment $null - there is nothing to inspect, which is not the same as a parser that could not
+        look. Every caller already treats a null Fragment as "nothing to say about this script".
 
     .PARAMETER ParserVersion
         An explicit TSqlNNNParser to use. Omit to take the newest parser the loaded assembly ships.

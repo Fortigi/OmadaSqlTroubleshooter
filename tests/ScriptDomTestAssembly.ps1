@@ -40,9 +40,16 @@ function Get-ScriptDomAssemblyPath {
         return $Cached
     }
 
+    # The archive and the folder it expands into are scratch on every path, so they are cleaned up in
+    # a finally rather than at each exit. There are four ways out of the block below - a hash
+    # mismatch, a missing net8.0 build, an exception, and success - and cleaning up at each of them
+    # meant the two failure paths left a package and an expanded tree behind on every test run.
+    $Package = Join-Path $CacheRoot "package.zip"
+    $Expanded = Join-Path $CacheRoot "expanded"
+
     try {
         New-Item -Path $CacheRoot -ItemType Directory -Force | Out-Null
-        $Package = Join-Path $CacheRoot "package.zip"
+
         # Bounded and terminating on purpose: the point of this helper is to return $null quickly so
         # the caller can mark its tests inconclusive. On a network-restricted agent an unbounded
         # request hangs the whole test run instead.
@@ -50,11 +57,9 @@ function Get-ScriptDomAssemblyPath {
 
         $ActualHash = (Get-FileHash -Path $Package -Algorithm SHA256).Hash.ToLowerInvariant()
         if ($ActualHash -ne $Artifact.Sha256) {
-            Remove-Item -Path $Package -Force -ErrorAction SilentlyContinue
             return $null
         }
 
-        $Expanded = Join-Path $CacheRoot "expanded"
         Expand-Archive -Path $Package -DestinationPath $Expanded -Force
         $Source = Get-ChildItem -Path $Expanded -Filter "Microsoft.SqlServer.TransactSql.ScriptDom.dll" -Recurse |
             Where-Object { $_.Directory.Name -eq "net8.0" } |
@@ -64,12 +69,14 @@ function Get-ScriptDomAssemblyPath {
         }
 
         Copy-Item -Path $Source.FullName -Destination $Cached -Force
-        Remove-Item -Path $Expanded -Recurse -Force -ErrorAction SilentlyContinue
-        Remove-Item -Path $Package -Force -ErrorAction SilentlyContinue
         return $Cached
     }
     catch {
         return $null
+    }
+    finally {
+        Remove-Item -Path $Expanded -Recurse -Force -ErrorAction SilentlyContinue
+        Remove-Item -Path $Package -Force -ErrorAction SilentlyContinue
     }
 }
 
