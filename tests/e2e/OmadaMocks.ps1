@@ -159,12 +159,26 @@ function script:Start-OmadaBackgroundRequest {
 # --- Editor read seam: reproduce the poll-timer contract synchronously -----------------------------
 # The real poll timer sets $Script:Task then invokes the completion block. Invoke-ExecuteQuery reads
 # $Script:Task.Result as a JSON string. We invoke the block inline so execute is fully synchronous.
+#
+# The RESULT DEPENDS ON THE SCRIPT, exactly as the real seam's does. Two callers read the editor and
+# they ask different questions: the execute path evaluates a function returning
+# { fullText, selectedText, ... }, while the debounced validation of issue #61 evaluates
+# "editor.getValue()" and gets back a plain string. Returning the execute payload to both made the
+# validation pass parse "@{fullText=...; selectedText=}" as if it were T-SQL - a marker about a query
+# nobody wrote, produced by the harness rather than by the application.
 function script:Invoke-ExecuteScriptWithResultAsync {
     param(
         $ScriptToExecute,
         $OnCompletedScriptBlock
     )
-    $Script:Task = [pscustomobject]@{ Status = "RanToCompletion"; Result = (Get-E2EEditorPayloadJson) }
+    $Result = if (([string]$ScriptToExecute) -like "*editor.getValue()*" -and ([string]$ScriptToExecute) -notlike "*selectedText*") {
+        [string]$script:E2EEditorText | ConvertTo-Json -Compress
+    }
+    else {
+        Get-E2EEditorPayloadJson
+    }
+
+    $Script:Task = [pscustomobject]@{ Status = "RanToCompletion"; Result = $Result }
     if ($null -ne $OnCompletedScriptBlock) {
         & $OnCompletedScriptBlock $null
     }
