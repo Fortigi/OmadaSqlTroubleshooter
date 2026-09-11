@@ -91,14 +91,11 @@ function New-TabSession {
             TabItem          = $null
             ConnectionStatus = $false
             PendingTask      = $null
-            # The "Executing Query..." window, per tab. Module scope is what it used to be, and that
-            # made one tab's popup appear over every other tab and leaked a window that nothing could
-            # close once a second tab started a query. See Show-ExecuteQueryPopup.
-            ExecutePopup     = $null
-            # Warnings and errors that belong to this tab and were raised while it was off screen.
-            # Shown when the tab is next opened, so a background query's failure does not interrupt
-            # whatever the user is doing on a different tab. See Add-TabScopedMessage.
-            PendingMessages  = [System.Collections.Generic.List[object]]::new()
+            # What this tab's Messages pane is showing: the rows read and completion time of the
+            # current execute, plus any error detail. The list is the source of truth and the pane's
+            # TextBox is a rendering of it. Per tab, so two tabs failing at the same time cannot mix
+            # their output whatever Set-ActiveTabContext is pointing at. See Write-TabMessage.
+            QueryMessages    = [System.Collections.Generic.List[string]]::new()
             CurrentUrl       = $null
             AppConfig        = $(if ($null -ne $RestoreFrom) { $RestoreFrom } else { $DefaultTabConfig })
             RunTimeData      = [PSCustomObject]@{
@@ -127,6 +124,10 @@ function New-TabSession {
                     FullName    = $null
                 }
                 StopWatch                      = $null
+                # Rows the last execute read, carried from Complete-ExecuteQueryResult to
+                # Reset-ExecuteQueryUiState so the Messages pane can summarise every execute -
+                # including the failures that never produce a result to count. See Write-TabMessage.
+                LastRowsRead                   = 0
                 QueryListCache                 = @{
                     QueryList   = $null
                     LastRefresh = Get-Date

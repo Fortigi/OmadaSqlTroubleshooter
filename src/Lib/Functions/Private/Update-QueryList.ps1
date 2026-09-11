@@ -44,7 +44,11 @@ function Update-QueryList {
 
         if (($Script:RunTimeData.QueryListCache.QueryList | Measure-Object).Count -le 0) {
             if (!$NotShowPopupWindow) {
-                $Script:PopUpWindowQueryRefresh = Show-PopupWindow -Message "Refreshing queries..."
+                # No -Render. The popup this replaced used .Show() and pumped nothing, and pumping
+                # here would be a behaviour change, not a port: this runs inside the connect sequence
+                # and from completions, where draining the dispatcher lets the completion poll timer
+                # fire reentrantly and Set-ActiveTabContext repoint the tab mid-refresh.
+                Set-TabStatusMessage -Message "Refreshing queries..."
             }
             $Script:RunTimeData.QueryListCache.QueryList = @()
             if ($Script:AppConfig.MyCreatedQueriesOnly -and $Script:AppConfig.MyUpdatedQueriesOnly -and ![string]::IsNullOrWhiteSpace($Script:AppConfig.IdentityUserName)) {
@@ -114,8 +118,8 @@ function Update-QueryList {
                 "Clear editor because query is not set" | Write-LogOutput -LogType DEBUG
                 Set-EditorValue
             }
-            if ($null -ne $Script:PopUpWindowQueryRefresh) {
-                $Script:PopUpWindowQueryRefresh.Close()
+            if (!$NotShowPopupWindow) {
+                Reset-TabStatusMessage
             }
         }
         else {

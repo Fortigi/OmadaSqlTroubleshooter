@@ -93,6 +93,7 @@ function Invoke-OmadaSqlTroubleshooter {
             AppLogObject        = [System.Collections.ObjectModel.ObservableCollection[string]]::new()
         }
         StopWatch          = $null
+        LastRowsRead       = 0
         LastFormMeasured = Get-Date
         ConfigFile         = [PSCustomObject]@{
             Path = $null

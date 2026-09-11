@@ -4,8 +4,8 @@ $Script:MainForm.Elements.ButtonExecuteQuery.Add_Click({
 
             # While a query is in flight this button reads "Cancel" (Set-ExecuteQueryButtonState), so
             # a click here is a request to stop waiting rather than to execute again. Checked first,
-            # before any of the start-an-execute work below - starting a stopwatch and showing a
-            # popup on the way to cancelling would be exactly backwards.
+            # before any of the start-an-execute work below - starting a stopwatch and announcing an
+            # execute on the way to cancelling would be exactly backwards.
             if ($null -ne (Get-ActiveExecuteQueryRequest)) {
                 "Cancel requested for the running query." | Write-LogOutput
                 Stop-ExecuteQueryRequest
@@ -14,20 +14,24 @@ $Script:MainForm.Elements.ButtonExecuteQuery.Add_Click({
 
             $Script:RunTimeData.StopWatch = [System.Diagnostics.Stopwatch]::StartNew()
 
-            Show-ExecuteQueryPopup
+            # Messages accumulate within one execute and are cleared when the next one starts, so the
+            # pane always describes the run the user just asked for. This also returns the tab control
+            # to Results, so a tab left on Messages by a previous failure does not hide the rows this
+            # run is about to produce.
+            Clear-TabMessage
+            Set-TabStatusMessage -Message "Executing query..."
 
             $Script:MainForm.Elements.ButtonSaveQuery.IsEnabled = $false
             $Script:MainForm.Elements.ButtonExecuteQuery.IsEnabled = $false
             $Script:MainForm.Elements.ButtonShowOutput.IsEnabled = $false
             $Script:MainForm.Elements.ButtonSaveOutputFile.IsEnabled = $false
 
-            # Let the "Executing Query..." popup actually paint before this handler continues.
-            # This used to be Start-Sleep -Milliseconds 100, which cannot work: Start-Sleep parks the
-            # dispatcher thread without pumping it, so the render pass the popup is waiting for never
-            # runs - the window simply froze 100 ms longer with nothing new on screen.
-            # (Show-PopupWindow uses .Show(), not .ShowDialog(), so nothing else pumps for it either.)
+            # Let the "Executing query..." status message actually paint before this handler
+            # continues. This used to be Start-Sleep -Milliseconds 100, which cannot work: Start-Sleep
+            # parks the dispatcher thread without pumping it, so the render pass never runs - the
+            # window simply froze 100 ms longer with nothing new on screen.
             # Invoking an empty action at Background priority drains everything of higher priority
-            # first - Render included - which is exactly the pass that draws the popup.
+            # first - Render included - which is exactly the pass that paints the status bar.
             #
             # Suspended around the pump, and this is not optional. Pumping the dispatcher is exactly
             # what lets the WebViewCompletionPollTimer fire, and a completion drained here runs
@@ -48,12 +52,13 @@ $Script:MainForm.Elements.ButtonExecuteQuery.Add_Click({
             if (!(Test-ConnectionRequirements) -or [string]::IsNullOrWhiteSpace($Script:AppConfig.CurrentSqlQuery.DoId)) {
                 "Omada Url not set or Query not selected, cannot retrieve data!" | Write-LogOutput -LogType WARNING
 
-                # The full teardown, not just the popup. This branch has already disabled Save,
-                # Execute and the output buttons above, and closing the popup left them that way -
-                # so refusing to start an execute took the tab's Execute button with it, for a click
-                # that changed nothing. -SkipStatusBarTime is exactly what it is for: no request was
-                # issued, so there is no elapsed time worth showing.
+                # The full teardown. This branch has already disabled Save, Execute and the output
+                # buttons above, and leaving them that way meant refusing to start an execute took the
+                # tab's Execute button with it, for a click that changed nothing. -SkipStatusBarTime
+                # is exactly what it is for: no request was issued, so there is no elapsed time worth
+                # showing and no execute to summarise.
                 Reset-ExecuteQueryUiState -SkipStatusBarTime
+                Set-TabStatusMessage -Message "Cannot execute: no tenant URL or no query selected"
                 Restore-MainFormFocus
             }
             else {

@@ -181,29 +181,26 @@ function script:New-E2EConnectedTab {
     return (Get-ActiveTabSession)
 }
 
-function script:Test-E2EExecutePopupClosed {
+function script:Test-E2EExecuteStatusSettled {
     <#
-    Whether no tab is still showing an "Executing Query..." popup.
+    Whether no tab is still claiming a query is running.
 
-    Asserted across every tab rather than just the active one, and that matters: the popup used to be
-    a single module-scope slot, and a second execute overwrote it - orphaning the first tab's window
-    so nothing could ever close it. A check that only looked at the active tab would miss exactly that.
+    Checked across every tab rather than just the active one, and that matters: what this replaced was
+    a single module-scope popup slot, and a second execute overwrote it - orphaning the first tab's
+    window so nothing could ever close it. A check that only looked at the active tab would miss
+    exactly that class of bug, and a per-tab status bar can still reproduce it if a completion ever
+    writes to the tab it is standing on rather than the tab it is acting for.
 
-    These assertions used to read $Script:PopupWindowExecuteQuery, which no longer exists. That is not
-    a compile error in PowerShell - it is simply always $null - so they would have kept passing while
-    testing nothing at all.
+    "Settled" means the bar has moved on from "Executing query...". Every terminal path - success,
+    failure and cancellation alike - runs Reset-ExecuteQueryUiState and then writes an outcome, so a
+    tab left on the executing message is a tab whose teardown did not happen.
     #>
     foreach ($Tab in @($Script:Tabs)) {
-        if ($null -ne $Tab -and $null -ne $Tab.ExecutePopup) {
-            return $false
+        if ($null -eq $Tab -or $null -eq $Tab.Elements -or $null -eq $Tab.Elements.TextBlockStatusBarMessage) {
+            continue
         }
-    }
 
-    # Clearing the tab's slot is not the same as closing the window, and the regression being guarded
-    # against is exactly a window that nobody closed. Asserting only the slot passes a build in which
-    # Close() is never called - verified by mutation, which is why this second check exists.
-    foreach ($Popup in @($script:E2EExecutePopups)) {
-        if ($null -ne $Popup -and -not $Popup.Closed) {
+        if ([string]$Tab.Elements.TextBlockStatusBarMessage.Text -eq "Executing query...") {
             return $false
         }
     }
@@ -366,9 +363,9 @@ function script:Clear-E2EPopups {
 }
 
 function script:Clear-E2EExecutePopupHistory {
-    # Reset per case. Without it a window a previous case legitimately left open - one whose query is
-    # still in flight when that case ends - fails the NEXT case's "nothing was left open" check.
-    $script:E2EExecutePopups.Clear()
+    # Reset per case. Without it the messages a previous case legitimately left behind - including one
+    # whose query is still in flight when that case ends - are read by the NEXT case's assertions.
+    $script:E2EPopupMessages.Clear()
 }
 
 function script:Get-E2EPopups {

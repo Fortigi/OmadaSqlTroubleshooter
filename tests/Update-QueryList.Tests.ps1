@@ -66,9 +66,19 @@ BeforeAll {
 
     function Set-EditorValue { }
 
-    function Show-PopupWindow {
-        param($Message)
-        return $null
+    # Records rather than paints: the refresh announces itself on the tab's status bar now that the
+    # floating popup is gone (issue #93), and these tests are about the request, not the bar.
+    $script:StatusMessages = [System.Collections.Generic.List[string]]::new()
+    function Set-TabStatusMessage {
+        param([string]$Message, $TabSession, [switch]$Render)
+        $script:StatusMessages.Add([string]$Message)
+    }
+
+    # The refresh reverts the bar to the connection state when it finishes rather than leaving
+    # "Queries refreshed" sitting where the user looks to find out whether they are connected.
+    function Reset-TabStatusMessage {
+        param($TabSession)
+        $script:StatusMessages.Add("<reset>")
     }
 
     function Get-SqlTroubleShooterView { return $null }
