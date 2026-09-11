@@ -96,7 +96,7 @@ BeforeAll {
         }
 
         $StatusBarElements = @{
-            TextBlockStatusBarConnectionStatus = [PSCustomObject]@{ Name = "TextBlockStatusBarConnectionStatus"; Text = "Disconnected" }
+            TextBlockStatusBarMessage = [PSCustomObject]@{ Name = "TextBlockStatusBarMessage"; Text = "Disconnected" }
             TextBlockStatusBarDatabaseName     = [PSCustomObject]@{ Name = "TextBlockStatusBarDatabaseName"; Text = "-" }
             TextBlockStatusBarUrl              = [PSCustomObject]@{ Name = "TextBlockStatusBarUrl"; Text = "-" }
             TextBlockStatusBarQueryTime        = [PSCustomObject]@{ Name = "TextBlockStatusBarQueryTime"; Text = "00:00:00.0000000" }
@@ -134,8 +134,8 @@ Describe "Invoke-OmadaPSWebRequestWrapper connection state" {
 
         Invoke-OmadaPSWebRequestWrapper | Out-Null
 
-        $Script:MainForm.Elements.TextBlockStatusBarConnectionStatus.Text | Should -Be "Disconnected"
-        $Script:MainForm.Definition.TextBlockStatusBarConnectionStatus.Text | Should -Be "Disconnected"
+        $Script:MainForm.Elements.TextBlockStatusBarMessage.Text | Should -Be "Disconnected"
+        $Script:MainForm.Definition.TextBlockStatusBarMessage.Text | Should -Be "Disconnected"
     }
 
     It "does not change the connection flag on a successful request" {
