@@ -488,7 +488,9 @@
                                                         <TextBlock Grid.Column="1" x:Name="ImageOutputStatus" Style="{StaticResource ToolbarGlyphStyle}" Text="&#xF232;" />
                                                         <TextBlock Grid.Column="3" x:Name="TextBlockOutputBox" Text="Results:" />
                                                 </Grid>
-                                                <DataGrid x:Name="DataGridQueryResult" Grid.Row="1" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Auto" FontFamily="Consolas" IsReadOnly="True" HorizontalAlignment="Stretch" VerticalAlignment="Stretch" Background="{DynamicResource {x:Static SystemColors.WindowBrushKey}}" AlternationCount="{Binding MyObservableCollection.Count}" MinHeight="200" ScrollViewer.CanContentScroll="True" ScrollViewer.VerticalScrollBarVisibility="Auto" ScrollViewer.HorizontalScrollBarVisibility="Auto" CanUserResizeColumns="True" CanUserReorderColumns="True" CanUserSortColumns="False" Focusable="True" IsTabStop="True" SelectionMode="Extended" SelectionUnit="CellOrRowHeader" ClipboardCopyMode="IncludeHeader">
+                                                <TabControl x:Name="TabControlQueryOutput" Grid.Row="1" HorizontalAlignment="Stretch" VerticalAlignment="Stretch">
+                                                        <TabItem Header="Results">
+                                                <DataGrid x:Name="DataGridQueryResult" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Auto" FontFamily="Consolas" IsReadOnly="True" HorizontalAlignment="Stretch" VerticalAlignment="Stretch" Background="{DynamicResource {x:Static SystemColors.WindowBrushKey}}" AlternationCount="{Binding MyObservableCollection.Count}" MinHeight="200" ScrollViewer.CanContentScroll="True" ScrollViewer.VerticalScrollBarVisibility="Auto" ScrollViewer.HorizontalScrollBarVisibility="Auto" CanUserResizeColumns="True" CanUserReorderColumns="True" CanUserSortColumns="False" Focusable="True" IsTabStop="True" SelectionMode="Extended" SelectionUnit="CellOrRowHeader" ClipboardCopyMode="IncludeHeader">
                                                         <DataGrid.Resources>
                                                                 <Style TargetType="TextBlock">
                                                                         <Setter Property="VerticalAlignment" Value="Center"/>
@@ -621,6 +623,18 @@
                                                                 </ContextMenu>
                                                         </DataGrid.ContextMenu>
                                                 </DataGrid>
+                                                        </TabItem>
+                                                        <TabItem Header="Messages">
+                                                                <!-- A read-only TextBox rather than a TextBlock: issue #93 requires the error
+                                                                     text to be selectable and copyable, which a TextBox gives without any
+                                                                     selection handling of our own. -->
+                                                                <TextBox x:Name="TextBoxQueryMessages" IsReadOnly="True" IsReadOnlyCaretVisible="True"
+                                                                         FontFamily="Consolas" TextWrapping="Wrap" AcceptsReturn="True"
+                                                                         BorderThickness="0" HorizontalAlignment="Stretch" VerticalAlignment="Stretch"
+                                                                         VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Auto"
+                                                                         Background="{DynamicResource {x:Static SystemColors.WindowBrushKey}}" />
+                                                        </TabItem>
+                                                </TabControl>
                                         </Grid>
                                 </Grid>
                                 <StatusBar Height="30" Grid.Row="2" VerticalAlignment="Bottom" HorizontalAlignment="Stretch" Background="Khaki">
@@ -642,7 +656,9 @@
                                                 </ItemsPanelTemplate>
                                         </StatusBar.ItemsPanel>
                                         <StatusBarItem Grid.Column="0">
-                                                <TextBlock Name="TextBlockStatusBarConnectionStatus" Text="Disconnected" />
+                                                <!-- The stretchy column. Carries the most recent state change on this tab -
+                                                     connection, execution, completion - written only by Set-TabStatusMessage. -->
+                                                <TextBlock Name="TextBlockStatusBarMessage" Text="Disconnected" TextTrimming="CharacterEllipsis" />
                                         </StatusBarItem>
                                         <Separator Grid.Column="1" Background="Gray" Opacity="0.50" Margin="2,5,2,5" />
                                         <StatusBarItem Grid.Column="2">

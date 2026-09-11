@@ -80,7 +80,7 @@ E2ESuite -Name "NoReconnectStartup" -Body {
         $RestoredTab = Get-ActiveTabSession
         E2EAssertTrue ($RestoredTab.DisplayName -like "Persisted*") "the persisted tab should be the active tab after restore"
         E2EAssertTrue (-not $Script:ConnectionStatus) "the restored tab must be disconnected"
-        E2EAssertEqual "Disconnected" ([string]$Script:MainForm.Elements.TextBlockStatusBarConnectionStatus.Text) "the status bar must read Disconnected"
+        E2EAssertEqual "Disconnected" ([string]$Script:MainForm.Elements.TextBlockStatusBarMessage.Text) "the status bar must read Disconnected"
     }
 
     E2ECase -Name "the schema push that runs when Monaco finishes loading does not connect a restored tab" -Body {
@@ -123,7 +123,7 @@ E2ESuite -Name "NoReconnectStartup" -Body {
         Get-SqlSchemaObject
         E2EAssertEqual 0 (Get-E2ECallCount) "the navigation-completed schema push must stay quiet after a declined reconnect"
         E2EAssertTrue (-not $Script:ConnectionStatus) "the tab must remain disconnected after declining the prompt"
-        E2EAssertEqual "Disconnected" ([string]$Script:MainForm.Elements.TextBlockStatusBarConnectionStatus.Text) "the status bar must read Disconnected"
+        E2EAssertEqual "Disconnected" ([string]$Script:MainForm.Elements.TextBlockStatusBarMessage.Text) "the status bar must read Disconnected"
     }
 
     E2ECase -Name "accepting the reconnect prompt still connects the tab and retrieves its schema" -Body {

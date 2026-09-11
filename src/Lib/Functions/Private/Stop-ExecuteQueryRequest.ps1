@@ -83,6 +83,12 @@ function Stop-ExecuteQueryRequest {
         "Stopped waiting for the query. It may still be running on the server." | Write-LogOutput -LogType WARNING -SkipDialog
         $Script:MainForm.Elements.TextBlockStatusBarRows | Set-TextBlockText -Text "cancelled"
 
+        # The cancel path never reaches Complete-ExecuteQueryResult, so nothing else would move the
+        # status bar off "Executing query..." - leaving the tab claiming a query was still running
+        # after the user had stopped it. An outcome, not progress, so it stands until the next
+        # execute rather than reverting to the connection state.
+        Set-TabStatusMessage -Message "Query cancelled"
+
         Reset-ExecuteQueryUiState
     }
     catch {
