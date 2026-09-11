@@ -44,7 +44,10 @@ BeforeAll {
             [switch]$NoFile
         )
 
-        $Folder = Join-Path ([System.IO.Path]::GetTempPath()) ("osqConfig_{0}" -f ([guid]::NewGuid().ToString("N")))
+        # Under $TestDrive rather than %TEMP%: Pester removes it after the run, so repeated local
+        # runs do not leave a trail of config folders behind. Still one folder per call, because
+        # $TestDrive is per-file and these tests must not read each other's config.
+        $Folder = Join-Path $TestDrive ("osqConfig_{0}" -f ([guid]::NewGuid().ToString("N")))
         New-Item -Path $Folder -ItemType Directory -Force | Out-Null
         $ConfigFile = Join-Path $Folder -ChildPath "config.json"
 
