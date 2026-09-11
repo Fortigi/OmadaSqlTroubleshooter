@@ -43,7 +43,10 @@ function Get-ScriptDomAssemblyPath {
     try {
         New-Item -Path $CacheRoot -ItemType Directory -Force | Out-Null
         $Package = Join-Path $CacheRoot "package.zip"
-        Invoke-WebRequest -Uri $Artifact.Url -OutFile $Package
+        # Bounded and terminating on purpose: the point of this helper is to return $null quickly so
+        # the caller can mark its tests inconclusive. On a network-restricted agent an unbounded
+        # request hangs the whole test run instead.
+        Invoke-WebRequest -Uri $Artifact.Url -OutFile $Package -TimeoutSec 60 -ErrorAction Stop
 
         $ActualHash = (Get-FileHash -Path $Package -Algorithm SHA256).Hash.ToLowerInvariant()
         if ($ActualHash -ne $Artifact.Sha256) {

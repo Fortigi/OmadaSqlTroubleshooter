@@ -18,6 +18,15 @@ function Get-SqlFragmentDescendant {
         tracked by reference, so a tree that hangs the same node off two properties cannot produce a
         duplicate or a loop.
 
+        THE SET IS BUILT WITH THE DEFAULT COMPARER, AND THAT IS DELIBERATE. ScriptDom's fragments
+        inherit Equals and GetHashCode from System.Object without overriding either, so the default
+        comparer already compares by reference - which is exactly what is wanted here. Naming
+        ReferenceEqualityComparer explicitly would say the same thing and cost the feature its
+        minimum supported runtime: that type arrived in .NET 5, and this module declares PowerShell
+        7.0, which runs on .NET Core 3.1. Get-SqlFragmentDescendant.Tests.ps1 asserts the inheritance
+        this depends on, so a future ScriptDom that did override them fails a test rather than
+        silently merging two distinct nodes.
+
     .PARAMETER Fragment
         The node to walk. Null yields nothing.
 
@@ -49,7 +58,7 @@ function Get-SqlFragmentDescendant {
     }
 
     $Match = [System.Collections.Generic.List[object]]::new()
-    $Seen = [System.Collections.Generic.HashSet[object]]::new([System.Collections.Generic.ReferenceEqualityComparer]::Instance)
+    $Seen = [System.Collections.Generic.HashSet[object]]::new()
 
     # An explicit stack rather than recursion. A deeply nested query would otherwise be limited by
     # PowerShell's recursion depth, and hitting that would turn a valid query into a failed pass.

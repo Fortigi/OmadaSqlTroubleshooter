@@ -135,18 +135,20 @@ function Get-SqlSchemaDiagnostic {
         # specifications that contain it. That is what makes a correlated subquery able to see the
         # outer query's columns - and, deliberately, it also lets a derived table see them, which is
         # more permissive than T-SQL and therefore quieter.
-        # Keyed by reference, explicitly: a ScriptDom node is not a value and two distinct nodes that
-        # happen to describe the same text must never share an entry.
-        $ScopeSource = [System.Collections.Generic.Dictionary[object, object]]::new([System.Collections.Generic.ReferenceEqualityComparer]::Instance)
+        # Keyed by reference: a ScriptDom node is not a value, and two distinct nodes that happen to
+        # describe the same text must never share an entry. The DEFAULT comparer already does that -
+        # ScriptDom's fragments inherit Equals and GetHashCode from System.Object - and saying so with
+        # ReferenceEqualityComparer would cost the feature its minimum supported runtime, since that
+        # type arrived in .NET 5 and this module declares PowerShell 7.0 (.NET Core 3.1).
+        $ScopeSource = [System.Collections.Generic.Dictionary[object, object]]::new()
         foreach ($Specification in $QuerySpecification) {
             $ScopeSource[$Specification] = @(Get-SqlQueryScopeSource -QuerySpecification $Specification -SchemaModel $SchemaModel -ScriptDefined $ScriptDefined)
         }
 
-        $Contained = [System.Collections.Generic.Dictionary[object, object]]::new([System.Collections.Generic.ReferenceEqualityComparer]::Instance)
+        $Contained = [System.Collections.Generic.Dictionary[object, object]]::new()
         foreach ($Specification in $QuerySpecification) {
             $Contained[$Specification] = [System.Collections.Generic.HashSet[object]]::new(
-                [object[]]@(Get-SqlFragmentDescendant -Fragment $Specification -TypeName "QuerySpecification"),
-                [System.Collections.Generic.ReferenceEqualityComparer]::Instance)
+                [object[]]@(Get-SqlFragmentDescendant -Fragment $Specification -TypeName "QuerySpecification"))
         }
 
         foreach ($Specification in $QuerySpecification) {
@@ -539,7 +541,7 @@ function Get-SqlOwnColumnReference {
         $QuerySpecification
     )
 
-    $Nested = [System.Collections.Generic.HashSet[object]]::new([System.Collections.Generic.ReferenceEqualityComparer]::Instance)
+    $Nested = [System.Collections.Generic.HashSet[object]]::new()
 
     foreach ($Inner in @(Get-SqlFragmentDescendant -Fragment $QuerySpecification -TypeName "QuerySpecification")) {
         foreach ($Column in @(Get-SqlFragmentDescendant -Fragment $Inner -TypeName "ColumnReferenceExpression" -IncludeSelf)) {

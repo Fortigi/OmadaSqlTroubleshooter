@@ -15,6 +15,11 @@ $Script:SqlSchemaForm.Elements.ButtonRefreshSqlSchema.Add_Click({
             Reset-SqlSchemaCache
         }
         catch {
-            $_.Exception.Message | Write-LogOutput -LogType ERROR -ErrorObject $_
+            # Write-ContainedErrorLog, not Write-LogOutput -LogType ERROR: the latter ends in
+            # Write-Error under $ErrorActionPreference = Stop, so it THROWS. A click handler is
+            # invoked by WPF and has no caller worth unwinding to, so an uncontained throw here
+            # escapes into the dispatcher's unhandled path and stacks a second dialog on the first.
+            # The user still gets the message, exactly once, and control returns normally.
+            $_.Exception.Message | Write-ContainedErrorLog -ErrorObject $_
         }
     })
