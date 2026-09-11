@@ -167,6 +167,26 @@ Describe "Update-QueryList connection guard" {
         $Script:MainForm.Elements.ButtonShowSqlSchema.IsEnabled | Should -BeFalse
     }
 
+    It "does not leave the status bar stuck on 'Refreshing queries...' when the refresh throws" {
+        # The progress message is transient, and the bar is where the user looks to find out whether
+        # they are connected - so a refresh that fails must not leave its own progress text sitting
+        # there for the rest of the session. The reset used to be on the success path only, past an
+        # early return and inside a function whose outer catch swallows.
+        Initialize-QueryListTestState -Connected $true
+        $script:StatusMessages.Clear()
+
+        # The "my queries" filter is what reaches Get-SqlTroubleShooterView; with it off the throw
+        # below would never be called and the test would pass while exercising nothing.
+        $Script:AppConfig.MyCreatedQueriesOnly = $true
+        $Script:AppConfig.IdentityUserName = "someone@example.com"
+        function Get-SqlTroubleShooterView { throw "tenant unreachable" }
+
+        Update-QueryList
+
+        $script:StatusMessages | Should -Contain "Refreshing queries..."
+        $script:StatusMessages[-1] | Should -Be "<reset>"
+    }
+
     It "refreshes and enables the query controls for a connected tab" {
         Initialize-QueryListTestState -Connected $true
 
