@@ -51,60 +51,28 @@ function Copy-DataGridToClipboard {
         }
         $SelectedRows = @($DataGrid.Items | Where-Object { $SelectedRowSet.Contains($_) })
 
-        $CellValues = [System.Collections.Generic.List[string]]::new()
-        $Lines = [System.Collections.Generic.List[string]]::new()
-
+        $Header = $null
         if ($IncludeHeader) {
-            $Lines.Add((($SelectedColumns | ForEach-Object { "{0}" -f $_.Header }) -join "`t"))
+            $Header = @($SelectedColumns | ForEach-Object { "{0}" -f $_.Header })
         }
 
+        $Rows = [System.Collections.Generic.List[string[]]]::new()
         foreach ($Row in $SelectedRows) {
             $RowValues = [System.Collections.Generic.List[string]]::new()
             foreach ($Column in $SelectedColumns) {
                 $CellInfo = [System.Windows.Controls.DataGridCellInfo]::new($Row, $Column)
                 if ($DataGrid.SelectedCells.Contains($CellInfo)) {
-                    $CellValue = "{0}" -f $Column.OnCopyingCellClipboardContent($Row)
-                    $RowValues.Add($CellValue)
-                    $CellValues.Add($CellValue)
+                    $RowValues.Add(("{0}" -f $Column.OnCopyingCellClipboardContent($Row)))
                 }
             }
-            $Lines.Add(($RowValues -join "`t"))
+            $Rows.Add($RowValues.ToArray())
         }
 
-        $ClipboardText = $Lines -join "`r`n"
-        if ([string]::IsNullOrWhiteSpace($ClipboardText)) {
+        # Everything from here on is string work with no WPF in it, so it lives in
+        # Format-ClipboardText and is covered by tests/Format-ClipboardText.Tests.ps1.
+        $FormattedText = Format-ClipboardText -Row $Rows.ToArray() -Header $Header -OutputFormat $OutputFormat
+        if ([string]::IsNullOrWhiteSpace($FormattedText)) {
             return
-        }
-
-        $AllValuesAreIntegers = ($CellValues | Where-Object { $_ -notmatch "^-?\d+$" }).Count -eq 0
-
-        switch ($OutputFormat) {
-            "SqlArray" {
-                if ($AllValuesAreIntegers) {
-                    $FormattedText = $CellValues -join ",`r`n    "
-                }
-                else {
-                    $EscapedValues = $CellValues | ForEach-Object { ($_ -replace "'", "''") }
-                    $FormattedText = $EscapedValues -join "',`r`n    '"
-                    $FormattedText = "'{0}'" -f $FormattedText
-                }
-                $FormattedText = "(`r`n    {0}`r`n)" -f $FormattedText
-            }
-            "PowerShellArray" {
-                if ($AllValuesAreIntegers) {
-                    $FormattedText = $CellValues -join ", "
-                    $FormattedText = "@({0})" -f $FormattedText
-                }
-                else {
-                    $EscapedValues = $CellValues | ForEach-Object { ($_ -replace "'", "''") }
-                    $FormattedText = $EscapedValues | ForEach-Object { "'{0}'" -f $_ }
-                    $FormattedText = $FormattedText -join ",`r`n    "
-                    $FormattedText = "@(`r`n    {0}`r`n)" -f $FormattedText
-                }
-            }
-            default {
-                $FormattedText = $ClipboardText
-            }
         }
 
         [System.Windows.Clipboard]::SetText($FormattedText)
