@@ -92,6 +92,13 @@ Describe "Get-QueryResultValueKind" {
             Get-QueryResultValueKind -Value "2019-13-45T99:99:99" | Should -Be "String"
         }
 
+        It "never produces Date from refinement, only from a declared date column" {
+            # The asymmetry is deliberate: a bare "2019-01-01" in a string column could be a product
+            # code, so it is left a string. A column DECLARED date carries no such doubt.
+            Get-QueryResultValueKind -Value "2019-01-01" | Should -Be "String"
+            Get-QueryResultValueKind -Value "2019-01-01" -SqlType "date" | Should -Be "Date"
+        }
+
         It "skips refinement entirely when asked to" {
             Get-QueryResultValueKind -Value "2019-11-20T13:55:09" -SkipValueRefinement | Should -Be "String"
         }
@@ -106,6 +113,8 @@ Describe "Get-QueryResultValueKind" {
             @{ SqlType = "decimal(18,2)"; Expected = "Decimal" }
             @{ SqlType = "money"; Expected = "Decimal" }
             @{ SqlType = "float"; Expected = "Float" }
+            @{ SqlType = "date"; Expected = "Date" }
+            @{ SqlType = "datetime"; Expected = "DateTime" }
             @{ SqlType = "datetime2(7)"; Expected = "DateTime" }
             @{ SqlType = "datetimeoffset"; Expected = "DateTimeOffset" }
             @{ SqlType = "time(7)"; Expected = "Time" }

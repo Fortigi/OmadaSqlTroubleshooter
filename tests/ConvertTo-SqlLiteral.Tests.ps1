@@ -209,6 +209,32 @@ Describe "ConvertTo-SqlLiteral" {
         }
     }
 
+    Context "A declared date column is date-only (review of PR #106)" {
+        It "emits the unambiguous yyyyMMdd form, per the mapping table in issue #103" {
+            # "20190101" is the one date literal T-SQL reads identically under every SET DATEFORMAT
+            # and SET LANGUAGE. "2019-01-01" is not, for a datetime column.
+            ConvertTo-SqlLiteral -Value ([datetime]"2019-01-01") -SqlType "date" | Should -BeExactly "'20190101'"
+        }
+
+        It "drops a time part that a date column cannot hold anyway" {
+            ConvertTo-SqlLiteral -Value ([datetime]"2019-01-01T13:55:09") -SqlType "date" | Should -BeExactly "'20190101'"
+        }
+
+        It "still emits a full timestamp for datetime and datetime2" {
+            ConvertTo-SqlLiteral -Value ([datetime]"2019-11-20T13:55:09") -SqlType "datetime" | Should -BeExactly "'2019-11-20T13:55:09.000'"
+            ConvertTo-SqlLiteral -Value ([datetime]"2019-11-20T13:55:09") -SqlType "datetime2(7)" | Should -BeExactly "'2019-11-20T13:55:09.000'"
+        }
+
+        It "is unchanged for a CLR DateTime with no declared type" {
+            ConvertTo-SqlLiteral -Value ([datetime]"2019-01-01") | Should -BeExactly "'2019-01-01T00:00:00.000'"
+        }
+
+        It "renders identically under nl-NL, en-US and tr-TR" {
+            $Actual = Invoke-InEveryCulture -Action { ConvertTo-SqlLiteral -Value ([datetime]"2019-01-01") -SqlType "date" }
+            $Actual | Should -BeExactly "'20190101'"
+        }
+    }
+
     Context "A Boolean kind holding text is never guessed at (review of PR #106)" {
         It "emits 0 for the string 'False' rather than 1" {
             # [bool]'False' is $true in PowerShell, so a plain cast here would emit 1 for a value
@@ -299,6 +325,11 @@ Describe "ConvertTo-SqlLiteral" {
         ) {
             $Literal = ConvertTo-SqlLiteral -Value $Value
             Test-SqlParses -Script ("SELECT * FROM t WHERE c IN ({0});" -f $Literal) | Should -BeNullOrEmpty
+        }
+
+        It "produces a date literal that ScriptDom parses and that CAST reads as a date" {
+            $Literal = ConvertTo-SqlLiteral -Value ([datetime]"2019-01-01") -SqlType "date"
+            Test-SqlParses -Script ("SELECT CAST({0} AS date);" -f $Literal) | Should -BeNullOrEmpty
         }
 
         It "produces an injection literal that parses as exactly one statement, not two" {

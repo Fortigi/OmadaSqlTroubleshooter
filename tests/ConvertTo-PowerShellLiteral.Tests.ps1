@@ -121,6 +121,30 @@ Describe "ConvertTo-PowerShellLiteral" {
         }
     }
 
+    Context "A declared date column is date-only (review of PR #106)" {
+        It "emits a date-only literal rather than a midnight timestamp" {
+            ConvertTo-PowerShellLiteral -Value ([datetime]"2019-01-01") -SqlType "date" -TypedLiteral | Should -BeExactly "[datetime]'2019-01-01'"
+        }
+
+        It "emits a plain quoted date when typed literals are off" {
+            ConvertTo-PowerShellLiteral -Value ([datetime]"2019-01-01") -SqlType "date" | Should -BeExactly "'2019-01-01'"
+        }
+
+        It "still emits a full timestamp for datetime" {
+            ConvertTo-PowerShellLiteral -Value ([datetime]"2019-11-20T13:55:09") -SqlType "datetime" -TypedLiteral | Should -BeExactly "[datetime]'2019-11-20T13:55:09.000'"
+        }
+
+        It "round-trips a date literal to the same date" {
+            $RoundTrip = Invoke-Literal -Literal (ConvertTo-PowerShellLiteral -Value ([datetime]"2019-01-01") -SqlType "date" -TypedLiteral)
+            $RoundTrip | Should -Be ([datetime]"2019-01-01")
+        }
+
+        It "renders identically under nl-NL, en-US and tr-TR" {
+            $Actual = Invoke-InEveryCulture -Action { ConvertTo-PowerShellLiteral -Value ([datetime]"2019-01-01") -SqlType "date" -TypedLiteral }
+            $Actual | Should -BeExactly "[datetime]'2019-01-01'"
+        }
+    }
+
     Context "A Boolean kind holding text is never guessed at (review of PR #106)" {
         It "emits `$false for the string 'False' rather than `$true" {
             # [bool]'False' is $true, so a plain cast would emit $true here. In PowerShell that is

@@ -124,6 +124,14 @@ function ConvertTo-SqlLiteral {
             return $FloatText
         }
 
+        "Date" {
+            # yyyyMMdd, the ISO 8601 basic form. It is the one date literal T-SQL reads identically
+            # under every SET DATEFORMAT and SET LANGUAGE - "2019-01-01" is NOT, for a datetime
+            # column - and it carries no time part to be implicitly converted away.
+            $DateValue = ConvertTo-InvariantDateTime -Value $BaseValue
+            return (Format-SqlStringLiteral -Text $DateValue.ToString("yyyyMMdd", $Invariant) -SqlType $SqlType -NeverPrefix)
+        }
+
         "DateTime" {
             $DateTimeValue = ConvertTo-InvariantDateTime -Value $BaseValue
             return (Format-SqlStringLiteral -Text (Format-InvariantDateTimeText -Value $DateTimeValue) -SqlType $SqlType -NeverPrefix)

@@ -126,6 +126,18 @@ function ConvertTo-PowerShellLiteral {
             return $FloatText
         }
 
+        "Date" {
+            # Date-only, so the literal says what the column holds. A full timestamp here would add
+            # a midnight that is not in the data.
+            $DateValue = ConvertTo-InvariantDateTime -Value $BaseValue
+            $DateText = $DateValue.ToString("yyyy-MM-dd", $Invariant)
+            if ($TypedLiteral.IsPresent) {
+                return "[datetime]'{0}'" -f $DateText
+            }
+
+            return (Format-PowerShellStringLiteral -Text $DateText)
+        }
+
         "DateTime" {
             $DateTimeValue = ConvertTo-InvariantDateTime -Value $BaseValue
             $DateTimeText = Format-InvariantDateTimeText -Value $DateTimeValue

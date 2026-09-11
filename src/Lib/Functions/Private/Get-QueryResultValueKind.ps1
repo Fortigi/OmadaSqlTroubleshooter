@@ -43,8 +43,8 @@
         Resolve from the CLR type alone and skip priority 3 entirely.
 
     .OUTPUTS
-        [string] one of Null, Integer, Decimal, Float, Boolean, DateTime, DateTimeOffset, Time,
-        Guid, Binary, String.
+        [string] one of Null, Integer, Decimal, Float, Boolean, Date, DateTime, DateTimeOffset,
+        Time, Guid, Binary, String.
 
     .EXAMPLE
         Get-QueryResultValueKind -Value 900
@@ -176,7 +176,10 @@ function Get-SqlTypeNameKind {
         "smallmoney" { return "Decimal" }
         "float" { return "Float" }
         "real" { return "Float" }
-        "date" { return "DateTime" }
+        # Date, not DateTime: a date column has no time part, and emitting one forces an implicit
+        # conversion on the server. Only a DECLARED date reaches this - value refinement never
+        # produces Date, because a bare "2019-01-01" in a string column is not safely a date.
+        "date" { return "Date" }
         "datetime" { return "DateTime" }
         "datetime2" { return "DateTime" }
         "smalldatetime" { return "DateTime" }
