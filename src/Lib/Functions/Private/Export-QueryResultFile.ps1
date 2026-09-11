@@ -38,10 +38,13 @@ function Export-QueryResultFile {
         [string]$Path
     )
 
-    # A result with no rows at all - $null, or a wrapper without the "d.rows" shape - is an empty
-    # export, not a failure. The Where-Object is doing real work and is not defensive noise:
-    # @($null) is an array of one $null, not an empty array, and Export-Csv refuses a null
-    # -InputObject, so without it "nothing to save" writes an error record instead of a file.
+    # The rows, for the two row-based formats below. A result with no rows at all - $null, or a
+    # wrapper without the "d.rows" shape - becomes an empty set here, so CSV and plain text write
+    # an empty export rather than failing. The Where-Object is doing real work and is not
+    # defensive noise: @($null) is an array of one $null, not an empty array, and Export-Csv
+    # refuses a null -InputObject, so without it "nothing to save" writes an error record.
+    # JSON and CliXml do not use this - they serialize the whole wrapper as it was given, which
+    # is the point of those two formats.
     $Row = @($QueryResult.d.rows | Where-Object { $null -ne $_ })
 
     if ($Path -like "*.json") {

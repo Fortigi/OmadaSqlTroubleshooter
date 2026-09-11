@@ -127,12 +127,33 @@ jobs:
                 issue_number: open.number,
                 body
               });
-            } else {
-              await github.rest.issues.create({
+              return;
+            }
+
+            // The repository has no 'e2e' label yet. Created explicitly rather than relying on
+            // what issues.create does with an unknown label, because the cost of being wrong is
+            // that the one notification saying the nightly lane is broken never gets filed.
+            try {
+              await github.rest.issues.getLabel({
                 owner: context.repo.owner,
                 repo: context.repo.repo,
-                title,
-                body,
-                labels: ['e2e']
+                name: 'e2e'
+              });
+            } catch (error) {
+              if (error.status !== 404) { throw error; }
+              await github.rest.issues.createLabel({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                name: 'e2e',
+                color: 'b60205',
+                description: 'The scheduled end-to-end suite'
               });
             }
+
+            await github.rest.issues.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title,
+              body,
+              labels: ['e2e']
+            });
