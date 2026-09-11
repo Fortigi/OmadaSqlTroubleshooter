@@ -80,7 +80,8 @@ BeforeAll {
     function Invoke-ExecuteScriptAsync {
         param(
             $ScriptToExecute,
-            $OnCompletedScriptBlock
+            $OnCompletedScriptBlock,
+            [switch]$SkipTrace
         )
         $script:PushedEditorScripts.Add([string]$ScriptToExecute)
         if ($null -ne $OnCompletedScriptBlock) {

@@ -9,10 +9,25 @@ function Invoke-ExecuteScriptAsync {
     [CmdLetBinding()]
     param(
         $ScriptToExecute,
-        $OnCompletedScriptBlock
+        $OnCompletedScriptBlock,
+        [switch]$SkipTrace
     )
     try {
-        $Script:Tracer::WriteLine(("{0}: Function: {1} - Caller: {2}({3}) - Command: {4} - Parameters: {5}" -f $($Script:RunTimeConfig.ApplicationName), $($MyInvocation.MyCommand.Name), $($MyInvocation.ScriptName).Split("\")[-1], $($MyInvocation.ScriptLineNumber), $MyInvocation.Statement, (ConvertTo-RedactedLogString -InputObject $PSBoundParameters -MaxDepth 1)))
+        # SkipTrace exists for one caller: the diagnostics push of issue #61. The preamble below
+        # writes ConvertTo-RedactedLogString -InputObject $PSBoundParameters, and $ScriptToExecute is
+        # the whole JavaScript payload. For a setDiagnostics(...) call that payload carries the
+        # diagnostic messages themselves - the parser's "Incorrect syntax near 'Person'.", the schema
+        # pass naming a tenant's table and column, a rule quoting the user's own alias - so tracing it
+        # copies query-derived identifiers into the trace on every debounced keystroke, which is
+        # exactly what issue #61 section 5 and acceptance criteria 8 and A10 forbid. Redaction does
+        # not help: ConvertTo-RedactedLogString masks credentials and result data, not identifiers
+        # taken from a query.
+        #
+        # Everything else still traces as before; the switch narrows nothing but the one payload that
+        # is made of the user's own text.
+        if (-not $SkipTrace) {
+            $Script:Tracer::WriteLine(("{0}: Function: {1} - Caller: {2}({3}) - Command: {4} - Parameters: {5}" -f $($Script:RunTimeConfig.ApplicationName), $($MyInvocation.MyCommand.Name), $($MyInvocation.ScriptName).Split("\")[-1], $($MyInvocation.ScriptLineNumber), $MyInvocation.Statement, (ConvertTo-RedactedLogString -InputObject $PSBoundParameters -MaxDepth 1)))
+        }
         if ($null -ne $Script:Webview.Object) {
             # CoreWebView2 must be checked too, not just IsLoaded: while a tab is being torn down
             # (e.g. Close All disposing tabs), a focus-driven editor push can land on a WebView2

@@ -346,15 +346,23 @@ function Resolve-SqlSchemaTable {
     .DESCRIPTION
         A two-part name resolves in its own schema or not at all. A one-part name resolves when
         exactly one schema owns it, or - matching SQL Server's usual default and the editor's own
-        resolveTableRef - when dbo owns it among several. A bare name owned by several non-dbo schemas
-        is ambiguous and resolves to the first of them: the point here is only whether the object is
-        known, and "known in some schema" is a true answer to that question.
+        resolveTableRef - when dbo owns it among several.
+
+        A bare name owned by several non-dbo schemas is AMBIGUOUS, and the two callers need different
+        answers about it. The table check only asks whether the object is known, and "known in some
+        schema" is a true answer. The column check would have to pick one of them, and picking
+        arbitrarily means the columns it then validates against may belong to the wrong table - a
+        warning that is wrong in both directions. So the ambiguity is reported rather than hidden, and
+        Get-SqlQueryScopeSource treats such a source as opaque and skips its column checks.
 
     .PARAMETER SchemaModel
         The indexed schema from Get-SqlSchemaModel.
 
     .PARAMETER Identifier
         The name's identifiers, in order.
+
+    .PARAMETER Ambiguous
+        Set to $true when a one-part name was owned by several schemas and none of them is dbo.
 
     .OUTPUTS
         The schema model's table entry, or $null.
@@ -364,8 +372,14 @@ function Resolve-SqlSchemaTable {
         [Parameter(Mandatory = $true)]
         $SchemaModel,
         [Parameter(Mandatory = $true)]
-        $Identifier
+        $Identifier,
+        [Parameter(Mandatory = $false)]
+        [ref]$Ambiguous
     )
+
+    if ($null -ne $Ambiguous) {
+        $Ambiguous.Value = $false
+    }
 
     $Part = @($Identifier)
     $BaseName = [string]$Part[-1].Value
@@ -396,6 +410,12 @@ function Resolve-SqlSchemaTable {
     $Dbo = @($Candidate | Where-Object { $_.Schema -eq "dbo" })
     if ($Dbo.Count -eq 1) {
         return $Dbo[0]
+    }
+
+    # Several non-dbo schemas own this name. The entry returned is one of them, which is enough to
+    # answer "is this object known?" and not enough to answer "what are its columns?".
+    if ($null -ne $Ambiguous) {
+        $Ambiguous.Value = $true
     }
 
     return $Candidate[0]
@@ -503,10 +523,20 @@ function Get-SqlQueryScopeSource {
                 continue
             }
 
-            $Entry = Resolve-SqlSchemaTable -SchemaModel $SchemaModel -Identifier $Identifier
+            $IsAmbiguous = $false
+            $Entry = Resolve-SqlSchemaTable -SchemaModel $SchemaModel -Identifier $Identifier -Ambiguous ([ref]$IsAmbiguous)
+
             if ($null -eq $Entry) {
                 # The table itself is already reported by the table pass. Marking the source opaque
                 # stops the same mistake being reported a second time, once per column.
+                $Source.Add([PSCustomObject]@{ Name = $Name; Entry = $null; Opaque = $true })
+                continue
+            }
+
+            if ($IsAmbiguous) {
+                # A bare name owned by several non-dbo schemas. Which one the query means is not
+                # knowable from the text, so validating columns against the arbitrary pick would be a
+                # guess - and a guess that can be wrong in both directions. Opaque instead.
                 $Source.Add([PSCustomObject]@{ Name = $Name; Entry = $null; Opaque = $true })
                 continue
             }

@@ -49,6 +49,10 @@ BeforeAll {
             "dbo.Contract"         = @("Id int", "PersonId int", "Number nvarchar(20)")
             "graphql.IdentityView" = @("id int", "name nvarchar(50)")
             "audit.Person"         = @("Id int", "ChangedBy nvarchar(50)")
+            # Owned by two schemas, NEITHER of them dbo: a bare "Event" cannot be placed from the
+            # query text alone, and the two have different columns so guessing is visibly wrong.
+            "audit.Event"          = @("Id int", "Actor nvarchar(50)")
+            "graphql.Event"        = @("Id int", "Payload nvarchar(max)")
         }
     }
 
@@ -73,7 +77,7 @@ BeforeAll {
 Describe 'Get-SqlSchemaModel' -Tag 'Unit' {
 
     It 'Should index every table in the response' {
-        $script:SchemaModel.Table.Count | Should -Be 4
+        $script:SchemaModel.Table.Count | Should -Be 6
     }
 
     It 'Should split the column name from its type the way the editor does' {
@@ -217,6 +221,26 @@ Describe 'Get-SqlSchemaDiagnostic' -Tag 'Unit' {
 
         It 'Should skip a three-part name, which this schema says nothing about' {
             (Get-SchemaDiagnosticFor "SELECT x.Whatever FROM OtherDatabase.dbo.Thing x").Count | Should -Be 0
+        }
+
+        It 'Should accept a bare table name owned by several non-dbo schemas' {
+            # The table check only asks whether the object is known, and "known in some schema" is a
+            # true answer to that.
+            (Get-SchemaDiagnosticFor "SELECT e.Actor FROM Event e").Count | Should -Be 0
+        }
+
+        It 'Should skip COLUMN checks for a bare name owned by several non-dbo schemas' {
+            # And the column check asks a question the query text cannot answer: audit.Event has
+            # Actor, graphql.Event has Payload, and nothing says which one "Event" means. Validating
+            # against an arbitrary pick would warn about a column that exists, or accept one that does
+            # not - wrong in both directions. Both of these must therefore be silent.
+            (Get-SchemaDiagnosticFor "SELECT e.Actor FROM Event e").Count | Should -Be 0
+            (Get-SchemaDiagnosticFor "SELECT e.Payload FROM Event e").Count | Should -Be 0
+        }
+
+        It 'Should still check columns for a bare name only one schema owns' {
+            # The discriminating half: the rule above must not switch column checking off generally.
+            (Get-SchemaDiagnosticFor "SELECT c.Nope FROM Contract c").Count | Should -Be 1
         }
 
         It 'Should report a missing table once, not once per column of it' {

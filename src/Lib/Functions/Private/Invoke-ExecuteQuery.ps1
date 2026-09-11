@@ -50,7 +50,10 @@ function Invoke-ExecuteQuery {
                             }
                         }
 
-                        Invoke-ExecuteScriptAsync -ScriptToExecute (ConvertTo-EditorDiagnosticScript -Diagnostic $Private:SyntaxDiagnostic)
+                        # -SkipTrace: the payload IS the diagnostics, and their messages quote the
+                        # user's query. See Invoke-ExecuteScriptAsync for why the preamble cannot see
+                        # this one call (issue #61 acceptance criteria 8 and A10).
+                        Invoke-ExecuteScriptAsync -SkipTrace -ScriptToExecute (ConvertTo-EditorDiagnosticScript -Diagnostic $Private:SyntaxDiagnostic)
 
                         # Not every marker asks a question. Schema warnings never do - they are a guess
                         # against a cache that may be stale - and an Info-level compatibility rule is

@@ -192,7 +192,8 @@ $script:E2EEditorScripts = [System.Collections.Generic.List[string]]::new()
 function script:Invoke-ExecuteScriptAsync {
     param(
         $ScriptToExecute,
-        $OnCompletedScriptBlock
+        $OnCompletedScriptBlock,
+        [switch]$SkipTrace
     )
     $script:E2EEditorScripts.Add([string]$ScriptToExecute)
     $Script:Task = [pscustomobject]@{ Status = "RanToCompletion"; Result = $null }
