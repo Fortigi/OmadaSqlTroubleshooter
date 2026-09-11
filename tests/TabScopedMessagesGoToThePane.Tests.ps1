@@ -71,6 +71,36 @@ Describe "A query failure reaches the pane and not a dialog" {
     }
 }
 
+Describe "An execute starts from a clean slate" {
+    BeforeAll {
+        $Script:ClickSource = Get-Content -Path (Join-Path $Script:SourceRoot -ChildPath "Lib\Events\MainFormTabContent.Elements.ButtonExecuteQuery.ps1") -Raw
+    }
+
+    It "clears the Messages pane" {
+        # Criterion 8's second half: messages clear at the start of the next execute.
+        $Script:ClickSource | Should -Match 'Clear-TabMessage'
+    }
+
+    It "zeroes the row count the summary is written from" {
+        # Reset-ExecuteQueryUiState summarises the execute from $Script:RunTimeData.LastRowsRead, and
+        # cancelling never reaches Complete-ExecuteQueryResult to re-compute it. Without this line a
+        # cancelled run reports the PREVIOUS query's rows as its own - a number that was never read,
+        # which is worse than reporting none.
+        $Script:ClickSource | Should -Match '\$Script:RunTimeData\.LastRowsRead = 0'
+    }
+
+    It "does it before the query is dispatched, not after" {
+        # Ordering matters: zeroing after Invoke-ExecuteQuery would race a completion that had
+        # already written the real count.
+        $Private:ZeroAt = $Script:ClickSource.IndexOf('$Script:RunTimeData.LastRowsRead = 0')
+        $Private:ExecuteAt = $Script:ClickSource.IndexOf('Invoke-ExecuteQuery')
+
+        $Private:ZeroAt | Should -BeGreaterThan -1
+        $Private:ExecuteAt | Should -BeGreaterThan -1
+        $Private:ZeroAt | Should -BeLessThan $Private:ExecuteAt
+    }
+}
+
 Describe "Write-LogOutput draws the line where the issue says it does" {
     BeforeAll {
         $Script:LogSource = Get-Content -Path (Join-Path $Script:SourceRoot -ChildPath "Lib\Functions\Private\Write-LogOutput.ps1") -Raw

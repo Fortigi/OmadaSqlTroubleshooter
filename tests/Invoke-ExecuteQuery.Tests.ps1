@@ -267,6 +267,18 @@ Describe "Reset-ExecuteQueryUiState" {
         $Script:TestTabSession.Elements.TextBoxQueryMessages.Text | Should -Match "Rows read: 3"
     }
 
+    It "reports whatever row count the execute actually recorded, not a fixed one" {
+        # The teardown summarises from LastRowsRead rather than re-deriving rows it cannot see. The
+        # corollary - that the value has to be zeroed when an execute STARTS, or a cancelled run
+        # inherits the previous query's count - is asserted against the click handler in
+        # TabScopedMessagesGoToThePane.Tests.ps1, which is where that code lives.
+        $Script:RunTimeData.LastRowsRead = 1204
+
+        Reset-ExecuteQueryUiState
+
+        ($Script:TestTabSession.QueryMessages -join " ") | Should -Match 'Rows read: 1[.,]204'
+    }
+
     It "does not pull the user to Messages for an execute that merely finished" {
         # Focus follows failure, not completion: a successful query still has to land the user on
         # their data. Only an ERROR moves the selection, and that happens through Write-LogOutput.

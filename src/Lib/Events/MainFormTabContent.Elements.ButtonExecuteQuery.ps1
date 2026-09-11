@@ -19,6 +19,13 @@ $Script:MainForm.Elements.ButtonExecuteQuery.Add_Click({
             # to Results, so a tab left on Messages by a previous failure does not hide the rows this
             # run is about to produce.
             Clear-TabMessage
+
+            # Zeroed with the pane, and for the same reason. Reset-ExecuteQueryUiState summarises the
+            # execute from this value, and cancelling never reaches Complete-ExecuteQueryResult - so a
+            # stale count would survive and the cancelled run would report the PREVIOUS query's rows
+            # as its own. The whole point of the summary is that the number can be trusted.
+            $Script:RunTimeData.LastRowsRead = 0
+
             Set-TabStatusMessage -Message "Executing query..."
 
             $Script:MainForm.Elements.ButtonSaveQuery.IsEnabled = $false

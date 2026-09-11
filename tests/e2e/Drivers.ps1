@@ -362,11 +362,9 @@ function script:Clear-E2EPopups {
     $script:E2EPopupMessages.Clear()
 }
 
-function script:Clear-E2EExecutePopupHistory {
-    # Reset per case. Without it the messages a previous case legitimately left behind - including one
-    # whose query is still in flight when that case ends - are read by the NEXT case's assertions.
-    $script:E2EPopupMessages.Clear()
-}
+# Clear-E2EExecutePopupHistory used to live here and cleared a second list of its own - the execute
+# popups the mock had handed out. There are no popups and no second list any more, so it had become a
+# duplicate of Clear-E2EPopups under a name that described neither. Callers use Clear-E2EPopups.
 
 function script:Get-E2EPopups {
     param(
