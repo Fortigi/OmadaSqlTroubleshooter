@@ -200,6 +200,30 @@ Describe "Format-QueryResultSelection" {
                 Should -BeExactly "@(`r`n    `$null,`r`n    `$null`r`n)"
         }
 
+        It "still warns for PowerShell output, but without the IN-list wording" {
+            # Criterion 6 asks for a warning whenever NULLs are copied. Only the shape that gets
+            # pasted into an IN clause carries that hazard, though, so the others state the fact
+            # without explaining a risk that does not apply to them.
+            Format-QueryResultSelection -Row (New-FixtureRow) -ColumnSchema (New-ColumnSchema -Name "ParentID") -OutputFormat "PowerShellArray" -Setting (New-Setting) | Out-Null
+
+            @(Get-WarningMessage | Where-Object { $_ -match "NULL values in column" }).Count | Should -Be 1
+            @(Get-WarningMessage | Where-Object { $_ -match "silently excludes" }).Count | Should -Be 0
+        }
+
+        It "still warns for a multi-column VALUES constructor, but without the IN-list wording" {
+            # A VALUES constructor is joined to, not pasted into an IN clause.
+            Format-QueryResultSelection -Row (New-FixtureRow) -ColumnSchema (New-ColumnSchema -Name "Id", "ParentID") -OutputFormat "SqlArray" -Setting (New-Setting) | Out-Null
+
+            @(Get-WarningMessage | Where-Object { $_ -match "NULL values in column" }).Count | Should -Be 1
+            @(Get-WarningMessage | Where-Object { $_ -match "silently excludes" }).Count | Should -Be 0
+        }
+
+        It "uses the IN-list wording only for a single-column SQL list" {
+            Format-QueryResultSelection -Row (New-FixtureRow) -ColumnSchema (New-ColumnSchema -Name "ParentID") -OutputFormat "SqlArray" -Setting (New-Setting) | Out-Null
+
+            @(Get-WarningMessage | Where-Object { $_ -match "silently excludes" -and $_ -match "NOT IN" }).Count | Should -Be 1
+        }
+
         It "never emits an empty string in place of a NULL" {
             Format-QueryResultSelection -Row (New-FixtureRow) -ColumnSchema (New-ColumnSchema -Name "ParentID") -OutputFormat "SqlArray" -Setting (New-Setting) |
                 Should -Not -Match "''"

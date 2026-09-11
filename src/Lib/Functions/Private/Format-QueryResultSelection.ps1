@@ -149,9 +149,16 @@ function Format-QueryResultSelection {
     }
 
     if ($NullColumn.Count -gt 0 -and !$SkipNull) {
-        # Worth a warning every time: NULL never matches inside an IN list, and a NOT IN list that
-        # contains one returns no rows at all. Both look like a correct query that found nothing.
-        "The copied selection contains NULL values in column(s): {0}. 'IN (..., NULL)' silently excludes those rows, and 'NOT IN' with a NULL returns no rows at all." -f ($NullColumn -join ", ") | Write-LogOutput -LogType WARNING -SkipDialog
+        # A copied NULL is always worth saying out loud, but only ONE shape carries the IN-list
+        # hazard: a single-column SQL list, which is what gets pasted into an IN clause. A VALUES
+        # constructor is joined to, and a PowerShell array is not SQL at all. Naming the wrong
+        # hazard is worse than naming none - it teaches the reader to distrust the warning.
+        if ($OutputFormat -eq "SqlArray" -and !$IsMultiColumn) {
+            "The copied selection contains NULL values in column(s): {0}. 'IN (..., NULL)' silently excludes those rows, and 'NOT IN' with a NULL returns no rows at all." -f ($NullColumn -join ", ") | Write-LogOutput -LogType WARNING -SkipDialog
+        }
+        else {
+            "The copied selection contains NULL values in column(s): {0}." -f ($NullColumn -join ", ") | Write-LogOutput -LogType WARNING -SkipDialog
+        }
     }
 
     if ($Setting.MaxValues -gt 0 -and $EmittedCount -gt $Setting.MaxValues) {
