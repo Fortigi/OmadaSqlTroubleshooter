@@ -9,6 +9,15 @@ on:
     # 03:41 UTC - well clear of the 01:17 nightly build, so the two never contend for a runner.
     - cron: '41 3 * * *'
   workflow_dispatch: {}
+  # A change to the suite, the mock backend or this workflow is the one case worth spending a
+  # Windows runner on before merge - otherwise a broken harness is only discovered by the next
+  # scheduled run, after the change has already landed. Deliberately not triggered on src/**:
+  # that would put the slow lane on nearly every pull request, which is what the schedule avoids.
+  pull_request:
+    paths:
+      - 'tests/e2e/**'
+      - 'tests/mock/**'
+      - '.github/workflows/e2e.yml'
 
 permissions:
   contents: read
