@@ -35,29 +35,35 @@ function Invoke-ExecuteQuery {
                     if ($Private:ValidationSetting.Enabled -or $Private:ValidationSetting.SchemaEnabled -or $Private:ValidationSetting.OmadaEnabled) {
                         $Private:ValidationResult = Get-SqlDiagnostic -SqlText $Private:TextToValidate -Setting $Private:ValidationSetting
 
+                        # EditorDiagnostic, not SyntaxDiagnostic: this holds what ALL THREE passes
+                        # found. Every marker here goes on screen, and only some of them go on to ask
+                        # the user a question - which is what BlockingDiagnostic below selects. A name
+                        # saying "syntax" would invite the next reader to assume the schema warnings
+                        # had already been filtered out, and they have not.
+                        #
                         # Markers are refreshed either way. A check that could not run clears them:
                         # anything still on screen came from an earlier check of different text, and
                         # a stale squiggle is indistinguishable from a live one.
-                        $Private:SyntaxDiagnostic = @()
+                        $Private:EditorDiagnostic = @()
                         if ($Private:ValidationResult.Status -eq "Ok") {
-                            $Private:SyntaxDiagnostic = $Private:ValidationResult.Diagnostic
+                            $Private:EditorDiagnostic = $Private:ValidationResult.Diagnostic
 
                             # The parser numbered the selection from line 1. The markers go onto the
                             # whole model, so without this every squiggle for an executed selection
                             # lands too high by the height of the text above it.
                             if (![string]::IsNullOrWhiteSpace($Private:SelectionText)) {
-                                $Private:SyntaxDiagnostic = Move-SqlDiagnosticToSelection -Diagnostic $Private:SyntaxDiagnostic -StartLine $Private:EditorData.selectionStartLine -StartColumn $Private:EditorData.selectionStartColumn
+                                $Private:EditorDiagnostic = Move-SqlDiagnosticToSelection -Diagnostic $Private:EditorDiagnostic -StartLine $Private:EditorData.selectionStartLine -StartColumn $Private:EditorData.selectionStartColumn
                             }
                         }
 
-                        Invoke-ExecuteScriptAsync -ScriptToExecute (ConvertTo-EditorDiagnosticScript -Diagnostic $Private:SyntaxDiagnostic)
+                        Invoke-ExecuteScriptAsync -ScriptToExecute (ConvertTo-EditorDiagnosticScript -Diagnostic $Private:EditorDiagnostic)
 
                         # Not every marker asks a question. Schema warnings never do - they are a guess
                         # against a cache that may be stale - and an Info-level compatibility rule is
                         # an observation about naming, not a reason to stop. Only a completed check can
                         # ask at all: one that did not run has nothing to warn about and must not stand
                         # between the user and their query.
-                        $Private:BlockingDiagnostic = @($Private:SyntaxDiagnostic | Where-Object { Test-SqlDiagnosticBlocksExecution -Diagnostic $_ })
+                        $Private:BlockingDiagnostic = @($Private:EditorDiagnostic | Where-Object { Test-SqlDiagnosticBlocksExecution -Diagnostic $_ })
 
                         if ($Private:BlockingDiagnostic.Count -gt 0 -and $Private:ValidationSetting.WarnOnExecuteWithErrors) {
                             "Query has {0} blocking diagnostic(s); asking before executing." -f $Private:BlockingDiagnostic.Count | Write-LogOutput -LogType DEBUG

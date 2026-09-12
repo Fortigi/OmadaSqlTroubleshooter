@@ -352,8 +352,13 @@ function Resolve-SqlSchemaTable {
         answers about it. The table check only asks whether the object is known, and "known in some
         schema" is a true answer. The column check would have to pick one of them, and picking
         arbitrarily means the columns it then validates against may belong to the wrong table - a
-        warning that is wrong in both directions. So the ambiguity is reported rather than hidden, and
-        Get-SqlQueryScopeSource treats such a source as opaque and skips its column checks.
+        warning that is wrong in both directions. So the ambiguity is signalled TO THE CALLER through
+        the optional -Ambiguous reference, and Get-SqlQueryScopeSource acts on it by treating such a
+        source as opaque and skipping its column checks.
+
+        Nothing about the ambiguity reaches the user. It is a reason for this pass to say LESS, not
+        something to tell them about: a bare name their query resolves perfectly well at the server is
+        not a defect, and warning about it would be the pass complaining about its own limits.
 
     .PARAMETER SchemaModel
         The indexed schema from Get-SqlSchemaModel.
