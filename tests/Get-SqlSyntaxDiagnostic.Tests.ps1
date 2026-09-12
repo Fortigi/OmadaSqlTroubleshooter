@@ -395,9 +395,20 @@ Describe 'Update-SqlSyntaxDiagnostic' -Tag 'Unit' {
             $script:PushedEditorScripts.Add([string]$ScriptToExecute)
         }
 
+        # Two jobs. When the text was handed in, reading the editor is a bug and this throws. When it
+        # was not, the block drives the debounced read path with whatever $script:EditorReadTask says
+        # the WebView2 task did - which is how the "could not run" exits below are reached at all.
+        $script:EditorReadTask = $null
+
         function Invoke-ExecuteScriptWithResultAsync {
             param($ScriptToExecute, $OnCompletedScriptBlock)
-            throw "Update-SqlSyntaxDiagnostic must not read the editor when it was handed the text."
+
+            if ($null -eq $script:EditorReadTask) {
+                throw "Update-SqlSyntaxDiagnostic must not read the editor when it was handed the text."
+            }
+
+            $Script:Task = $script:EditorReadTask
+            & $OnCompletedScriptBlock
         }
 
         $script:ValidationSetting = $null
@@ -417,6 +428,7 @@ Describe 'Update-SqlSyntaxDiagnostic' -Tag 'Unit' {
 
     BeforeEach {
         $script:PushedEditorScripts.Clear()
+        $script:EditorReadTask = $null
         $script:ValidationSetting = [PSCustomObject]@{
             Enabled                 = $true
             SchemaEnabled           = $true
@@ -472,6 +484,48 @@ Describe 'Update-SqlSyntaxDiagnostic' -Tag 'Unit' {
         Update-SqlSyntaxDiagnostic -SqlText "SELECT a, FROM dbo.Person"
 
         @($script:PushedEditorScripts).Count | Should -Be 0
+    }
+
+    Context 'When the editor content could not be read' {
+        # The debounced path reads the editor and then validates what came back. Both ways that read
+        # can fail end in "nothing was checked", and this function's whole rule for that case is that
+        # the markers are CLEARED - anything left on screen came from an earlier check of different
+        # text, and the user cannot tell a stale squiggle from a live one.
+        It 'Should clear the markers when the editor read did not complete' {
+            $script:EditorReadTask = [PSCustomObject]@{ Status = "Faulted"; Result = $null }
+
+            Update-SqlSyntaxDiagnostic
+
+            @($script:PushedEditorScripts).Count | Should -Be 1
+            $script:PushedEditorScripts[0] | Should -Be "setDiagnostics([]);"
+        }
+
+        It 'Should clear the markers when the editor returned something unparseable' {
+            # editor.getValue() is expected to come back as JSON. When it does not, ConvertFrom-Json
+            # throws into the catch - which used to log and leave the previous squiggles in place.
+            $script:EditorReadTask = [PSCustomObject]@{ Status = "RanToCompletion"; Result = "{not json" }
+
+            Update-SqlSyntaxDiagnostic
+
+            @($script:PushedEditorScripts).Count | Should -Be 1
+            $script:PushedEditorScripts[0] | Should -Be "setDiagnostics([]);"
+        }
+
+        It 'Should validate normally when the read did succeed' {
+            # So the two assertions above are measuring the failure paths rather than a stub that
+            # clears the markers no matter what.
+            $script:EditorReadTask = [PSCustomObject]@{ Status = "RanToCompletion"; Result = ('"SELECT a, FROM dbo.Person"') }
+            $script:SyntaxResult = [PSCustomObject]@{
+                Status        = "Ok"
+                ParserVersion = "TSql180Parser"
+                Diagnostic    = @([PSCustomObject]@{ Line = 1; Column = 11; EndLine = 1; EndColumn = 15; Severity = "Error"; Message = "Incorrect syntax near 'FROM'."; Source = "T-SQL syntax" })
+            }
+
+            Update-SqlSyntaxDiagnostic
+
+            @($script:PushedEditorScripts).Count | Should -Be 1
+            $script:PushedEditorScripts[0] | Should -Match 'setDiagnostics\(\[\{'
+        }
     }
 }
 
