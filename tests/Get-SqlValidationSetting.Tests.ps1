@@ -7,6 +7,10 @@ BeforeAll {
     $PrivatePath = Join-Path $ParentPath -ChildPath "src\Lib\Functions\Private"
     $Script:SchemaPath = Join-Path $ParentPath -ChildPath "src\Lib\schema\appGlobalConfigSchema.json"
 
+    # The module's one answer to "is this actually a boolean?". Resolve-SqlValidationSwitch delegates
+    # to it rather than parsing for itself, so the real one is dot-sourced here instead of stubbed -
+    # a stub would let these tests agree with a parser the application does not use.
+    . (Join-Path $PrivatePath -ChildPath "Resolve-StrictBoolean.ps1")
     . (Join-Path $PrivatePath -ChildPath "Get-SqlValidationSetting.ps1")
 
     $Script:Tracer = [System.Diagnostics.Trace]
@@ -177,6 +181,18 @@ Describe 'Get-SqlValidationSetting' -Tag 'Unit' {
 
             (Get-SqlValidationSetting).SchemaEnabled | Should -BeFalse
         }
+
+        It 'Should accept <Stored> as <Expected>, which is what Resolve-StrictBoolean adds over a local parser' {
+            # Delegating rather than re-parsing is what buys this: a value stored as 0 or 1 resolves,
+            # and so does one wrapped in a PSObject. A second implementation here would have had to
+            # get both right again.
+            $Script:AppGlobalConfig = [PSCustomObject]@{ EnableSchemaValidation = $Stored }
+
+            (Get-SqlValidationSetting).SchemaEnabled | Should -Be $Expected
+        } -ForEach @(
+            @{ Stored = 0; Expected = $false }
+            @{ Stored = 1; Expected = $true }
+        )
     }
 
     Context 'The per-rule severity overrides' {

@@ -95,10 +95,14 @@ function Resolve-SqlValidationSwitch {
         a user who had just switched it off. Being unable to turn a noisy check off is worse than the
         noise, and it is the failure this whole feature is written to avoid.
 
-        So the value is parsed rather than coerced: a real boolean is taken as it is, the strings
-        "true" and "false" are accepted in any casing, and anything else keeps the schema default.
-        Keeping the DEFAULT rather than falling to $false matters - an unreadable value must not
-        silently disable a check either, and the same rule already governs
+        The parsing itself is Resolve-StrictBoolean's job, not this function's: it is the module's one
+        answer to "is this actually a boolean?", it returns $null rather than guessing, and it already
+        handles the cases a second implementation here would get wrong - a PSObject wrapper, and a 0/1
+        that arrived as a number.
+
+        What is decided HERE is the fallback: an unresolvable value keeps the SCHEMA DEFAULT rather
+        than becoming $false, because a value nobody can read must not silently disable a check any
+        more than it may silently enable one. The same rule already governs
         ValidationDebounceMilliseconds above.
 
     .PARAMETER Property
@@ -119,23 +123,21 @@ function Resolve-SqlValidationSwitch {
     $Default = Get-ConfigSchemaDefault -Property $Property
     $Value = if ($null -eq $Default) { $true } else { [bool]$Default }
 
-    if ($null -eq $Script:AppGlobalConfig -or $null -eq $Script:AppGlobalConfig.$Property) {
+    if ($null -eq $Script:AppGlobalConfig) {
         return $Value
     }
 
-    $Stored = $Script:AppGlobalConfig.$Property
-
-    if ($Stored -is [bool]) {
-        return $Stored
+    $Resolved = Resolve-StrictBoolean -Value $Script:AppGlobalConfig.$Property
+    if ($null -ne $Resolved) {
+        return [bool]$Resolved
     }
 
-    $Parsed = $false
-    if ([bool]::TryParse([string]$Stored, [ref]$Parsed)) {
-        return $Parsed
+    # Absent is the ordinary case for a configuration written before these properties existed, and
+    # says nothing worth logging. A value that is present and unreadable is worth one DEBUG line -
+    # the property name is a setting, never anything taken from the user's query.
+    if ($null -ne $Script:AppGlobalConfig.$Property) {
+        "Configuration property '{0}' is not a boolean; using the default." -f $Property | Write-LogOutput -LogType DEBUG
     }
-
-    # Unreadable. The name is safe to log - it is a setting, not anything from the user's query.
-    "Configuration property '{0}' is not a boolean; using the default." -f $Property | Write-LogOutput -LogType DEBUG
 
     return $Value
 }
