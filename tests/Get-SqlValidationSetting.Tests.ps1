@@ -1,15 +1,23 @@
 #Requires -Version 7.0
-# Tests for the configuration and the graceful-degradation switch of the client-side T-SQL syntax
-# pass (issue #61, acceptance criteria 6 and 7).
+# Tests for the configuration and the graceful-degradation switch of the three client-side validation
+# passes (issue #61, acceptance criteria 6, 7, A7 and A8).
 
 BeforeAll {
     $ParentPath = Split-Path -Path $PSScriptRoot -Parent
     $PrivatePath = Join-Path $ParentPath -ChildPath "src\Lib\Functions\Private"
     $Script:SchemaPath = Join-Path $ParentPath -ChildPath "src\Lib\schema\appGlobalConfigSchema.json"
 
+    # The module's one answer to "is this actually a boolean?". Resolve-SqlValidationSwitch delegates
+    # to it rather than parsing for itself, so the real one is dot-sourced here instead of stubbed -
+    # a stub would let these tests agree with a parser the application does not use.
+    . (Join-Path $PrivatePath -ChildPath "Resolve-StrictBoolean.ps1")
     . (Join-Path $PrivatePath -ChildPath "Get-SqlValidationSetting.ps1")
 
     $Script:Tracer = [System.Diagnostics.Trace]
+
+    # Captured rather than discarded: this function is on the debounced path, so HOW OFTEN it logs
+    # is part of its contract, not just what it says.
+    $script:LoggedMessage = [System.Collections.Generic.List[object]]::new()
 
     function Write-LogOutput {
         param(
@@ -19,7 +27,9 @@ BeforeAll {
             [switch]$SkipDialog,
             [switch]$TabScoped
         )
-        process { }
+        process {
+            $script:LoggedMessage.Add([PSCustomObject]@{ Message = [string]$Message; LogType = $LogType })
+        }
     }
 
     # The real Get-ConfigSchemaDefault reads the module's own schema through Get-ModuleBaseFolder,
@@ -38,6 +48,8 @@ Describe 'Global configuration schema' -Tag 'Unit' {
 
     It 'Should declare <Name> as <Type> with a default of <Default>' -ForEach @(
         @{ Name = 'EnableSyntaxValidation'; Type = 'Bool'; Default = $true }
+        @{ Name = 'EnableSchemaValidation'; Type = 'Bool'; Default = $true }
+        @{ Name = 'EnableOmadaCompatibilityValidation'; Type = 'Bool'; Default = $true }
         @{ Name = 'ValidationDebounceMilliseconds'; Type = 'Int'; Default = 400 }
         @{ Name = 'WarnOnExecuteWithErrors'; Type = 'Bool'; Default = $true }
     ) {
@@ -46,6 +58,16 @@ Describe 'Global configuration schema' -Tag 'Unit' {
         $Property | Should -Not -BeNullOrEmpty -Because "issue #61 section 4 requires '$Name'"
         $Property.Type | Should -Be $Type
         $Property.DefaultValue | Should -Be $Default
+    }
+
+    It 'Should declare OmadaCompatibilityRuleSeverity for the per-rule overrides' {
+        # Issue #61 section 3.6: suppression is configuration, not a code edit. A PSObject because the
+        # value is a set of rule-id/severity pairs, and Add-ConfigProperty gives an attribute-less
+        # PSObject the empty object the issue specifies as its default.
+        $Property = $Script:SchemaProperty | Where-Object { $_.Name -eq 'OmadaCompatibilityRuleSeverity' } | Select-Object -First 1
+
+        $Property | Should -Not -BeNullOrEmpty
+        $Property.Type | Should -Be 'PSObject'
     }
 
     It 'Should declare SqlParserVersion so the parser version is configurable' {
@@ -64,6 +86,8 @@ Describe 'Get-SqlValidationSetting' -Tag 'Unit' {
     BeforeEach {
         $Script:SqlSyntaxValidationAvailable = $true
         $Script:AppGlobalConfig = $null
+        $Script:SqlValidationSettingWarned = $null
+        $script:LoggedMessage.Clear()
     }
 
     Context 'With no stored configuration' {
@@ -71,20 +95,32 @@ Describe 'Get-SqlValidationSetting' -Tag 'Unit' {
             $Setting = Get-SqlValidationSetting
 
             $Setting.Enabled | Should -BeTrue
+            $Setting.SchemaEnabled | Should -BeTrue
+            $Setting.OmadaEnabled | Should -BeTrue
             $Setting.DebounceMilliseconds | Should -Be 400
             $Setting.WarnOnExecuteWithErrors | Should -BeTrue
             $Setting.ParserVersion | Should -BeNullOrEmpty
+            $Setting.RuleSeverity | Should -BeNullOrEmpty
         }
     }
 
     Context 'When the parser is unavailable' {
         # Acceptance criterion 6. The one WARNING is emitted once at startup; from here on the
         # feature is simply off, whatever the user's setting says.
-        It 'Should be disabled even when the user switched validation on' {
+        It 'Should disable every pass even when the user switched them all on' {
+            # All three read the tree the parser produces, so without it none of them can run
+            # (acceptance criteria 6 and A8).
             $Script:SqlSyntaxValidationAvailable = $false
-            $Script:AppGlobalConfig = [PSCustomObject]@{ EnableSyntaxValidation = $true }
+            $Script:AppGlobalConfig = [PSCustomObject]@{
+                EnableSyntaxValidation             = $true
+                EnableSchemaValidation             = $true
+                EnableOmadaCompatibilityValidation = $true
+            }
 
-            (Get-SqlValidationSetting).Enabled | Should -BeFalse
+            $Setting = Get-SqlValidationSetting
+            $Setting.Enabled | Should -BeFalse
+            $Setting.SchemaEnabled | Should -BeFalse
+            $Setting.OmadaEnabled | Should -BeFalse
         }
 
         It 'Should be disabled when availability was never resolved at all' {
@@ -94,12 +130,118 @@ Describe 'Get-SqlValidationSetting' -Tag 'Unit' {
         }
     }
 
-    Context 'When the user has switched the pass off' {
-        # Acceptance criterion 7.
-        It 'Should report the pass as disabled' {
-            $Script:AppGlobalConfig = [PSCustomObject]@{ EnableSyntaxValidation = $false }
+    Context 'When the user has switched a pass off' {
+        # Acceptance criteria 7 and A8: each pass switches off independently of the other two.
+        It 'Should report <Property> as disabled without touching the others' -ForEach @(
+            @{ Property = 'EnableSyntaxValidation'; Off = 'Enabled'; StillOn = @('SchemaEnabled', 'OmadaEnabled') }
+            @{ Property = 'EnableSchemaValidation'; Off = 'SchemaEnabled'; StillOn = @('Enabled', 'OmadaEnabled') }
+            @{ Property = 'EnableOmadaCompatibilityValidation'; Off = 'OmadaEnabled'; StillOn = @('Enabled', 'SchemaEnabled') }
+        ) {
+            $Script:AppGlobalConfig = [PSCustomObject]@{ $Property = $false }
 
-            (Get-SqlValidationSetting).Enabled | Should -BeFalse
+            $Setting = Get-SqlValidationSetting
+            $Setting.$Off | Should -BeFalse
+            foreach ($Other in $StillOn) {
+                $Setting.$Other | Should -BeTrue -Because "switching off '$Property' must not switch off '$Other'"
+            }
+        }
+    }
+
+    Context 'A configuration file a user has hand-edited' {
+        # The settings come out of JSON that a user can edit by hand, and PowerShell casts ANY
+        # non-empty string to $true. A quoted "false" - an easy thing to type - would therefore read
+        # as $true and leave a pass running for someone who had just switched it off. Being unable to
+        # turn a noisy check off is worse than the noise, and it is the failure this whole feature
+        # exists to avoid.
+        It 'Should read a quoted "<Stored>" as <Expected>, not as truthiness' -ForEach @(
+            @{ Stored = 'false'; Expected = $false }
+            @{ Stored = 'False'; Expected = $false }
+            @{ Stored = 'FALSE'; Expected = $false }
+            @{ Stored = 'true'; Expected = $true }
+            @{ Stored = 'True'; Expected = $true }
+        ) {
+            $Script:AppGlobalConfig = [PSCustomObject]@{ EnableSchemaValidation = $Stored }
+
+            (Get-SqlValidationSetting).SchemaEnabled | Should -Be $Expected
+        }
+
+        It 'Should apply the same strictness to <Property>' -ForEach @(
+            @{ Property = 'EnableSyntaxValidation'; Field = 'Enabled' }
+            @{ Property = 'EnableSchemaValidation'; Field = 'SchemaEnabled' }
+            @{ Property = 'EnableOmadaCompatibilityValidation'; Field = 'OmadaEnabled' }
+            @{ Property = 'WarnOnExecuteWithErrors'; Field = 'WarnOnExecuteWithErrors' }
+        ) {
+            $Script:AppGlobalConfig = [PSCustomObject]@{ $Property = 'false' }
+
+            (Get-SqlValidationSetting).$Field | Should -BeFalse -Because "'$Property' must be switchable off from a hand-edited file"
+        }
+
+        It 'Should keep the schema default for a value that is not a boolean at all' {
+            # Not $false: an unreadable value must not silently DISABLE a check either. The same rule
+            # already governs ValidationDebounceMilliseconds.
+            $Script:AppGlobalConfig = [PSCustomObject]@{ EnableSchemaValidation = 'maybe' }
+
+            (Get-SqlValidationSetting).SchemaEnabled | Should -BeTrue
+        }
+
+        It 'Should still accept a real boolean' {
+            $Script:AppGlobalConfig = [PSCustomObject]@{ EnableSchemaValidation = $false }
+
+            (Get-SqlValidationSetting).SchemaEnabled | Should -BeFalse
+        }
+
+        It 'Should complain about a malformed value once per session, not once per debounce tick' {
+            # Get-SqlValidationSetting runs on every debounce tick, every execute and after every
+            # schema push. A line per call would be the log flooding the rest of this feature is
+            # careful to avoid, in service of a message that says the same thing every time.
+            $Script:AppGlobalConfig = [PSCustomObject]@{ EnableSchemaValidation = 'maybe' }
+
+            $null = Get-SqlValidationSetting
+            $null = Get-SqlValidationSetting
+            $null = Get-SqlValidationSetting
+
+            @($script:LoggedMessage | Where-Object { $_.Message -like "*EnableSchemaValidation*" }).Count | Should -Be 1
+        }
+
+        It 'Should still complain separately about a different malformed property' {
+            # Once per PROPERTY, not once per session: a second malformed setting is new information.
+            $Script:AppGlobalConfig = [PSCustomObject]@{ EnableSchemaValidation = 'maybe'; EnableSyntaxValidation = 'perhaps' }
+
+            $null = Get-SqlValidationSetting
+            $null = Get-SqlValidationSetting
+
+            @($script:LoggedMessage).Count | Should -Be 2
+        }
+
+        It 'Should say nothing at all when every value is readable' {
+            # So the assertions above are measuring suppression rather than an accidentally silent stub.
+            $Script:AppGlobalConfig = [PSCustomObject]@{ EnableSchemaValidation = 'false' }
+
+            $null = Get-SqlValidationSetting
+
+            @($script:LoggedMessage).Count | Should -Be 0
+        }
+
+        It 'Should accept <Stored> as <Expected>, which is what Resolve-StrictBoolean adds over a local parser' {
+            # Delegating rather than re-parsing is what buys this: a value stored as 0 or 1 resolves,
+            # and so does one wrapped in a PSObject. A second implementation here would have had to
+            # get both right again.
+            $Script:AppGlobalConfig = [PSCustomObject]@{ EnableSchemaValidation = $Stored }
+
+            (Get-SqlValidationSetting).SchemaEnabled | Should -Be $Expected
+        } -ForEach @(
+            @{ Stored = 0; Expected = $false }
+            @{ Stored = 1; Expected = $true }
+        )
+    }
+
+    Context 'The per-rule severity overrides' {
+        It 'Should pass the stored overrides through untouched' {
+            # Not normalised here: Resolve-OmadaCompatibilityRuleSeverity is the one place that decides
+            # what an override means, and it has each rule's own default to fall back to.
+            $Script:AppGlobalConfig = [PSCustomObject]@{ OmadaCompatibilityRuleSeverity = [PSCustomObject]@{ OMD001 = 'Off' } }
+
+            (Get-SqlValidationSetting).RuleSeverity.OMD001 | Should -Be 'Off'
         }
     }
 
