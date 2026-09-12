@@ -29,9 +29,32 @@ function Get-ScriptDomAssemblyPath {
         return $null
     }
 
+    # An already-installed copy is preferred, but only when it is provably THE PINNED ONE. The
+    # assertions these tests make are about grammar - exact messages, exact columns, which
+    # TSqlNNNParser exists - so running them against whatever happens to be in a developer's Bin
+    # folder would make them non-deterministic in the worst way: green here, red in CI, or green in
+    # both while asserting the wrong thing.
+    #
+    # The module already answers this question at startup, and the two checks are its: the stamp
+    # Install-ScriptDom wrote next to the assembly must record the pinned VERSION, and the file on
+    # disk must still hash to what was recorded when it was installed. Get-ScriptDomStamp is the
+    # module's own reader - reused rather than reimplemented, so a stamp this accepts is a stamp the
+    # application accepts. Anything less falls through to the pinned download below.
     $Installed = Join-Path ([System.Environment]::GetFolderPath("LocalApplicationData")) "OmadaSqlTroubleshooter\Bin\Microsoft.SqlServer.TransactSql.ScriptDom.dll"
     if (Test-Path $Installed -PathType Leaf) {
-        return $Installed
+        . (Join-Path $RepositoryRoot -ChildPath "src\Lib\Functions\Private\Get-ScriptDomStamp.ps1")
+        $Script:ScriptDomStampPath = Join-Path (Split-Path -Path $Installed -Parent) "ScriptDom.pin"
+
+        $Stamp = Get-ScriptDomStamp
+        $InstalledHash = (Get-FileHash -Path $Installed -Algorithm SHA256).Hash.ToLowerInvariant()
+
+        if ($null -ne $Stamp -and
+            $Stamp.Version -eq $Artifact.Version -and
+            $Stamp.Sha256 -eq $InstalledHash) {
+            return $Installed
+        }
+
+        Write-Warning ("The installed ScriptDom assembly does not match the pinned version {0}; the tests will use a verified download instead." -f $Artifact.Version)
     }
 
     $CacheRoot = Join-Path ([System.IO.Path]::GetTempPath()) ("OmadaSqlTroubleshooter.ScriptDom.{0}" -f $Artifact.Version)
