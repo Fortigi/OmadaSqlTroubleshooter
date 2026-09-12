@@ -1,0 +1,166 @@
+name: E2E Suite
+
+# The end-to-end suite launches the real application against the fully mocked Omada backend in
+# tests/mock, so it needs no tenant, no credentials and no interaction - but it does need a
+# Windows runner and it is slow, which is why it runs on a schedule rather than on every push.
+# Trigger it by hand from the Actions tab (or from a PR branch) with "Run workflow".
+on:
+  schedule:
+    # 03:41 UTC - well clear of the 01:17 nightly build, so the two never contend for a runner.
+    - cron: '41 3 * * *'
+  workflow_dispatch: {}
+  # A change to the suite, the mock backend or this workflow is the one case worth spending a
+  # Windows runner on before merge - otherwise a broken harness is only discovered by the next
+  # scheduled run, after the change has already landed. Deliberately not triggered on src/**:
+  # that would put the slow lane on nearly every pull request, which is what the schedule avoids.
+  pull_request:
+    paths:
+      - 'tests/e2e/**'
+      - 'tests/mock/**'
+      - '.github/workflows/e2e.yml'
+
+permissions:
+  contents: read
+  checks: write
+  issues: write
+
+jobs:
+  e2e:
+    name: End-to-end (real app, mocked backend)
+    runs-on: windows-latest
+    timeout-minutes: 30
+    defaults:
+      run:
+        shell: pwsh
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install modules
+        run: ./build/InstallModules.ps1
+
+      # The suite imports the real module, and OmadaSqlTroubleshooter.psm1 refuses to load without
+      # OmadaWeb.PS. Installed here rather than in build/InstallModules.ps1, which exists for the
+      # build tooling: the unit tests dot-source individual functions and never import the module,
+      # so adding a gallery install there would slow every PR validation run for nothing.
+      # The minimum version is the one the module itself enforces on import.
+      - name: Install the OmadaWeb.PS runtime dependency
+        run: |
+          $MinimumVersion = '2026.07.09.9'
+          if (-not (Get-Module -ListAvailable -Name OmadaWeb.PS | Where-Object { $_.Version -ge [version]$MinimumVersion })) {
+            "Installing OmadaWeb.PS >= $MinimumVersion" | Write-Host
+            Install-Module -Name OmadaWeb.PS -MinimumVersion $MinimumVersion -Scope CurrentUser -Force -AllowClobber
+          }
+          $Installed = Get-Module -ListAvailable -Name OmadaWeb.PS | Sort-Object Version -Descending | Select-Object -First 1
+          if ($null -eq $Installed) {
+            throw "OmadaWeb.PS could not be installed; the end-to-end suite cannot import the module."
+          }
+          "Using OmadaWeb.PS {0}" -f $Installed.Version | Write-Host
+
+      - name: Run end-to-end suite
+        run: ./build/build.ps1 -Task E2E
+
+      - name: Check for results
+        id: results
+        if: always()
+        run: |
+          $exists = Test-Path 'buildoutput/E2EResults.xml'
+          "exists=$exists" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+
+      - name: Publish results
+        uses: dorny/test-reporter@v1
+        if: always() && steps.results.outputs.exists == 'True'
+        with:
+          name: E2E Scenarios
+          path: buildoutput/E2EResults.xml
+          reporter: java-junit
+
+      - name: Upload results
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: E2EResults
+          path: buildoutput/E2EResults.xml
+          if-no-files-found: warn
+
+  report-failure:
+    name: Report a failed scheduled run
+    needs: e2e
+    # Only the scheduled lane files an issue. A failed manual run is already in front of whoever
+    # started it, and a red lane nobody is watching is exactly what this job exists to prevent.
+    if: always() && needs.e2e.result == 'failure' && github.event_name == 'schedule'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Open or update the tracking issue
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const title = 'E2E suite is failing';
+            const runUrl = `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`;
+            const body = [
+              `The scheduled end-to-end suite failed on \`${context.sha.substring(0, 7)}\`.`,
+              '',
+              `Run: ${runUrl}`,
+              '',
+              'The suite runs the real application against the mocked backend in `tests/mock`, so',
+              'nothing external can have caused this. Reproduce locally with',
+              '`./build/build.ps1 -Task E2E`.',
+              '',
+              'Before treating it as a regression, check what failed. The scenarios wait on the app',
+              'with fixed timeouts, and a runner under load has produced a batch of timeout',
+              'failures with nothing actually broken. A handful of `Timed out after ...` messages',
+              'is worth a re-run first; anything that failed on an assertion is not.'
+            ].join('\n');
+
+            // Matched on the title alone. Filtering by an 'e2e' label would find nothing until
+            // the label exists in the repository, and a lookup that always comes back empty
+            // means a fresh issue filed every single night instead of one that gets updated.
+            // Paginated rather than capped at one page: the whole point of this lookup is to
+            // update the existing issue, and it would quietly stop doing that the day the
+            // repository passes a hundred open issues.
+            const existing = await github.paginate(github.rest.issues.listForRepo, {
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              state: 'open',
+              per_page: 100
+            });
+            const open = existing.find(issue => issue.title === title && !issue.pull_request);
+
+            if (open) {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: open.number,
+                body
+              });
+              return;
+            }
+
+            // The repository has no 'e2e' label yet. Created explicitly rather than relying on
+            // what issues.create does with an unknown label, because the cost of being wrong is
+            // that the one notification saying the nightly lane is broken never gets filed.
+            try {
+              await github.rest.issues.getLabel({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                name: 'e2e'
+              });
+            } catch (error) {
+              if (error.status !== 404) { throw error; }
+              await github.rest.issues.createLabel({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                name: 'e2e',
+                color: 'b60205',
+                description: 'The scheduled end-to-end suite'
+              });
+            }
+
+            await github.rest.issues.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title,
+              body,
+              labels: ['e2e']
+            });

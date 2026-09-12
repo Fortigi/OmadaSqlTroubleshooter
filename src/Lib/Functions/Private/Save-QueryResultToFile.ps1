@@ -124,18 +124,10 @@ function Save-QueryResultToFile {
             if ($null -eq $Script:RunTimeConfig.OutputFileName) {
                 return
             }
-            elseif ($Script:RunTimeConfig.OutputFileName -like "*.json") {
-                $QueryResult | ConvertTo-Json -Depth 15 | Set-Content $Script:RunTimeConfig.OutputFileName -Encoding UTF8
-            }
-            elseif ($Script:RunTimeConfig.OutputFileName -like "*.csv") {
-                $QueryResult.d.rows | Export-Csv -Path $Script:RunTimeConfig.OutputFileName -Delimiter ";" -NoTypeInformation -Encoding UTF8
-            }
-            elseif ($Script:RunTimeConfig.OutputFileName -like "*.xml") {
-                $QueryResult | Export-Clixml -Path $Script:RunTimeConfig.OutputFileName -Depth 15
-            }
-            else {
-                ($QueryResult.d.rows | Format-Table -AutoSize | Out-String -Width 10000000).Trim() | Set-Content $Script:RunTimeConfig.OutputFileName -Encoding UTF8
-            }
+
+            # The format dispatch itself lives in Export-QueryResultFile, which touches no dialog,
+            # form or config state and is therefore covered by tests/Export-QueryResultFile.Tests.ps1.
+            Export-QueryResultFile -QueryResult $QueryResult -Path $Script:RunTimeConfig.OutputFileName
 
             "Output file saved!" | Write-LogOutput -LogType DEBUG
             Split-Path $Script:RunTimeConfig.OutputFileName | Set-ConfigProperty -Property "LastOutputFolder"
