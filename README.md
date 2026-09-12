@@ -450,6 +450,10 @@ privacy statement is a bug.
 
 Contributions are welcome! If you have ideas for improvements or bug fixes, feel free to open a pull request on [GitHub](https://github.com/Fortigi/OmadaSqlTroubleshooter).
 
+Please read [CONTRIBUTING.md](CONTRIBUTING.md) first — it covers where the tests live, how to run
+them, how a pull request gets validated, and the one rule we ask every change to follow: **every
+bug fix ships with the test that would have caught it**.
+
 ## RELATED LINKS
 
 [`OmadaWeb.PS`](https://github.com/Fortigi/OmadaWeb.PS)
