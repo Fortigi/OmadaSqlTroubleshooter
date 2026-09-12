@@ -34,11 +34,18 @@ function Invoke-ExecuteScriptAsync {
         # The length is kept because it is the part that is actually useful when debugging this seam:
         # an empty push, a truncated one, or a schema that grew unexpectedly all show up in it, and
         # none of them needs the text.
+        #
+        # $MyInvocation.Statement is dropped from this one trace line for the same reason, and it is
+        # the subtler half. It is the SOURCE TEXT of the calling statement, so shape-tracing the
+        # parameters would still leave the guarantee resting on every call site happening to pass a
+        # variable rather than a literal - true today, and not something the code enforces. Without
+        # it the guarantee is unconditional. Caller and line number still say exactly which push this
+        # was, which is what the field was being read for.
         $Private:TracedParameter = [Ordered]@{
             ScriptToExecute        = "<{0} characters>" -f ([string]$ScriptToExecute).Length
             OnCompletedScriptBlock = if ($null -eq $OnCompletedScriptBlock) { "<none>" } else { "<scriptblock>" }
         }
-        $Script:Tracer::WriteLine(("{0}: Function: {1} - Caller: {2}({3}) - Command: {4} - Parameters: {5}" -f $($Script:RunTimeConfig.ApplicationName), $($MyInvocation.MyCommand.Name), $($MyInvocation.ScriptName).Split("\")[-1], $($MyInvocation.ScriptLineNumber), $MyInvocation.Statement, (ConvertTo-RedactedLogString -InputObject $Private:TracedParameter -MaxDepth 1)))
+        $Script:Tracer::WriteLine(("{0}: Function: {1} - Caller: {2}({3}) - Parameters: {4}" -f $($Script:RunTimeConfig.ApplicationName), $($MyInvocation.MyCommand.Name), $($MyInvocation.ScriptName).Split("\")[-1], $($MyInvocation.ScriptLineNumber), (ConvertTo-RedactedLogString -InputObject $Private:TracedParameter -MaxDepth 1)))
 
         if ($null -ne $Script:Webview.Object) {
             # CoreWebView2 must be checked too, not just IsLoaded: while a tab is being torn down

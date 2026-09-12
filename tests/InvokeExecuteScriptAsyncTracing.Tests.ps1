@@ -84,27 +84,29 @@ Describe 'Invoke-ExecuteScriptAsync tracing' -Tag 'Unit' {
     }
 
     It 'Should say whether a completion block was supplied, without tracing it' {
-        # Both arguments go through variables, and that is not tidiness. The preamble also writes
-        # $MyInvocation.Statement, which is the SOURCE TEXT of the calling statement - so a literal
-        # written at the call site is traced whatever this function does with its parameters. Every
-        # real call site passes a variable or an expression, so nothing of the user's reaches it;
-        # writing the literal here would fail this test for the test's own reason.
-        $Script = "setTheme('dark');"
-        $Completion = { "Zqx7Confidential" }
-
-        Invoke-ExecuteScriptAsync -ScriptToExecute $Script -OnCompletedScriptBlock $Completion
+        Invoke-ExecuteScriptAsync -ScriptToExecute "setTheme('dark');" -OnCompletedScriptBlock { "Zqx7Confidential" }
 
         [RecordingTracer]::Line[0] | Should -Match '<scriptblock>'
         [RecordingTracer]::Line[0] | Should -Not -Match 'Zqx7'
     }
 
-    It 'Should not trace a payload built at the call site either' {
-        # The production call sites all look like this: an expression, never a literal. Asserted so
-        # the guarantee is stated for the shape the application actually uses.
-        $Table = "Zqx7SecretTable"
-        Invoke-ExecuteScriptAsync -ScriptToExecute ("setEditorValue('SELECT * FROM dbo.{0}');" -f $Table)
+    It 'Should not trace a payload written as a literal at the call site' {
+        # The case that decides whether the guarantee is unconditional. The preamble every other
+        # function here opens with also writes $MyInvocation.Statement - the SOURCE TEXT of the
+        # calling statement - so shape-tracing the parameters alone would leave the promise resting
+        # on every call site happening to pass a variable rather than a literal. True of every call
+        # site today, and nothing in the code enforces it. This call deliberately does the opposite:
+        # the payload is written inline, and none of it may appear.
+        Invoke-ExecuteScriptAsync -ScriptToExecute "setEditorValue('SELECT * FROM dbo.Zqx7SecretTable');"
 
         [RecordingTracer]::Line[0] | Should -Not -Match 'Zqx7'
+        [RecordingTracer]::Line[0] | Should -Not -Match 'SELECT'
+    }
+
+    It 'Should still name the caller and the line, which is what the statement text was read for' {
+        Invoke-ExecuteScriptAsync -ScriptToExecute "setTheme('dark');"
+
+        [RecordingTracer]::Line[0] | Should -Match 'Caller: InvokeExecuteScriptAsyncTracing\.Tests\.ps1\(\d+\)'
     }
 
     It 'Should cope with a null payload rather than throwing on its length' {

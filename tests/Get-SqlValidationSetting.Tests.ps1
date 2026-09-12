@@ -135,6 +135,50 @@ Describe 'Get-SqlValidationSetting' -Tag 'Unit' {
         }
     }
 
+    Context 'A configuration file a user has hand-edited' {
+        # The settings come out of JSON that a user can edit by hand, and PowerShell casts ANY
+        # non-empty string to $true. A quoted "false" - an easy thing to type - would therefore read
+        # as $true and leave a pass running for someone who had just switched it off. Being unable to
+        # turn a noisy check off is worse than the noise, and it is the failure this whole feature
+        # exists to avoid.
+        It 'Should read a quoted "<Stored>" as <Expected>, not as truthiness' -ForEach @(
+            @{ Stored = 'false'; Expected = $false }
+            @{ Stored = 'False'; Expected = $false }
+            @{ Stored = 'FALSE'; Expected = $false }
+            @{ Stored = 'true'; Expected = $true }
+            @{ Stored = 'True'; Expected = $true }
+        ) {
+            $Script:AppGlobalConfig = [PSCustomObject]@{ EnableSchemaValidation = $Stored }
+
+            (Get-SqlValidationSetting).SchemaEnabled | Should -Be $Expected
+        }
+
+        It 'Should apply the same strictness to <Property>' -ForEach @(
+            @{ Property = 'EnableSyntaxValidation'; Field = 'Enabled' }
+            @{ Property = 'EnableSchemaValidation'; Field = 'SchemaEnabled' }
+            @{ Property = 'EnableOmadaCompatibilityValidation'; Field = 'OmadaEnabled' }
+            @{ Property = 'WarnOnExecuteWithErrors'; Field = 'WarnOnExecuteWithErrors' }
+        ) {
+            $Script:AppGlobalConfig = [PSCustomObject]@{ $Property = 'false' }
+
+            (Get-SqlValidationSetting).$Field | Should -BeFalse -Because "'$Property' must be switchable off from a hand-edited file"
+        }
+
+        It 'Should keep the schema default for a value that is not a boolean at all' {
+            # Not $false: an unreadable value must not silently DISABLE a check either. The same rule
+            # already governs ValidationDebounceMilliseconds.
+            $Script:AppGlobalConfig = [PSCustomObject]@{ EnableSchemaValidation = 'maybe' }
+
+            (Get-SqlValidationSetting).SchemaEnabled | Should -BeTrue
+        }
+
+        It 'Should still accept a real boolean' {
+            $Script:AppGlobalConfig = [PSCustomObject]@{ EnableSchemaValidation = $false }
+
+            (Get-SqlValidationSetting).SchemaEnabled | Should -BeFalse
+        }
+    }
+
     Context 'The per-rule severity overrides' {
         It 'Should pass the stored overrides through untouched' {
             # Not normalised here: Resolve-OmadaCompatibilityRuleSeverity is the one place that decides

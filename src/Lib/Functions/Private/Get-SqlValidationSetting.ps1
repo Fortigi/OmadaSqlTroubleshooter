@@ -28,20 +28,9 @@ function Get-SqlValidationSetting {
 
     # No tracer preamble: this is called from the debounced validation path on every idle tick.
 
-    $Enabled = $true
-    if ($null -ne $Script:AppGlobalConfig -and $null -ne $Script:AppGlobalConfig.EnableSyntaxValidation) {
-        $Enabled = [bool]$Script:AppGlobalConfig.EnableSyntaxValidation
-    }
-
-    $SchemaEnabled = $true
-    if ($null -ne $Script:AppGlobalConfig -and $null -ne $Script:AppGlobalConfig.EnableSchemaValidation) {
-        $SchemaEnabled = [bool]$Script:AppGlobalConfig.EnableSchemaValidation
-    }
-
-    $OmadaEnabled = $true
-    if ($null -ne $Script:AppGlobalConfig -and $null -ne $Script:AppGlobalConfig.EnableOmadaCompatibilityValidation) {
-        $OmadaEnabled = [bool]$Script:AppGlobalConfig.EnableOmadaCompatibilityValidation
-    }
+    $Enabled = Resolve-SqlValidationSwitch -Property "EnableSyntaxValidation"
+    $SchemaEnabled = Resolve-SqlValidationSwitch -Property "EnableSchemaValidation"
+    $OmadaEnabled = Resolve-SqlValidationSwitch -Property "EnableOmadaCompatibilityValidation"
 
     # An unavailable parser overrides every setting: all three passes read the tree it produces, so
     # the feature cannot run whatever the user asked for. The single WARNING about that was already
@@ -65,10 +54,7 @@ function Get-SqlValidationSetting {
         }
     }
 
-    $WarnOnExecute = $true
-    if ($null -ne $Script:AppGlobalConfig -and $null -ne $Script:AppGlobalConfig.WarnOnExecuteWithErrors) {
-        $WarnOnExecute = [bool]$Script:AppGlobalConfig.WarnOnExecuteWithErrors
-    }
+    $WarnOnExecute = Resolve-SqlValidationSwitch -Property "WarnOnExecuteWithErrors"
 
     $ParserVersion = $null
     if ($null -ne $Script:AppGlobalConfig -and ![string]::IsNullOrWhiteSpace($Script:AppGlobalConfig.SqlParserVersion)) {
@@ -92,4 +78,64 @@ function Get-SqlValidationSetting {
         ParserVersion           = $ParserVersion
         RuleSeverity            = $RuleSeverity
     }
+}
+
+function Resolve-SqlValidationSwitch {
+    <#
+    .SYNOPSIS
+        Reads one of the validation on/off settings from the global configuration, strictly.
+
+    .DESCRIPTION
+        A plain [bool] cast is the wrong tool for a value that came out of a JSON file a user can
+        hand-edit. PowerShell casts any non-empty string to $true, so a configuration containing
+
+            "EnableSchemaValidation": "false"
+
+        - quoted, which is an easy thing to type - would read as $true and leave the pass running for
+        a user who had just switched it off. Being unable to turn a noisy check off is worse than the
+        noise, and it is the failure this whole feature is written to avoid.
+
+        So the value is parsed rather than coerced: a real boolean is taken as it is, the strings
+        "true" and "false" are accepted in any casing, and anything else keeps the schema default.
+        Keeping the DEFAULT rather than falling to $false matters - an unreadable value must not
+        silently disable a check either, and the same rule already governs
+        ValidationDebounceMilliseconds above.
+
+    .PARAMETER Property
+        The global configuration property to read. Its default comes from the schema, so the default
+        lives in exactly one place.
+
+    .OUTPUTS
+        [bool]
+    #>
+    [CmdLetBinding()]
+    param(
+        [Parameter(Mandatory = $true, Position = 0)]
+        [string]$Property
+    )
+
+    # No tracer preamble: called from the debounced validation path on every idle tick.
+
+    $Default = Get-ConfigSchemaDefault -Property $Property
+    $Value = if ($null -eq $Default) { $true } else { [bool]$Default }
+
+    if ($null -eq $Script:AppGlobalConfig -or $null -eq $Script:AppGlobalConfig.$Property) {
+        return $Value
+    }
+
+    $Stored = $Script:AppGlobalConfig.$Property
+
+    if ($Stored -is [bool]) {
+        return $Stored
+    }
+
+    $Parsed = $false
+    if ([bool]::TryParse([string]$Stored, [ref]$Parsed)) {
+        return $Parsed
+    }
+
+    # Unreadable. The name is safe to log - it is a setting, not anything from the user's query.
+    "Configuration property '{0}' is not a boolean; using the default." -f $Property | Write-LogOutput -LogType DEBUG
+
+    return $Value
 }
