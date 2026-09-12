@@ -15,6 +15,10 @@ BeforeAll {
 
     $Script:Tracer = [System.Diagnostics.Trace]
 
+    # Captured rather than discarded: this function is on the debounced path, so HOW OFTEN it logs
+    # is part of its contract, not just what it says.
+    $script:LoggedMessage = [System.Collections.Generic.List[object]]::new()
+
     function Write-LogOutput {
         param(
             [Parameter(ValueFromPipeline = $true)]$Message,
@@ -23,7 +27,9 @@ BeforeAll {
             [switch]$SkipDialog,
             [switch]$TabScoped
         )
-        process { }
+        process {
+            $script:LoggedMessage.Add([PSCustomObject]@{ Message = [string]$Message; LogType = $LogType })
+        }
     }
 
     # The real Get-ConfigSchemaDefault reads the module's own schema through Get-ModuleBaseFolder,
@@ -80,6 +86,8 @@ Describe 'Get-SqlValidationSetting' -Tag 'Unit' {
     BeforeEach {
         $Script:SqlSyntaxValidationAvailable = $true
         $Script:AppGlobalConfig = $null
+        $Script:SqlValidationSettingWarned = $null
+        $script:LoggedMessage.Clear()
     }
 
     Context 'With no stored configuration' {
@@ -180,6 +188,38 @@ Describe 'Get-SqlValidationSetting' -Tag 'Unit' {
             $Script:AppGlobalConfig = [PSCustomObject]@{ EnableSchemaValidation = $false }
 
             (Get-SqlValidationSetting).SchemaEnabled | Should -BeFalse
+        }
+
+        It 'Should complain about a malformed value once per session, not once per debounce tick' {
+            # Get-SqlValidationSetting runs on every debounce tick, every execute and after every
+            # schema push. A line per call would be the log flooding the rest of this feature is
+            # careful to avoid, in service of a message that says the same thing every time.
+            $Script:AppGlobalConfig = [PSCustomObject]@{ EnableSchemaValidation = 'maybe' }
+
+            $null = Get-SqlValidationSetting
+            $null = Get-SqlValidationSetting
+            $null = Get-SqlValidationSetting
+
+            @($script:LoggedMessage | Where-Object { $_.Message -like "*EnableSchemaValidation*" }).Count | Should -Be 1
+        }
+
+        It 'Should still complain separately about a different malformed property' {
+            # Once per PROPERTY, not once per session: a second malformed setting is new information.
+            $Script:AppGlobalConfig = [PSCustomObject]@{ EnableSchemaValidation = 'maybe'; EnableSyntaxValidation = 'perhaps' }
+
+            $null = Get-SqlValidationSetting
+            $null = Get-SqlValidationSetting
+
+            @($script:LoggedMessage).Count | Should -Be 2
+        }
+
+        It 'Should say nothing at all when every value is readable' {
+            # So the assertions above are measuring suppression rather than an accidentally silent stub.
+            $Script:AppGlobalConfig = [PSCustomObject]@{ EnableSchemaValidation = 'false' }
+
+            $null = Get-SqlValidationSetting
+
+            @($script:LoggedMessage).Count | Should -Be 0
         }
 
         It 'Should accept <Stored> as <Expected>, which is what Resolve-StrictBoolean adds over a local parser' {

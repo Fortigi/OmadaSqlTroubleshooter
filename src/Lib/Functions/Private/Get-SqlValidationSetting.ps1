@@ -133,10 +133,24 @@ function Resolve-SqlValidationSwitch {
     }
 
     # Absent is the ordinary case for a configuration written before these properties existed, and
-    # says nothing worth logging. A value that is present and unreadable is worth one DEBUG line -
+    # says nothing worth logging. A value that is present and unreadable is worth ONE DEBUG line -
     # the property name is a setting, never anything taken from the user's query.
+    #
+    # Once per property per session, and that is not a nicety. This function is called on every
+    # debounce tick, on every execute and after every schema push, so a malformed setting would
+    # otherwise write a line per keystroke-pause for the rest of the session - the same log flooding
+    # the rest of this feature is careful to avoid, in service of a message that says the same thing
+    # every time. The setting cannot change without the configuration being rewritten, so the second
+    # line onwards carries no information the first did not.
     if ($null -ne $Script:AppGlobalConfig.$Property) {
-        "Configuration property '{0}' is not a boolean; using the default." -f $Property | Write-LogOutput -LogType DEBUG
+        if ($null -eq $Script:SqlValidationSettingWarned) {
+            $Script:SqlValidationSettingWarned = @{}
+        }
+
+        if (-not $Script:SqlValidationSettingWarned.ContainsKey($Property)) {
+            $Script:SqlValidationSettingWarned[$Property] = $true
+            "Configuration property '{0}' is not a boolean; using the default." -f $Property | Write-LogOutput -LogType DEBUG
+        }
     }
 
     return $Value
