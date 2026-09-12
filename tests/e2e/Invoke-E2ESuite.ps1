@@ -37,6 +37,30 @@ Remove-Item -Path $ResultsPath, $SentinelPath -ErrorAction Ignore
 $TempAppData = Join-Path ([System.IO.Path]::GetTempPath()) ("osqE2E_{0}" -f ([guid]::NewGuid().ToString("N")))
 New-Item -Path $TempAppData -ItemType Directory -Force | Out-Null
 
+function Write-AppOutput {
+    <#
+    .SYNOPSIS
+    Replays whatever the hidden app process wrote, so a failure says why instead of only that it
+    happened.
+    #>
+    param(
+        [Parameter(Mandatory = $true)]
+        [AllowNull()]
+        $Line
+    )
+
+    $Captured = @($Line)
+    "" | Write-Host
+    "--- app output ({0} line(s)) ---" -f $Captured.Count | Write-Host -ForegroundColor Yellow
+    if ($Captured.Count -eq 0) {
+        "(the app process wrote nothing at all)" | Write-Host -ForegroundColor Yellow
+    }
+    else {
+        $Captured | ForEach-Object { $_ | Write-Host }
+    }
+    "--- end app output ---" | Write-Host -ForegroundColor Yellow
+}
+
 $RealAppData = Join-Path ([System.Environment]::GetFolderPath([System.Environment+SpecialFolder]::ApplicationData)) "OmadaSqlTroubleshooter"
 $RealAppDataBefore = if (Test-Path $RealAppData) { (Get-Item $RealAppData).LastWriteTimeUtc } else { $null }
 
@@ -48,23 +72,59 @@ $Command = "Import-Module '$ModulePath' -Force; Invoke-OmadaSqlTroubleshooter -R
 "  results   : $ResultsPath" | Write-Host
 
 $Process = $null
+$AppExitCode = $null
+$AppOutput = [System.Collections.Concurrent.ConcurrentQueue[string]]::new()
+$OutputSubscription = $null
+$ErrorSubscription = $null
 try {
     $ProcessInfo = New-Object System.Diagnostics.ProcessStartInfo
     $ProcessInfo.FileName = "pwsh"
     $ProcessInfo.Arguments = "-STA -NoProfile -NonInteractive -Command `"$Command`""
     $ProcessInfo.UseShellExecute = $false
     $ProcessInfo.CreateNoWindow = $true
+    # Captured rather than inherited. On a developer machine the child's console output reaches
+    # the terminal either way, but under a CI runner it did not - which left a failure reported
+    # as "the automation did not finish" with nothing above it to say why. Both streams are now
+    # collected and replayed by Write-AppOutput whenever the run does not complete cleanly.
+    $ProcessInfo.RedirectStandardOutput = $true
+    $ProcessInfo.RedirectStandardError = $true
     $ProcessInfo.EnvironmentVariables["OMADASQL_E2E_APPDATA"] = $TempAppData
     $ProcessInfo.EnvironmentVariables["OMADASQL_E2E_SCRIPT"] = $AutomationScript
     $ProcessInfo.EnvironmentVariables["OMADASQL_E2E_RESULTS"] = $ResultsPath
 
-    $Process = [System.Diagnostics.Process]::Start($ProcessInfo)
+    $Process = New-Object System.Diagnostics.Process
+    $Process.StartInfo = $ProcessInfo
+    $Process.EnableRaisingEvents = $true
+
+    # Read both streams asynchronously: a synchronous ReadToEnd on one of them deadlocks as soon
+    # as the other fills its 4 KB pipe buffer.
+    $OutputSubscription = Register-ObjectEvent -InputObject $Process -EventName OutputDataReceived -MessageData $AppOutput -Action {
+        if ($null -ne $EventArgs.Data) { $Event.MessageData.Enqueue($EventArgs.Data) }
+    }
+    $ErrorSubscription = Register-ObjectEvent -InputObject $Process -EventName ErrorDataReceived -MessageData $AppOutput -Action {
+        if ($null -ne $EventArgs.Data) { $Event.MessageData.Enqueue("STDERR: " + $EventArgs.Data) }
+    }
+
+    $Process.Start() | Out-Null
+    $Process.BeginOutputReadLine()
+    $Process.BeginErrorReadLine()
+
     if (-not $Process.WaitForExit($TimeoutSeconds * 1000)) {
         try { $Process.Kill($true) } catch { }
+        Write-AppOutput -Line $AppOutput
         throw "E2E run timed out after $TimeoutSeconds seconds (app hung)."
     }
+    # The parameterless overload waits for the async readers to drain as well.
+    $Process.WaitForExit()
+    $AppExitCode = $Process.ExitCode
 }
 finally {
+    foreach ($Subscription in @($OutputSubscription, $ErrorSubscription)) {
+        if ($null -ne $Subscription) {
+            Unregister-Event -SourceIdentifier $Subscription.Name -ErrorAction Ignore
+            Remove-Job -Job $Subscription -Force -ErrorAction Ignore
+        }
+    }
     Remove-Item -Path $TempAppData -Recurse -Force -ErrorAction Ignore
 }
 
@@ -75,7 +135,8 @@ if ($RealAppDataBefore -ne $RealAppDataAfter) {
 }
 
 if (-not (Test-Path $SentinelPath)) {
-    throw "E2E produced no completion sentinel - the automation did not finish (see app output above)."
+    Write-AppOutput -Line $AppOutput
+    throw ("E2E produced no completion sentinel - the automation did not finish (app exit code {0}). The app output is above." -f $AppExitCode)
 }
 
 [xml]$Report = Get-Content -Path $ResultsPath -Raw
