@@ -59,8 +59,30 @@ function Get-ScriptDomAssemblyPath {
 
     $CacheRoot = Join-Path ([System.IO.Path]::GetTempPath()) ("OmadaSqlTroubleshooter.ScriptDom.{0}" -f $Artifact.Version)
     $Cached = Join-Path $CacheRoot "Microsoft.SqlServer.TransactSql.ScriptDom.dll"
+    $CachedHashPath = "{0}.sha256" -f $Cached
+
+    # The same question the installed copy is asked, asked of the cache: is this the file we put
+    # here? A run interrupted mid-copy, or a temp folder something else has been at, otherwise leaves
+    # a truncated assembly that every later run reuses in silence - and the failure it produces looks
+    # like a flaky parser rather than a broken file.
+    #
+    # A sidecar hash rather than an attempted load, for two reasons: loading an assembly cannot be
+    # undone in the session that does it, and the version an assembly reports is not the package
+    # version pinned in the lock, so a load proves less than it appears to.
     if (Test-Path $Cached -PathType Leaf) {
-        return $Cached
+        $Recorded = $null
+        if (Test-Path $CachedHashPath -PathType Leaf) {
+            $Recorded = (Get-Content -Path $CachedHashPath -Raw).Trim()
+        }
+
+        if (![string]::IsNullOrWhiteSpace($Recorded) -and
+            (Get-FileHash -Path $Cached -Algorithm SHA256).Hash.ToLowerInvariant() -eq $Recorded) {
+            return $Cached
+        }
+
+        Write-Warning "The cached ScriptDom assembly is incomplete or does not match what was recorded for it; it will be downloaded again."
+        Remove-Item -Path $Cached -Force -ErrorAction SilentlyContinue
+        Remove-Item -Path $CachedHashPath -Force -ErrorAction SilentlyContinue
     }
 
     # The archive and the folder it expands into are scratch on every path, so they are cleaned up in
@@ -91,7 +113,16 @@ function Get-ScriptDomAssemblyPath {
             return $null
         }
 
-        Copy-Item -Path $Source.FullName -Destination $Cached -Force
+        # Published atomically, so the partial copy the check above exists to catch cannot be created
+        # by this function in the first place: the file only appears at its final name once it is
+        # whole. Detection stays, because an interrupted run is not the only way a temp file goes bad.
+        $Staging = "{0}.tmp" -f $Cached
+        Copy-Item -Path $Source.FullName -Destination $Staging -Force
+
+        (Get-FileHash -Path $Staging -Algorithm SHA256).Hash.ToLowerInvariant() |
+            Set-Content -Path $CachedHashPath -NoNewline
+
+        Move-Item -Path $Staging -Destination $Cached -Force
         return $Cached
     }
     catch {
@@ -100,6 +131,7 @@ function Get-ScriptDomAssemblyPath {
     finally {
         Remove-Item -Path $Expanded -Recurse -Force -ErrorAction SilentlyContinue
         Remove-Item -Path $Package -Force -ErrorAction SilentlyContinue
+        Remove-Item -Path ("{0}.tmp" -f $Cached) -Force -ErrorAction SilentlyContinue
     }
 }
 
