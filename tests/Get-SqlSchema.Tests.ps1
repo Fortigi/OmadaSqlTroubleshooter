@@ -25,6 +25,11 @@ BeforeAll {
     . (Join-Path $PrivatePath -ChildPath "Resolve-OmadaRequestFailure.ps1")
     . (Join-Path $PrivatePath -ChildPath "Invoke-OmadaPSWebRequestWrapper.ps1")
     . (Join-Path $PrivatePath -ChildPath "Write-ContainedErrorLog.ps1")
+    # Get-SqlSchemaObject now takes its cache key from the one place that builds it, which is shared
+    # with the schema validation pass of issue #61: two copies of that string format would be two
+    # chances for the pass to read a different tenant's schema than the editor shows completions for.
+    . (Join-Path $PrivatePath -ChildPath "Get-SqlSchemaModel.ps1")
+    . (Join-Path $PrivatePath -ChildPath "Get-ActiveSqlSchemaModel.ps1")
     . (Join-Path $PrivatePath -ChildPath "Get-SqlSchema.ps1")
 
     . (Join-Path $PSScriptRoot -ChildPath "mock\OmadaMockRouter.ps1")

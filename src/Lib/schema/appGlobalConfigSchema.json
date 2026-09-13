@@ -87,6 +87,20 @@
     "DefaultValue": true
   },
   {
+    "Name": "EnableSchemaValidation",
+    "Type": "Bool",
+    "DefaultValue": true
+  },
+  {
+    "Name": "EnableOmadaCompatibilityValidation",
+    "Type": "Bool",
+    "DefaultValue": true
+  },
+  {
+    "Name": "OmadaCompatibilityRuleSeverity",
+    "Type": "PSObject"
+  },
+  {
     "Name": "ValidationDebounceMilliseconds",
     "Type": "Int",
     "DefaultValue": 400

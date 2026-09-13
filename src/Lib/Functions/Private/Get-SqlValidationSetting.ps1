@@ -4,12 +4,15 @@ function Get-SqlValidationSetting {
         Resolves the effective client-side validation settings from the global configuration.
 
     .DESCRIPTION
-        Three things decide whether the syntax pass runs, and they are resolved in one place so no
-        call site has to repeat them:
+        Three things decide whether a pass runs, and they are resolved in one place so no call site
+        has to repeat them:
 
-          * the user's EnableSyntaxValidation setting;
+          * the user's EnableSyntaxValidation, EnableSchemaValidation and
+            EnableOmadaCompatibilityValidation settings, which are independent of each other
+            (issue #61 acceptance criteria 7 and A8);
           * whether the ScriptDom assembly actually loaded ($Script:SqlSyntaxValidationAvailable,
-            set once at startup by Initialize-OmadaSqlTroubleShooter);
+            set once at startup by Initialize-OmadaSqlTroubleShooter) - all three passes read the
+            same syntax tree, so without a parser none of them can run;
           * the schema defaults, for a configuration file written before these properties existed.
 
         A stored ValidationDebounceMilliseconds that is absent, -1 (the value Add-ConfigProperty
@@ -17,23 +20,25 @@ function Get-SqlValidationSetting {
         rather than to zero, because zero would mean "validate on every keystroke".
 
     .OUTPUTS
-        [PSCustomObject] with Enabled, DebounceMilliseconds, WarnOnExecuteWithErrors and
-        ParserVersion.
+        [PSCustomObject] with Enabled, SchemaEnabled, OmadaEnabled, DebounceMilliseconds,
+        WarnOnExecuteWithErrors, ParserVersion and RuleSeverity.
     #>
     [CmdLetBinding()]
     param()
 
     # No tracer preamble: this is called from the debounced validation path on every idle tick.
 
-    $Enabled = $true
-    if ($null -ne $Script:AppGlobalConfig -and $null -ne $Script:AppGlobalConfig.EnableSyntaxValidation) {
-        $Enabled = [bool]$Script:AppGlobalConfig.EnableSyntaxValidation
-    }
+    $Enabled = Resolve-SqlValidationSwitch -Property "EnableSyntaxValidation"
+    $SchemaEnabled = Resolve-SqlValidationSwitch -Property "EnableSchemaValidation"
+    $OmadaEnabled = Resolve-SqlValidationSwitch -Property "EnableOmadaCompatibilityValidation"
 
-    # An unavailable parser overrides the setting: the feature cannot run, whatever the user asked
-    # for. The single WARNING about that was already emitted at startup.
+    # An unavailable parser overrides every setting: all three passes read the tree it produces, so
+    # the feature cannot run whatever the user asked for. The single WARNING about that was already
+    # emitted at startup.
     if ($Script:SqlSyntaxValidationAvailable -ne $true) {
         $Enabled = $false
+        $SchemaEnabled = $false
+        $OmadaEnabled = $false
     }
 
     $DebounceDefault = Get-ConfigSchemaDefault -Property "ValidationDebounceMilliseconds"
@@ -49,20 +54,104 @@ function Get-SqlValidationSetting {
         }
     }
 
-    $WarnOnExecute = $true
-    if ($null -ne $Script:AppGlobalConfig -and $null -ne $Script:AppGlobalConfig.WarnOnExecuteWithErrors) {
-        $WarnOnExecute = [bool]$Script:AppGlobalConfig.WarnOnExecuteWithErrors
-    }
+    $WarnOnExecute = Resolve-SqlValidationSwitch -Property "WarnOnExecuteWithErrors"
 
     $ParserVersion = $null
     if ($null -ne $Script:AppGlobalConfig -and ![string]::IsNullOrWhiteSpace($Script:AppGlobalConfig.SqlParserVersion)) {
         $ParserVersion = [string]$Script:AppGlobalConfig.SqlParserVersion
     }
 
+    # Passed through as stored, not normalised here: Resolve-OmadaCompatibilityRuleSeverity is the one
+    # place that decides what an override means, including what an unrecognised value means, and it
+    # has the rule's own default in hand to fall back to.
+    $RuleSeverity = $null
+    if ($null -ne $Script:AppGlobalConfig -and $null -ne $Script:AppGlobalConfig.OmadaCompatibilityRuleSeverity) {
+        $RuleSeverity = $Script:AppGlobalConfig.OmadaCompatibilityRuleSeverity
+    }
+
     return [PSCustomObject]@{
         Enabled                 = $Enabled
+        SchemaEnabled           = $SchemaEnabled
+        OmadaEnabled            = $OmadaEnabled
         DebounceMilliseconds    = $Debounce
         WarnOnExecuteWithErrors = $WarnOnExecute
         ParserVersion           = $ParserVersion
+        RuleSeverity            = $RuleSeverity
     }
+}
+
+function Resolve-SqlValidationSwitch {
+    <#
+    .SYNOPSIS
+        Reads one of the validation on/off settings from the global configuration, strictly.
+
+    .DESCRIPTION
+        A plain [bool] cast is the wrong tool for a value that came out of a JSON file a user can
+        hand-edit. PowerShell casts any non-empty string to $true, so a configuration containing
+
+            "EnableSchemaValidation": "false"
+
+        - quoted, which is an easy thing to type - would read as $true and leave the pass running for
+        a user who had just switched it off. Being unable to turn a noisy check off is worse than the
+        noise, and it is the failure this whole feature is written to avoid.
+
+        The parsing itself is Resolve-StrictBoolean's job, not this function's: it is the module's one
+        answer to "is this actually a boolean?", it returns $null rather than guessing, and it already
+        handles the cases a second implementation here would get wrong - a PSObject wrapper, and a 0/1
+        that arrived as a number.
+
+        What is decided HERE is the fallback: an unresolvable value keeps the SCHEMA DEFAULT rather
+        than becoming $false, because a value nobody can read must not silently disable a check any
+        more than it may silently enable one. The same rule already governs
+        ValidationDebounceMilliseconds above.
+
+    .PARAMETER Property
+        The global configuration property to read. Its default comes from the schema, so the default
+        lives in exactly one place.
+
+    .OUTPUTS
+        [bool]
+    #>
+    [CmdLetBinding()]
+    param(
+        [Parameter(Mandatory = $true, Position = 0)]
+        [string]$Property
+    )
+
+    # No tracer preamble: called from the debounced validation path on every idle tick.
+
+    $Default = Get-ConfigSchemaDefault -Property $Property
+    $Value = if ($null -eq $Default) { $true } else { [bool]$Default }
+
+    if ($null -eq $Script:AppGlobalConfig) {
+        return $Value
+    }
+
+    $Resolved = Resolve-StrictBoolean -Value $Script:AppGlobalConfig.$Property
+    if ($null -ne $Resolved) {
+        return [bool]$Resolved
+    }
+
+    # Absent is the ordinary case for a configuration written before these properties existed, and
+    # says nothing worth logging. A value that is present and unreadable is worth ONE DEBUG line -
+    # the property name is a setting, never anything taken from the user's query.
+    #
+    # Once per property per session, and that is not a nicety. This function is called on every
+    # debounce tick, on every execute and after every schema push, so a malformed setting would
+    # otherwise write a line per keystroke-pause for the rest of the session - the same log flooding
+    # the rest of this feature is careful to avoid, in service of a message that says the same thing
+    # every time. The setting cannot change without the configuration being rewritten, so the second
+    # line onwards carries no information the first did not.
+    if ($null -ne $Script:AppGlobalConfig.$Property) {
+        if ($null -eq $Script:SqlValidationSettingWarned) {
+            $Script:SqlValidationSettingWarned = @{}
+        }
+
+        if (-not $Script:SqlValidationSettingWarned.ContainsKey($Property)) {
+            $Script:SqlValidationSettingWarned[$Property] = $true
+            "Configuration property '{0}' is not a boolean; using the default." -f $Property | Write-LogOutput -LogType DEBUG
+        }
+    }
+
+    return $Value
 }

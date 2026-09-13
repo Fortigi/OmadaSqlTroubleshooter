@@ -25,8 +25,44 @@ OmadaSqlTroubleshooter is a PowerShell Module that contains an interactive deskt
   - Table aliases resolve to their columns (e.g. `FROM dbo.Person p` → `p.` completes Person's columns), and column suggestions show their data type
   - Keyword, built-in function and snippet suggestions (e.g. `SELECT … FROM`, `JOIN … ON`, `CASE WHEN`) for SQL syntax
   - The schema is retrieved automatically on connect and when you switch database — no need to open the schema view first
-- Schema view — press **Shift + click** on a table or column to insert it into the editor
+- Schema view — press **Shift + click** on a table or column to insert it into the editor, and **Refresh schema** to discard the cached schema and fetch it again
 - Filter queries while typing in the editor
+- Client-side validation while you type — errors are shown in the editor before a query is ever sent to Omada:
+  - **T-SQL syntax**, parsed locally with the same parser SQL Server's own tooling uses, so the message is the one the server would have returned
+  - **Tables and columns**, resolved against the schema already fetched for IntelliSense — a warning, never a blocker, because the cached schema can be older than the database
+  - **Omada compatibility**, for queries that are valid T-SQL and still cannot work here (see *What the SQL Troubleshooter can run* below)
+  - Nothing leaves your machine for this: the query text is parsed and resolved locally, and nothing blocks execution — you are asked once and can always execute anyway
+  - Each check can be switched off independently, and individual compatibility rules can be re-levelled or suppressed, in the application configuration
+
+#### What the SQL Troubleshooter can run
+
+The tool has **read access only**. That is its security posture, not a limitation to be worked
+around: a troubleshooting client that can read identity data is already sensitive, and one that could
+write to the Omada database would be a different risk class entirely. Enforcement is the tenant's
+permission set; the client-side checks exist to explain the boundary at the moment you meet it.
+
+| Not supported | Supported |
+|---|---|
+| Data manipulation — `INSERT`, `UPDATE`, `DELETE`, `MERGE`, `TRUNCATE` | `SELECT`, in all its forms |
+| Data definition — `CREATE`, `ALTER`, `DROP` | Reads from tables and views |
+| Stored procedures and dynamic SQL — `EXEC`, `sp_executesql` | **Common table expressions**, including multiple and nested |
+| Temporary tables — `#t`, `##t`, `SELECT … INTO #t` | Derived tables, `JOIN`, `APPLY`, set operators |
+| | Window functions, `PIVOT`/`UNPIVOT`, `CASE`, built-in functions |
+
+One rule is worth knowing before you write a query rather than after: **every column in the result
+must have a name.** Results come back as JSON objects keyed by column name, so a column with no key
+cannot survive that representation — the query runs and the grid arrives empty, reported as
+*Query did not return any results!*. Alias the column and it works:
+
+```sql
+SELECT uid, COUNT(*)            FROM dbo.SomeTable GROUP BY uid   -- returns nothing
+SELECT uid, COUNT(*) AS [Count] FROM dbo.SomeTable GROUP BY uid   -- returns rows
+```
+
+Temporary tables are the other common surprise. Use a common table expression instead — CTEs are
+supported and are the sanctioned replacement. (`SELECT … INTO` writes a table, so it belongs with the
+data-definition row above whatever the target is called; only the `#t` form is flagged as a temporary
+table.)
 
 #### Results & Export
 - View results in a PowerShell GridView

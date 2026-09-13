@@ -45,7 +45,7 @@ function Get-SqlSchemaObject {
             # target the same data connection (DoId): same tenant + same database => identical
             # schema, so the first tab to fetch it populates a session-lifetime cache and every
             # other matching connected tab reuses it without another round-trip.
-            $SchemaCacheKey = "{0}|{1}" -f $Script:RunTimeData.RestMethodParam.SessionKey, $Script:AppConfig.CurrentDataConnection.DoId
+            $SchemaCacheKey = Get-ActiveSqlSchemaCacheKey
             if ($null -eq $Script:SqlSchemaCache) {
                 $Script:SqlSchemaCache = @{}
             }
@@ -189,6 +189,14 @@ function Complete-SqlSchemaRetrieval {
                 $Script:SqlSchemaCache = @{}
             }
             $Script:SqlSchemaCache[$SchemaCacheKey] = $ReturnValue
+
+            # The index the schema validation pass resolves against is built from this response and
+            # memoised beside it. Dropping it here is what stops an index outliving the response it
+            # was built from - after a refresh, the pass would otherwise keep answering from the
+            # schema the user just asked to replace.
+            if ($null -ne $Script:SqlSchemaModelCache) {
+                $Script:SqlSchemaModelCache.Remove($SchemaCacheKey)
+            }
         }
 
         if ($null -eq $ReturnValue -or $ReturnValue -is [System.Management.Automation.ErrorRecord] -or $null -eq $ReturnValue.d) {

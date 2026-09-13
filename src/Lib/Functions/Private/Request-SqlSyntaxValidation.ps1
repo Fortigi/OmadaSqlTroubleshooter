@@ -1,7 +1,7 @@
 function Request-SqlSyntaxValidation {
     <#
     .SYNOPSIS
-        Schedules a debounced syntax validation for a tab whose editor content has changed.
+        Schedules a debounced client-side validation for a tab whose editor content has changed.
 
     .DESCRIPTION
         Restarting a DispatcherTimer on every change is what makes the pass idle-triggered rather
@@ -31,7 +31,7 @@ function Request-SqlSyntaxValidation {
         }
 
         $Setting = Get-SqlValidationSetting
-        if (-not $Setting.Enabled) {
+        if (-not $Setting.Enabled -and -not $Setting.SchemaEnabled -and -not $Setting.OmadaEnabled) {
             return
         }
 
