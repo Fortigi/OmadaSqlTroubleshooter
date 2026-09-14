@@ -145,6 +145,10 @@ Task Test -Depends Analyze {
             # some OTHER file - a new caller of the file writer - which the mapping below would not
             # associate with this suite, so it would skip exactly when it is needed.
             'SessionLogFileRedaction.Tests.ps1'
+            # Guards every .github/workflows/*.yml `uses:` line, not one source file with a matching
+            # name - the mapping below has nothing to associate it with, so without this it would
+            # skip on exactly the pull requests that add a new unpinned action reference (#113).
+            'WorkflowActionPins.Tests.ps1'
         )
 
         if ($ChangedFiles.Count -gt 0) {
