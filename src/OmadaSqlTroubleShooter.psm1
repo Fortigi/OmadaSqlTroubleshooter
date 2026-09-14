@@ -12,23 +12,10 @@ try {
     "Loading {0} Module" -f $ModuleName | Write-Verbose
 
     $Script:ModuleVersion = "Development"
-    $MinimumOmadaWebPSVersion = "2026.07.09.9"
-    if ($MinimumOmadaWebPSVersion -ne "0.0") {
-        Import-Module OmadaWeb.PS -MinimumVersion $MinimumOmadaWebPSVersion -ErrorAction Stop
-        if ((Get-Module -Name OmadaWeb.PS).Version -lt [version]$MinimumOmadaWebPSVersion) {
-            throw ("OmadaWeb.PS module version {0} or higher is required." -f $MinimumOmadaWebPSVersion)
-        }
-    }
 
-    # Pinned versions and expected SHA-256 hashes of every binary the module downloads. Resolved from
-    # $PSScriptRoot so it works identically from src\ and from the built module folder. Nothing is
-    # downloaded without it - see Get-DependencyLock.
-    $Script:DependencyLockPath = Join-Path $PSScriptRoot -ChildPath "DependencyLock.psd1"
-
-    $LocalAppDataPath = [System.Environment]::GetFolderPath([System.Environment+SpecialFolder]::LocalApplicationData)
-    $Script:ModuleAppDataPath = (New-Item (Join-Path $LocalAppDataPath -ChildPath $ModuleName) -ItemType Directory -Force).FullName
-    $BinPath = (New-Item (Join-Path $Script:ModuleAppDataPath -ChildPath "Bin") -ItemType Directory -Force).FullName
-
+    # Function files are dot-sourced here, ahead of the OmadaWeb.PS version check below, so that
+    # Import-OmadaWebPSModule (defined in Lib\Functions\Private) is already available when the
+    # check runs.
     if (-not (Test-Path "$PSScriptRoot\Lib\Functions\Public" -PathType Container)) {
         $Public = @(Get-ChildItem "$PsscriptRoot\Lib\Functions\Functions.ps1")
     }
@@ -51,6 +38,20 @@ try {
     }
 
     #endregion
+
+    $MinimumOmadaWebPSVersion = "2026.07.09.9"
+    if ($MinimumOmadaWebPSVersion -ne "0.0") {
+        Import-OmadaWebPSModule -MinimumVersion $MinimumOmadaWebPSVersion
+    }
+
+    # Pinned versions and expected SHA-256 hashes of every binary the module downloads. Resolved from
+    # $PSScriptRoot so it works identically from src\ and from the built module folder. Nothing is
+    # downloaded without it - see Get-DependencyLock.
+    $Script:DependencyLockPath = Join-Path $PSScriptRoot -ChildPath "DependencyLock.psd1"
+
+    $LocalAppDataPath = [System.Environment]::GetFolderPath([System.Environment+SpecialFolder]::LocalApplicationData)
+    $Script:ModuleAppDataPath = (New-Item (Join-Path $LocalAppDataPath -ChildPath $ModuleName) -ItemType Directory -Force).FullName
+    $BinPath = (New-Item (Join-Path $Script:ModuleAppDataPath -ChildPath "Bin") -ItemType Directory -Force).FullName
 
     try {
         $WebBinBasePath = New-Item  $BinPath -ItemType Directory -Force
