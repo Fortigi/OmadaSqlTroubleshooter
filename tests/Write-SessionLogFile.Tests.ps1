@@ -343,6 +343,17 @@ Describe "Write-SessionLogFile" {
             (Read-SessionLogFileHeader -Path $ActivePath).SessionKey | Should -BeExactly $Script:SessionLogFile.SessionKey
         }
 
+        It "releases the file when the part cannot be started, rather than leaving it held open" {
+            # An invalid session key makes the header fail after the writer has been created, which
+            # is the failure path that has to clean up both the writer and the stream.
+            $PartPath = Join-Path $Script:Folder -ChildPath "OmadaSqlTroubleshooter.log"
+
+            { Open-SessionLogFileWriter -Path $PartPath -SessionKey "not-a-session-key" -StartTime (Get-Date) -ProcessId $PID } | Should -Throw
+
+            { [System.IO.File]::Delete($PartPath) } | Should -Not -Throw
+            Test-Path -LiteralPath $PartPath | Should -BeFalse
+        }
+
         It "never creates a file when asked to reopen one that does not exist" {
             $MissingPath = Join-Path $Script:Folder -ChildPath "OmadaSqlTroubleshooter.log"
 

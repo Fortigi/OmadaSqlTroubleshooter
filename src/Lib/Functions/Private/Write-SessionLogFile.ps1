@@ -130,6 +130,7 @@ function Open-SessionLogFileWriter {
     }
 
     $Stream = [System.IO.FileStream]::new($Path, $FileMode, [System.IO.FileAccess]::Write, [System.IO.FileShare]::ReadWrite)
+    $Writer = $null
     try {
         if ($Append) {
             $Stream.Seek(0, [System.IO.SeekOrigin]::End) | Out-Null
@@ -147,6 +148,16 @@ function Open-SessionLogFileWriter {
         }
     }
     catch {
+        # The writer first when it exists, which also closes the stream. Its own dispose flushes and
+        # can fail for the same reason the open did - a full disk, say - so that failure must not
+        # replace the one being rethrown, and the stream is disposed regardless.
+        if ($null -ne $Writer) {
+            try {
+                $Writer.Dispose()
+            }
+            catch {}
+        }
+
         $Stream.Dispose()
         throw
     }
