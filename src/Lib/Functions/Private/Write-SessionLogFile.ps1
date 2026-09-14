@@ -114,12 +114,21 @@ function Write-SessionLogFile {
         Writes one already-redacted log line to the session log file.
 
     .DESCRIPTION
-        The file half of issue #121. Called from exactly one place - Write-LogOutput, AFTER
-        Protect-LogMessage has masked the message - and that is not an implementation detail but the
-        whole design: the file is behind the redaction gate, never beside it. A writer that took its
-        own copy of a message would put unredacted credentials, tokens, result data and query text
-        on disk permanently, which is a regression of issues #39 and #111 and strictly worse than
-        the problem this feature solves.
+        The file half of issue #121. Every line it writes has been through Protect-LogMessage, and
+        that is not an implementation detail but the whole design: the file is behind the redaction
+        gate, never beside it. A writer that took its own copy of a message would put unredacted
+        credentials, tokens, result data and query text on disk permanently, which is a regression
+        of issues #39 and #111 and strictly worse than the problem this feature solves.
+
+        Two callers, and only two, both of which satisfy that:
+
+          * Write-LogOutput, immediately AFTER the gate has masked the message;
+          * Start-SessionLogFile, replaying the lines held before the file could be opened - which
+            reached the buffer through Write-LogOutput, and therefore through the gate.
+
+        SessionLogFileRedaction.Tests.ps1 asserts exactly that set, and asserts that the second one
+        passes buffered entries rather than anything composed on the spot. A third caller, or a
+        different argument in the second, is a message reaching disk unmasked.
 
         The file applies its OWN level, which is why the level test is here rather than at the call
         site: the log window and the file filter differently, and the window's decision has already
