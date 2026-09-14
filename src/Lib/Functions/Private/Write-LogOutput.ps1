@@ -88,6 +88,15 @@ function Write-LogOutput {
             DialogIcon  = $null
         }
 
+        # The Messages pane's own copy of the text, kept separate from $LogMessageDialog.Text (issue
+        # #128). The heading and two leading blank lines the WARNING/ERROR branches below add exist to
+        # separate a modal dialog's summary from its detail; the pane is not a dialog - it is a
+        # durable, top-aligned text surface beside the results, and the status bar (issue #117)
+        # already names the outcome, so the pane gets the plain message with nothing prepended.
+        # Application-level dialogs (Show-LogMessageDialog and the no-window MessageBox path below)
+        # keep reading $LogMessageDialog.Text and are unaffected by this.
+        $LogMessagePaneText = $Message
+
         # The same inclusion table this switch statement always applied, moved into
         # Test-LogLevelThreshold. There are two levels that filter now - the log window's, here, and
         # the session log file's own (issue #121), which may reasonably be more verbose - and two
@@ -149,6 +158,13 @@ function Write-LogOutput {
                             #
                             #    Internal Server Error"
                             $LogMessageDialog.Text = "Failure {0} - {1} occurred:`r`n`r`n{2}" -f $ErrorObject.Exception.StatusCode, $ErrorObject.Exception.Response.ReasonPhrase, $LogMessageDialog.Text
+
+                            # The dialog Title carries the status code too, but a tab-scoped failure
+                            # (issue #93) never raises a dialog, so the Title is never shown to a tab
+                            # user. Without this the status code would vanish entirely from what a tab
+                            # user sees once the pane heading above is dropped - append it as plain
+                            # trailing detail instead, with no heading and no blank lines.
+                            $LogMessagePaneText = "{0} ({1} - {2})" -f $LogMessagePaneText, $ErrorObject.Exception.StatusCode, $ErrorObject.Exception.Response.ReasonPhrase
                         }
                     }
                     else {
@@ -212,7 +228,7 @@ function Write-LogOutput {
                 # refines the issue #93 rule "on success Results stays selected" to the case it was
                 # written for, a query that actually returned rows to land on.
                 if ($TabScoped) {
-                    Add-TabMessage -TabSession (Get-ActiveTabSession) -Text $LogMessageDialog.Text -Focus:$LogMessage.ShowError
+                    Add-TabMessage -TabSession (Get-ActiveTabSession) -Text $LogMessagePaneText -Focus:$LogMessage.ShowError
                 }
                 else {
                     Show-LogMessageDialog -Text $LogMessageDialog.Text -Title $LogMessageDialog.Title -Icon $LogMessageDialog.Icon
