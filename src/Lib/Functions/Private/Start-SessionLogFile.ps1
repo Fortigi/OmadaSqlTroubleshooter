@@ -62,7 +62,12 @@ function Start-SessionLogFile {
             $State.Directory = $Setting.Directory
             $State.MaxBytes = [long]$Setting.MaxSizeMegabytes * 1MB
 
-            New-Item -Path $Setting.Directory -ItemType Directory -Force -ErrorAction Stop | Out-Null
+            # Directory::CreateDirectory rather than New-Item, which has no -LiteralPath at all.
+            # SessionLogFileDirectory is whatever the user typed, and "[" and "]" are wildcard
+            # characters to PowerShell's path handling - so a folder genuinely called "logs[1]"
+            # should not be left depending on which provider cmdlet happens to expand it. This
+            # overload is literal by construction, and already idempotent.
+            [System.IO.Directory]::CreateDirectory($Setting.Directory) | Out-Null
 
             Remove-ExpiredSessionLogFile -Directory $Setting.Directory -RetentionDays $Setting.RetentionDays -RetentionCount $Setting.RetentionCount -ExcludeSession $State.SessionKey | Out-Null
 

@@ -118,6 +118,24 @@ Describe "Start-SessionLogFile" {
         }
     }
 
+    Context "A configured directory PowerShell might read as a pattern" {
+
+        It "treats SessionLogFileDirectory as a literal path, brackets and all" {
+            # SessionLogFileDirectory is whatever the user typed, and "[" and "]" are wildcard
+            # characters to most of PowerShell's path parameters. A real folder called "logs[1]" must
+            # be created and written to, not pattern-matched against.
+            $Bracketed = Join-Path $Script:AppDataFolder -ChildPath "logs[1]"
+            $Script:AppGlobalConfig = [PSCustomObject]@{ SessionLogFileDirectory = $Bracketed }
+
+            $Path = Start-SessionLogFile
+            Write-SessionLogFile -Line "into a bracketed folder" -LogType "ERROR"
+
+            Test-Path -LiteralPath $Bracketed -PathType Container | Should -BeTrue
+            (Split-Path $Path -Parent) | Should -BeExactly $Bracketed
+            Get-Content -LiteralPath $Path -Raw | Should -Match "into a bracketed folder"
+        }
+    }
+
     Context "Switched off" {
 
         It "writes no file and leaves nothing to write to" {
