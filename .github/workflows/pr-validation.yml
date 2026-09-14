@@ -33,6 +33,13 @@ jobs:
     name: Dispatch
     runs-on: ubuntu-latest
     if: github.event_name == 'workflow_dispatch' || (github.event.issue.pull_request != null && startsWith(github.event.comment.body, '/validate'))
+    # Narrower than the workflow-level grant above: this job only reads the PR, reacts to the
+    # triggering comment and writes the pending commit status - it never checks anything out and
+    # never touches a check run.
+    permissions:
+      pull-requests: read
+      issues: write
+      statuses: write
     outputs:
       should_run: ${{ steps.resolve.outputs.should_run }}
       head_sha: ${{ steps.resolve.outputs.head_sha }}
@@ -101,6 +108,11 @@ jobs:
     needs: dispatch
     if: needs.dispatch.outputs.should_run == 'true'
     runs-on: windows-latest
+    # Narrower than the workflow-level grant above: this job checks out the PR head and publishes
+    # a check run for its own Pester results - nothing here touches a PR, an issue or a status.
+    permissions:
+      contents: read
+      checks: write
     defaults:
       run:
         shell: pwsh
@@ -249,6 +261,9 @@ jobs:
     # run must not overwrite the status the newer run is already writing for the same SHA.
     if: always() && !cancelled() && needs.dispatch.outputs.should_run == 'true'
     runs-on: ubuntu-latest
+    # Narrower than the workflow-level grant above: this job only writes the final commit status.
+    permissions:
+      statuses: write
     steps:
       - name: Harden the runner (audit all outgoing network calls)
         uses: step-security/harden-runner@e14015d583714f6e62063499dc959a02595150a1 # v2.21.1

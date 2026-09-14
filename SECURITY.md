@@ -91,7 +91,7 @@ Out of scope:
 | Integrity verification of the runtime-downloaded assemblies | [src/DependencyLock.psd1](src/DependencyLock.psd1), see below |
 | Static analysis (PSScriptAnalyzer) and Pester suites | [build/psakeBuild.ps1](build/psakeBuild.ps1), run in PR validation |
 
-Two caveats worth stating plainly rather than letting the table above overstate what these controls
+Three caveats worth stating plainly rather than letting the table above overstate what these controls
 do:
 
 - **The Dependabot cooldown does not reduce zero-day exposure.** Dependabot *security* updates —
