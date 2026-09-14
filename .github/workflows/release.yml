@@ -23,7 +23,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
 
       - name: Install modules
         shell: pwsh
@@ -59,7 +59,7 @@ jobs:
           "exists=$exists" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
 
       - name: Publish test results
-        uses: dorny/test-reporter@v1
+        uses: dorny/test-reporter@31a54ee7ebcacc03a09ea97a7e5465a47b84aea5 # v1.9.1
         if: always() && steps.test-results.outputs.exists == 'True'
         with:
           name: Pester Tests (Release)
@@ -67,7 +67,7 @@ jobs:
           reporter: java-junit
 
       - name: Upload build output
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: BuildOutput
           path: buildoutput/
@@ -90,12 +90,12 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
           fetch-depth: 0
 
       - name: Download build output
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with:
           name: BuildOutput
           path: buildoutput/
@@ -133,7 +133,7 @@ jobs:
           git push origin "refs/tags/v${{ env.BUILD_VERSION }}"
 
       - name: Create GitHub Release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # v2.6.2
         with:
           tag_name: v${{ env.BUILD_VERSION }}
           name: Release v${{ env.BUILD_VERSION }}
