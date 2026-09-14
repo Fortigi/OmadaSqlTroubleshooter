@@ -121,6 +121,26 @@ Describe 'Set-BodyRedactionState' {
             $Warning | Should -Not -Match ([regex]::Escape("'C:\Users\O'Connor"))
         }
 
+        It 'ends the message with the path, so it neither runs on into a sentence nor copies out with a period' {
+            # "...session_001.log A very long value..." is a run-on, and "...session_001.log." puts a
+            # period on the end of whatever the user copies. The path has to be the last thing.
+            $SessionLogPath = "C:\Users\someone\AppData\Roaming\OmadaSqlTroubleshooter\logs\session_001.log"
+            $Script:SessionLogFile = [PSCustomObject]@{ Path = $SessionLogPath }
+
+            Set-BodyRedactionState -Enabled $true
+
+            $Warning = ($Script:LogLines | Where-Object { $_.LogType -eq "WARNING" })[0].Message
+            $Warning | Should -Match ("\. It is also written to the session log file: {0}$" -f [regex]::Escape($SessionLogPath))
+            $Warning | Should -Match "truncated\."
+        }
+
+        It 'ends every sentence with punctuation when there is no file' {
+            Set-BodyRedactionState -Enabled $true
+
+            $Warning = ($Script:LogLines | Where-Object { $_.LogType -eq "WARNING" })[0].Message
+            $Warning | Should -Match "truncated\. No session log file is being written this session\.$"
+        }
+
         It 'does not splice a status message into the middle of a list when there is no file' {
             # "...written to this log, to no session log file is being written, and to any log
             # file..." is a sentence the reader has to decode, in the one message they must not

@@ -58,7 +58,11 @@ function Set-BodyRedactionState {
                     $SessionLogFileNote = "It is also written to the session log file: {0}" -f $Script:SessionLogFile.Path
                 }
 
-                "Request body logging is enabled: query text is now written to this log, and to any log file exported from it. {0} A very long value is still truncated." -f $SessionLogFileNote | Write-LogOutput -LogType WARNING -SkipDialog
+                # The note comes last, so the path ends the message. Followed by another sentence it
+                # reads as a run-on ("...session_001.log A very long value..."); followed by a period
+                # it copies out as "session_001.log." - neither is acceptable for the one message a
+                # user is meant to act on.
+                "Request body logging is enabled: query text is now written to this log, and to any log file exported from it. A very long value is still truncated. {0}" -f $SessionLogFileNote | Write-LogOutput -LogType WARNING -SkipDialog
             }
 
             "Request body logging is enabled" | Write-LogOutput -LogType LOG
