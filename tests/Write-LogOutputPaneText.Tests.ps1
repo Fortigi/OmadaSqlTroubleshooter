@@ -148,15 +148,44 @@ Describe "Messages accumulating within one execute still read as a list" {
         $Script:TabA.Elements.TextBoxQueryMessages.Text | Should -Be "Rows read: 0"
     }
 
+    It "does not start the pane text with a newline, even once a second message has arrived" {
+        Add-TabMessage -TabSession $Script:TabA -Text "Rows read: 0"
+        Add-TabMessage -TabSession $Script:TabA -Text "Completion time: 00:00:01"
+
+        $Script:TabA.Elements.TextBoxQueryMessages.Text | Should -Not -Match "^\r?\n"
+    }
+
     It "keeps several messages visibly separated rather than run together" {
         Add-TabMessage -TabSession $Script:TabA -Text "Invalid column name 'Idenity'."
         Add-TabMessage -TabSession $Script:TabA -Text "Rows read: 0"
         Add-TabMessage -TabSession $Script:TabA -Text "Completion time: 00:00:01"
 
-        $Lines = $Script:TabA.Elements.TextBoxQueryMessages.Text -split "`r`n"
-        $Lines.Count | Should -Be 3
-        $Lines[0] | Should -Be "Invalid column name 'Idenity'."
-        $Lines[1] | Should -Be "Rows read: 0"
-        $Lines[2] | Should -Be "Completion time: 00:00:01"
+        # One blank line BETWEEN entries - splitting on a double line break, not a single one,
+        # since a single "`r`n" join would run a multi-line message's own internal lines together
+        # with the next entry (see the multi-line test below).
+        $Entries = $Script:TabA.Elements.TextBoxQueryMessages.Text -split "`r`n`r`n"
+        $Entries.Count | Should -Be 3
+        $Entries[0] | Should -Be "Invalid column name 'Idenity'."
+        $Entries[1] | Should -Be "Rows read: 0"
+        $Entries[2] | Should -Be "Completion time: 00:00:01"
+    }
+
+    It "separates two multi-line messages with exactly one blank line, not run together" {
+        # The case the fix is actually for: a multi-line SQL error followed by a warning. Before
+        # issue #128, the dialog headings this pane no longer carries were what separated entries;
+        # a plain single "`r`n" join would leave nothing distinguishing the boundary between these
+        # two messages from the line break inside the first one.
+        $SqlError = "Msg 207, Level 16, State 1, Line 4`r`nInvalid column name 'Idenity'."
+        $Warning = "Query did not return any results"
+
+        Add-TabMessage -TabSession $Script:TabA -Text $SqlError
+        Add-TabMessage -TabSession $Script:TabA -Text $Warning
+
+        $Script:TabA.Elements.TextBoxQueryMessages.Text | Should -Be ($SqlError, $Warning -join "`r`n`r`n")
+
+        $Entries = $Script:TabA.Elements.TextBoxQueryMessages.Text -split "`r`n`r`n"
+        $Entries.Count | Should -Be 2
+        $Entries[0] | Should -Be $SqlError
+        $Entries[1] | Should -Be $Warning
     }
 }

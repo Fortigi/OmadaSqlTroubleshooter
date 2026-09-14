@@ -162,7 +162,7 @@ Describe "Add-TabMessage" {
         Add-TabMessage -TabSession $Script:TabA -Text "first"
         Add-TabMessage -TabSession $Script:TabA -Text "second"
 
-        $Script:TabA.Elements.TextBoxQueryMessages.Text | Should -Be ($Script:TabA.QueryMessages -join "`r`n")
+        $Script:TabA.Elements.TextBoxQueryMessages.Text | Should -Be ($Script:TabA.QueryMessages -join "`r`n`r`n")
     }
 
     It "brings the pane to the front when asked" {
