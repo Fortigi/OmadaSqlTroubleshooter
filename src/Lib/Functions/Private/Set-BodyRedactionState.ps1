@@ -52,7 +52,10 @@ function Set-BodyRedactionState {
                 # file..." makes them decode it first.
                 $SessionLogFileNote = "No session log file is being written this session."
                 if ($null -ne $Script:SessionLogFile -and ![string]::IsNullOrWhiteSpace($Script:SessionLogFile.Path)) {
-                    $SessionLogFileNote = "It is also written to the session log file at '{0}'." -f $Script:SessionLogFile.Path
+                    # Unquoted. This path is a thing the user copies out of the message, and a
+                    # Windows profile name may legally contain an apostrophe - "C:\Users\O'Connor\..."
+                    # inside single quotes reads as a quoted string that ends after the O.
+                    $SessionLogFileNote = "It is also written to the session log file: {0}" -f $Script:SessionLogFile.Path
                 }
 
                 "Request body logging is enabled: query text is now written to this log, and to any log file exported from it. {0} A very long value is still truncated." -f $SessionLogFileNote | Write-LogOutput -LogType WARNING -SkipDialog

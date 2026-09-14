@@ -108,6 +108,19 @@ Describe 'Set-BodyRedactionState' {
             $Warning | Should -Match "session log file"
         }
 
+        It 'does not wrap the path in quotes a Windows profile name can contain' {
+            # A path is a thing the user copies out of this message. "C:\Users\O'Connor\..." inside
+            # single quotes reads as a quoted string that ends after the O, which is the one message
+            # where an ambiguous path is least welcome.
+            $Script:SessionLogFile = [PSCustomObject]@{ Path = "C:\Users\O'Connor\AppData\Roaming\OmadaSqlTroubleshooter\logs\session_001.log" }
+
+            Set-BodyRedactionState -Enabled $true
+
+            $Warning = ($Script:LogLines | Where-Object { $_.LogType -eq "WARNING" })[0].Message
+            $Warning | Should -Match ([regex]::Escape("C:\Users\O'Connor\AppData\Roaming\OmadaSqlTroubleshooter\logs\session_001.log"))
+            $Warning | Should -Not -Match ([regex]::Escape("'C:\Users\O'Connor"))
+        }
+
         It 'does not splice a status message into the middle of a list when there is no file' {
             # "...written to this log, to no session log file is being written, and to any log
             # file..." is a sentence the reader has to decode, in the one message they must not

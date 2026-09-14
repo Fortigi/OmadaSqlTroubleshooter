@@ -216,6 +216,14 @@ Describe 'Session log file, from the log window (issue #121)' {
             $Script:EntryPointSource | Should -Match '\$Script:SessionLogFile = New-SessionLogFileState'
         }
 
+        It 'resolves nothing to create that buffer, because resolution can log' {
+            # Get-ConfigSchemaDefault logs a WARNING for a property it cannot find - and a line
+            # logged BEFORE the buffer exists has nowhere to go, which is the one thing the buffer
+            # is for. The level here is provisional anyway: held lines are re-filtered against the
+            # configured level once Start-SessionLogFile has resolved it.
+            $Script:EntryPointSource | Should -Match '\$Script:SessionLogFile = New-SessionLogFileState\s*\r?\n'
+        }
+
         It 'closes it on the way out' {
             $Script:EntryPointSource | Should -Match 'Stop-SessionLogFile'
         }

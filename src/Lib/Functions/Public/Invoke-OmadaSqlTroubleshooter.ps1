@@ -136,7 +136,12 @@ function Invoke-OmadaSqlTroubleshooter {
     # That buffer is not a nicety: assembly loading, hash verification and the parser install all
     # happen below this line, and a session that dies during start-up is exactly the session
     # somebody wants the log of.
-    $Script:SessionLogFile = New-SessionLogFileState -LogLevel (Get-ConfigSchemaDefault -Property "SessionLogFileLogLevel")
+    #
+    # Nothing is resolved from the schema here. Get-ConfigSchemaDefault logs a WARNING for a property
+    # it cannot find, and a line logged BEFORE this assignment has nowhere at all to go - which is the
+    # one case the buffer exists to cover. The level this state starts with is provisional either way:
+    # Start-SessionLogFile re-filters every held line against the configured level once it knows it.
+    $Script:SessionLogFile = New-SessionLogFileState
 
     Initialize-OmadaSqlTroubleShooter
 
