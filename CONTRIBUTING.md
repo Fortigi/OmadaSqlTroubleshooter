@@ -67,6 +67,33 @@ PSScriptAnalyzer gates the test run, so a style violation stops the build before
 executes. The repository's PowerShell conventions are Stroustrup braces, no aliases, full cmdlet
 names in correct casing, spaces around operators, and aligned hashtable values.
 
+## Workflow changes: pin every action to a commit SHA
+
+If your change touches a `.github/workflows/*.yml` file and adds or modifies a `uses:` line, pin it
+to the full 40-character commit SHA of the release you mean, with the human-readable version as a
+trailing comment:
+
+```yaml
+uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+```
+
+Not a tag, not a branch — a tag can be moved after the fact, and a moved tag on a workflow that
+builds the module or publishes a release is a code-execution primitive against exactly that job.
+Dependabot reads the trailing comment and keeps both the SHA and the comment current, so pinning
+does not mean losing update notifications.
+
+`tests/WorkflowActionPins.Tests.ps1` fails PR validation on any `uses:` line that is not pinned this
+way, so an unpinned reference is caught before review rather than relied on to be caught during it.
+
+Resolve a tag to its commit SHA with the GitHub API rather than trusting what a browser shows,
+dereferencing an annotated tag if the response is one:
+
+```bash
+gh api repos/<owner>/<repo>/git/refs/tags/<tag> --jq '.object.sha,.object.type'
+# if .object.type is "tag", the above is the tag object's own sha - dereference it:
+gh api repos/<owner>/<repo>/git/tags/<sha> --jq '.object.sha'
+```
+
 ## Branches
 
 | Kind | Format |

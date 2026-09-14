@@ -83,9 +83,32 @@ Out of scope:
 |---|---|
 | Private vulnerability reporting | Repository settings — *Settings > Advanced Security > Private vulnerability reporting* |
 | Secret scanning and push protection | Repository settings — *Settings > Advanced Security* |
-| Dependabot version and security updates | [.github/dependabot.yml](.github/dependabot.yml) |
+| Dependabot version and security updates, with a cooldown | [.github/dependabot.yml](.github/dependabot.yml) |
+| Dependabot malware alerts (npm, PyPI, Maven, RubyGems, **NuGet**, Go, crates.io, Composer) | Repository settings — *Settings > Advanced Security > Dependabot alerts* |
+| Pre-merge vulnerability and licence gate on the dependency graph diff | [.github/workflows/dependency-review.yml](.github/workflows/dependency-review.yml) |
+| Every GitHub Actions `uses:` pinned to a full commit SHA | every workflow in [.github/workflows](.github/workflows), enforced by [tests/WorkflowActionPins.Tests.ps1](tests/WorkflowActionPins.Tests.ps1) and *Settings > Actions > General > Allowed actions* |
+| Runner egress monitoring (audit only) | `step-security/harden-runner`, first step of every job in every workflow |
 | Integrity verification of the runtime-downloaded assemblies | [src/DependencyLock.psd1](src/DependencyLock.psd1), see below |
 | Static analysis (PSScriptAnalyzer) and Pester suites | [build/psakeBuild.ps1](build/psakeBuild.ps1), run in PR validation |
+
+Two caveats worth stating plainly rather than letting the table above overstate what these controls
+do:
+
+- **The Dependabot cooldown does not reduce zero-day exposure.** Dependabot *security* updates —
+  the pull request a published advisory triggers — bypass cooldown by design, on both ecosystems.
+  What the cooldown buys is a window against a *compromised release*: a maintainer account is taken
+  over, a malicious version is published, and it is caught and yanked within days. Waiting means
+  this repository simply never consumed the bad release during that window. It is not, and is not
+  sold here as, protection against a same-day advisory.
+- **Harden-Runner is audit-only on Windows.** `build`, `validate`, `release`, `sync` and `e2e` all
+  run on `windows-latest`, where Harden-Runner has no block mode, no file integrity monitoring and
+  no process monitoring — those are Linux (and self-hosted, Enterprise) features only. On these jobs
+  it gives detection and forensics — an unexplained egress is visible after the fact — not
+  prevention. The `ubuntu-latest` coordination jobs are where block mode would eventually apply.
+- **Dependabot malware alerts do not cover GitHub Actions.** The July 2026 expansion added NuGet and
+  seven other ecosystems, sourced from OpenSSF's `malicious-packages` feed, but `github-actions` is
+  not among them. SHA-pinning and the manual review recorded for `dorny/test-reporter` and
+  `softprops/action-gh-release` are what cover a malicious action here, not this alerting.
 
 ## Runtime dependency verification
 
