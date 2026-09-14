@@ -1,0 +1,67 @@
+name: Dependency Review
+
+# Gates the dependency graph diff on every pull request: a published vulnerability advisory or a
+# licence outside the allow-list fails the check before merge, instead of surfacing only as a
+# Dependabot alert afterwards. Deliberately its own workflow rather than a job in
+# pr-validation.yml - see the comment on the `on:` trigger below.
+#
+# It covers both ecosystems this repository has in its dependency graph: `github-actions` (this
+# repository's own workflow `uses:` lines) and `nuget` (build/Dependencies, which is how the
+# runtime-downloaded WebView2 and ScriptDom assemblies get a dependency graph entry at all - see
+# the header comment in build/Dependencies/Dependencies.csproj). It runs on every pull request
+# unconditionally: the action reads the Dependency Review API rather than executing anything from
+# the pull request branch, so unlike a build job there is no cost worth gating behind a paths
+# filter.
+#
+# pr-validation.yml is deliberately `issue_comment`-driven so that `github.ref` always resolves to
+# the default branch even while a specific PR is being validated (see the comment at the top of
+# that workflow). dependency-review-action needs an actual `pull_request` (or `merge_group`) event
+# to diff base against head through the Dependency Review API, so it cannot live there - e2e.yml
+# already establishes the `pull_request` trigger precedent in this repository.
+on:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  dependency-review:
+    # The job `name` is what shows up as the check name. It has to read exactly "Dependency
+    # Review" because that is the name the branch protection ruleset (added after this PR merges)
+    # will require.
+    name: Dependency Review
+    runs-on: ubuntu-latest
+    steps:
+      - name: Harden the runner (audit all outgoing network calls)
+        uses: step-security/harden-runner@e14015d583714f6e62063499dc959a02595150a1 # v2.21.1
+        with:
+          egress-policy: audit
+
+      - name: Checkout
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+
+      - name: Dependency Review
+        uses: actions/dependency-review-action@2031cfc080254a8a887f58cffee85186f0e49e48 # v4.9.0
+        with:
+          fail-on-severity: moderate
+          comment-summary-in-pr: never
+          # `deny-licenses` is deprecated for possible removal
+          # (actions/dependency-review-action#938); `allow-licenses` is the supported replacement
+          # and the two are mutually exclusive.
+          #
+          # The list is every licence actually in this repository's dependency graph today, per
+          # THIRD-PARTY-NOTICES.md and `gh api repos/Fortigi/OmadaSqlTroubleshooter/dependency-graph/sbom`:
+          #   - MIT             - Monaco Editor code, Microsoft.SqlServer.TransactSql.ScriptDom
+          #                       (declared `<license type="expression">MIT</license>` in its
+          #                       .nuspec; GitHub's dependency graph currently reports no
+          #                       concluded license for it at all, which the action treats as an
+          #                       "unknown license" warning rather than a failure - see "Decisions
+          #                       worth reviewing" in the PR description)
+          #   - CC-BY-4.0       - Codicons icon glyphs, bundled inside Monaco
+          #   - BSD-3-Clause    - Microsoft.Web.WebView2. Its LICENSE.txt is a Microsoft-authored,
+          #                       non-SPDX BSD-3-Clause-style grant (see THIRD-PARTY-NOTICES.md
+          #                       §1.3); GitHub's own licence detection concludes it as
+          #                       BSD-3-Clause, which is the identifier that has to be allow-listed
+          #                       for the SPDX-based check to pass, not a claim that Microsoft
+          #                       labelled it that way itself.
+          allow-licenses: MIT, CC-BY-4.0, BSD-3-Clause
