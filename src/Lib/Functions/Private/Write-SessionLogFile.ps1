@@ -49,6 +49,12 @@ function New-SessionLogFileState {
         Pending      = [System.Collections.Generic.List[PSCustomObject]]::new()
         PendingLimit = 2000
         Failed       = $false
+        # What Write-SessionLogFile locks on. TextWriter::Synchronized makes WriteLine atomic and
+        # nothing else: BytesWritten, Part, Path and the Writer reference itself are all
+        # read-modify-written around it, and a rollover disposes and replaces the writer. Two
+        # threads rolling at once could lose lines or dispose the writer out from under a write in
+        # flight, abandoning the file for the rest of the session.
+        SyncRoot     = [object]::new()
     }
 }
 
@@ -66,8 +72,10 @@ function Open-SessionLogFileWriter {
           * FileShare.ReadWrite|Delete, so the user can open, copy or even delete the file while the
             application is still running. A log nobody can read until the application exits is the
             old behaviour under a new name.
-          * TextWriter::Synchronized, because a StreamWriter is not thread-safe and the dispatcher
-            thread is not the only thing that can reach Write-LogOutput.
+          * TextWriter::Synchronized, because a StreamWriter is not thread-safe. That covers the
+            writer itself and nothing around it - the state beside it is guarded by the state's
+            SyncRoot, which Write-SessionLogFile, Start-SessionLogFile and Stop-SessionLogFile all
+            take. Both, because this handle can outlive the state object that produced it.
 
     .PARAMETER Path
         The file to append to.
@@ -147,7 +155,15 @@ function Write-SessionLogFile {
         return
     }
 
+    # The whole body, not just the WriteLine. The synchronized writer makes one WriteLine atomic and
+    # promises nothing about the counter beside it, the part number, the path, or the dispose and
+    # replace a rollover performs - and an unguarded rollover racing a write loses lines or abandons
+    # the file. Uncontended, this costs nothing worth measuring; contended, it is what makes the
+    # crash-survival guarantee true from more than one thread.
+    $LockTaken = $false
     try {
+        [System.Threading.Monitor]::Enter($State.SyncRoot, [ref]$LockTaken)
+
         if ($null -eq $State.Writer) {
             # Not open yet. Hold the line WITH its type: the level the file will run at is not known
             # until the configuration has been read, so the filtering decision cannot be made here.
@@ -180,6 +196,13 @@ function Write-SessionLogFile {
         catch {}
         $State.Writer = $null
         $Script:Tracer::WriteLine(("OmadaSqlTroubleshooter: the session log file was abandoned: {0}" -f $_.Exception.Message))
+    }
+    finally {
+        # A lock a failed write kept would freeze every later log line, which is a far worse failure
+        # than the lost log file the catch above has already settled for.
+        if ($LockTaken) {
+            [System.Threading.Monitor]::Exit($State.SyncRoot)
+        }
     }
 }
 
@@ -240,17 +263,29 @@ function Stop-SessionLogFile {
         return
     }
 
+    # Under the same lock Write-SessionLogFile takes, so shutdown cannot dispose the writer out from
+    # under a line still being written.
+    $LockTaken = $false
     try {
-        if ($null -ne $State.Writer) {
-            $State.Writer.Dispose()
+        [System.Threading.Monitor]::Enter($State.SyncRoot, [ref]$LockTaken)
+
+        try {
+            if ($null -ne $State.Writer) {
+                $State.Writer.Dispose()
+            }
+        }
+        catch {
+            $Script:Tracer::WriteLine(("OmadaSqlTroubleshooter: the session log file did not close cleanly: {0}" -f $_.Exception.Message))
+        }
+
+        $State.Writer = $null
+        # Both null together is what "stopped" means to Write-SessionLogFile: nothing to write to,
+        # and nothing to hold lines in either.
+        $State.Pending = $null
+    }
+    finally {
+        if ($LockTaken) {
+            [System.Threading.Monitor]::Exit($State.SyncRoot)
         }
     }
-    catch {
-        $Script:Tracer::WriteLine(("OmadaSqlTroubleshooter: the session log file did not close cleanly: {0}" -f $_.Exception.Message))
-    }
-
-    $State.Writer = $null
-    # Both null together is what "stopped" means to Write-SessionLogFile: nothing to write to, and
-    # nothing to hold lines in either.
-    $State.Pending = $null
 }

@@ -185,6 +185,16 @@ Describe 'Session log file, from the log window (issue #121)' {
             $Script:OpenLogFolderEventSource | Should -Match '\$Script:SessionLogFile'
             $Script:OpenLogFolderEventSource | Should -Match 'Add_Click'
         }
+
+        It 'reports a failure without unwinding the click handler' {
+            # Write-LogOutput -LogType ERROR ends in Write-Error, and the application runs with
+            # $ErrorActionPreference = Stop - so logging an ERROR from a WPF click handler throws
+            # into the dispatcher's unhandled path and stacks dialogs. Write-ContainedErrorLog is
+            # this repository's answer, and the same rule CleanupPathsDoNotThrow.Tests.ps1 applies
+            # to the other handlers that must carry on afterwards.
+            $Script:OpenLogFolderEventSource | Should -Match 'Write-ContainedErrorLog'
+            $Script:OpenLogFolderEventSource | Should -Not -Match 'Write-LogOutput -LogType ERROR'
+        }
     }
 
     Context 'The application starts and stops the file' {

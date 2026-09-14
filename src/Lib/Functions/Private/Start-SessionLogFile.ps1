@@ -50,24 +50,39 @@ function Start-SessionLogFile {
             $State = New-SessionLogFileState -LogLevel $Setting.LogLevel
         }
 
-        $State.LogLevel = $Setting.LogLevel
-        $State.Directory = $Setting.Directory
-        $State.MaxBytes = [long]$Setting.MaxSizeMegabytes * 1MB
+        # Under the state's own lock, the same one Write-SessionLogFile takes. Everything below
+        # read-modify-writes state a concurrent line could also be touching, and the Pending handover
+        # in particular has a window in which a line added to the old list would simply be lost.
+        # Monitor is reentrant, so the Write-SessionLogFile calls in the flush below are fine.
+        $LockTaken = $false
+        try {
+            [System.Threading.Monitor]::Enter($State.SyncRoot, [ref]$LockTaken)
 
-        New-Item -Path $Setting.Directory -ItemType Directory -Force -ErrorAction Stop | Out-Null
+            $State.LogLevel = $Setting.LogLevel
+            $State.Directory = $Setting.Directory
+            $State.MaxBytes = [long]$Setting.MaxSizeMegabytes * 1MB
 
-        Remove-ExpiredSessionLogFile -Directory $Setting.Directory -RetentionDays $Setting.RetentionDays -RetentionCount $Setting.RetentionCount -ExcludeSession $State.SessionKey | Out-Null
+            New-Item -Path $Setting.Directory -ItemType Directory -Force -ErrorAction Stop | Out-Null
 
-        $State.Path = Join-Path $Setting.Directory -ChildPath (Get-SessionLogFileName -StartTime $State.StartTime -ProcessId $State.ProcessId -Part $State.Part)
-        $State.Writer = Open-SessionLogFileWriter -Path $State.Path
-        $Script:SessionLogFile = $State
+            Remove-ExpiredSessionLogFile -Directory $Setting.Directory -RetentionDays $Setting.RetentionDays -RetentionCount $Setting.RetentionCount -ExcludeSession $State.SessionKey | Out-Null
 
-        # Clearing Pending first is deliberate: Write-SessionLogFile holds a line whenever Pending is
-        # a list, so flushing into itself would put every held line straight back into the buffer.
-        $Pending = $State.Pending
-        $State.Pending = $null
-        foreach ($Entry in $Pending) {
-            Write-SessionLogFile -Line $Entry.Line -LogType $Entry.LogType
+            $State.Path = Join-Path $Setting.Directory -ChildPath (Get-SessionLogFileName -StartTime $State.StartTime -ProcessId $State.ProcessId -Part $State.Part)
+            $State.Writer = Open-SessionLogFileWriter -Path $State.Path
+            $Script:SessionLogFile = $State
+
+            # Clearing Pending first is deliberate: Write-SessionLogFile holds a line whenever
+            # Pending is a list, so flushing into itself would put every held line straight back into
+            # the buffer.
+            $Pending = $State.Pending
+            $State.Pending = $null
+            foreach ($Entry in $Pending) {
+                Write-SessionLogFile -Line $Entry.Line -LogType $Entry.LogType
+            }
+        }
+        finally {
+            if ($LockTaken) {
+                [System.Threading.Monitor]::Exit($State.SyncRoot)
+            }
         }
 
         # Through Write-LogOutput, so it reaches the log window as well as the file: the path is how

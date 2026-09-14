@@ -29,6 +29,10 @@ $Script:LogForm.Elements.ButtonOpenLogFolder.Add_Click({
             "Opened the session log folder: {0}" -f $LogFolder | Write-LogOutput -LogType DEBUG
         }
         catch {
-            $_.Exception.Message | Write-LogOutput -LogType ERROR -ErrorObject $_
+            # Contained, not raw. Write-LogOutput ends every ERROR in Write-Error and the
+            # application runs with $ErrorActionPreference = Stop, so reporting one from a click
+            # handler throws into the dispatcher's unhandled path and stacks dialogs. The user still
+            # sees the message exactly once; the handler returns normally.
+            $_.Exception.Message | Write-ContainedErrorLog -ErrorObject $_
         }
     })

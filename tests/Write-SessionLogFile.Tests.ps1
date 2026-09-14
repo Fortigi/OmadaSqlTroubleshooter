@@ -278,6 +278,67 @@ Describe "Write-SessionLogFile" {
         }
     }
 
+    Context "Concurrency" {
+
+        It "carries a lock object for the state the synchronized writer does not cover" {
+            # TextWriter::Synchronized makes WriteLine atomic and nothing else. BytesWritten, Part,
+            # Path and the Writer reference itself are all read-modify-written around it, and the
+            # rollover disposes and replaces the writer - so two threads rolling at once could lose
+            # lines or abandon the file outright.
+            $Script:SessionLogFile = New-SessionLogFileState -LogLevel "DEBUG"
+
+            $Script:SessionLogFile.SyncRoot | Should -Not -BeNullOrEmpty
+        }
+
+        It "waits for that lock rather than writing through it" {
+            # A real wait, not a claim about the source: another thread holds the lock for 400ms and
+            # the write must not return before it is released.
+            $Script:SessionLogFile = Open-TestSessionLogFile -Folder $Script:Folder
+            # A runspace, not a bare [System.Threading.Thread]: a PowerShell script block has no
+            # runspace on a raw .NET thread and the process dies trying. The SyncRoot instance is
+            # passed by reference, so both sides lock the same object.
+            $Holder = [powershell]::Create()
+            $Holder.AddScript({
+                    param($SyncRoot)
+                    [System.Threading.Monitor]::Enter($SyncRoot)
+                    try {
+                        Start-Sleep -Milliseconds 400
+                    }
+                    finally {
+                        [System.Threading.Monitor]::Exit($SyncRoot)
+                    }
+                }).AddArgument($Script:SessionLogFile.SyncRoot) | Out-Null
+
+            try {
+                $Handle = $Holder.BeginInvoke()
+                # Let the holder actually take the lock before the timed write starts.
+                Start-Sleep -Milliseconds 150
+                $Elapsed = Measure-Command { Write-SessionLogFile -Line "behind the lock" -LogType "INFO" }
+                $Holder.EndInvoke($Handle)
+            }
+            finally {
+                $Holder.Dispose()
+            }
+
+            $Elapsed.TotalMilliseconds | Should -BeGreaterThan 200
+            Read-SessionLogFileWhileOpen -Path $Script:SessionLogFile.Path | Should -Match "behind the lock"
+        }
+
+        It "releases the lock when the write fails, so one failure does not deadlock the application" {
+            $Script:SessionLogFile = Open-TestSessionLogFile -Folder $Script:Folder
+            $Script:SessionLogFile.Writer.Dispose()
+
+            Write-SessionLogFile -Line "into a closed writer" -LogType "INFO"
+
+            $Taken = [System.Threading.Monitor]::TryEnter($Script:SessionLogFile.SyncRoot, 1000)
+            if ($Taken) {
+                [System.Threading.Monitor]::Exit($Script:SessionLogFile.SyncRoot)
+            }
+
+            $Taken | Should -BeTrue
+        }
+    }
+
     Context "Required parameters" {
 
         It "declares <Parameter> mandatory" -ForEach @(
