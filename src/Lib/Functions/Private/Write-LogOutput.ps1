@@ -88,29 +88,11 @@ function Write-LogOutput {
             DialogIcon  = $null
         }
 
-        switch ($Script:RunTimeConfig.Logging.LogLevelSetting) {
-            { $_ -eq "VERBOSE2" -and $LogType -in @( "DEBUG", "INFO", "ERROR", "VERBOSE", "WARNING", "FATAL", "LOG", "VERBOSE2") } {
-                $LogMessage.Show = $true
-            }
-            { $_ -eq "VERBOSE" -and $LogType -in @( "DEBUG", "INFO", "ERROR", "VERBOSE", "WARNING", "FATAL", "LOG") } {
-                $LogMessage.Show = $true
-            }
-            { $_ -eq "DEBUG" -and $LogType -in @( "DEBUG", "INFO", "ERROR", "WARNING", "FATAL", "LOG") } {
-                $LogMessage.Show = $true
-            }
-            { $_ -eq "INFO" -and $LogType -in @( "INFO", "ERROR", "WARNING", "FATAL", "LOG") } {
-                $LogMessage.Show = $true
-            }
-            { $_ -eq "WARNING" -and $LogType -in @(  "ERROR", "WARNING", "FATAL", "LOG") } {
-                $LogMessage.Show = $true
-            }
-            { $_ -in @("ERROR", "FATAL") -and $LogType -in @(  "ERROR", "FATAL", "LOG") } {
-                $LogMessage.Show = $true
-            }
-            default {
-                $LogMessage.Show = $false
-            }
-        }
+        # The same inclusion table this switch statement always applied, moved into
+        # Test-LogLevelThreshold. There are two levels that filter now - the log window's, here, and
+        # the session log file's own (issue #121), which may reasonably be more verbose - and two
+        # copies of the table would drift.
+        $LogMessage.Show = Test-LogLevelThreshold -Level $Script:RunTimeConfig.Logging.LogLevelSetting -LogType $LogType
 
         switch ($LogType) {
             { $_ -eq "VERBOSE2" -and $LogMessage.Show } {
@@ -187,6 +169,19 @@ function Write-LogOutput {
                 $LogMessage.Text | Write-Host -ForegroundColor $LogMessage.Color
             }
         }
+
+        # The same finished line to this session's log file (issue #121). BEHIND Protect-LogMessage,
+        # never beside it: a file outlives the process, gets backed up and gets attached to support
+        # tickets, so a writer that took its own copy of $Message would put unredacted credentials,
+        # tokens, result data and query text on disk permanently - a regression of #39 and #111 and
+        # strictly worse than the problem the file exists to solve. $LogMessage.Text is the masked
+        # text, the same string AppLogObject receives above.
+        #
+        # Outside the $LogMessage.Show block on purpose. Show is the LOG WINDOW's decision; the file
+        # has a level of its own, which is usually the more verbose of the two - that is what removes
+        # the "please reproduce it with -LogLevel VERBOSE" round trip. Write-SessionLogFile applies
+        # it, and does nothing at all when no file is being written.
+        Write-SessionLogFile -Line (($LogMessage.Text) -join "`r`n") -LogType $LogType
         if ($LogMessage.ShowVerbose) {
             $LogMessage.Text | Write-Verbose
         }

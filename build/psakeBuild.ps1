@@ -140,6 +140,11 @@ Task Test -Depends Analyze {
         $AlwaysRunTestFile = @(
             'DependencyLock.Tests.ps1'
             'ThirdPartyNotices.Tests.ps1'
+            # Guards a repository-wide invariant: nothing writes a log message to disk except
+            # through Protect-LogMessage (issue #121). The change that would break it is a change to
+            # some OTHER file - a new caller of the file writer - which the mapping below would not
+            # associate with this suite, so it would skip exactly when it is needed.
+            'SessionLogFileRedaction.Tests.ps1'
         )
 
         if ($ChangedFiles.Count -gt 0) {

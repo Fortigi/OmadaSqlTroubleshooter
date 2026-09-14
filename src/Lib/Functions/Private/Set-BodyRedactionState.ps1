@@ -14,8 +14,17 @@ function Set-BodyRedactionState {
         way it reads every other logging setting.
 
         Switching the option on writes one WARNING, once per session: from that point the query text
-        is in the log window and in anything exported from it, and a user attaching a log to a support
-        ticket should not have to discover that afterwards.
+        is in the log window, in the session log file this session is writing (issue #121) and in
+        anything exported from either, and a user attaching a log to a support ticket should not have
+        to discover that afterwards.
+
+        The session log file is deliberately not an exception to the option. It sits behind
+        Protect-LogMessage, the same single gate the log window sits behind, and this option is
+        lifted upstream of that gate inside ConvertTo-RedactedLogString - so the file shows what the
+        window shows, by construction. Making the file the one place the body stayed masked would
+        mean a second redaction decision applied only to the file, which is exactly the parallel
+        arrangement issue #121 forbids, and would leave the two disagreeing about the same request.
+        What changes instead is this warning, which now names the file.
     #>
     [CmdLetBinding()]
     param(
@@ -37,7 +46,23 @@ function Set-BodyRedactionState {
                 $Script:SkipBodyRedactionWarned = $true
                 # -SkipDialog on purpose: this is a heads-up that belongs in the log the user is
                 # looking at, not a modal box in front of the query they are trying to run.
-                "Request body logging is enabled: query text is now written to this log, and to any log file exported from it. A very long value is still truncated." | Write-LogOutput -LogType WARNING -SkipDialog
+                # A whole second sentence, not a phrase spliced into a list. This is the disclosure
+                # that tells a user their query text is about to go somewhere permanent, and
+                # "...written to this log, to no session log file is being written, and to any log
+                # file..." makes them decode it first.
+                $SessionLogFileNote = "No session log file is being written this session."
+                if ($null -ne $Script:SessionLogFile -and ![string]::IsNullOrWhiteSpace($Script:SessionLogFile.Path)) {
+                    # Unquoted. This path is a thing the user copies out of the message, and a
+                    # Windows profile name may legally contain an apostrophe - "C:\Users\O'Connor\..."
+                    # inside single quotes reads as a quoted string that ends after the O.
+                    $SessionLogFileNote = "It is also written to the session log file: {0}" -f $Script:SessionLogFile.Path
+                }
+
+                # The note comes last, so the path ends the message. Followed by another sentence it
+                # reads as a run-on ("...session_001.log A very long value..."); followed by a period
+                # it copies out as "session_001.log." - neither is acceptable for the one message a
+                # user is meant to act on.
+                "Request body logging is enabled: query text is now written to this log, and to any log file exported from it. A very long value is still truncated. {0}" -f $SessionLogFileNote | Write-LogOutput -LogType WARNING -SkipDialog
             }
 
             "Request body logging is enabled" | Write-LogOutput -LogType LOG

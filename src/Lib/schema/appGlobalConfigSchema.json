@@ -138,5 +138,29 @@
     "Name": "ArrayCopyMaxValues",
     "Type": "Int",
     "DefaultValue": 1000
+  },
+  {
+    "Name": "EnableSessionLogFile",
+    "Type": "Bool",
+    "DefaultValue": false
+  },
+  {
+    "Name": "SessionLogFileLogLevel",
+    "Type": "String",
+    "DefaultValue": "DEBUG"
+  },
+  {
+    "Name": "SessionLogFileDirectory",
+    "Type": "String"
+  },
+  {
+    "Name": "SessionLogFileRetentionCount",
+    "Type": "Int",
+    "DefaultValue": 10
+  },
+  {
+    "Name": "SessionLogFileMaxSizeMegabytes",
+    "Type": "Int",
+    "DefaultValue": 5
   }
 ]

@@ -71,6 +71,26 @@ function Open-LogForm {
             $Script:RunTimeConfig.Logging.LogLevelSetting = $LogForm.Elements.ComboBoxSelectLogLevel.SelectedValue.Content
         }
 
+        # Where this session's log is being written (issue #121). Shown rather than only offered
+        # behind the "Folder" button, because the commonest thing a user needs to do with it is put
+        # it in a support ticket - and because a session that could not open a file has to be able to
+        # say so, which a button cannot.
+        # Both, not just the TextBlock. Assigning to a property of $null throws, this function's
+        # catch logs an ERROR, and an ERROR under $ErrorActionPreference = Stop throws again - so a
+        # XAML mismatch would turn "open the log window" into an error cascade over a label.
+        if ($null -ne $Script:LogForm.Elements.TextBlockSessionLogPath -and $null -ne $Script:LogForm.Elements.ButtonOpenLogFolder) {
+            if ($null -ne $Script:SessionLogFile -and ![string]::IsNullOrWhiteSpace($Script:SessionLogFile.Path)) {
+                $Script:LogForm.Elements.TextBlockSessionLogPath.Text = $Script:SessionLogFile.Path
+                $Script:LogForm.Elements.TextBlockSessionLogPath.ToolTip = $Script:SessionLogFile.Path
+                $Script:LogForm.Elements.ButtonOpenLogFolder.IsEnabled = $true
+            }
+            else {
+                $Script:LogForm.Elements.TextBlockSessionLogPath.Text = "No session log file is being written."
+                $Script:LogForm.Elements.TextBlockSessionLogPath.ToolTip = "Off by default: set EnableSessionLogFile to true in the settings file to write one. If it is on, the file could not be opened. Export Log File still saves what this window is showing."
+                $Script:LogForm.Elements.ButtonOpenLogFolder.IsEnabled = $false
+            }
+        }
+
         if ($null -ne ($Script:LogForm.Definition | Get-FormPositionConfig)) {
             $Position = $Script:LogForm.Definition | Get-FormPositionConfig
             "Log form position: {0}" -f $Position | Write-LogOutput -LogType DEBUG

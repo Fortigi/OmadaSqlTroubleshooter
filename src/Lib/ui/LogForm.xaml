@@ -103,6 +103,10 @@
             <RowDefinition Height="*"/>
             <RowDefinition Height="40"/>
             <RowDefinition Height="30"/>
+            <!-- The session log file's own row (issue #121). Its own row rather than a fourth
+                 control on the button row above, which already needs about 520px against a 450px
+                 window. -->
+            <RowDefinition Height="30"/>
             <RowDefinition Height="10"/>
         </Grid.RowDefinitions>
         <Grid.ColumnDefinitions>
@@ -236,9 +240,52 @@
                 <CheckBox x:Name="CheckboxShowRequestBody"
                           Content="Show request body"
                           VerticalAlignment="Center"
-                          ToolTip="Log the request body (your query) instead of its shape - the same as starting with -SkipBodyRedaction. Secrets are still masked and a very long value is still truncated, but the query text ends up in this window and in any exported log file."/>
+                          ToolTip="Log the request body (your query) instead of its shape - the same as starting with -SkipBodyRedaction. Secrets are still masked and a very long value is still truncated, but the query text ends up in this window, in the session log file and in any exported log file."/>
             </StackPanel>
         </StackPanel>
+        <Grid Grid.Row="4"
+              Grid.Column="1"
+              VerticalAlignment="Center">
+            <!-- Where this session's log file is being written (issue #121). The path is shown, not
+                 just offered behind a button, because a path that can be read is a path that can be
+                 pasted into a support ticket. -->
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="Auto"/>
+                <ColumnDefinition Width="8"/>
+                <ColumnDefinition Width="*"/>
+            </Grid.ColumnDefinitions>
+            <Button Grid.Column="0"
+                    x:Name="ButtonOpenLogFolder"
+                    TabIndex="16"
+                    ToolTip="Open the folder this session's log file is written to"
+                    IsEnabled="True">
+                <Grid HorizontalAlignment="Center"
+                      VerticalAlignment="Center">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="6"/>
+                        <ColumnDefinition Width="Auto"/>
+                        <ColumnDefinition Width="4"/>
+                        <ColumnDefinition Width="40"/>
+                    </Grid.ColumnDefinitions>
+                    <TextBlock Grid.Column="1"
+                               x:Name="ButtonOpenLogFolderImage"
+                               Style="{StaticResource ToolbarGlyphStyle}"
+                               Text="&#xE838;"/>
+                    <AccessText Grid.Column="3"
+                                x:Name="ButtonOpenLogFolderText"
+                                Text="_Folder"
+                                Style="{StaticResource ButtonAccessTextStyle}"
+                                IsHitTestVisible="False"/>
+                </Grid>
+            </Button>
+            <TextBlock Grid.Column="2"
+                       x:Name="TextBlockSessionLogPath"
+                       Text="No session log file is being written."
+                       FontSize="11"
+                       TextTrimming="CharacterEllipsis"
+                       VerticalAlignment="Center"
+                       ToolTip="The log file this session is being written to"/>
+        </Grid>
     </Grid>
 
 </Window>
