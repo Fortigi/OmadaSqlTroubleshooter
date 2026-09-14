@@ -200,10 +200,22 @@ Describe "The Messages pane exists beside the results grid" {
     It "is written only through Set-TabStatusMessage" {
         # The single-writer property this issue introduced. Any direct assignment to the block outside
         # its own function is the second writer issue #71 went looking for.
+        #
+        # The one other file allowed to name the block is its ToolTipOpening handler (issue #119),
+        # which subscribes to an event and cannot do that without naming the element. It is exempted
+        # by exact name, and the next test holds it to never assigning anything on the block.
         $Private:Direct = Get-ChildItem -Path $Script:SourceRoot -Recurse -Filter "*.ps1" |
             Select-String -Pattern "TextBlockStatusBarMessage" |
-            Where-Object { $_.Path -notlike "*Set-TabStatusMessage.ps1" }
+            Where-Object { $_.Path -notlike "*Set-TabStatusMessage.ps1" } |
+            Where-Object { $_.Path -notlike "*\MainFormTabContent.Elements.TextBlockStatusBarMessage.ps1" }
 
         $Private:Direct | Should -BeNullOrEmpty
+    }
+
+    It "is only subscribed to, never written, by its ToolTipOpening handler" {
+        $Private:HandlerSource = Get-Content -Path (Join-Path $Script:SourceRoot -ChildPath "Lib\Events\MainFormTabContent.Elements.TextBlockStatusBarMessage.ps1") -Raw
+
+        $Private:HandlerSource | Should -Not -Match 'TextBlockStatusBarMessage\.(Text|ToolTip)\s*='
+        $Private:HandlerSource | Should -Not -Match '\.(Text|ToolTip)\s*='
     }
 }
