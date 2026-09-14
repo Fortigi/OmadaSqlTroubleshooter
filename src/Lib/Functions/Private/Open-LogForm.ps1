@@ -75,7 +75,10 @@ function Open-LogForm {
         # behind the "Folder" button, because the commonest thing a user needs to do with it is put
         # it in a support ticket - and because a session that could not open a file has to be able to
         # say so, which a button cannot.
-        if ($null -ne $Script:LogForm.Elements.TextBlockSessionLogPath) {
+        # Both, not just the TextBlock. Assigning to a property of $null throws, this function's
+        # catch logs an ERROR, and an ERROR under $ErrorActionPreference = Stop throws again - so a
+        # XAML mismatch would turn "open the log window" into an error cascade over a label.
+        if ($null -ne $Script:LogForm.Elements.TextBlockSessionLogPath -and $null -ne $Script:LogForm.Elements.ButtonOpenLogFolder) {
             if ($null -ne $Script:SessionLogFile -and ![string]::IsNullOrWhiteSpace($Script:SessionLogFile.Path)) {
                 $Script:LogForm.Elements.TextBlockSessionLogPath.Text = $Script:SessionLogFile.Path
                 $Script:LogForm.Elements.TextBlockSessionLogPath.ToolTip = $Script:SessionLogFile.Path

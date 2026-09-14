@@ -79,15 +79,16 @@ function Remove-ExpiredSessionLogFile {
         # grows when pruning has been failing, so the slow path would be the crowded one.
         $Candidate = [System.Collections.Generic.List[PSCustomObject]]::new()
         foreach ($File in (Get-ChildItem -LiteralPath $Directory -Filter (Get-SessionLogFilePattern) -File -ErrorAction SilentlyContinue)) {
-            if ($File.Name -notmatch $NameExpression) {
-                continue
+            # -match, not "-notmatch ... continue". Both populate $Matches, but reading a capture
+            # group after testing for the NEGATIVE reads like a bug even when it is not, and the
+            # capture this takes decides which files get deleted together.
+            if ($File.Name -match $NameExpression) {
+                $Candidate.Add([PSCustomObject]@{
+                        Path          = $File.FullName
+                        SessionKey    = $Matches["Session"]
+                        LastWriteTime = $File.LastWriteTime
+                    })
             }
-
-            $Candidate.Add([PSCustomObject]@{
-                    Path          = $File.FullName
-                    SessionKey    = $Matches["Session"]
-                    LastWriteTime = $File.LastWriteTime
-                })
         }
 
         if ($Candidate.Count -eq 0) {

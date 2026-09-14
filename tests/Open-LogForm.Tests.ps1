@@ -175,6 +175,14 @@ Describe 'Session log file, from the log window (issue #121)' {
             $Script:OpenLogFormSource | Should -Match '\$Script:SessionLogFile'
         }
 
+        It 'checks both new elements are there before touching either' {
+            # Assigning to a property of $null throws, Open-LogForm's catch logs an ERROR, and
+            # logging an ERROR under $ErrorActionPreference = Stop throws again - so a XAML mismatch
+            # or a partial harness would turn "the log window opens" into an error cascade. Guarding
+            # only the TextBlock and then dereferencing the Button was exactly that hole.
+            $Script:OpenLogFormSource | Should -Match '\$null -ne \$Script:LogForm\.Elements\.TextBlockSessionLogPath -and \$null -ne \$Script:LogForm\.Elements\.ButtonOpenLogFolder'
+        }
+
         It 'offers a button that opens the folder' {
             $Script:OpenLogFolderButton | Should -Not -BeNullOrEmpty
             # The window's Button style disables buttons by default; every usable one opts back in.
