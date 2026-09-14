@@ -28,6 +28,119 @@ BeforeAll {
     }
 
     function Get-ActiveTabSession { return $Script:ActiveStub }
+
+    # A tab whose SelectedIndex counts how often it is WRITTEN, not just what it ends up holding.
+    # Issue #115 asks for the selection to change only when it is not already correct, and the two
+    # are indistinguishable from the final value alone: assigning SelectedIndex the value it already
+    # holds still raises SelectionChanged in WPF, which is what the user sees as a needless flicker.
+    #
+    # A ScriptProperty over a backing field rather than a WPF control, because CI's pwsh cannot
+    # resolve System.Windows.* at all.
+    function script:New-SelectionTrackingTabStub {
+        param(
+            [string]$Id = "tab-tracked",
+            [int]$SelectedIndex = 0
+        )
+
+        $TabControl = [pscustomobject]@{ BackingIndex = $SelectedIndex; SelectionWrites = 0 }
+        $TabControl | Add-Member -MemberType ScriptProperty -Name SelectedIndex -Value {
+            $this.BackingIndex
+        } -SecondValue {
+            $this.BackingIndex = $args[0]
+            $this.SelectionWrites++
+        }
+
+        return [pscustomobject]@{
+            Id            = $Id
+            QueryMessages = [System.Collections.Generic.List[string]]::new()
+            Elements      = @{
+                TextBoxQueryMessages  = [pscustomobject]@{ Text = "" }
+                TabControlQueryOutput = $TabControl
+            }
+        }
+    }
+}
+
+Describe "Set-TabOutputSelection" {
+    BeforeEach {
+        $Script:TabA = New-MessageTabStub -Id "tab-A"
+        $Script:ActiveStub = $Script:TabA
+    }
+
+    It "selects Messages" {
+        Set-TabOutputSelection -TabSession $Script:TabA -Pane Messages
+
+        $Script:TabA.Elements.TabControlQueryOutput.SelectedIndex | Should -Be 1
+    }
+
+    It "selects Results" {
+        $Script:TabA.Elements.TabControlQueryOutput.SelectedIndex = 1
+
+        Set-TabOutputSelection -TabSession $Script:TabA -Pane Results
+
+        $Script:TabA.Elements.TabControlQueryOutput.SelectedIndex | Should -Be 0
+    }
+
+    It "does not write the selection when it is already correct" {
+        # The acceptance criterion: an execute that returns rows while Results is already selected
+        # must not visibly re-select anything.
+        $Tracked = New-SelectionTrackingTabStub -SelectedIndex 0
+
+        Set-TabOutputSelection -TabSession $Tracked -Pane Results
+
+        $Tracked.Elements.TabControlQueryOutput.SelectionWrites | Should -Be 0
+        $Tracked.Elements.TabControlQueryOutput.SelectedIndex | Should -Be 0
+    }
+
+    It "writes the selection exactly once when it does have to change" {
+        $Tracked = New-SelectionTrackingTabStub -SelectedIndex 0
+
+        Set-TabOutputSelection -TabSession $Tracked -Pane Messages
+        Set-TabOutputSelection -TabSession $Tracked -Pane Messages
+
+        $Tracked.Elements.TabControlQueryOutput.SelectionWrites | Should -Be 1
+        $Tracked.Elements.TabControlQueryOutput.SelectedIndex | Should -Be 1
+    }
+
+    It "falls back to the active tab when it is not told which tab" {
+        Set-TabOutputSelection -Pane Messages
+
+        $Script:TabA.Elements.TabControlQueryOutput.SelectedIndex | Should -Be 1
+    }
+
+    It "does not throw when there is no tab at all" {
+        $Script:ActiveStub = $null
+
+        { Set-TabOutputSelection -Pane Messages } | Should -Not -Throw
+    }
+
+    It "does not throw when the tab has no elements yet" {
+        $Bare = [pscustomobject]@{ Id = "tab-bare"; QueryMessages = $null; Elements = $null }
+
+        { Set-TabOutputSelection -TabSession $Bare -Pane Messages } | Should -Not -Throw
+    }
+
+    It "requires the pane, so a call site that forgot it fails instead of selecting Results" {
+        # Asserted through the parameter metadata rather than by calling without -Pane: PowerShell
+        # answers a missing mandatory parameter with a prompt, which in a test run hangs rather than
+        # throws. Left optional the parameter would bind to the empty string, satisfy ValidateSet on
+        # an unbound parameter, and fall through to Results - silently hiding the pane this function
+        # exists to bring forward.
+        $Parameter = (Get-Command Set-TabOutputSelection).Parameters["Pane"]
+        $Attribute = $Parameter.Attributes | Where-Object { $_ -is [System.Management.Automation.ParameterAttribute] } | Select-Object -First 1
+
+        $Attribute.Mandatory | Should -BeTrue
+    }
+
+    It "does not throw when the tab has no output tab control" {
+        $Legacy = [pscustomobject]@{
+            Id            = "tab-legacy"
+            QueryMessages = [System.Collections.Generic.List[string]]::new()
+            Elements      = @{ TextBoxQueryMessages = [pscustomobject]@{ Text = "" } }
+        }
+
+        { Set-TabOutputSelection -TabSession $Legacy -Pane Results } | Should -Not -Throw
+    }
 }
 
 Describe "Add-TabMessage" {
@@ -212,5 +325,21 @@ Describe "Two tabs failing concurrently" {
 
         $Script:TabA.Elements.TabControlQueryOutput.SelectedIndex | Should -Be 1
         $Script:TabB.Elements.TabControlQueryOutput.SelectedIndex | Should -Be 0
+    }
+
+    It "selecting an output tab on one tab does not move the other's" {
+        # Issue #115, per tab like the rest of the pane: a background completion on tab A must not
+        # change the selected output tab on tab B.
+        $Script:TabB.Elements.TabControlQueryOutput.SelectedIndex = 1
+
+        Set-TabOutputSelection -TabSession $Script:TabA -Pane Messages
+
+        $Script:TabA.Elements.TabControlQueryOutput.SelectedIndex | Should -Be 1
+        $Script:TabB.Elements.TabControlQueryOutput.SelectedIndex | Should -Be 1
+
+        Set-TabOutputSelection -TabSession $Script:TabA -Pane Results
+
+        $Script:TabA.Elements.TabControlQueryOutput.SelectedIndex | Should -Be 0
+        $Script:TabB.Elements.TabControlQueryOutput.SelectedIndex | Should -Be 1
     }
 }

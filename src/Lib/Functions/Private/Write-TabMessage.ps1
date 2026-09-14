@@ -4,6 +4,71 @@
 $Script:QueryOutputResultsIndex = 0
 $Script:QueryOutputMessagesIndex = 1
 
+function Set-TabOutputSelection {
+    <#
+    .SYNOPSIS
+    Select a tab's Results or Messages pane, and only when it is not already the selected one.
+
+    .DESCRIPTION
+    The single writer of TabControlQueryOutput.SelectedIndex, so the mapping from a pane name to an
+    index lives in one place and every caller inherits the same two guarantees.
+
+    The first is that a selection which is already correct is left alone. Assigning SelectedIndex the
+    value it already holds still raises SelectionChanged in WPF, and an execute that returned rows
+    while Results was already selected would then visibly re-select the tab the user was already on
+    (issue #115).
+
+    The second is that the change is scoped to one tab. The tab control belongs to the tab session,
+    not to the window, so a background completion on tab A reaches tab A's control and cannot move
+    what tab B is showing - whatever Set-ActiveTabContext is pointing at when it lands.
+
+    .PARAMETER TabSession
+    The tab whose selection to set. Defaults to the active tab, which during a background completion
+    is the tab the work belongs to.
+
+    .PARAMETER Pane
+    Which pane to select: Results or Messages. Mandatory, because it is the whole instruction: left
+    optional it would bind to the empty string, pass ValidateSet's check on an unbound parameter, and
+    fall through to Results - so a call site that forgot to say which pane it wanted would silently
+    select the one that hides the Messages this function exists to bring forward.
+    #>
+    [CmdLetBinding()]
+    param(
+        $TabSession,
+        [Parameter(Mandatory = $true)]
+        [ValidateSet("Results", "Messages")]
+        [string]$Pane
+    )
+
+    try {
+        $Private:Target = if ($null -ne $TabSession) { $TabSession } else { Get-ActiveTabSession }
+        if ($null -eq $Private:Target -or $null -eq $Private:Target.Elements) {
+            return
+        }
+
+        $Private:TabControl = $Private:Target.Elements.TabControlQueryOutput
+        if ($null -eq $Private:TabControl) {
+            return
+        }
+
+        $Private:DesiredIndex = if ($Pane -eq "Messages") {
+            $Script:QueryOutputMessagesIndex
+        }
+        else {
+            $Script:QueryOutputResultsIndex
+        }
+
+        if ($Private:TabControl.SelectedIndex -eq $Private:DesiredIndex) {
+            return
+        }
+
+        $Private:TabControl.SelectedIndex = $Private:DesiredIndex
+    }
+    catch {
+        "Could not select the {0} pane: {1}" -f $Pane, $_.Exception.Message | Write-LogOutput -LogType DEBUG
+    }
+}
+
 function Clear-TabMessage {
     <#
     .SYNOPSIS
@@ -44,9 +109,7 @@ function Clear-TabMessage {
                 $Private:Target.Elements.TextBoxQueryMessages.Text = ""
             }
 
-            if ($null -ne $Private:Target.Elements.TabControlQueryOutput) {
-                $Private:Target.Elements.TabControlQueryOutput.SelectedIndex = $Script:QueryOutputResultsIndex
-            }
+            Set-TabOutputSelection -TabSession $Private:Target -Pane Results
         }
     }
     catch {
@@ -81,6 +144,10 @@ function Add-TabMessage {
     Bring the Messages pane to the front. Set for failures and not for successes: a failure the user
     cannot see is the thing this issue set out to fix, while a successful query should still land
     them on their data.
+
+    This covers a message that arrives on its own, outside an execute completing. The pane an execute
+    leaves selected is decided by Complete-ExecuteQueryResult from the outcome instead (issue #115),
+    because severity cannot tell "returned no rows" - a WARNING - from "returned rows".
     #>
     [CmdLetBinding()]
     param(
@@ -109,8 +176,8 @@ function Add-TabMessage {
             $Private:Target.Elements.TextBoxQueryMessages.Text = ($Private:Target.QueryMessages -join "`r`n")
         }
 
-        if ($Focus -and $null -ne $Private:Target.Elements.TabControlQueryOutput) {
-            $Private:Target.Elements.TabControlQueryOutput.SelectedIndex = $Script:QueryOutputMessagesIndex
+        if ($Focus) {
+            Set-TabOutputSelection -TabSession $Private:Target -Pane Messages
         }
     }
     catch {
