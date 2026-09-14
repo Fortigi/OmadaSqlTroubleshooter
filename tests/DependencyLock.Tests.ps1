@@ -214,10 +214,11 @@ Describe 'Dependency lock packaging' -Tag 'Unit' {
         # alignment, this must fail before it doubles validation time again.
         $Content = Get-Content -Path (Join-Path $Script:RepositoryRoot -ChildPath '.github\workflows\pr-validation.yml') -Raw
 
-        # Matches the YAML 'matrix:' key however it is written - block style with nested keys in any
-        # order, or flow style like 'matrix: { shell: [...] }' - so a reintroduced matrix is caught
-        # regardless of formatting.
-        $Content | Should -Not -Match '(?m)^\s*matrix:' -Because 'the validate job must not reintroduce a build matrix'
+        # Deliberately not anchored to line start: a 'matrix:' key can come back block-style, flow-style
+        # ('matrix: { shell: [...] }'), or fully inline nested inside 'strategy: { ... }'. This workflow
+        # has no legitimate use of the substring 'matrix:' today, so any occurrence at all is a
+        # reintroduced build matrix.
+        $Content | Should -Not -Match 'matrix:' -Because 'the validate job must not reintroduce a build matrix'
         $Content | Should -Not -Match '(?i)\bpowershell\b' -Because 'Windows PowerShell 5.1 is not a supported shell for this job'
     }
 }
