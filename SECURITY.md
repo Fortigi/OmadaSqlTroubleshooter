@@ -91,6 +91,26 @@ Out of scope:
 | Integrity verification of the runtime-downloaded assemblies | [src/DependencyLock.psd1](src/DependencyLock.psd1), see below |
 | Static analysis (PSScriptAnalyzer) and Pester suites | [build/psakeBuild.ps1](build/psakeBuild.ps1), run in PR validation |
 
+### Branch ruleset on `main`
+
+Repository setting — *Settings > Rules > Rulesets* — a ruleset named **"Protect Main"** requires a
+pull request (squash merges only) before merging to `main`, blocks force pushes and branch
+deletion, and requires the `PR Validation` and `Dependency Review` status checks together with
+conversation resolution.
+
+- **`PR Validation` as a required check is a deliberate human gate, not an oversight.** It reports
+  a commit status from the comment-triggered `/validate` workflow (see
+  [Pull requests](CONTRIBUTING.md#pull-requests)), so *every* pull request — Dependabot's included
+  — stays blocked until a maintainer comments `/validate`. That permanently rules out Dependabot
+  auto-merge. This trade is intentional.
+- **`E2E Suite` is deliberately not a required check.** It is `paths`-filtered (see
+  [.github/workflows/e2e.yml](.github/workflows/e2e.yml)), so it never reports on most pull
+  requests — a required check that never reports blocks a merge forever.
+- **Signed commits are deliberately not required.**
+  [.github/workflows/dependency-lock-sync.yml](.github/workflows/dependency-lock-sync.yml) pushes
+  its lock-file refresh unsigned; requiring signatures would break the one workflow that makes a
+  Dependabot pull request mergeable.
+
 Three caveats worth stating plainly rather than letting the table above overstate what these controls
 do:
 

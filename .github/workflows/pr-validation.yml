@@ -21,12 +21,11 @@ concurrency:
   group: pr-validation-${{ github.event.issue.number || github.ref }}
   cancel-in-progress: true
 
-permissions:
-  contents: read
-  checks: write
-  pull-requests: write
-  issues: write
-  statuses: write
+# Every job below declares its own permissions: block, each scoped to only the API calls that job
+# actually makes - a job-level block fully replaces this one rather than narrowing it, so leaving
+# a broad grant here would be dead weight that only widens the default for a future job that
+# forgets to declare its own.
+permissions: {}
 
 jobs:
   dispatch:

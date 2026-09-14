@@ -65,4 +65,22 @@ Describe 'Workflow action pins' -Tag 'Unit' {
             $Uncommented | Should -BeNullOrEmpty -Because "the SHA pin needs a human-readable '# vX.Y.Z' comment for review and for Dependabot to rewrite`n$Detail"
         }
     }
+
+    Context 'pr-validation.yml workflow-level permissions' {
+
+        BeforeAll {
+            $Script:PrValidationPath = Join-Path -Path $Script:WorkflowsPath -ChildPath 'pr-validation.yml'
+            $Script:PrValidationLines = Get-Content -LiteralPath $Script:PrValidationPath
+        }
+
+        It 'Should keep the workflow-level permissions block empty, since every job declares its own' {
+            # dispatch, validate and report-status each carry their own job-level `permissions:`
+            # block, and a job-level block fully REPLACES the workflow-level one rather than
+            # narrowing it - so a non-empty grant up here is dead for all three jobs today and
+            # only widens the default for a future job that forgets to declare its own.
+            $TopLevelPermissions = @($Script:PrValidationLines | Where-Object { $_ -match '^permissions:' })
+            $TopLevelPermissions | Should -HaveCount 1 -Because 'the top-level permissions: key should appear exactly once'
+            $TopLevelPermissions[0] | Should -Match '^permissions:\s*\{\}\s*$' -Because 'every job in this workflow declares its own permissions: block'
+        }
+    }
 }
