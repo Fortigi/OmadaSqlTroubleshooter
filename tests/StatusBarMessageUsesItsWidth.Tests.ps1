@@ -264,7 +264,16 @@ Describe "The neighbours have the ceiling Auto never gave them" {
 
 Describe "The message column is still the one that grows" {
     It "is the only star column" {
-        (Get-StatusBarColumnDefinition -Index 0).Width | Should -Be "*"
+        # Matched rather than compared: "*", "1*" and "2*" are the same thing to WPF, and which one
+        # the markup spells is not what this test is about. What matters is that column 0 takes the
+        # leftover width and that nothing else competes with it for a share of it.
+        (Get-StatusBarColumnDefinition -Index 0).Width | Should -Match '^\d*\.?\d*\*$'
+
+        $Private:OtherStarColumns = 1..8 |
+            ForEach-Object { (Get-StatusBarColumnDefinition -Index $PSItem).Width } |
+            Where-Object { $PSItem -match '\*' }
+
+        $Private:OtherStarColumns | Should -BeNullOrEmpty
     }
 
     It "carries a floor so the Auto columns cannot squeeze it to nothing" {
