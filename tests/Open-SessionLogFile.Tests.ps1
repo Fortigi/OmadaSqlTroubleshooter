@@ -39,11 +39,16 @@ BeforeAll {
         param([string]$Path)
 
         $Stream = [System.IO.FileStream]::new($Path, [System.IO.FileMode]::Open, [System.IO.FileAccess]::Read, ([System.IO.FileShare]::ReadWrite -bor [System.IO.FileShare]::Delete))
+        $Reader = $null
         try {
             $Reader = [System.IO.StreamReader]::new($Stream)
             return $Reader.ReadToEnd()
         }
         finally {
+            if ($null -ne $Reader) {
+                $Reader.Dispose()
+            }
+
             $Stream.Dispose()
         }
     }

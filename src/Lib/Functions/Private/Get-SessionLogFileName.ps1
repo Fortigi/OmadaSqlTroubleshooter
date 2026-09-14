@@ -393,12 +393,19 @@ function Read-SessionLogFileHeader {
 
     try {
         $Stream = [System.IO.FileStream]::new($Path, [System.IO.FileMode]::Open, [System.IO.FileAccess]::Read, ([System.IO.FileShare]::ReadWrite -bor [System.IO.FileShare]::Delete))
+        $Reader = $null
         try {
             $Reader = [System.IO.StreamReader]::new($Stream, [System.Text.UTF8Encoding]::new($false))
             $Buffer = [char[]]::new(512)
             $CharacterCount = $Reader.Read($Buffer, 0, $Buffer.Length)
         }
         finally {
+            # The reader first, which also closes the stream; the stream's own Dispose then covers a
+            # reader that was never created. Disposing a stream twice is harmless.
+            if ($null -ne $Reader) {
+                $Reader.Dispose()
+            }
+
             $Stream.Dispose()
         }
 
