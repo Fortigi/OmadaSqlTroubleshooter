@@ -19,72 +19,22 @@ BeforeAll {
     . (Join-Path $PrivatePath -ChildPath "Get-QueryResultValueKind.ps1")
     . (Join-Path $PrivatePath -ChildPath "ConvertTo-SqlLiteral.ps1")
 
-    function Get-ScriptDomAssemblyPath {
-        <#
-            Resolves a ScriptDom assembly to test against, exactly as Get-SqlSyntaxDiagnostic.Tests
-            does: the copy the module has already installed when there is one, otherwise the pinned
-            package, downloaded and verified against the pinned SHA-256 before it is used.
-        #>
-        $Lock = Import-PowerShellDataFile -Path (Join-Path $ParentPath -ChildPath "src\DependencyLock.psd1")
-        $Artifact = @($Lock.Artifacts | Where-Object { $_.Id -eq "Microsoft.SqlServer.TransactSql.ScriptDom" })[0]
-        if ($null -eq $Artifact) {
-            return $null
-        }
+    # The SHARED resolver, not a copy of it. This file used to carry its own, which predated the
+    # cache integrity work of PR #105 and wrote no sidecar hash beside the DLL it cached. Both
+    # resolvers cache into the same %TEMP% folder, and this file sorts first, so on an agent with no
+    # installed copy it seeded that cache with an unrecorded file - after which every suite using the
+    # shared helper found "a cached assembly that does not match what was recorded for it", threw the
+    # already-loaded (and therefore locked) file away, and could not replace it. Fourteen tests went
+    # inconclusive in CI while this file's own ScriptDom assertions passed in the same job. One
+    # resolver, one cache, one recorded hash.
+    . (Join-Path $PSScriptRoot -ChildPath "ScriptDomTestAssembly.ps1")
 
-        $Installed = Join-Path ([System.Environment]::GetFolderPath("LocalApplicationData")) "OmadaSqlTroubleshooter\Bin\Microsoft.SqlServer.TransactSql.ScriptDom.dll"
-        if (Test-Path $Installed -PathType Leaf) {
-            return $Installed
-        }
+    Install-ScriptDomForTest -RepositoryRoot $ParentPath | Out-Null
 
-        $CacheRoot = Join-Path ([System.IO.Path]::GetTempPath()) ("OmadaSqlTroubleshooter.ScriptDom.{0}" -f $Artifact.Version)
-        $Cached = Join-Path $CacheRoot "Microsoft.SqlServer.TransactSql.ScriptDom.dll"
-        if (Test-Path $Cached -PathType Leaf) {
-            return $Cached
-        }
-
-        try {
-            New-Item -Path $CacheRoot -ItemType Directory -Force | Out-Null
-            $Package = Join-Path $CacheRoot "package.zip"
-            Invoke-WebRequest -Uri $Artifact.Url -OutFile $Package
-
-            $ActualHash = (Get-FileHash -Path $Package -Algorithm SHA256).Hash.ToLowerInvariant()
-            if ($ActualHash -ne $Artifact.Sha256) {
-                Remove-Item -Path $Package -Force -ErrorAction SilentlyContinue
-                return $null
-            }
-
-            $Expanded = Join-Path $CacheRoot "expanded"
-            Expand-Archive -Path $Package -DestinationPath $Expanded -Force
-            $Source = Get-ChildItem -Path $Expanded -Filter "Microsoft.SqlServer.TransactSql.ScriptDom.dll" -Recurse |
-                Where-Object { $_.Directory.Name -eq "net8.0" } |
-                Select-Object -First 1
-            if ($null -eq $Source) {
-                return $null
-            }
-
-            Copy-Item -Path $Source.FullName -Destination $Cached -Force
-            Remove-Item -Path $Expanded -Recurse -Force -ErrorAction SilentlyContinue
-            Remove-Item -Path $Package -Force -ErrorAction SilentlyContinue
-            return $Cached
-        }
-        catch {
-            return $null
-        }
-    }
-
-    $AssemblyPath = Get-ScriptDomAssemblyPath
-    $Script:ScriptDomLoaded = $false
-    if (![string]::IsNullOrWhiteSpace($AssemblyPath) -and (Test-Path $AssemblyPath -PathType Leaf)) {
-        try {
-            Add-Type -Path $AssemblyPath -ErrorAction Stop
-            $Script:ScriptDomLoaded = $true
-        }
-        catch {
-            # Already loaded into this session by another test file is a success, not a failure.
-            $Script:ScriptDomLoaded = $null -ne ([System.AppDomain]::CurrentDomain.GetAssemblies() |
-                    Where-Object { $_.GetName().Name -eq "Microsoft.SqlServer.TransactSql.ScriptDom" })
-        }
-    }
+    # Asked of the session rather than of the return value: another test file having already loaded
+    # the assembly is a success, not a failure, and an assembly cannot be loaded twice.
+    $Script:ScriptDomLoaded = $null -ne ([System.AppDomain]::CurrentDomain.GetAssemblies() |
+            Where-Object { $_.GetName().Name -eq "Microsoft.SqlServer.TransactSql.ScriptDom" })
 
     function Test-SqlParses {
         <#

@@ -79,17 +79,29 @@ function ConvertTo-SqlLiteral {
 
     $Invariant = [cultureinfo]::InvariantCulture
 
+    # A value that cannot be emitted as the kind it was given becomes a quoted literal rather than a
+    # broken one. Before issue #120 the kind always came from the value's own CLR type, so a
+    # conversion here could not fail; now it can also come from the SQL schema, and a schema is a
+    # name-based resolution against a cache that may be stale. Get-QueryResultColumnKind corroborates
+    # the declared kind against every value before it is used, so this is the second line of defence
+    # - and the only one for a caller that passes -Kind itself.
+    if (-not (Test-QueryResultValueFitsKind -Value $BaseValue -Kind $Kind)) {
+        return (Format-SqlStringLiteral -Text ([string]::Format($Invariant, "{0}", $BaseValue)) -SqlType $SqlType)
+    }
+
     switch ($Kind) {
         "Boolean" {
             # 1/0, never 'True'/'False'. A bit column compared against the string 'False' is a
             # conversion error, and that is the good outcome - the bad one is a column typed wide
             # enough to accept it and match nothing.
             #
-            # Resolve-StrictBoolean rather than a [bool] cast: the cast is truthiness, so
+            # Resolve-ColumnBooleanValue rather than a [bool] cast: the cast is truthiness, so
             # [bool]'False' is $true and the literal would come out as 1 - the exact inversion this
-            # issue is about. That matters once Kind can be Boolean because the COLUMN is a bit
-            # while the value arrives as text, which is what the SqlType seam enables.
-            $BooleanValue = Resolve-StrictBoolean -Value $BaseValue
+            # issue is about. That matters now that Kind can be Boolean because the COLUMN is a bit
+            # while the value arrives as text, which is what the SqlType seam populated by issue #120
+            # enables; the helper is also what accepts the "0"/"1" a bit takes when it is rendered
+            # as text rather than as a JSON boolean.
+            $BooleanValue = Resolve-ColumnBooleanValue -Value $BaseValue
             if ($null -eq $BooleanValue) {
                 # Not a boolean this function can vouch for. Quote it and let the server reject it,
                 # rather than guess a bit value that may be the opposite of the truth.
@@ -109,7 +121,7 @@ function ConvertTo-SqlLiteral {
 
         "Decimal" {
             # decimal keeps its declared scale in the round trip, so 12.50 stays "12.50".
-            return ([decimal]$BaseValue).ToString($Invariant)
+            return (ConvertTo-InvariantDecimal -Value $BaseValue).ToString($Invariant)
         }
 
         "Float" {
@@ -382,6 +394,49 @@ function Get-InvariantFloatText {
     }
 
     return $Text
+}
+
+function ConvertTo-InvariantDecimal {
+    <#
+    .SYNOPSIS
+        Coerces a value to [decimal], parsing a string with InvariantCulture and keeping its scale.
+
+    .DESCRIPTION
+        A plain [decimal] cast of a STRING loses the trailing zeros: [decimal]"8.00" renders as "8",
+        and a money column copied as 8 instead of 8.00 is a value the reader has to take on trust.
+        [decimal]::Parse keeps the scale the text carried, which is what issue #103's mapping table
+        asks for - and the string case only became reachable when issue #120 let a declared decimal
+        type meet a value rendered as text.
+
+        The culture is fixed for the reason it is fixed everywhere else here: under nl-NL a
+        culture-sensitive parse reads "12.50" as twelve hundred and fifty.
+
+    .PARAMETER Value
+        A numeric value, or a string holding one.
+
+    .OUTPUTS
+        [decimal]
+
+    .NOTES
+        No tracer preamble: called from the per-cell clipboard path.
+    #>
+
+    [CmdLetBinding()]
+    [OutputType([decimal])]
+    param(
+        [Parameter(Mandatory = $false, Position = 0)]
+        [AllowNull()]
+        $Value
+    )
+
+    if ($Value -is [string]) {
+        return [decimal]::Parse(
+            $Value.Trim(),
+            ([System.Globalization.NumberStyles]::AllowLeadingSign -bor [System.Globalization.NumberStyles]::AllowDecimalPoint),
+            [cultureinfo]::InvariantCulture)
+    }
+
+    return [decimal]$Value
 }
 
 function ConvertTo-InvariantDateTime {

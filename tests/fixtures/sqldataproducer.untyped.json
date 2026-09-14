@@ -1,0 +1,30 @@
+{
+  "_comment": [
+    "The SqlDataProducer result set of tests/mock/fixtures/asmx.paging.sqldataproducer.json, with",
+    "every cell carried as a JSON STRING - the shape issue #120 reports from a real tenant, and the",
+    "shape the typed mock fixture cannot reproduce. Nothing but the value types differs: same",
+    "columns, same rows, same order.",
+    "",
+    "Evidence for this shape: the jQGrid population web service renders cells for a grid rather than",
+    "returning typed SQL values. Issue #95 pinned the same endpoint family returning 'When' as a",
+    "server-formatted DISPLAY STRING ('8/25/2026 12:03 PM') where the committed fixture has an ISO",
+    "timestamp - so the committed fixtures are idealised, and the live payload is text.",
+    "",
+    "Deleted is carried as 'False'/'True' here and as '0'/'1' in the Flagged column, because a bit",
+    "rendered to text can arrive either way and both have to end up as 1/0.",
+    "",
+    "Code is the leading-zero column of acceptance criterion 2: it must stay quoted whatever else is",
+    "promoted, which on untyped data is the whole point."
+  ],
+  "d": {
+    "Records": 4,
+    "Total": 1,
+    "Page": 1,
+    "Rows": [
+      { "Id": "900", "UID": "0f6a1b3c-1111-4a2b-9c01-a00000000900", "Number": "IDG-900", "DisplayName": "Users", "Code": "007", "Amount": "12.50", "CreateTime": "2019-11-20T13:55:09", "Deleted": "False", "Flagged": "0", "ParentID": null },
+      { "Id": "901", "UID": "0f6a1b3c-1111-4a2b-9c01-a00000000901", "Number": "IDG-901", "DisplayName": "User groups", "Code": "042", "Amount": "0.75", "CreateTime": "2019-11-20T13:55:09", "Deleted": "True", "Flagged": "1", "ParentID": null },
+      { "Id": "902", "UID": "0f6a1b3c-1111-4a2b-9c01-a00000000902", "Number": "IDG-902", "DisplayName": "Müller", "Code": "100", "Amount": "-3.20", "CreateTime": "2023-07-17T12:17:24", "Deleted": "False", "Flagged": "0", "ParentID": null },
+      { "Id": "903", "UID": "0f6a1b3c-1111-4a2b-9c01-a00000000903", "Number": "IDG-903", "DisplayName": "O'Brien", "Code": "900", "Amount": "8.00", "CreateTime": "2024-07-19T09:40:42", "Deleted": "True", "Flagged": "1", "ParentID": null }
+    ]
+  }
+}

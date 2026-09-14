@@ -8,6 +8,8 @@
 
 BeforeAll {
     $ParentPath = Split-Path -Path $PSScriptRoot -Parent
+    . (Join-Path $ParentPath -ChildPath "src\Lib\Functions\Private\Resolve-StrictBoolean.ps1")
+    . (Join-Path $ParentPath -ChildPath "src\Lib\Functions\Private\Get-QueryResultValueKind.ps1")
     . (Join-Path $ParentPath -ChildPath "src\Lib\Functions\Private\Get-DataGridSelectionSchema.ps1")
 
     $Script:Tracer = [System.Diagnostics.Trace]
@@ -124,12 +126,62 @@ Describe "Get-DataGridSelectionSchema" {
         }
     }
 
-    Context "The schema resolution seam" {
-        It "reports a null SqlType, because priority 1 is not delivered yet" {
-            # Downstream code already reads and honours SqlType. Asserting it is null here is what
-            # makes the seam visible: when the schema lookup lands, this is the test that changes.
+    Context "The schema resolution - priority 1, delivered by issue #120" {
+        It "takes the declared type from the map, keyed by the binding path" {
+            $Grid = New-GridStub -Column @{ Header = "Identifier"; SortMemberPath = "Id"; DisplayIndex = 0 }
+            @(Get-DataGridSelectionSchema -DataGrid $Grid -SqlTypeMap @{ Id = "int" })[0].SqlType | Should -BeExactly "int"
+        }
+
+        It "does not key the map by the header, which is not reliably the name of anything" {
+            # A header has been through Invoke-SanitizeJsonKeys and the grid's own escaping. Typing a
+            # column from it would resolve the wrong column whenever the two differ.
+            $Grid = New-GridStub -Column @{ Header = "Identifier"; SortMemberPath = "Id"; DisplayIndex = 0 }
+            @(Get-DataGridSelectionSchema -DataGrid $Grid -SqlTypeMap @{ Identifier = "int" })[0].SqlType | Should -BeNullOrEmpty
+        }
+
+        It "leaves a column the map does not answer for untyped" {
+            $Grid = New-GridStub -Column @{ Header = "Total"; SortMemberPath = "Total"; DisplayIndex = 0 }
+            @(Get-DataGridSelectionSchema -DataGrid $Grid -SqlTypeMap @{ Id = "int" })[0].SqlType | Should -BeNullOrEmpty
+        }
+
+        It "treats an explicit null map as 'resolve nothing' rather than falling back" {
             $Grid = New-GridStub -Column @{ Header = "Id"; SortMemberPath = "Id"; DisplayIndex = 0 }
-            @(Get-DataGridSelectionSchema -DataGrid $Grid)[0].SqlType | Should -BeNullOrEmpty
+            @(Get-DataGridSelectionSchema -DataGrid $Grid -SqlTypeMap $null)[0].SqlType | Should -BeNullOrEmpty
+        }
+
+        It "resolves the map itself when the parameter is omitted" {
+            function Get-ActiveQueryColumnSqlTypeMap { return @{ Id = "bigint" } }
+
+            try {
+                $Grid = New-GridStub -Column @{ Header = "Id"; SortMemberPath = "Id"; DisplayIndex = 0 }
+                @(Get-DataGridSelectionSchema -DataGrid $Grid)[0].SqlType | Should -BeExactly "bigint"
+            }
+            finally {
+                Remove-Item -Path "Function:\Get-ActiveQueryColumnSqlTypeMap" -ErrorAction SilentlyContinue
+            }
+        }
+
+        It "still produces a schema when the declared types cannot be resolved at all" {
+            # Nothing about typing may cost the user their copy: no declared type is the state every
+            # copy was in before issue #120, and it still produces correct output.
+            $Grid = New-GridStub -Column @{ Header = "Id"; SortMemberPath = "Id"; DisplayIndex = 0 }
+            @(Get-DataGridSelectionSchema -DataGrid $Grid)[0].PropertyName | Should -BeExactly "Id"
+        }
+    }
+
+    Context "The untyped-response switch" {
+        It "allows value promotion when every bound cell is a string" {
+            $Grid = New-GridStub -Column @{ Header = "Id"; SortMemberPath = "Id"; DisplayIndex = 0 }
+            $Grid.Items = @('{ "Id": "900", "Number": "IDG-900" }' | ConvertFrom-Json)
+
+            @(Get-DataGridSelectionSchema -DataGrid $Grid -SqlTypeMap @{})[0].AllowValuePromotion | Should -BeTrue
+        }
+
+        It "refuses value promotion when the response typed anything" {
+            $Grid = New-GridStub -Column @{ Header = "Number"; SortMemberPath = "Number"; DisplayIndex = 0 }
+            $Grid.Items = @('{ "Id": 900, "Number": "12345" }' | ConvertFrom-Json)
+
+            @(Get-DataGridSelectionSchema -DataGrid $Grid -SqlTypeMap @{})[0].AllowValuePromotion | Should -BeFalse -Because "a typed response makes a JSON string evidence that the column is textual"
         }
     }
 }

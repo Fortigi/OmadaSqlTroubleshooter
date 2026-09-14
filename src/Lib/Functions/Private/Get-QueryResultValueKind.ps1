@@ -283,3 +283,358 @@ function Get-RefinedStringValueKind {
 
     return "String"
 }
+
+function Get-CanonicalNumericStringKind {
+    <#
+    .SYNOPSIS
+        Reports whether a string is a number written in exactly one, unambiguous way - and which
+        kind of number it is.
+
+    .DESCRIPTION
+        The gate on priority 3's only promotion, added by issue #120. Against a response that types
+        every column as a string there is no CLR type left to read, and #103 rejected text sniffing
+        for a very good reason: it turns the code "007" into the number 7.
+
+        The answer is to sniff CANONICAL numbers only. A canonical number is one whose text is the
+        only text that renders it, so emitting it unquoted cannot change what the value is:
+
+          * an optional leading minus, never a leading plus;
+          * no leading zero unless the integer part IS zero, so "007" is refused;
+          * at least one digit after the decimal point when there is one, so "12." is refused;
+          * no thousands separator, no exponent, no currency symbol, no percent sign, no
+            surrounding whitespace and no hexadecimal;
+          * it must round-trip - parsing the text and rendering it invariantly has to give the text
+            back, which is what stops a value too wide for Int64 or Decimal from being promoted.
+
+        Anything else is a string, because for anything else the quoted literal is the only literal
+        that is certainly right.
+
+    .PARAMETER Value
+        The text to inspect.
+
+    .OUTPUTS
+        [string] Integer or Decimal, or $null when the text is not a canonical number.
+
+    .NOTES
+        No tracer preamble: called once per copied cell.
+    #>
+
+    [CmdLetBinding()]
+    [OutputType([string])]
+    param(
+        [Parameter(Mandatory = $false, Position = 0)]
+        [AllowNull()]
+        [AllowEmptyString()]
+        [string]$Value
+    )
+
+    if ([string]::IsNullOrEmpty($Value)) {
+        return $null
+    }
+
+    $Invariant = [cultureinfo]::InvariantCulture
+
+    if ($Value -match "^-?(0|[1-9][0-9]*)$") {
+        $Integer = [long]0
+        if ([long]::TryParse($Value, [System.Globalization.NumberStyles]::AllowLeadingSign, $Invariant, [ref]$Integer) -and
+            $Integer.ToString($Invariant) -ceq $Value) {
+            return "Integer"
+        }
+
+        return $null
+    }
+
+    if ($Value -match "^-?(0|[1-9][0-9]*)\.[0-9]+$") {
+        $Decimal = [decimal]0
+        if ([decimal]::TryParse($Value, ([System.Globalization.NumberStyles]::AllowLeadingSign -bor [System.Globalization.NumberStyles]::AllowDecimalPoint), $Invariant, [ref]$Decimal) -and
+            $Decimal.ToString($Invariant) -ceq $Value) {
+            return "Decimal"
+        }
+
+        return $null
+    }
+
+    return $null
+}
+
+function Test-QueryResultRowIsUntyped {
+    <#
+    .SYNOPSIS
+        Reports whether a result set carries no type information of its own.
+
+    .DESCRIPTION
+        The switch that decides whether the value-promotion of issue #120 may run at all, and the
+        reason promoting numbers out of text does not re-break issue #103's acceptance criterion 1.
+
+        A response that types its values is evidence: the endpoint sent a JSON string because the
+        column is textual, so "12345" in an nvarchar column must stay quoted. A response that types
+        NOTHING is no evidence at all, and quoting everything is exactly the reported bug. The two
+        cannot be told apart one column at a time - a single text column looks identical in both -
+        so the question is asked of the whole result set, once per copy.
+
+        A number or a boolean is the evidence looked for, because those are the two shapes only a
+        typed JSON payload produces. A [datetime] is deliberately NOT evidence: ConvertFrom-Json
+        rehydrates an ISO 8601 timestamp to a [datetime] whether the JSON quoted it or not, so a
+        date proves nothing about the rest of the payload.
+
+        It reads at most MaximumRow rows. A typed response shows a number in its first row, and the
+        grid can hold thousands: scanning all of them would cost the whole result set per copy to
+        answer a question the first rows already answer.
+
+    .PARAMETER Row
+        The bound result rows.
+
+    .PARAMETER MaximumRow
+        How many rows to inspect before concluding.
+
+    .OUTPUTS
+        [bool] $true when nothing in the inspected rows carries a type.
+
+    .NOTES
+        No tracer preamble: called once per copy, and its parameter is the result set.
+    #>
+
+    [CmdLetBinding()]
+    [OutputType([bool])]
+    param(
+        [Parameter(Mandatory = $false, Position = 0)]
+        [AllowNull()]
+        [AllowEmptyCollection()]
+        $Row,
+        [Parameter(Mandatory = $false)]
+        [int]$MaximumRow = 200
+    )
+
+    $Inspected = 0
+
+    foreach ($CurrentRow in @($Row)) {
+        if ($null -eq $CurrentRow) {
+            continue
+        }
+
+        if ($Inspected -ge $MaximumRow) {
+            break
+        }
+
+        $Inspected++
+
+        foreach ($Property in $CurrentRow.PSObject.Properties) {
+            $Value = $Property.Value
+            if ($null -eq $Value) {
+                continue
+            }
+
+            if ($Value.GetType() -eq [System.Management.Automation.PSObject]) {
+                $Value = $Value.BaseObject
+            }
+
+            if ($Value -is [bool] -or $Value -is [decimal] -or $Value -is [double] -or $Value -is [single] -or
+                $Value -is [byte] -or $Value -is [sbyte] -or
+                $Value -is [int16] -or $Value -is [uint16] -or
+                $Value -is [int32] -or $Value -is [uint32] -or
+                $Value -is [int64] -or $Value -is [uint64] -or
+                $Value -is [bigint]) {
+                return $false
+            }
+        }
+    }
+
+    # No rows at all counts as untyped, and costs nothing: with no values there is no column to
+    # promote either.
+    return $true
+}
+
+function Resolve-ColumnBooleanValue {
+    <#
+    .SYNOPSIS
+        Resolves a value to a boolean for a column that is DECLARED to be a bit.
+
+    .DESCRIPTION
+        Resolve-StrictBoolean deliberately refuses the string "1": on its own, text is not evidence
+        of a truth value, and that refusal is pinned by its own tests.
+
+        A column the schema declares as a bit is a different question, and issue #120 is where the
+        difference shows up. A response that renders every value as text renders a bit as "0"/"1" or
+        as "True"/"False", and with the declared type in hand there is no guess left to make - the
+        column IS a bit. So exactly those shapes are accepted here, on top of everything
+        Resolve-StrictBoolean already vouches for, and the integer rule that function already
+        documents is what decides "0" and "1" rather than a second copy of that decision.
+
+        Nothing else widens: any other text still resolves to $null, and the caller then quotes the
+        value rather than emitting a bit it cannot vouch for.
+
+    .PARAMETER Value
+        The value to resolve.
+
+    .OUTPUTS
+        [bool], or $null when the value is not a boolean this can vouch for.
+
+    .NOTES
+        No tracer preamble: called once per copied cell.
+    #>
+
+    [CmdLetBinding()]
+    [OutputType([System.Nullable[bool]])]
+    param(
+        [Parameter(Mandatory = $false, Position = 0)]
+        [AllowNull()]
+        [AllowEmptyString()]
+        $Value
+    )
+
+    $Resolved = Resolve-StrictBoolean -Value $Value
+    if ($null -ne $Resolved) {
+        return $Resolved
+    }
+
+    $BaseValue = $Value
+    if ($null -ne $BaseValue -and $BaseValue.GetType() -eq [System.Management.Automation.PSObject]) {
+        $BaseValue = $BaseValue.BaseObject
+    }
+
+    if ($BaseValue -isnot [string]) {
+        return $null
+    }
+
+    $Text = $BaseValue.Trim()
+    if ((Get-CanonicalNumericStringKind -Value $Text) -ne "Integer") {
+        return $null
+    }
+
+    return (Resolve-StrictBoolean -Value ([long]$Text))
+}
+
+function Test-QueryResultValueFitsKind {
+    <#
+    .SYNOPSIS
+        Reports whether a value can honestly be emitted as the given literal kind.
+
+    .DESCRIPTION
+        The corroboration step of issue #120, and the reason a declared SQL type cannot corrupt a
+        value. Priority 1 answers from the schema, which is a NAME-based resolution against a cache
+        that may be older than the database - so before a whole column is formatted as its declared
+        type, every value in it has to be one that type can actually hold. A value that is not
+        degrades the column to String, which is always safe.
+
+        It is also what keeps issue #103's acceptance criterion 2 true whatever the schema says:
+        "007" does not fit Integer, because the only integer literal for it is 7, and 7 is a
+        different value.
+
+        $null and DBNull fit every kind: they are emitted as NULL whatever the column resolved to.
+
+    .PARAMETER Value
+        The value to check.
+
+    .PARAMETER Kind
+        The literal kind the column resolved to.
+
+    .OUTPUTS
+        [bool]
+
+    .NOTES
+        No tracer preamble: called once per copied cell.
+    #>
+
+    [CmdLetBinding()]
+    [OutputType([bool])]
+    param(
+        [Parameter(Mandatory = $false, Position = 0)]
+        [AllowNull()]
+        [AllowEmptyString()]
+        $Value,
+        [Parameter(Mandatory = $true)]
+        [string]$Kind
+    )
+
+    if ($null -eq $Value -or $Value -is [System.DBNull] -or $Kind -eq "Null" -or $Kind -eq "String") {
+        return $true
+    }
+
+    $BaseValue = $Value
+    if ($BaseValue.GetType() -eq [System.Management.Automation.PSObject]) {
+        $BaseValue = $BaseValue.BaseObject
+    }
+
+    # A value that already IS the CLR type the kind describes needs no text to be trusted. The
+    # string cases below are the ones the schema seam introduced.
+    $Invariant = [cultureinfo]::InvariantCulture
+    $Text = if ($BaseValue -is [string]) { $BaseValue.Trim() } else { $null }
+
+    switch ($Kind) {
+        "Boolean" {
+            return ($null -ne (Resolve-ColumnBooleanValue -Value $BaseValue))
+        }
+
+        "Integer" {
+            if ($BaseValue -is [bool]) { return $false }
+            if ($null -ne $Text) { return ((Get-CanonicalNumericStringKind -Value $Text) -eq "Integer") }
+
+            return ($BaseValue -is [byte] -or $BaseValue -is [sbyte] -or
+                $BaseValue -is [int16] -or $BaseValue -is [uint16] -or
+                $BaseValue -is [int32] -or $BaseValue -is [uint32] -or
+                $BaseValue -is [int64] -or $BaseValue -is [uint64] -or
+                $BaseValue -is [bigint])
+        }
+
+        "Decimal" {
+            if ($BaseValue -is [bool]) { return $false }
+            if ($null -ne $Text) { return ($null -ne (Get-CanonicalNumericStringKind -Value $Text)) }
+
+            return ($BaseValue -is [decimal] -or $BaseValue -is [byte] -or $BaseValue -is [sbyte] -or
+                $BaseValue -is [int16] -or $BaseValue -is [uint16] -or
+                $BaseValue -is [int32] -or $BaseValue -is [uint32] -or
+                $BaseValue -is [int64] -or $BaseValue -is [uint64])
+        }
+
+        "Float" {
+            if ($BaseValue -is [bool]) { return $false }
+            if ($null -ne $Text) {
+                $Double = [double]0
+                return [double]::TryParse($Text, [System.Globalization.NumberStyles]::Float, $Invariant, [ref]$Double)
+            }
+
+            return ($BaseValue -is [double] -or $BaseValue -is [single] -or $BaseValue -is [decimal] -or
+                $BaseValue -is [int16] -or $BaseValue -is [int32] -or $BaseValue -is [int64])
+        }
+
+        "Guid" {
+            if ($BaseValue -is [guid]) { return $true }
+            if ($null -eq $Text) { return $false }
+
+            $Guid = [guid]::Empty
+            return [guid]::TryParse($Text, [ref]$Guid)
+        }
+
+        "Binary" {
+            return ($BaseValue -is [byte[]])
+        }
+
+        "Time" {
+            if ($BaseValue -is [timespan]) { return $true }
+            if ($null -eq $Text) { return $false }
+
+            $Time = [timespan]::Zero
+            return [timespan]::TryParse($Text, $Invariant, [ref]$Time)
+        }
+
+        "DateTimeOffset" {
+            if ($BaseValue -is [datetimeoffset]) { return $true }
+            if ($null -eq $Text) { return $false }
+
+            $Offset = [datetimeoffset]::MinValue
+            return [datetimeoffset]::TryParse($Text, $Invariant, [System.Globalization.DateTimeStyles]::None, [ref]$Offset)
+        }
+
+        default {
+            # Date and DateTime. An INVARIANT parse only: a value rendered in the tenant's locale
+            # ("20-11-2019") is deliberately not accepted, because reading it needs a culture this
+            # process cannot know is the right one, and picking one is a guess that silently swaps
+            # the day and the month (issue #95 is the same trap on the history grid).
+            if ($BaseValue -is [datetime]) { return $true }
+            if ($null -eq $Text) { return $false }
+
+            $DateTime = [datetime]::MinValue
+            return [datetime]::TryParse($Text, $Invariant, [System.Globalization.DateTimeStyles]::None, [ref]$DateTime)
+        }
+    }
+}

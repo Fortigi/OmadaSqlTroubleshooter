@@ -23,6 +23,26 @@ function Get-ScriptDomAssemblyPath {
         [string]$RepositoryRoot
     )
 
+    # An assembly this session has already loaded is the answer, whatever the cache now looks like.
+    # It was resolved by this same function - it is the only thing in the test suite that loads
+    # ScriptDom - so it is already the verified copy, and it cannot be replaced in any case: a loaded
+    # assembly cannot be unloaded, and on Windows its file cannot be deleted or moved over.
+    #
+    # Without this, a cache that goes bad AFTER the first suite loaded from it takes every later suite
+    # down with it: the integrity check below throws the file away, the delete silently fails because
+    # the file is locked, the re-download cannot publish over it, and the function returns $null -
+    # so suite after suite marks itself inconclusive while a perfectly good parser sits loaded in the
+    # session. That is exactly what happened in CI to the 14 Get-QueryColumnSqlTypeMap tests.
+    $LoadedAssembly = [System.AppDomain]::CurrentDomain.GetAssemblies() |
+        Where-Object { $_.GetName().Name -eq "Microsoft.SqlServer.TransactSql.ScriptDom" } |
+        Select-Object -First 1
+
+    if ($null -ne $LoadedAssembly -and
+        ![string]::IsNullOrWhiteSpace($LoadedAssembly.Location) -and
+        (Test-Path $LoadedAssembly.Location -PathType Leaf)) {
+        return $LoadedAssembly.Location
+    }
+
     $Lock = Import-PowerShellDataFile -Path (Join-Path $RepositoryRoot -ChildPath "src\DependencyLock.psd1")
     $Artifact = @($Lock.Artifacts | Where-Object { $_.Id -eq "Microsoft.SqlServer.TransactSql.ScriptDom" })[0]
     if ($null -eq $Artifact) {
