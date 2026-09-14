@@ -5,6 +5,12 @@ BeforeAll {
     . (Join-Path $FunctionPath -ChildPath "Protect-LogMessage.ps1")
     . (Join-Path $FunctionPath -ChildPath "ConvertTo-RedactedLogString.ps1")
     . (Join-Path $FunctionPath -ChildPath "Get-LogResultShape.ps1")
+    # Write-LogOutput now asks Test-LogLevelThreshold what its level includes, and offers every line
+    # to the session log file as well (issue #121). Both are on the path taken for every message, so
+    # this suite needs the real ones rather than a stand-in that could disagree with them.
+    . (Join-Path $FunctionPath -ChildPath "Test-LogLevelThreshold.ps1")
+    . (Join-Path $FunctionPath -ChildPath "Get-SessionLogFileName.ps1")
+    . (Join-Path $FunctionPath -ChildPath "Write-SessionLogFile.ps1")
 
     $Script:Tracer = [System.Diagnostics.Trace]
 
@@ -34,6 +40,9 @@ Describe 'Write-LogOutput redaction' {
         $Script:Tabs = @()
         $Script:ActiveTabId = $null
         $Script:TextBoxLog = $null
+        # No session log file in this suite: AppLogObject is the subject here, and the file's own
+        # behaviour - including that it is redacted identically - is SessionLogFileRedaction.Tests.ps1.
+        $Script:SessionLogFile = $null
     }
 
     Context 'A full request parameter set (issue #39 acceptance criterion)' {
