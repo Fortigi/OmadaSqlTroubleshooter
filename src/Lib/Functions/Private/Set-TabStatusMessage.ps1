@@ -59,7 +59,15 @@ function Set-TabStatusMessage {
             return
         }
 
-        $Private:StatusBlock.Text = $Message
+        # Only write when the text actually changes. Issue #119 asks that nothing repaint the bar
+        # while no work is in flight. WPF's property system already ignores an equal value (measured:
+        # two identical writes raise no Text change), but that is the DependencyProperty's behaviour
+        # and not this function's. Callers such as Reset-TabStatusMessage write the steady state
+        # again and again, so the guarantee is stated here, where a test can hold it. The tooltip
+        # is bound to Text in the XAML and needs nothing from this function.
+        if ([string]$Private:StatusBlock.Text -cne [string]$Message) {
+            $Private:StatusBlock.Text = $Message
+        }
 
         if ($Render -and $null -ne $Private:StatusBlock.Dispatcher) {
             $Private:StatusBlock.Dispatcher.Invoke([System.Action] {}, [System.Windows.Threading.DispatcherPriority]::Render) | Out-Null
@@ -69,6 +77,115 @@ function Set-TabStatusMessage {
         # A status bar that cannot be painted must not take the operation it was describing down
         # with it. The message is already in the log by the time this runs.
         "Could not write the status message: {0}" -f $_.Exception.Message | Write-LogOutput -LogType DEBUG
+    }
+}
+
+function Test-TabStatusMessageTrimmed {
+    <#
+    .SYNOPSIS
+    Tell whether the status bar message is trimmed at the width it has right now.
+
+    .DESCRIPTION
+    Issue #119. The one place that decides "is the message cut off". Its only caller is the
+    ToolTipOpening handler on TextBlockStatusBarMessage, so the question is asked at hover time,
+    against the width the block has at that moment, and never cached.
+
+    It used to be asked when the text was written, and that goes stale. Resizing the window changes
+    whether the SAME text trims without anything writing it. Measured in an STA host against this
+    markup: "Query 'MvE: Rope log query' executed successfully - see Messages" wants 350px, gets
+    725.87px at a 1445px tab and is not trimmed, gets 174px at 700px and is, then gets 725.87px again
+    at 1445px, all with no write in between.
+
+    WPF gives nothing to read this from. System.Windows.Controls.TextBlock on .NET 10 has TextTrimming
+    and no IsTextTrimmed (reflected in the same host; IsTextTrimmed is WinUI's). So the block is asked
+    how wide it wants to be with no constraint, and that is compared with the width it was arranged to.
+    The infinite Measure leaves a live element's arrangement invalid until the next layout pass, which
+    restores it (measured: DesiredSize 1402px after the call, 720.51px again after UpdateLayout, and
+    ActualWidth 725.87px throughout). InvalidateMeasure afterwards makes sure that pass happens.
+
+    .PARAMETER StatusBlock
+    The tab's TextBlockStatusBarMessage.
+
+    .OUTPUTS
+    $true only when the block has been laid out and its text needs more width than it was given.
+    #>
+    [CmdLetBinding()]
+    [OutputType([bool])]
+    param(
+        $StatusBlock
+    )
+
+    try {
+        if ($null -eq $StatusBlock) {
+            return $false
+        }
+
+        # Before the first layout pass ActualWidth is 0 and nothing is known about what fits. Unknown
+        # means "not trimmed": a tooltip cannot open on an element that has not been laid out anyway.
+        $Private:AvailableWidth = [double]$StatusBlock.ActualWidth
+        if ($Private:AvailableWidth -le 0) {
+            return $false
+        }
+
+        # Guarded on the method rather than called outright: the headless test lane cannot resolve
+        # System.Windows.*, and the stand-in element it passes supplies DesiredSize directly.
+        if ($null -ne $StatusBlock.PSObject.Methods["Measure"]) {
+            try {
+                $StatusBlock.Measure([System.Windows.Size]::new([double]::PositiveInfinity, [double]::PositiveInfinity))
+            }
+            finally {
+                $StatusBlock.InvalidateMeasure()
+            }
+        }
+
+        $Private:NaturalWidth = 0.0
+        if ($null -ne $StatusBlock.DesiredSize) {
+            $Private:NaturalWidth = [double]$StatusBlock.DesiredSize.Width
+        }
+
+        # DesiredSize includes the margin and ActualWidth does not.
+        if ($null -ne $StatusBlock.Margin) {
+            $Private:NaturalWidth -= [double]$StatusBlock.Margin.Left + [double]$StatusBlock.Margin.Right
+        }
+
+        return ($Private:NaturalWidth -gt $Private:AvailableWidth)
+    }
+    catch {
+        "Could not tell whether the status message is trimmed: {0}" -f $_.Exception.Message | Write-LogOutput -LogType DEBUG
+        return $false
+    }
+}
+
+function Confirm-TabStatusMessageToolTipOpening {
+    <#
+    .SYNOPSIS
+    Let the status bar message's tooltip open only while the message is trimmed.
+
+    .DESCRIPTION
+    Issue #119. The tooltip itself is declared in MainFormTabContent.xaml, bound to the block's own
+    Text, so it always holds the full message and no code ever assigns it. What is left to decide is
+    whether it should appear at all, and that is decided here, when WPF is about to open it. A message
+    that fits is already on screen, and a tooltip repeating it is noise. Marking ToolTipOpening handled
+    cancels the opening.
+
+    .PARAMETER StatusBlock
+    The element raising ToolTipOpening, which is the tab's TextBlockStatusBarMessage.
+
+    .PARAMETER EventArguments
+    The ToolTipEventArgs of that event.
+    #>
+    [CmdLetBinding()]
+    param(
+        $StatusBlock,
+        $EventArguments
+    )
+
+    if ($null -eq $EventArguments) {
+        return
+    }
+
+    if (-not (Test-TabStatusMessageTrimmed -StatusBlock $StatusBlock)) {
+        $EventArguments.Handled = $true
     }
 }
 
