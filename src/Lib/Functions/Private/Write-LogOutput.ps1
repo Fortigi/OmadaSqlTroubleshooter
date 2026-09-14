@@ -88,13 +88,13 @@ function Write-LogOutput {
             DialogIcon  = $null
         }
 
-        # The Messages pane's own copy of the text, kept separate from $LogMessageDialog.Text (issue
-        # #128). The heading and two leading blank lines the WARNING/ERROR branches below add exist to
-        # separate a modal dialog's summary from its detail; the pane is not a dialog - it is a
-        # durable, top-aligned text surface beside the results, and the status bar (issue #117)
-        # already names the outcome, so the pane gets the plain message with nothing prepended.
-        # Application-level dialogs (Show-LogMessageDialog and the no-window MessageBox path below)
-        # keep reading $LogMessageDialog.Text and are unaffected by this.
+        # The Messages pane's own copy of the text, kept separate from $LogMessageDialog.Text
+        # (issue #128). The heading and two leading blank lines the WARNING/ERROR branches below
+        # add exist to separate a modal dialog's summary from its detail; the pane is not a
+        # dialog - it is a durable, top-aligned text surface beside the results, and the status
+        # bar (issue #117) already names the outcome, so the pane gets the plain message with
+        # nothing prepended. Application-level dialogs (Show-LogMessageDialog and the no-window
+        # MessageBox path below) keep reading $LogMessageDialog.Text and are unaffected by this.
         $LogMessagePaneText = $Message
 
         # The same inclusion table this switch statement always applied, moved into
