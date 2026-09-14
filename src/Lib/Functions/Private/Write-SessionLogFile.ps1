@@ -143,7 +143,7 @@ function Open-SessionLogFileWriter {
         if (-not $Append) {
             $Header = Get-SessionLogFileHeader -SessionKey $SessionKey -StartTime $StartTime -ProcessId $ProcessId
             $Writer.WriteLine($Header)
-            $BytesWritten = [long]([System.Text.Encoding]::UTF8.GetByteCount($Header) + 2)
+            $BytesWritten = [long]([System.Text.Encoding]::UTF8.GetByteCount($Header) + [System.Text.Encoding]::UTF8.GetByteCount([System.Environment]::NewLine))
         }
     }
     catch {
@@ -346,8 +346,9 @@ function Write-SessionLogFile {
 
         $State.Writer.WriteLine($Line)
         # Counted rather than measured: asking the file system for its length on every line would
-        # turn one write into two I/O operations. "`r`n" is two bytes in UTF-8.
-        $State.BytesWritten += [System.Text.Encoding]::UTF8.GetByteCount($Line) + 2
+        # turn one write into two I/O operations. WriteLine ends the line with Environment.NewLine,
+        # so that is what is counted, rather than assuming it is "`r`n".
+        $State.BytesWritten += [System.Text.Encoding]::UTF8.GetByteCount($Line) + [System.Text.Encoding]::UTF8.GetByteCount([System.Environment]::NewLine)
 
         # Part 999 is the last number a name can carry, so the last part simply keeps growing:
         # logging never stops because of size.

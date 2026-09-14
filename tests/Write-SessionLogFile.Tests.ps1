@@ -263,6 +263,18 @@ Describe "Write-SessionLogFile" {
             }
         }
 
+        It "counts exactly the bytes that reach the file, header and line endings included" {
+            # The split decision is taken on this count, never on the file's measured length, so a
+            # count that drifts from the file splits at the wrong size.
+            $Script:SessionLogFile = Open-TestSessionLogFile -Folder $Script:Folder
+
+            Write-SessionLogFile -Line "plain ascii" -LogType "INFO"
+            Write-SessionLogFile -Line "accented: caf$([char]0x00E9) na$([char]0x00EF)ve" -LogType "INFO"
+            Write-SessionLogFile -Line "" -LogType "INFO"
+
+            $Script:SessionLogFile.BytesWritten | Should -Be ([System.IO.FileInfo]::new($Script:SessionLogFile.Path).Length)
+        }
+
         It "keeps each finished part within one line of the limit" {
             $Script:SessionLogFile = Open-TestSessionLogFile -Folder $Script:Folder -MaxBytes 2048
 
