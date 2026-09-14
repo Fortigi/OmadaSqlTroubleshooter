@@ -74,20 +74,23 @@ function Remove-ExpiredSessionLogFile {
         # The wildcard is what the file system can filter on cheaply; the expression below is what
         # decides whether a candidate really is one of ours. Both have to agree before anything is
         # deleted.
-        $Candidate = @()
+        # A List, not "$Candidate += ...". Array concatenation reallocates the whole array on every
+        # element, which is quadratic - and the folder this runs against is precisely the one that
+        # grows when pruning has been failing, so the slow path would be the crowded one.
+        $Candidate = [System.Collections.Generic.List[PSCustomObject]]::new()
         foreach ($File in (Get-ChildItem -LiteralPath $Directory -Filter (Get-SessionLogFilePattern) -File -ErrorAction SilentlyContinue)) {
             if ($File.Name -notmatch $NameExpression) {
                 continue
             }
 
-            $Candidate += [PSCustomObject]@{
-                Path          = $File.FullName
-                SessionKey    = $Matches["Session"]
-                LastWriteTime = $File.LastWriteTime
-            }
+            $Candidate.Add([PSCustomObject]@{
+                    Path          = $File.FullName
+                    SessionKey    = $Matches["Session"]
+                    LastWriteTime = $File.LastWriteTime
+                })
         }
 
-        if (($Candidate | Measure-Object).Count -eq 0) {
+        if ($Candidate.Count -eq 0) {
             return $Deleted.ToArray()
         }
 

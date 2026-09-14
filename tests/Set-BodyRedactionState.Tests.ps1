@@ -30,6 +30,9 @@ Describe 'Set-BodyRedactionState' {
         $Script:LogLines = [System.Collections.Generic.List[object]]::new()
         $Script:SkipBodyRedaction = $false
         $Script:SkipBodyRedactionWarned = $false
+        # No session log file unless a test says otherwise (issue #121); the warning names it when
+        # there is one.
+        $Script:SessionLogFile = $null
         $Script:RunTimeConfig = [PSCustomObject]@{
             ApplicationName = "Test"
             Logging         = [PSCustomObject]@{ SkipBodyRedaction = $false }
@@ -86,6 +89,34 @@ Describe 'Set-BodyRedactionState' {
             Set-BodyRedactionState -Enabled $false
 
             $Script:LogLines | Where-Object { $_.LogType -eq "WARNING" } | Should -BeNullOrEmpty
+        }
+    }
+
+    Context 'The session log file the warning now also names (issue #121)' {
+
+        # This is the disclosure that tells a user their query text is about to go somewhere
+        # permanent, so it has to read as a sentence in both cases - a session writing a file, and a
+        # session that is not.
+
+        It 'gives the path, so the user knows exactly what to check before attaching a log' {
+            $Script:SessionLogFile = [PSCustomObject]@{ Path = "C:\Users\someone\AppData\Roaming\OmadaSqlTroubleshooter\logs\session_001.log" }
+
+            Set-BodyRedactionState -Enabled $true
+
+            $Warning = ($Script:LogLines | Where-Object { $_.LogType -eq "WARNING" })[0].Message
+            $Warning | Should -Match ([regex]::Escape("logs\session_001.log"))
+            $Warning | Should -Match "session log file"
+        }
+
+        It 'does not splice a status message into the middle of a list when there is no file' {
+            # "...written to this log, to no session log file is being written, and to any log
+            # file..." is a sentence the reader has to decode, in the one message they must not
+            # have to.
+            Set-BodyRedactionState -Enabled $true
+
+            $Warning = ($Script:LogLines | Where-Object { $_.LogType -eq "WARNING" })[0].Message
+            $Warning | Should -Not -Match "to no session log file is being written"
+            $Warning | Should -Match "this log"
         }
     }
 

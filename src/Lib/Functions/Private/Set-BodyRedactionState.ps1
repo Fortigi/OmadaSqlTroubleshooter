@@ -46,12 +46,16 @@ function Set-BodyRedactionState {
                 $Script:SkipBodyRedactionWarned = $true
                 # -SkipDialog on purpose: this is a heads-up that belongs in the log the user is
                 # looking at, not a modal box in front of the query they are trying to run.
-                $SessionLogFileNote = "no session log file is being written"
+                # A whole second sentence, not a phrase spliced into a list. This is the disclosure
+                # that tells a user their query text is about to go somewhere permanent, and
+                # "...written to this log, to no session log file is being written, and to any log
+                # file..." makes them decode it first.
+                $SessionLogFileNote = "No session log file is being written this session."
                 if ($null -ne $Script:SessionLogFile -and ![string]::IsNullOrWhiteSpace($Script:SessionLogFile.Path)) {
-                    $SessionLogFileNote = "the session log file at '{0}'" -f $Script:SessionLogFile.Path
+                    $SessionLogFileNote = "It is also written to the session log file at '{0}'." -f $Script:SessionLogFile.Path
                 }
 
-                "Request body logging is enabled: query text is now written to this log, to {0}, and to any log file exported from it. A very long value is still truncated." -f $SessionLogFileNote | Write-LogOutput -LogType WARNING -SkipDialog
+                "Request body logging is enabled: query text is now written to this log, and to any log file exported from it. {0} A very long value is still truncated." -f $SessionLogFileNote | Write-LogOutput -LogType WARNING -SkipDialog
             }
 
             "Request body logging is enabled" | Write-LogOutput -LogType LOG

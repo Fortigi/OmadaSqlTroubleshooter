@@ -83,18 +83,32 @@ Describe "The session log file sits behind Protect-LogMessage" {
 
     Context "Who is allowed to call the writer" {
 
-        It "is called from exactly one function in the whole source tree" {
+        It "is called from exactly two files in the whole source tree, and no others" {
             # Anything else is a second route to disk, and a second route is a route around the gate.
+            # Only the file that defines the writer is excluded from the scan - excluding a CALLER
+            # would be a hole in exactly the guard this suite exists to be, so Start-SessionLogFile
+            # is listed here and pinned down by the test below rather than waved through.
             $CallingFile = Get-ChildItem -Path $Script:SourceRoot -Filter "*.ps1" -Recurse -File |
-                Where-Object { $_.Name -ne "Write-SessionLogFile.ps1" -and $_.Name -ne "Start-SessionLogFile.ps1" } |
-                Where-Object { (Get-Content $_.FullName -Raw) -match "Write-SessionLogFile" } |
-                ForEach-Object { $_.Name }
+                Where-Object { $_.Name -ne "Write-SessionLogFile.ps1" } |
+                Where-Object { (Get-Content $_.FullName -Raw) -match "Write-SessionLogFile\s+-Line" } |
+                ForEach-Object { $_.Name } | Sort-Object
 
-            @($CallingFile) | Should -Be @("Write-LogOutput.ps1")
+            @($CallingFile) | Should -Be @("Start-SessionLogFile.ps1", "Write-LogOutput.ps1")
         }
 
         It "is called by Write-LogOutput exactly once" {
             ([regex]::Matches($Script:WriteLogOutputSource, "Write-SessionLogFile -Line")).Count | Should -Be 1
+        }
+
+        It "is called by Start-SessionLogFile exactly once, and only to replay already-gated lines" {
+            # The second caller is safe for one reason only: it replays entries the buffer holds,
+            # and every entry in that buffer arrived through Write-LogOutput and therefore through
+            # Protect-LogMessage. A call here passing anything else - a raw message, a status line
+            # composed on the spot - would be a message reaching disk unmasked.
+            $StartSource = Get-Content (Join-Path $Script:SourceRoot -ChildPath "Lib\Functions\Private\Start-SessionLogFile.ps1") -Raw
+
+            ([regex]::Matches($StartSource, "Write-SessionLogFile\s+-Line")).Count | Should -Be 1
+            $StartSource | Should -Match 'Write-SessionLogFile -Line \$Entry\.Line -LogType \$Entry\.LogType'
         }
     }
 
