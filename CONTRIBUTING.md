@@ -85,8 +85,8 @@ names in correct casing, spaces around operators, and aligned hashtable values.
    you verified it — including the judgement calls a reviewer could reasonably have made
    differently.
 2. **Validation does not start on its own.** Comment `/validate` on the pull request to run the
-   analyzer, the unit tests and the build on both `pwsh` and Windows PowerShell. Post it as the
-   most recent comment; a later comment cancels the run through the workflow's concurrency group.
+   analyzer, the unit tests and the build on `pwsh`. Post it as the most recent comment; a later
+   comment cancels the run through the workflow's concurrency group.
 3. Keep the branch up to date with `main` — validation refuses to run on a branch that is behind.
 4. Resolve every review thread, automated ones included, before asking for a merge.
 

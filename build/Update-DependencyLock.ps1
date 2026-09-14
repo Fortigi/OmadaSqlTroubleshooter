@@ -1,5 +1,3 @@
-#Requires -Version 5.1
-
 <#
 .SYNOPSIS
     Checks or refreshes the pinned versions and SHA-256 hashes in src/DependencyLock.psd1.
@@ -20,9 +18,6 @@
     -Refresh takes the versions from the manifest, downloads each artefact, and writes back the
     version, URL and hash of anything that moved. Only those three values are rewritten, in place, so
     comments and the descriptive fields are preserved.
-
-    Kept clean of PowerShell 7 syntax on purpose: the PR validation matrix runs one leg under Windows
-    PowerShell 5.1.
 .PARAMETER Check
     Report drift and exit non-zero if any is found. Changes nothing.
 .PARAMETER Refresh

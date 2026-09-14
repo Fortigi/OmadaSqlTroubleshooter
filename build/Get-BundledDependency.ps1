@@ -1,5 +1,3 @@
-#Requires -Version 5.1
-
 <#
 .SYNOPSIS
     Fetches the pinned dependency package and lays its files out as a bundle in the build output.
@@ -29,9 +27,6 @@
     It writes only into -OutputPath, which is under buildoutput. It must never write into src/:
     .gitignore only excludes src/bin/Debug/**, so a stray src\bin\*.dll would be committable and
     would immediately fail the "No redistributable binaries" test in tests/ThirdPartyNotices.Tests.ps1.
-
-    Kept clean of PowerShell 7 syntax on purpose: the PR validation matrix runs one leg under Windows
-    PowerShell 5.1.
 .PARAMETER ArtifactId
     Id of the artefact in the lock file to bundle.
 .PARAMETER OutputPath
