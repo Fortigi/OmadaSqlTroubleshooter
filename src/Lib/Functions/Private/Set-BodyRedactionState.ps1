@@ -14,8 +14,17 @@ function Set-BodyRedactionState {
         way it reads every other logging setting.
 
         Switching the option on writes one WARNING, once per session: from that point the query text
-        is in the log window and in anything exported from it, and a user attaching a log to a support
-        ticket should not have to discover that afterwards.
+        is in the log window, in the session log file this session is writing (issue #121) and in
+        anything exported from either, and a user attaching a log to a support ticket should not have
+        to discover that afterwards.
+
+        The session log file is deliberately not an exception to the option. It sits behind
+        Protect-LogMessage, the same single gate the log window sits behind, and this option is
+        lifted upstream of that gate inside ConvertTo-RedactedLogString - so the file shows what the
+        window shows, by construction. Making the file the one place the body stayed masked would
+        mean a second redaction decision applied only to the file, which is exactly the parallel
+        arrangement issue #121 forbids, and would leave the two disagreeing about the same request.
+        What changes instead is this warning, which now names the file.
     #>
     [CmdLetBinding()]
     param(
@@ -37,7 +46,12 @@ function Set-BodyRedactionState {
                 $Script:SkipBodyRedactionWarned = $true
                 # -SkipDialog on purpose: this is a heads-up that belongs in the log the user is
                 # looking at, not a modal box in front of the query they are trying to run.
-                "Request body logging is enabled: query text is now written to this log, and to any log file exported from it. A very long value is still truncated." | Write-LogOutput -LogType WARNING -SkipDialog
+                $SessionLogFileNote = "no session log file is being written"
+                if ($null -ne $Script:SessionLogFile -and ![string]::IsNullOrWhiteSpace($Script:SessionLogFile.Path)) {
+                    $SessionLogFileNote = "the session log file at '{0}'" -f $Script:SessionLogFile.Path
+                }
+
+                "Request body logging is enabled: query text is now written to this log, to {0}, and to any log file exported from it. A very long value is still truncated." -f $SessionLogFileNote | Write-LogOutput -LogType WARNING -SkipDialog
             }
 
             "Request body logging is enabled" | Write-LogOutput -LogType LOG

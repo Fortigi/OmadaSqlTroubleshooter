@@ -27,7 +27,7 @@ Prevents the application from attempting to reconnect to the Omada Identity Suit
 .PARAMETER SkipBodyRedaction
 Logs the request body - the query that was sent - instead of its shape, and starts the application with the log viewer's "Show request body" checkbox already checked.
 Only the body rule is lifted: a body member named for a secret, a credential and a secure string are still masked, headers, credentials and session cookies are unaffected, and a very long value is still truncated by the log's own length limit.
-The query text does end up in the log window and in any log file exported from it.
+The query text does end up in the log window, in the session log file this session writes, and in any log file exported from either.
 The name matches the OmadaWeb.PS switch it drives.
 
 .EXAMPLE
@@ -52,6 +52,12 @@ Starts the Omada SQL Troubleshooter application logging the executed query text,
 
 .NOTES
 Requires PowerShell 7.0 or higher and the OmadaWeb.PS module.
+
+Every session writes a log file for its whole lifetime, under %APPDATA%\OmadaSqlTroubleshooter\logs, named for the start time and the process id.
+Each line is flushed as it is written, so the file is complete up to the moment the application stopped even when it crashed, and it is unaffected by the log window's Clear.
+It goes through the same redaction gate as the log window and has its own log level - DEBUG by default, so it is more detailed than the window usually is.
+Old sessions are pruned on start-up, and the log window shows the file's path and opens its folder.
+EnableSessionLogFile, SessionLogFileLogLevel, SessionLogFileDirectory, SessionLogFileRetentionDays, SessionLogFileRetentionCount and SessionLogFileMaxSizeMegabytes in the configuration file change any of that.
 
 #>
 
@@ -123,6 +129,14 @@ function Invoke-OmadaSqlTroubleshooter {
     # PowerShell session: the module stays imported between runs, so without this reset a second
     # Invoke-OmadaSqlTroubleshooter in the same console would enable body logging silently.
     $Script:SkipBodyRedactionWarned = $false
+
+    # The session log file's state, created before anything can log (issue #121). The file itself
+    # cannot be opened yet - the configuration that says whether it is wanted, where it goes and at
+    # which level has not been read - so until Start-SessionLogFile runs, every line is held here.
+    # That buffer is not a nicety: assembly loading, hash verification and the parser install all
+    # happen below this line, and a session that dies during start-up is exactly the session
+    # somebody wants the log of.
+    $Script:SessionLogFile = New-SessionLogFileState -LogLevel (Get-ConfigSchemaDefault -Property "SessionLogFileLogLevel")
 
     Initialize-OmadaSqlTroubleShooter
 
@@ -197,6 +211,12 @@ function Invoke-OmadaSqlTroubleshooter {
         $Script:ConnectionStatus = $false
         $Script:RunTimeConfig.ReconnectStatus = 0
         Initialize-GlobalConfigSettings -Reset:$Reset
+
+        # As early as it can be: the configuration is what says whether a file is wanted at all,
+        # where it goes, at which level and how much is kept. Everything logged before this point
+        # was held and is written here, so the file starts at the first line of the session rather
+        # than at this one. Old sessions are pruned before the new file is opened.
+        Start-SessionLogFile | Out-Null
 
         Close-SplashScreenForm
     }
@@ -331,5 +351,10 @@ function Invoke-OmadaSqlTroubleshooter {
     Pop-Location
     #Clear-Variables
     "Application '{0}': Clean-up complete!" -f $Script:RunTimeConfig.ApplicationTitle | Write-Host -ForegroundColor Green
+
+    # Outside the try/catch above on purpose, so the handle is released however the session ended.
+    # Durability does not depend on reaching this: every line was flushed as it was written, which
+    # is what makes the file survive the crash that never reaches here at all.
+    Stop-SessionLogFile
     #endregion
 }
