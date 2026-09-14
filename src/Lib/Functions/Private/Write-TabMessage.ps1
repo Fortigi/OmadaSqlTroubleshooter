@@ -173,7 +173,17 @@ function Add-TabMessage {
         }
 
         if ($null -ne $Private:Target.Elements.TextBoxQueryMessages) {
-            $Private:Target.Elements.TextBoxQueryMessages.Text = ($Private:Target.QueryMessages -join "`r`n")
+            # A blank line BETWEEN entries, not before the first one (issue #128). Before that
+            # issue, the "Warning:`r`n`r`n"/"Failure occurred:`r`n`r`n" headings Write-LogOutput
+            # built into every dialog text were what visually separated one entry from the next in
+            # this pane; removing them for the pane left multi-line entries (a multi-line SQL
+            # error, say, followed by a warning) running together with no boundary between them. A
+            # plain "`r`n" join still puts one line break between entries, but two multi-line
+            # entries need a full blank line to read as separate items rather than more lines of
+            # the same one - "`r`n`r`n" as the SEPARATOR gives that, and a join only ever inserts
+            # the separator between items, never before the first, so the top of the pane is
+            # unaffected.
+            $Private:Target.Elements.TextBoxQueryMessages.Text = ($Private:Target.QueryMessages -join "`r`n`r`n")
         }
 
         if ($Focus) {
