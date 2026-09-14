@@ -1,3 +1,5 @@
+#Requires -Version 7.0
+
 BeforeAll {
     $Script:RepositoryRoot = Split-Path -Path $PSScriptRoot -Parent
     $Script:WorkflowsPath = Join-Path -Path $Script:RepositoryRoot -ChildPath '.github\workflows'
@@ -7,8 +9,10 @@ BeforeAll {
 
     # Matches a `uses:` step reference and captures the action, the ref it is pinned to, and
     # whatever trailing comment follows - the same three pieces every "pin to a SHA" policy needs
-    # to check. A local composite action (`uses: ./some/path`) or a reusable workflow reference
-    # (`uses: owner/repo/.github/workflows/x.yml@ref`) both still match; the ref group is what gets
+    # to check. The `@` is required, so a local composite action (`uses: ./some/path`, no `@ref`
+    # at all) never matches and is silently skipped below - it is this repository's own code,
+    # checked out with the workflow itself, and has nothing to pin. A reusable workflow reference
+    # (`uses: owner/repo/.github/workflows/x.yml@ref`) does match; the ref group is what gets
     # validated below, not the action path.
     $Script:UsesPattern = '^\s*(?:-\s*)?uses:\s*(?<Action>\S+?)@(?<Ref>\S+)\s*(?:#\s*(?<Comment>.*))?$'
 }
@@ -27,10 +31,6 @@ Describe 'Workflow action pins' -Tag 'Unit' {
                 foreach ($Line in Get-Content -LiteralPath $File.FullName) {
                     $LineNumber++
                     if ($Line -match $Script:UsesPattern) {
-                        # A local composite action (uses: ./path/to/action) has nothing to pin - it
-                        # is this repository's own code, checked out with the workflow itself.
-                        if ($Matches.Action -like './*') { continue }
-
                         [PSCustomObject]@{
                             File    = $File.Name
                             Line    = $LineNumber
