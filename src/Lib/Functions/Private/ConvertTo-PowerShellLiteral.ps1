@@ -84,13 +84,20 @@ function ConvertTo-PowerShellLiteral {
 
     $Invariant = [cultureinfo]::InvariantCulture
 
+    # A value that cannot be emitted as the kind it was given becomes a quoted literal rather than a
+    # broken one - the same second line of defence ConvertTo-SqlLiteral documents, for the same
+    # reason: since issue #120 the kind can come from the SQL schema and not only from the value.
+    if (-not (Test-QueryResultValueFitsKind -Value $BaseValue -Kind $Kind)) {
+        return (Format-PowerShellStringLiteral -Text ([string]::Format($Invariant, "{0}", $BaseValue)))
+    }
+
     switch ($Kind) {
         "Boolean" {
-            # Resolve-StrictBoolean rather than a [bool] cast, for the reason spelled out in
+            # Resolve-ColumnBooleanValue rather than a [bool] cast, for the reason spelled out in
             # ConvertTo-SqlLiteral: [bool]'False' is $true, so the cast would emit $true for a value
             # that says False. Emitting a quoted string instead is recoverable; emitting the
             # inverted boolean is not, because nothing downstream can tell it went wrong.
-            $BooleanValue = Resolve-StrictBoolean -Value $BaseValue
+            $BooleanValue = Resolve-ColumnBooleanValue -Value $BaseValue
             if ($null -eq $BooleanValue) {
                 return (Format-PowerShellStringLiteral -Text ([string]::Format($Invariant, "{0}", $BaseValue)))
             }
@@ -107,7 +114,7 @@ function ConvertTo-PowerShellLiteral {
         }
 
         "Decimal" {
-            $DecimalText = ([decimal]$BaseValue).ToString($Invariant)
+            $DecimalText = (ConvertTo-InvariantDecimal -Value $BaseValue).ToString($Invariant)
             if ($TypedLiteral.IsPresent) {
                 # The cast keeps it a [decimal]; the bare number would be parsed as a [double] and
                 # lose the exactness that made it a decimal in the first place.

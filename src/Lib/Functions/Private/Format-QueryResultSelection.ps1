@@ -201,6 +201,22 @@ function Get-QueryResultColumnKind {
           * anything else mixed -> String. Quoting a column that cannot be agreed on is always
             safe; picking one of the candidates never is.
 
+        Issue #120 added the two steps that make this work against a response which types every
+        column as a string, where the CLR type answers "String" for everything:
+
+          * CORROBORATION. A declared SQL type is a name-based resolution against a cached schema,
+            so it is trusted only as far as the values bear it out. Every value in the column has to
+            be one the declared kind can actually hold, or the whole column degrades to String. That
+            is what makes a wrong schema resolution harmless - and what keeps "007" quoted even in a
+            column the schema calls an int.
+          * PROMOTION. With no declared type and every value a string, the last remaining source is
+            the text. It is used only for a column whose values are ALL canonical numbers (see
+            Get-CanonicalNumericStringKind) - one decision for the whole column, never per cell and
+            never across columns. One non-numeric value leaves the whole column quoted. And it runs
+            only for a response that carried no types at all, which the column schema states in
+            AllowValuePromotion: on a typed response a JSON string means the column is textual, and
+            promoting there would re-break acceptance criterion 1.
+
     .PARAMETER Row
         The selected rows.
 
@@ -224,33 +240,133 @@ function Get-QueryResultColumnKind {
         $Column
     )
 
-    $Kind = [System.Collections.Generic.HashSet[string]]::new()
-
+    $Value = [System.Collections.Generic.List[object]]::new()
     foreach ($CurrentRow in $Row) {
-        $Value = $CurrentRow.$($Column.PropertyName)
-        if ($null -eq $Value -or $Value -is [System.DBNull]) {
+        $CurrentValue = $CurrentRow.$($Column.PropertyName)
+        if ($null -eq $CurrentValue -or $CurrentValue -is [System.DBNull]) {
             continue
         }
 
-        $Kind.Add((Get-QueryResultValueKind -Value $Value -SqlType $Column.SqlType)) | Out-Null
+        $Value.Add($CurrentValue)
     }
 
-    if ($Kind.Count -eq 0) {
+    if ($Value.Count -eq 0) {
         return "Null"
     }
 
+    # Priority 1, and the corroboration that keeps it honest.
+    $DeclaredKind = Get-SqlTypeNameKind -SqlType $Column.SqlType
+    if (![string]::IsNullOrWhiteSpace($DeclaredKind)) {
+        if (@($Value | Where-Object { -not (Test-QueryResultValueFitsKind -Value $_ -Kind $DeclaredKind) }).Count -eq 0) {
+            return $DeclaredKind
+        }
+
+        # The column name, the two kinds and nothing else: the value that did not fit is the reason
+        # this line exists and is exactly what must not be written down.
+        "Column '{0}' is declared as {1} but not every value can be emitted as one; the column is copied as text instead." -f $Column.Header, $DeclaredKind | Write-LogOutput -LogType DEBUG
+        return "String"
+    }
+
+    $Kind = [System.Collections.Generic.HashSet[string]]::new()
+    foreach ($CurrentValue in $Value) {
+        $Kind.Add((Get-QueryResultValueKind -Value $CurrentValue)) | Out-Null
+    }
+
+    $Resolved = "String"
     if ($Kind.Count -eq 1) {
-        return @($Kind)[0]
+        $Resolved = @($Kind)[0]
+    }
+    else {
+        $Numeric = @("Integer", "Decimal", "Float")
+        if (@($Kind | Where-Object { $_ -notin $Numeric }).Count -eq 0) {
+            if ($Kind.Contains("Float")) { $Resolved = "Float" }
+            elseif ($Kind.Contains("Decimal")) { $Resolved = "Decimal" }
+            else { $Resolved = "Integer" }
+        }
     }
 
-    $Numeric = @("Integer", "Decimal", "Float")
-    if (@($Kind | Where-Object { $_ -notin $Numeric }).Count -eq 0) {
-        if ($Kind.Contains("Float")) { return "Float" }
-        if ($Kind.Contains("Decimal")) { return "Decimal" }
-        return "Integer"
+    if ($Resolved -ne "String") {
+        return $Resolved
     }
 
-    return "String"
+    # Promotion is the last resort and it only applies to a response that carried NO types at all.
+    # On a typed response a string value is evidence in its own right - the endpoint sent a JSON
+    # string because the column is textual - and promoting it there would re-break issue #103's
+    # acceptance criterion 1. Get-DataGridSelectionSchema decides this from the bound rows, once per
+    # copy, and an absent flag means "no" so nothing promotes by accident.
+    if ($Column.AllowValuePromotion -ne $true) {
+        return "String"
+    }
+
+    return (Get-PromotedColumnKind -Value $Value)
+}
+
+function Get-PromotedColumnKind {
+    <#
+    .SYNOPSIS
+        Promotes a column of numeric-looking strings to a numeric kind, or leaves it a string.
+
+    .DESCRIPTION
+        Priority 3 of issue #103's order, widened by issue #120 for the case #103 did not have to
+        handle: a response that carries every column as text. #103 restricted refinement to picking
+        a narrower shape INSIDE a string, never promoting one to a number, because unrestricted
+        sniffing turns "007" into 7. Against an untyped response that restriction leaves the feature
+        with no source at all and it quotes an int column - which is the bug #120 reports.
+
+        The promotion is therefore as narrow as it can be and still fix that:
+
+          * The COLUMN decides, never the cell. Every non-null value must be a string, and every one
+            of them must be a canonical number; one value that is not leaves the whole column
+            quoted. So a single "IDG-900" keeps its whole column a string, and a column of mixed
+            "007" and "8" stays a string because "007" is not canonical.
+          * Canonical means the text is the only text that renders that number, so re-emitting it
+            unquoted cannot change it. Leading zeros, leading "+", exponents, thousands separators
+            and surrounding whitespace all disqualify a value - see
+            Get-CanonicalNumericStringKind.
+          * It runs ONLY when nothing better answered. A declared SQL type is consulted first and
+            wins outright, so a schema that says nvarchar keeps its digits quoted.
+
+    .PARAMETER Value
+        Every non-null value of the column.
+
+    .OUTPUTS
+        [string] Integer, Decimal, or String when the column cannot be promoted.
+
+    .NOTES
+        No tracer preamble: called once per column on the clipboard path.
+    #>
+
+    [CmdLetBinding()]
+    [OutputType([string])]
+    param(
+        [Parameter(Mandatory = $true, Position = 0)]
+        [AllowEmptyCollection()]
+        $Value
+    )
+
+    $Promoted = "Integer"
+
+    foreach ($CurrentValue in @($Value)) {
+        $BaseValue = $CurrentValue
+        if ($null -ne $BaseValue -and $BaseValue.GetType() -eq [System.Management.Automation.PSObject]) {
+            $BaseValue = $BaseValue.BaseObject
+        }
+
+        if ($BaseValue -isnot [string]) {
+            return "String"
+        }
+
+        $NumericKind = Get-CanonicalNumericStringKind -Value $BaseValue
+        if ([string]::IsNullOrWhiteSpace($NumericKind)) {
+            return "String"
+        }
+
+        if ($NumericKind -eq "Decimal") {
+            $Promoted = "Decimal"
+        }
+    }
+
+    return $Promoted
 }
 
 function Format-SelectionValue {
