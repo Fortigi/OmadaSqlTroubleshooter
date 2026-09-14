@@ -601,6 +601,12 @@ function Complete-ExecuteQueryResult {
             # Should not happen - the Execute button refuses a tab with no CurrentSqlQuery.DoId -
             # but a status bar reading "Query '' failed" would be worse than one that simply does
             # not name what it cannot name.
+            #
+            # It also covers a config cleared while the query was in flight (Get-SqlQueryObject and
+            # Reset-Application both write a null CurrentSqlQuery). This module never enables
+            # Set-StrictMode, so reading DisplayName off a missing object yields $null rather than
+            # throwing, and $null lands here - which is the point of testing the NAME rather than
+            # the outcome: every path still gets a message on the bar.
             "The query"
         }
         else {

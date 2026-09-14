@@ -581,18 +581,28 @@ Describe "Complete-ExecuteQueryResult" {
     }
 
     It "writes the outcome to the owning tab's status bar and no other" {
-        # Per tab, like the rest of the bar: a background completion on this tab must leave the tab
-        # the user is looking at alone.
-        $Other = [pscustomobject]@{
+        # Per tab, like the rest of the bar: a background completion belonging to one tab must not
+        # write over the status of the tab beside it.
+        #
+        # The completion is given to the SECOND tab on purpose. Adding a bystander tab and asserting
+        # it stayed empty proves nothing while the only tab the completion could possibly reach is
+        # the one under test - that assertion passes whatever the code writes to. Handing the
+        # completion to a tab that is NOT the one built by the fixture makes both halves real: the
+        # message has to arrive on that tab's own Elements, and it has to not arrive on the other's.
+        $Bystander = $Script:TestTabSession
+        $Script:TestTabSession = [pscustomobject]@{
             Id            = "tab-B"
-            QueryMessages = [System.Collections.Generic.List[string]]::new()
+            DisplayName   = "Tab B"
+            TabItem       = "item-B"
             Elements      = (New-TabElementStub)
+            QueryMessages = [System.Collections.Generic.List[string]]::new()
         }
+        $Script:Tabs = @($Bystander, $Script:TestTabSession)
 
         Complete-ExecuteQueryResult -QueryResult (New-ResultResponse -RowCount 0) -SaveResult ([pscustomobject]@{ Id = 100; DisplayName = "TestQuery" }) -TempQueryDoId $null
 
         $Script:TestTabSession.Elements.TextBlockStatusBarMessage.Text | Should -Be "Query 'TestQuery' returned no rows - see Messages"
-        $Other.Elements.TextBlockStatusBarMessage.Text | Should -Be ""
+        $Bystander.Elements.TextBlockStatusBarMessage.Text | Should -Be ""
     }
 
     It "leaves the outcome standing after the UI teardown" {
@@ -609,6 +619,17 @@ Describe "Complete-ExecuteQueryResult" {
         # Should not be reachable - the Execute button refuses a tab with no CurrentSqlQuery.DoId -
         # but "Query '' failed" would be worse than a bar that simply does not name what it cannot.
         $Script:AppConfig.CurrentSqlQuery.DisplayName = "  "
+
+        Complete-ExecuteQueryResult -QueryResult $null -SaveResult ([pscustomobject]@{ Id = 100; DisplayName = "TestQuery" }) -TempQueryDoId $null -Failed
+
+        $Script:TestTabSession.Elements.TextBlockStatusBarMessage.Text | Should -Be "The query failed - see Messages"
+    }
+
+    It "still writes an outcome when the config was cleared while the query was in flight" {
+        # Get-SqlQueryObject and Reset-Application both write a null CurrentSqlQuery, and a
+        # background completion can land after one of them has run. The name is then unavailable -
+        # which must cost the message its name, not the bar its message.
+        $Script:AppConfig.CurrentSqlQuery = $null
 
         Complete-ExecuteQueryResult -QueryResult $null -SaveResult ([pscustomobject]@{ Id = 100; DisplayName = "TestQuery" }) -TempQueryDoId $null -Failed
 
