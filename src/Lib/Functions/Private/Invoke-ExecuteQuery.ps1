@@ -480,7 +480,8 @@ function Complete-ExecuteQueryResult {
     be carrying. That distinction is the whole point of issue #44, so it does not get to be a guess.
 
     The error detail itself is already in the Messages pane by the time this runs -
-    Write-ContainedErrorLog -TabScoped put it there. This only decides what the status bar says.
+    Write-ContainedErrorLog -TabScoped put it there. This decides what the status bar says, and,
+    together with the row count, which of the two output tabs is left selected (issue #115).
     #>
     [CmdLetBinding()]
     param(
@@ -511,8 +512,10 @@ function Complete-ExecuteQueryResult {
             $Script:RunTimeData.LastRowsRead = 0
             $Script:MainForm.Elements.TextBlockStatusBarRows | Set-TextBlockText -Text "0 rows"
             $Script:MainForm.Elements.DataGridQueryResult.ItemsSource = $null
+            $Private:ReturnedRows = $false
         }
         else {
+            $Private:ReturnedRows = $true
             $Script:MainForm.Elements.DataGridQueryResult.AutoGenerateColumns = $true
             try {
                 $Script:MainForm.Elements.DataGridQueryResult.ItemsSource = @($Script:RunTimeData.QueryResult.d.Rows)
@@ -551,6 +554,32 @@ function Complete-ExecuteQueryResult {
 
                 $Script:MainForm.Elements.ComboBoxSelectQuery.SelectedItem = $Private:ComboBoxSelectQueryItem
             }
+        }
+
+        # The selected output tab follows the outcome of the execute (issue #115). Rows land the user
+        # on their data; a run with nothing to put in the grid lands them on the pane that says why.
+        #
+        # This refines the issue #93 rule rather than reversing it. "On success Results stays
+        # selected" still holds for a query that returned rows - that is the case the rule was written
+        # for. It does not hold for a query that returned none, because there is no data to stay on:
+        # the only thing with anything to say is the "Query did not return any results!" notice in the
+        # pane, and the user had to think to go and look for it.
+        #
+        # Keyed off the outcome rather than off the severity of the last message, which is where the
+        # decision used to live: that notice is a WARNING, so severity alone can never tell "your
+        # query ran and found nothing" apart from an ordinary successful run. The failed case is
+        # unchanged - Write-ContainedErrorLog -TabScoped already brought the pane forward for the
+        # ERROR - and is stated here anyway so all three outcomes are decided in one place.
+        #
+        # Set-TabOutputSelection leaves a selection that is already correct alone, so an execute that
+        # returned rows onto an already-selected Results tab does not visibly re-select anything. It
+        # is scoped to the tab the execute belongs to, which the completion has already made active,
+        # so a background completion on one tab cannot move another tab's selection.
+        if ($Failed -or -not $Private:ReturnedRows) {
+            Set-TabOutputSelection -TabSession (Get-ActiveTabSession) -Pane Messages
+        }
+        else {
+            Set-TabOutputSelection -TabSession (Get-ActiveTabSession) -Pane Results
         }
 
         # The last state change, on this tab's status bar. Both messages point at the pane rather

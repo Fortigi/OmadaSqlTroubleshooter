@@ -204,11 +204,18 @@ function Write-LogOutput {
                 # An application-level failure is not tab-scoped and still interrupts: it is not about
                 # a tab, the user may have no tab open, and it must be seen wherever they are.
                 #
-                # Focus follows severity, and only severity. An ERROR pulls the pane to the front
+                # Focus follows severity here, and only severity. An ERROR pulls the pane to the front
                 # because a failure the user cannot see is the thing this issue set out to fix. A
-                # WARNING does not: the commonest one by far is "Query did not return any results",
-                # which is a successful execute, and issue #93 asks for Results to stay selected on
-                # success so a query that worked still lands the user on their data.
+                # WARNING does not, because a warning on its own is not a reason to take the user off
+                # whatever they were looking at.
+                #
+                # Severity is the right rule for a message that arrives on its own, and the wrong one
+                # for the end of an execute: the commonest WARNING by far is "Query did not return any
+                # results", which is a completed execute with nothing to show, and severity cannot
+                # tell it apart from one that returned rows. That decision therefore no longer lives
+                # here - Complete-ExecuteQueryResult makes it from the outcome (issue #115), which
+                # refines the issue #93 rule "on success Results stays selected" to the case it was
+                # written for, a query that actually returned rows to land on.
                 if ($TabScoped) {
                     Add-TabMessage -TabSession (Get-ActiveTabSession) -Text $LogMessageDialog.Text -Focus:$LogMessage.ShowError
                 }

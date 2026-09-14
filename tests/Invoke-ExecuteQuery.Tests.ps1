@@ -149,6 +149,24 @@ BeforeAll {
         }
     }
 
+    # The same tab control, but one that counts how often SelectedIndex is WRITTEN rather than only
+    # what it ends up holding. Issue #115 asks for the selection to change only when it is not already
+    # correct, and assigning SelectedIndex the value it already holds still raises SelectionChanged in
+    # WPF - so the final value alone cannot tell a no-op apart from a visible re-selection.
+    function script:New-TrackedTabControlStub {
+        param([int]$SelectedIndex = 0)
+
+        $TabControl = [pscustomobject]@{ BackingIndex = $SelectedIndex; SelectionWrites = 0 }
+        $TabControl | Add-Member -MemberType ScriptProperty -Name SelectedIndex -Value {
+            $this.BackingIndex
+        } -SecondValue {
+            $this.BackingIndex = $args[0]
+            $this.SelectionWrites++
+        }
+
+        return $TabControl
+    }
+
     function script:Initialize-ExecuteQueryTestState {
         $script:RemovedQueryObjects.Clear()
         $script:ConfigWrites.Clear()
@@ -421,6 +439,70 @@ Describe "Complete-ExecuteQueryResult" {
         $Written = @($script:ConfigWrites | Where-Object { $_.Property -eq "CurrentSqlQuery" })
         $Written.Count | Should -BeGreaterThan 0
         $Written.Value | Should -Contain 777
+    }
+
+    It "leaves Results selected when the query returned rows" {
+        # Issue #93's rule, kept for the case it was written for: a query that produced data still
+        # lands the user on that data.
+        Complete-ExecuteQueryResult -QueryResult (New-ResultResponse -RowCount 2) -SaveResult ([pscustomobject]@{ Id = 100; DisplayName = "TestQuery" }) -TempQueryDoId $null
+
+        $Script:TestTabSession.Elements.TabControlQueryOutput.SelectedIndex | Should -Be 0
+    }
+
+    It "returns to Results when rows arrive on a tab left showing Messages" {
+        $Script:TestTabSession.Elements.TabControlQueryOutput.SelectedIndex = 1
+
+        Complete-ExecuteQueryResult -QueryResult (New-ResultResponse -RowCount 2) -SaveResult ([pscustomobject]@{ Id = 100; DisplayName = "TestQuery" }) -TempQueryDoId $null
+
+        $Script:TestTabSession.Elements.TabControlQueryOutput.SelectedIndex | Should -Be 0
+    }
+
+    It "selects Messages when the execute completed with zero rows" {
+        # Issue #115. The "Query did not return any results!" notice is a WARNING, so it never pulled
+        # the pane forward, and the user was left staring at a blank Results grid with the only
+        # explanation one click away and no sign that it was there.
+        Complete-ExecuteQueryResult -QueryResult (New-ResultResponse -RowCount 0) -SaveResult ([pscustomobject]@{ Id = 100; DisplayName = "TestQuery" }) -TempQueryDoId $null
+
+        $Script:TestTabSession.Elements.TabControlQueryOutput.SelectedIndex | Should -Be 1
+    }
+
+    It "selects Messages when the result never arrived at all" {
+        Complete-ExecuteQueryResult -QueryResult $null -SaveResult ([pscustomobject]@{ Id = 100; DisplayName = "TestQuery" }) -TempQueryDoId $null
+
+        $Script:TestTabSession.Elements.TabControlQueryOutput.SelectedIndex | Should -Be 1
+    }
+
+    It "selects Messages when the execute failed" {
+        Complete-ExecuteQueryResult -QueryResult $null -SaveResult ([pscustomobject]@{ Id = 100; DisplayName = "TestQuery" }) -TempQueryDoId $null -Failed
+
+        $Script:TestTabSession.Elements.TabControlQueryOutput.SelectedIndex | Should -Be 1
+    }
+
+    It "does not re-select Results for a query that returned rows onto an already-selected Results tab" {
+        # The acceptance criterion that the tab only switches when it is not already correct.
+        # Assigning SelectedIndex the value it already holds still raises SelectionChanged in WPF,
+        # so the final value alone cannot tell a no-op apart from a visible re-selection.
+        $Script:TestTabSession.Elements.TabControlQueryOutput = New-TrackedTabControlStub -SelectedIndex 0
+
+        Complete-ExecuteQueryResult -QueryResult (New-ResultResponse -RowCount 2) -SaveResult ([pscustomobject]@{ Id = 100; DisplayName = "TestQuery" }) -TempQueryDoId $null
+
+        $Script:TestTabSession.Elements.TabControlQueryOutput.SelectionWrites | Should -Be 0
+        $Script:TestTabSession.Elements.TabControlQueryOutput.SelectedIndex | Should -Be 0
+    }
+
+    It "does not move another tab's selected output tab" {
+        # Per tab, like the rest of the pane: a background completion on this tab must leave the tab
+        # the user is looking at alone.
+        $Other = [pscustomobject]@{
+            Id            = "tab-B"
+            QueryMessages = [System.Collections.Generic.List[string]]::new()
+            Elements      = (New-TabElementStub)
+        }
+
+        Complete-ExecuteQueryResult -QueryResult (New-ResultResponse -RowCount 0) -SaveResult ([pscustomobject]@{ Id = 100; DisplayName = "TestQuery" }) -TempQueryDoId $null
+
+        $Script:TestTabSession.Elements.TabControlQueryOutput.SelectedIndex | Should -Be 1
+        $Other.Elements.TabControlQueryOutput.SelectedIndex | Should -Be 0
     }
 
     It "does not throw when the response is an ErrorRecord" {
