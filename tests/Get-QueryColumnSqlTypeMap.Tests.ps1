@@ -1,4 +1,4 @@
-#Requires -Version 7.0
+﻿#Requires -Version 7.0
 # Tests for priority 1 of issue #103's type resolution - the seam issue #120 found unimplemented.
 #
 # The schema is a real Get-SqlSchemaModel index built from the same response shape
@@ -216,6 +216,56 @@ Describe "Get-QueryColumnSqlTypeMap" {
             }
 
             (Get-QueryColumnSqlTypeMap -SqlText "SELECT Id FROM dbo.tblNoSuchTable" -SchemaModel (New-IdentitySchemaModel)).Count | Should -Be 0
+        }
+    }
+
+    Context "The binding path the grid actually uses" {
+        # Complete-ExecuteQueryResult re-binds a response WPF cannot bind through
+        # Invoke-SanitizeJsonKeys, which replaces every character outside [A-Za-z0-9_-] with an
+        # underscore. The grid column is then keyed by the sanitised name, so a map keyed only by the
+        # declared name would never answer for it - and, worse, an alias dropped only under its
+        # declared name could let a sanitised column inherit a type that is not its own.
+        It "answers under the sanitised binding name as well as the declared one" {
+            if ($null -eq $Script:ScriptDomPath) {
+                Set-ItResult -Inconclusive -Because "the pinned ScriptDom package could not be resolved or downloaded on this machine"
+                return
+            }
+
+            # A "#" rather than a space: GetSqlSchema returns each column as "ColumnName DataType",
+            # so a column name containing a SPACE cannot be represented in that response at all and
+            # never reaches this function. Every other character the sanitiser replaces does.
+            $Model = New-SchemaModel -Table @{ "dbo.tblOrder" = @("Order#Date datetime", "Id int") }
+            $Map = Get-QueryColumnSqlTypeMap -SqlText "SELECT [Order#Date], Id FROM dbo.tblOrder" -SchemaModel $Model
+
+            $Map["Order#Date"] | Should -BeExactly "datetime"
+            $Map["Order_Date"] | Should -BeExactly "datetime" -Because "that is the name the grid binds it under"
+        }
+
+        It "drops an alias under its sanitised name too, so it cannot inherit another column's type" {
+            if ($null -eq $Script:ScriptDomPath) {
+                Set-ItResult -Inconclusive -Because "the pinned ScriptDom package could not be resolved or downloaded on this machine"
+                return
+            }
+
+            $Model = New-SchemaModel -Table @{ "dbo.tblOrder" = @("Total_Count int", "Id int") }
+            $Map = Get-QueryColumnSqlTypeMap -SqlText "SELECT COUNT(*) AS [Total Count], Id FROM dbo.tblOrder GROUP BY Id" -SchemaModel $Model
+
+            $Map.ContainsKey("Total Count") | Should -BeFalse
+            $Map.ContainsKey("Total_Count") | Should -BeFalse -Because "the aliased column binds under exactly that name"
+            $Map["Id"] | Should -BeExactly "int"
+        }
+
+        It "drops a name two differently spelled columns sanitise onto with different types" {
+            if ($null -eq $Script:ScriptDomPath) {
+                Set-ItResult -Inconclusive -Because "the pinned ScriptDom package could not be resolved or downloaded on this machine"
+                return
+            }
+
+            $Model = New-SchemaModel -Table @{ "dbo.tblOrder" = @("Order#Date datetime", "Order.Date int") }
+            $Map = Get-QueryColumnSqlTypeMap -SqlText "SELECT * FROM dbo.tblOrder" -SchemaModel $Model
+
+            $Map.ContainsKey("Order_Date") | Should -BeFalse
+            $Map["Order#Date"] | Should -BeExactly "datetime" -Because "the declared spelling is still unambiguous"
         }
     }
 

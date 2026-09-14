@@ -117,26 +117,40 @@ function Get-QueryColumnSqlTypeMap {
 
         foreach ($ColumnName in @($Entry.Column.Keys)) {
             $DeclaredType = [string]$Entry.Column[$ColumnName]
-            if ([string]::IsNullOrWhiteSpace($DeclaredType)) {
-                $DroppedColumn[$ColumnName] = $true
-                continue
-            }
 
-            if (-not $TypeByColumn.ContainsKey($ColumnName)) {
-                $TypeByColumn[$ColumnName] = $DeclaredType
-                continue
-            }
+            # Both spellings: the name as the database declares it, and the name the grid would bind
+            # it under if the response had to go through Invoke-SanitizeJsonKeys. See
+            # Get-SanitizedBindingName - a column called "Order Date" binds as "Order_Date", and a map
+            # keyed only by the declared spelling would silently never answer for it.
+            foreach ($Key in @(Get-ColumnLookupName -Name $ColumnName)) {
+                if ([string]::IsNullOrWhiteSpace($DeclaredType)) {
+                    $DroppedColumn[$Key] = $true
+                    continue
+                }
 
-            # Two tables in the same query declaring the same column name differently. Which one the
-            # grid column came from is not knowable from the name, so neither is its type.
-            if ($TypeByColumn[$ColumnName] -ne $DeclaredType) {
-                $DroppedColumn[$ColumnName] = $true
+                if (-not $TypeByColumn.ContainsKey($Key)) {
+                    $TypeByColumn[$Key] = $DeclaredType
+                    continue
+                }
+
+                # Two columns reaching the same lookup name with different types - two tables in the
+                # query declaring the same column differently, or two differently named columns that
+                # sanitise to the same binding name. Which one the grid column came from is not
+                # knowable from the name, so neither is its type.
+                if ($TypeByColumn[$Key] -ne $DeclaredType) {
+                    $DroppedColumn[$Key] = $true
+                }
             }
         }
     }
 
     foreach ($Alias in @(Get-QuerySelectAliasName -Fragment $Fragment)) {
-        $DroppedColumn[$Alias] = $true
+        # Both spellings again, and here it is not merely a missed opportunity: an alias written
+        # "[Total Count]" binds as "Total_Count", so dropping only the declared spelling would let
+        # that column inherit the declared type of a real "Total_Count" column.
+        foreach ($Key in @(Get-ColumnLookupName -Name $Alias)) {
+            $DroppedColumn[$Key] = $true
+        }
     }
 
     $Map = @{}
@@ -152,6 +166,54 @@ function Get-QueryColumnSqlTypeMap {
     "Resolved {0} of {1} candidate column name(s) to a declared SQL type for the copy path." -f $Map.Count, $TypeByColumn.Count | Write-LogOutput -LogType DEBUG
 
     return $Map
+}
+
+function Get-ColumnLookupName {
+    <#
+    .SYNOPSIS
+        The names a schema column or a SELECT alias can be looked up under from the grid.
+
+    .DESCRIPTION
+        A grid column is keyed by its binding path, and the binding path is not always the name the
+        database uses. When the tenant returns keys WPF cannot bind, Complete-ExecuteQueryResult
+        re-binds the response through Invoke-SanitizeJsonKeys, which replaces every character outside
+        [A-Za-z0-9_-] with an underscore - so "Order Date" arrives in the grid as "Order_Date".
+
+        Both spellings are therefore returned, deduplicated, and the caller records each of them. A
+        name that needs no sanitising yields one entry and costs nothing.
+
+    .PARAMETER Name
+        The declared column name or alias.
+
+    .OUTPUTS
+        [string[]] the name, plus its sanitised form when that differs.
+
+    .NOTES
+        No tracer preamble: the parameter is a tenant identifier.
+    #>
+
+    [CmdletBinding()]
+    [OutputType([string[]])]
+    param(
+        [Parameter(Mandatory = $false, Position = 0)]
+        [AllowNull()]
+        [AllowEmptyString()]
+        [string]$Name
+    )
+
+    if ([string]::IsNullOrWhiteSpace($Name)) {
+        return @()
+    }
+
+    # The rule Invoke-SanitizeObject applies, and it has to stay the same rule: a copy that drifted
+    # would resolve a column the grid binds under a different name.
+    $Sanitized = $Name -replace '[^A-Za-z0-9_\-]', "_"
+
+    if ($Sanitized -ceq $Name) {
+        return @($Name)
+    }
+
+    return @($Name, $Sanitized)
 }
 
 function Get-QuerySelectAliasName {
