@@ -22,6 +22,11 @@ jobs:
       year: ${{ steps.versioning.outputs.year }}
 
     steps:
+      - name: Harden the runner (audit all outgoing network calls)
+        uses: step-security/harden-runner@e14015d583714f6e62063499dc959a02595150a1 # v2.21.1
+        with:
+          egress-policy: audit
+
       - name: Checkout
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
 
@@ -89,6 +94,11 @@ jobs:
       YEAR: ${{ needs.build.outputs.year }}
 
     steps:
+      - name: Harden the runner (audit all outgoing network calls)
+        uses: step-security/harden-runner@e14015d583714f6e62063499dc959a02595150a1 # v2.21.1
+        with:
+          egress-policy: audit
+
       - name: Checkout
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
