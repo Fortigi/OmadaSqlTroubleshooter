@@ -86,7 +86,7 @@ Out of scope:
 | Dependabot version and security updates, with a cooldown | [.github/dependabot.yml](.github/dependabot.yml) |
 | Dependabot malware alerts (npm, PyPI, Maven, RubyGems, **NuGet**, Go, crates.io, Composer) | Repository settings — *Settings > Advanced Security > Dependabot alerts* |
 | Pre-merge vulnerability and licence gate on the dependency graph diff | [.github/workflows/dependency-review.yml](.github/workflows/dependency-review.yml) |
-| Every GitHub Actions `uses:` pinned to a full commit SHA | every workflow in [.github/workflows](.github/workflows), enforced by [tests/WorkflowActionPins.Tests.ps1](tests/WorkflowActionPins.Tests.ps1) and *Settings > Actions > General > Allowed actions* |
+| Every external GitHub Actions `uses:` (one with an `@ref`) pinned to a full commit SHA | every workflow in [.github/workflows](.github/workflows), enforced by [tests/WorkflowActionPins.Tests.ps1](tests/WorkflowActionPins.Tests.ps1) and *Settings > Actions > General > Allowed actions* |
 | Runner egress monitoring (audit only) | `step-security/harden-runner`, first step of every job in every workflow |
 | Integrity verification of the runtime-downloaded assemblies | [src/DependencyLock.psd1](src/DependencyLock.psd1), see below |
 | Static analysis (PSScriptAnalyzer) and Pester suites | [build/psakeBuild.ps1](build/psakeBuild.ps1), run in PR validation |

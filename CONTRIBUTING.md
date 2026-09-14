@@ -82,8 +82,11 @@ builds the module or publishes a release is a code-execution primitive against e
 Dependabot reads the trailing comment and keeps both the SHA and the comment current, so pinning
 does not mean losing update notifications.
 
-`tests/WorkflowActionPins.Tests.ps1` fails PR validation on any `uses:` line that is not pinned this
-way, so an unpinned reference is caught before review rather than relied on to be caught during it.
+`tests/WorkflowActionPins.Tests.ps1` fails PR validation on any external `uses:` reference (one with
+an `@ref`) that is not pinned this way, so an unpinned reference is caught before review rather than
+relied on to be caught during it. A local composite action (`uses: ./some/path`, no `@ref` at all)
+has nothing to pin - it is this repository's own code, checked out with the workflow - and is
+correctly skipped.
 
 Resolve a tag to its commit SHA with the GitHub API rather than trusting what a browser shows,
 dereferencing an annotated tag if the response is one:
