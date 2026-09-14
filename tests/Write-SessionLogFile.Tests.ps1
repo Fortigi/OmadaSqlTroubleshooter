@@ -309,6 +309,35 @@ Describe "Write-SessionLogFile" {
             ((Get-WholeSessionBody -Folder $Script:Folder) -join "`n") | Should -BeExactly ($Expected -join "`n")
         }
 
+        It "recreates the active file with its header when it vanished before the split could rename it" {
+            $Script:SessionLogFile = Open-TestSessionLogFile -Folder $Script:Folder -MaxBytes 1024
+            $ActivePath = $Script:SessionLogFile.Path
+            # Nothing holds the active file between the split closing it and renaming it. Reproduce
+            # that instant: close it, delete it, and let the session write through a stand-in writer
+            # until the next split finds the file gone.
+            $Script:SessionLogFile.Writer.Dispose()
+            Remove-Item -LiteralPath $ActivePath -Force
+            $StandIn = Open-SessionLogFileWriter -Path (Join-Path $Script:Folder -ChildPath "stand-in.txt") -SessionKey $Script:SessionLogFile.SessionKey -StartTime $Script:SessionLogFile.StartTime -ProcessId $Script:SessionLogFile.ProcessId
+            $Script:SessionLogFile.Writer = $StandIn.Writer
+            $Script:SessionLogFile.BytesWritten = [long]0
+
+            # About 11 bytes a line against a 1024-byte limit: one split, after roughly 93 lines, and
+            # not a second one before the assertions.
+            foreach ($Index in 1..120) {
+                Write-SessionLogFile -Line ("line {0:0000}" -f $Index) -LogType "INFO"
+            }
+
+            $Script:SessionLogFile.Failed | Should -BeFalse
+            (Read-SessionLogFileHeader -Path $ActivePath).SessionKey | Should -BeExactly $Script:SessionLogFile.SessionKey
+        }
+
+        It "never creates a file when asked to reopen one that does not exist" {
+            $MissingPath = Join-Path $Script:Folder -ChildPath "OmadaSqlTroubleshooter.log"
+
+            { Open-SessionLogFileWriter -Path $MissingPath -Append } | Should -Throw
+            Test-Path -LiteralPath $MissingPath | Should -BeFalse
+        }
+
         It "stops splitting at part 999 but never stops writing" {
             $Script:SessionLogFile = Open-TestSessionLogFile -Folder $Script:Folder -MaxBytes 1024 -Numbered
             $Script:SessionLogFile.Part = 999

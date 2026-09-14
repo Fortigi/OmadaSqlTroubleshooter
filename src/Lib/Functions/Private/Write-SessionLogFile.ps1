@@ -121,13 +121,20 @@ function Open-SessionLogFileWriter {
         [switch]$Append
     )
 
+    # FileMode.Open and a seek for -Append, not FileMode.Append: FileMode.Append creates a file that
+    # does not exist, and a part created that way would have no header. Reopening must only ever
+    # reopen; a missing file throws, and the caller creates a proper part instead.
     $FileMode = [System.IO.FileMode]::CreateNew
     if ($Append) {
-        $FileMode = [System.IO.FileMode]::Append
+        $FileMode = [System.IO.FileMode]::Open
     }
 
     $Stream = [System.IO.FileStream]::new($Path, $FileMode, [System.IO.FileAccess]::Write, [System.IO.FileShare]::ReadWrite)
     try {
+        if ($Append) {
+            $Stream.Seek(0, [System.IO.SeekOrigin]::End) | Out-Null
+        }
+
         # No byte order mark, matching what "Export Log File" writes.
         $Writer = [System.IO.StreamWriter]::new($Stream, [System.Text.UTF8Encoding]::new($false))
         $Writer.AutoFlush = $true
@@ -417,9 +424,19 @@ function Switch-SessionLogFilePart {
             }
 
             if (-not $Renamed) {
-                $Opened = Open-SessionLogFileWriter -Path $State.Path -Append
+                if ([System.IO.File]::Exists($State.Path)) {
+                    $Opened = Open-SessionLogFileWriter -Path $State.Path -Append
+                    $State.Writer = $Opened.Writer
+                    $State.BytesWritten = [long]0
+                    return
+                }
+
+                # The file vanished between closing it and renaming it - nothing holds it in that
+                # instant, so somebody could delete it. Start it again as a proper part, header
+                # first, so rotation and pruning still know which session it belongs to.
+                $Opened = Open-SessionLogFileWriter -Path $State.Path -SessionKey $State.SessionKey -StartTime $State.StartTime -ProcessId $State.ProcessId
                 $State.Writer = $Opened.Writer
-                $State.BytesWritten = [long]0
+                $State.BytesWritten = $Opened.BytesWritten
                 return
             }
 
