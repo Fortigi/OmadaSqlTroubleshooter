@@ -28,6 +28,10 @@
     <PackageReference Include="Microsoft.Web.WebView2" Version="1.0.4129.50" />
     <!-- Parses T-SQL locally for the editor's syntax diagnostics (Install-ScriptDom). -->
     <PackageReference Include="Microsoft.SqlServer.TransactSql.ScriptDom" Version="180.102.0" />
+    <!-- THROWAWAY: deliberately vulnerable, for the #113 Dependency Review acceptance test only.
+         Newtonsoft.Json < 13.0.1 carries GHSA-5crp-9r3c-p9vr (High). Not a real dependency of this
+         module - never merge this. -->
+    <PackageReference Include="Newtonsoft.Json" Version="12.0.3" />
   </ItemGroup>
 
 </Project>
