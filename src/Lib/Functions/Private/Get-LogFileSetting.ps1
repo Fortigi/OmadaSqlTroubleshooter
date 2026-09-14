@@ -9,23 +9,19 @@ function Get-LogFileSetting {
         before these properties existed, and a hard fallback covers a schema that cannot be read at
         all. No call site repeats any of it.
 
-        The six properties come from issue #121:
+        The five properties, as the maintainer set them for issue #121:
 
-          EnableSessionLogFile            write a file for the session at all
+          EnableSessionLogFile            write a file for the session at all; off by default
           SessionLogFileLogLevel          the file's OWN level, independent of the log window's
           SessionLogFileDirectory         empty means "beside the other per-user state"
-          SessionLogFileRetentionDays     prune sessions older than this on start-up
-          SessionLogFileRetentionCount    keep at most this many sessions
-          SessionLogFileMaxSizeMegabytes  ceiling per file, after which the session rolls to a part
+          SessionLogFileRetentionCount    keep at most this many sessions, the running one included
+          SessionLogFileMaxSizeMegabytes  split the active file into a numbered part past this size
 
         Nothing here is allowed to resolve to zero from an unusable stored value. A zero retention
-        would delete the log the user is about to be asked for, and a zero ceiling would end the file
-        after its first line - both of them the failure this feature exists to prevent, arrived at by
-        a different route.
+        would delete every other session, and a zero size would split the file after every line.
 
     .OUTPUTS
-        [PSCustomObject] with Enabled, LogLevel, Directory, RetentionDays, RetentionCount and
-        MaxSizeMegabytes.
+        [PSCustomObject] with Enabled, LogLevel, Directory, RetentionCount and MaxSizeMegabytes.
 
     .EXAMPLE
         $Setting = Get-LogFileSetting
@@ -41,7 +37,8 @@ function Get-LogFileSetting {
     [OutputType([PSCustomObject])]
     param()
 
-    $Enabled = Resolve-SessionLogFileBooleanSetting -Property "EnableSessionLogFile" -Fallback $true
+    # Off unless something says otherwise: a file on disk is opt-in.
+    $Enabled = Resolve-SessionLogFileBooleanSetting -Property "EnableSessionLogFile" -Fallback $false
 
     # Resolve-LogLevel is the module's one answer to "is this string a log level?", and it already
     # falls back from a stored value to the schema default without guessing. A level nobody can read
@@ -63,15 +60,13 @@ function Get-LogFileSetting {
         $Directory = [string]$Script:AppGlobalConfig.SessionLogFileDirectory
     }
 
-    $RetentionDays = Resolve-SessionLogFileIntegerSetting -Property "SessionLogFileRetentionDays" -Fallback 14
-    $RetentionCount = Resolve-SessionLogFileIntegerSetting -Property "SessionLogFileRetentionCount" -Fallback 20
-    $MaxSizeMegabytes = Resolve-SessionLogFileIntegerSetting -Property "SessionLogFileMaxSizeMegabytes" -Fallback 20
+    $RetentionCount = Resolve-SessionLogFileIntegerSetting -Property "SessionLogFileRetentionCount" -Fallback 10
+    $MaxSizeMegabytes = Resolve-SessionLogFileIntegerSetting -Property "SessionLogFileMaxSizeMegabytes" -Fallback 5
 
     return [PSCustomObject]@{
         Enabled          = $Enabled
         LogLevel         = $LogLevel
         Directory        = $Directory
-        RetentionDays    = $RetentionDays
         RetentionCount   = $RetentionCount
         MaxSizeMegabytes = $MaxSizeMegabytes
     }

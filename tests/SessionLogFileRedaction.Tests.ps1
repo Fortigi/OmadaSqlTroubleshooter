@@ -51,9 +51,13 @@ BeforeAll {
 
         $State = New-SessionLogFileState -LogLevel $LogLevel
         $State.Directory = $Folder
-        $State.MaxBytes = [long]20 * 1MB
-        $State.Path = Join-Path $Folder -ChildPath (Get-SessionLogFileName -StartTime $State.StartTime -ProcessId $State.ProcessId -Part $State.Part)
-        $State.Writer = Open-SessionLogFileWriter -Path $State.Path
+        $State.MaxBytes = [long]5 * 1MB
+        $State.SessionKey = New-SessionLogFileSessionKey -StartTime $State.StartTime
+        $State.UsesActiveName = $true
+        $State.Path = Join-Path $Folder -ChildPath (Get-SessionLogFileName)
+        $Opened = Open-SessionLogFileWriter -Path $State.Path -SessionKey $State.SessionKey -StartTime $State.StartTime -ProcessId $State.ProcessId
+        $State.Writer = $Opened.Writer
+        $State.BytesWritten = $Opened.BytesWritten
         $State.Pending = $null
         $Script:SessionLogFile = $State
 
@@ -144,6 +148,28 @@ Describe "The session log file sits behind Protect-LogMessage" {
             $WriterSource | Should -Not -Match "\|\s*Protect-LogMessage"
         }
     }
+
+    Context "The header is the one line that does not come through the gate" {
+
+        It "writes to the file in exactly two places: the gated line and the header" {
+            # Anything else written straight to the writer would be a route to disk that neither
+            # Write-LogOutput nor the caller scan above can see.
+            $WriterSource = Get-Content (Join-Path $Script:SourceRoot -ChildPath "Lib\Functions\Private\Write-SessionLogFile.ps1") -Raw
+            $WriteCall = @([regex]::Matches($WriterSource, '\$[A-Za-z.]*Writer\.Write(Line)?\([^)]*\)') | ForEach-Object { $_.Value } | Sort-Object)
+
+            $WriteCall | Should -Be @('$State.Writer.WriteLine($Line)', '$Writer.WriteLine($Header)')
+            $WriterSource | Should -Match '\$Header = Get-SessionLogFileHeader -SessionKey \$SessionKey -StartTime \$StartTime -ProcessId \$ProcessId'
+        }
+
+        It "writes nothing to a session log file from any other source file" {
+            $DirectWriter = Get-ChildItem -Path $Script:SourceRoot -Filter "*.ps1" -Recurse -File |
+                Where-Object { $_.Name -ne "Write-SessionLogFile.ps1" } |
+                Where-Object { (Get-Content $_.FullName -Raw) -match 'Writer\.Write(Line)?\(' } |
+                ForEach-Object { $_.Name }
+
+            $DirectWriter | Should -BeNullOrEmpty
+        }
+    }
 }
 
 Describe "What actually reaches the file" {
@@ -229,7 +255,9 @@ Describe "What actually reaches the file" {
             "Request failed. Authorization: Basic {0}" -f $Script:SecretBasicHeader | Write-LogOutput -LogType LOG -SkipDialog
 
             $Window = ($Script:RunTimeConfig.Logging.AppLogObject -join "`r`n").Trim()
-            (Read-SessionLogFileWhileOpen -Path $State.Path).Trim() | Should -BeExactly $Window
+            # Everything after the header line, which is the file's own and asserted separately below.
+            $FileBody = ((Read-SessionLogFileWhileOpen -Path $State.Path) -split "`r`n", 2)[1]
+            $FileBody.Trim() | Should -BeExactly $Window
         }
     }
 

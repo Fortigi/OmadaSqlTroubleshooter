@@ -1,12 +1,12 @@
 #Requires -Version 7.0
-# Tests for starting the session log file (issue #121).
+# Tests for starting the session log file (issue #121, as the maintainer revised it).
 #
-# Start-up is where the feature either delivers or does not: it decides whether a file is written at
-# all, where it goes, what it is called, which of the lines already emitted reach it, and what is
-# pruned before it opens. All of that is asserted against a real folder.
+# Start-up decides whether a file is written at all - off unless configured - where it goes, what it
+# is called, what happens to the previous session's file and to another instance's live one, which
+# held lines reach it, and what is pruned. All of that is asserted against a real folder.
 #
-# The last context is the one that keeps the feature honest. A log file the application cannot open
-# must never be the reason the application does not start.
+# The last context keeps the feature honest: a log file the application cannot open must never be
+# the reason the application does not start.
 
 BeforeAll {
     $ParentPath = Split-Path -Path $PSScriptRoot -Parent
@@ -17,8 +17,9 @@ BeforeAll {
     . (Join-Path $PrivatePath -ChildPath "Test-LogLevelThreshold.ps1")
     . (Join-Path $PrivatePath -ChildPath "Get-SessionLogFileName.ps1")
     . (Join-Path $PrivatePath -ChildPath "Get-LogFileSetting.ps1")
-    . (Join-Path $PrivatePath -ChildPath "Remove-ExpiredSessionLogFile.ps1")
+    . (Join-Path $PrivatePath -ChildPath "Remove-ExcessSessionLogFile.ps1")
     . (Join-Path $PrivatePath -ChildPath "Write-SessionLogFile.ps1")
+    . (Join-Path $PrivatePath -ChildPath "Open-SessionLogFile.ps1")
     . (Join-Path $PrivatePath -ChildPath "Start-SessionLogFile.ps1")
 
     $Script:Tracer = [System.Diagnostics.Trace]
@@ -63,44 +64,64 @@ Describe "Start-SessionLogFile" {
 
     BeforeEach {
         $Script:AppDataFolder = Join-Path ([System.IO.Path]::GetTempPath()) -ChildPath ("OmadaSqlLogStart_{0}" -f ([guid]::NewGuid().ToString("N")))
-        New-Item -Path $Script:AppDataFolder -ItemType Directory -Force | Out-Null
+        [System.IO.Directory]::CreateDirectory($Script:AppDataFolder) | Out-Null
+        $Script:LogFolder = Join-Path $Script:AppDataFolder -ChildPath "logs"
         $Script:RunTimeConfig = [PSCustomObject]@{
             ApplicationName = "Test"
             AppDataFolder   = $Script:AppDataFolder
         }
-        $Script:AppGlobalConfig = $null
+        $Script:AppGlobalConfig = [PSCustomObject]@{ EnableSessionLogFile = $true }
         $Script:SessionLogFile = New-SessionLogFileState -LogLevel "DEBUG"
         $Script:LoggedMessage = [System.Collections.Generic.List[PSCustomObject]]::new()
+        $Script:OtherInstance = $null
     }
 
     AfterEach {
         Stop-SessionLogFile
-        Remove-Item -Path $Script:AppDataFolder -Recurse -Force -ErrorAction SilentlyContinue
+        if ($null -ne $Script:OtherInstance -and $null -ne $Script:OtherInstance.Writer) {
+            $Script:OtherInstance.Writer.Dispose()
+        }
+
+        Remove-Item -LiteralPath $Script:AppDataFolder -Recurse -Force -ErrorAction SilentlyContinue
     }
 
-    Context "On by default" {
+    Context "Off by default" {
 
-        It "creates a file under the application's own per-user folder" {
+        It "creates no folder and no file when nothing is configured" {
+            $Script:AppGlobalConfig = $null
+
+            Start-SessionLogFile | Should -BeNullOrEmpty
+
+            $Script:SessionLogFile | Should -BeNullOrEmpty
+            Test-Path -LiteralPath $Script:LogFolder | Should -BeFalse
+        }
+
+        It "creates nothing when switched off explicitly" {
+            $Script:AppGlobalConfig = [PSCustomObject]@{ EnableSessionLogFile = $false }
+
+            Start-SessionLogFile | Out-Null
+
+            $Script:SessionLogFile | Should -BeNullOrEmpty
+            Test-Path -LiteralPath $Script:LogFolder | Should -BeFalse
+        }
+    }
+
+    Context "Switched on" {
+
+        It "writes OmadaSqlTroubleshooter.log under the application's own per-user folder" {
             $Path = Start-SessionLogFile
 
-            $Path | Should -Not -BeNullOrEmpty
+            $Path | Should -BeExactly (Join-Path $Script:LogFolder -ChildPath "OmadaSqlTroubleshooter.log")
             Test-Path -LiteralPath $Path | Should -BeTrue
-            (Split-Path $Path -Parent) | Should -BeExactly (Join-Path $Script:AppDataFolder -ChildPath "logs")
         }
 
-        It "names the file for the session that is starting" {
-            $Path = Start-SessionLogFile
-
-            (Split-Path $Path -Leaf) | Should -Match (Get-SessionLogFileNameExpression)
-            (Split-Path $Path -Leaf) | Should -Match ("pid{0}_" -f $PID)
-        }
-
-        It "leaves the state ready to be written to, at the configured level and ceiling" {
+        It "leaves the state ready to be written to, at the configured level and a 5 MB split size" {
             Start-SessionLogFile | Out-Null
 
             $Script:SessionLogFile.Writer | Should -Not -BeNullOrEmpty
             $Script:SessionLogFile.LogLevel | Should -BeExactly "DEBUG"
-            $Script:SessionLogFile.MaxBytes | Should -Be (20 * 1MB)
+            $Script:SessionLogFile.MaxBytes | Should -Be (5 * 1MB)
+            $Script:SessionLogFile.UsesActiveName | Should -BeTrue
         }
 
         It "writes the lines that were emitted before it opened" {
@@ -116,92 +137,109 @@ Describe "Start-SessionLogFile" {
 
             ($Script:LoggedMessage | Where-Object { $_.Message -like ("*{0}*" -f $Path) } | Measure-Object).Count | Should -BeGreaterThan 0
         }
-    }
-
-    Context "A configured directory PowerShell might read as a pattern" {
 
         It "treats SessionLogFileDirectory as a literal path, brackets and all" {
-            # SessionLogFileDirectory is whatever the user typed, and "[" and "]" are wildcard
-            # characters to most of PowerShell's path parameters. A real folder called "logs[1]" must
-            # be created and written to, not pattern-matched against.
             $Bracketed = Join-Path $Script:AppDataFolder -ChildPath "logs[1]"
-            $Script:AppGlobalConfig = [PSCustomObject]@{ SessionLogFileDirectory = $Bracketed }
+            $Script:AppGlobalConfig = [PSCustomObject]@{
+                EnableSessionLogFile    = $true
+                SessionLogFileDirectory = $Bracketed
+            }
 
             $Path = Start-SessionLogFile
             Write-SessionLogFile -Line "into a bracketed folder" -LogType "ERROR"
 
-            Test-Path -LiteralPath $Bracketed -PathType Container | Should -BeTrue
             (Split-Path $Path -Parent) | Should -BeExactly $Bracketed
             Get-Content -LiteralPath $Path -Raw | Should -Match "into a bracketed folder"
         }
     }
 
-    Context "Switched off" {
+    Context "The previous session's file and another instance's" {
 
-        It "writes no file and leaves nothing to write to" {
-            $Script:AppGlobalConfig = [PSCustomObject]@{ EnableSessionLogFile = $false }
-
+        It "renames what a closed previous session left and starts a fresh OmadaSqlTroubleshooter.log" {
             Start-SessionLogFile | Out-Null
+            Write-SessionLogFile -Line "from the first session" -LogType "ERROR"
+            $FirstKey = $Script:SessionLogFile.SessionKey
+            Stop-SessionLogFile
+            $Script:SessionLogFile = New-SessionLogFileState -LogLevel "DEBUG"
 
-            $Script:SessionLogFile | Should -BeNullOrEmpty
-            Test-Path -LiteralPath (Join-Path $Script:AppDataFolder -ChildPath "logs") | Should -BeFalse
+            $Path = Start-SessionLogFile
+
+            $Rotated = Join-Path $Script:LogFolder -ChildPath (Get-SessionLogFileName -SessionKey $FirstKey -Part 1)
+            Get-Content -LiteralPath $Rotated -Raw | Should -Match "from the first session"
+            $Path | Should -BeExactly (Join-Path $Script:LogFolder -ChildPath "OmadaSqlTroubleshooter.log")
+            Get-Content -LiteralPath $Path -Raw | Should -Not -Match "from the first session"
+            $Script:SessionLogFile.SessionKey | Should -Not -BeExactly $FirstKey
+        }
+
+        It "writes its own numbered file while another instance holds OmadaSqlTroubleshooter.log" {
+            Start-SessionLogFile | Out-Null
+            Write-SessionLogFile -Line "the first instance is running" -LogType "ERROR"
+            $Script:OtherInstance = $Script:SessionLogFile
+            $Script:SessionLogFile = New-SessionLogFileState -LogLevel "DEBUG"
+
+            $Path = Start-SessionLogFile
+
+            (Split-Path $Path -Leaf) | Should -BeExactly (Get-SessionLogFileName -SessionKey $Script:SessionLogFile.SessionKey -Part 1)
+            $Script:SessionLogFile.UsesActiveName | Should -BeFalse
+            $Script:SessionLogFile.SessionKey | Should -Not -BeExactly $Script:OtherInstance.SessionKey
+            Test-Path -LiteralPath $Script:OtherInstance.Path | Should -BeTrue
+            ($Script:LoggedMessage | Where-Object { $_.LogType -eq "INFO" -and $_.Message -match "in use" } | Measure-Object).Count | Should -Be 1
         }
     }
 
-    Context "Pruning happens before the file is opened" {
+    Context "Retention" {
 
-        It "removes an expired session from a previous run" {
-            $LogFolder = Join-Path $Script:AppDataFolder -ChildPath "logs"
-            New-Item -Path $LogFolder -ItemType Directory -Force | Out-Null
-            $Stale = Join-Path $LogFolder -ChildPath (Get-SessionLogFileName -StartTime ([datetime]::Now.AddDays(-90)) -ProcessId 999 -Part 1)
-            Set-Content -Path $Stale -Value "old" -Encoding UTF8
-            (Get-Item $Stale).LastWriteTime = [datetime]::Now.AddDays(-90)
+        It "keeps at most ten sessions by default, the one starting included" {
+            [System.IO.Directory]::CreateDirectory($Script:LogFolder) | Out-Null
+            foreach ($Day in 1..12) {
+                $SessionKey = "202601{0:00}-080000" -f $Day
+                $Opened = Open-SessionLogFileWriter -Path (Join-Path $Script:LogFolder -ChildPath (Get-SessionLogFileName -SessionKey $SessionKey -Part 1)) -SessionKey $SessionKey -StartTime ([datetime]::new(2026, 1, $Day, 8, 0, 0)) -ProcessId 4242
+                $Opened.Writer.Dispose()
+            }
 
             Start-SessionLogFile | Out-Null
 
-            Test-Path -LiteralPath $Stale | Should -BeFalse
-        }
-
-        It "does not prune the session it is about to write" {
-            $Script:AppGlobalConfig = [PSCustomObject]@{
-                SessionLogFileRetentionDays  = 1
-                SessionLogFileRetentionCount = 1
-            }
-
-            $Path = Start-SessionLogFile
-            Write-SessionLogFile -Line "still here" -LogType "ERROR"
-
-            Test-Path -LiteralPath $Path | Should -BeTrue
+            $SessionKey = @(Get-SessionLogFileInventory -Directory $Script:LogFolder | ForEach-Object {
+                    if ($_.IsActive) {
+                        (Read-SessionLogFileHeader -Path $_.Path).SessionKey
+                    }
+                    else {
+                        $_.SessionKey
+                    }
+                } | Sort-Object -Unique)
+            $SessionKey.Count | Should -Be 10
+            $SessionKey | Should -Contain $Script:SessionLogFile.SessionKey
+            $SessionKey | Should -Not -Contain "20260101-080000"
+            $SessionKey | Should -Not -Contain "20260102-080000"
+            $SessionKey | Should -Not -Contain "20260103-080000"
         }
     }
 
     Context "A file it cannot open" {
 
-        It "starts the application anyway, with no file and no exception" {
+        BeforeEach {
             # A file where the folder should be: the directory can never be created.
             $Blocked = Join-Path $Script:AppDataFolder -ChildPath "blocked"
-            Set-Content -Path $Blocked -Value "not a folder" -Encoding UTF8
-            $Script:AppGlobalConfig = [PSCustomObject]@{ SessionLogFileDirectory = (Join-Path $Blocked -ChildPath "logs") }
+            [System.IO.File]::WriteAllText($Blocked, "not a folder")
+            $Script:AppGlobalConfig = [PSCustomObject]@{
+                EnableSessionLogFile    = $true
+                SessionLogFileDirectory = (Join-Path $Blocked -ChildPath "logs")
+            }
+        }
 
+        It "starts the application anyway, with no file and no exception" {
             { Start-SessionLogFile | Out-Null } | Should -Not -Throw
 
             $Script:SessionLogFile | Should -BeNullOrEmpty
         }
 
         It "says so once, without a dialog" {
-            $Blocked = Join-Path $Script:AppDataFolder -ChildPath "blocked"
-            Set-Content -Path $Blocked -Value "not a folder" -Encoding UTF8
-            $Script:AppGlobalConfig = [PSCustomObject]@{ SessionLogFileDirectory = (Join-Path $Blocked -ChildPath "logs") }
-
             Start-SessionLogFile | Out-Null
 
             ($Script:LoggedMessage | Where-Object { $_.LogType -eq "WARNING" } | Measure-Object).Count | Should -Be 1
         }
 
         It "leaves a later write harmless" {
-            $Blocked = Join-Path $Script:AppDataFolder -ChildPath "blocked"
-            Set-Content -Path $Blocked -Value "not a folder" -Encoding UTF8
-            $Script:AppGlobalConfig = [PSCustomObject]@{ SessionLogFileDirectory = (Join-Path $Blocked -ChildPath "logs") }
             Start-SessionLogFile | Out-Null
 
             { Write-SessionLogFile -Line "nowhere to go" -LogType "ERROR" } | Should -Not -Throw

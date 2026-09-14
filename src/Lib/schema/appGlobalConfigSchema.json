@@ -142,7 +142,7 @@
   {
     "Name": "EnableSessionLogFile",
     "Type": "Bool",
-    "DefaultValue": true
+    "DefaultValue": false
   },
   {
     "Name": "SessionLogFileLogLevel",
@@ -154,18 +154,13 @@
     "Type": "String"
   },
   {
-    "Name": "SessionLogFileRetentionDays",
-    "Type": "Int",
-    "DefaultValue": 14
-  },
-  {
     "Name": "SessionLogFileRetentionCount",
     "Type": "Int",
-    "DefaultValue": 20
+    "DefaultValue": 10
   },
   {
     "Name": "SessionLogFileMaxSizeMegabytes",
     "Type": "Int",
-    "DefaultValue": 20
+    "DefaultValue": 5
   }
 ]

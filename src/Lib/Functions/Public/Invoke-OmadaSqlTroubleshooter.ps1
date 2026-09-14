@@ -27,7 +27,7 @@ Prevents the application from attempting to reconnect to the Omada Identity Suit
 .PARAMETER SkipBodyRedaction
 Logs the request body - the query that was sent - instead of its shape, and starts the application with the log viewer's "Show request body" checkbox already checked.
 Only the body rule is lifted: a body member named for a secret, a credential and a secure string are still masked, headers, credentials and session cookies are unaffected, and a very long value is still truncated by the log's own length limit.
-The query text does end up in the log window, in the session log file this session writes, and in any log file exported from either.
+The query text does end up in the log window, in the session log file when one is being written, and in any log file exported from either.
 The name matches the OmadaWeb.PS switch it drives.
 
 .EXAMPLE
@@ -53,11 +53,12 @@ Starts the Omada SQL Troubleshooter application logging the executed query text,
 .NOTES
 Requires PowerShell 7.0 or higher and the OmadaWeb.PS module.
 
-Every session writes a log file for its whole lifetime, under %APPDATA%\OmadaSqlTroubleshooter\logs, named for the start time and the process id.
+A session log file is off by default. Set EnableSessionLogFile to true in the configuration file to write one for the whole lifetime of every session, under %APPDATA%\OmadaSqlTroubleshooter\logs.
+The running session writes OmadaSqlTroubleshooter.log. Past SessionLogFileMaxSizeMegabytes (5 by default) it is split off as OmadaSqlTroubleshooter_<start>_<part>.log and continues in a fresh OmadaSqlTroubleshooter.log; the next start renames the leftover file the same way. A second instance running at the same time writes numbered parts of its own.
 Each line is flushed as it is written, so the file is complete up to the moment the application stopped even when it crashed, and it is unaffected by the log window's Clear.
 It goes through the same redaction gate as the log window and has its own log level - DEBUG by default, so it is more detailed than the window usually is.
-Old sessions are pruned on start-up, and the log window shows the file's path and opens its folder.
-EnableSessionLogFile, SessionLogFileLogLevel, SessionLogFileDirectory, SessionLogFileRetentionDays, SessionLogFileRetentionCount and SessionLogFileMaxSizeMegabytes in the configuration file change any of that.
+At most SessionLogFileRetentionCount sessions (10 by default, the running one included) are kept; older sessions are deleted whole on start-up. The log window shows the file's path and opens its folder.
+SessionLogFileLogLevel and SessionLogFileDirectory change the level and the folder.
 
 #>
 
@@ -220,7 +221,7 @@ function Invoke-OmadaSqlTroubleshooter {
         # As early as it can be: the configuration is what says whether a file is wanted at all,
         # where it goes, at which level and how much is kept. Everything logged before this point
         # was held and is written here, so the file starts at the first line of the session rather
-        # than at this one. Old sessions are pruned before the new file is opened.
+        # than at this one. It writes nothing unless EnableSessionLogFile is on.
         Start-SessionLogFile | Out-Null
 
         Close-SplashScreenForm

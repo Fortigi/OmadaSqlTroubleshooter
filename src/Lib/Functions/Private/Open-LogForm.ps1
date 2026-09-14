@@ -86,7 +86,7 @@ function Open-LogForm {
             }
             else {
                 $Script:LogForm.Elements.TextBlockSessionLogPath.Text = "No session log file is being written."
-                $Script:LogForm.Elements.TextBlockSessionLogPath.ToolTip = "Switched off, or the file could not be opened. Export Log File still saves what this window is showing."
+                $Script:LogForm.Elements.TextBlockSessionLogPath.ToolTip = "Off by default: set EnableSessionLogFile to true in the settings file to write one. If it is on, the file could not be opened. Export Log File still saves what this window is showing."
                 $Script:LogForm.Elements.ButtonOpenLogFolder.IsEnabled = $false
             }
         }

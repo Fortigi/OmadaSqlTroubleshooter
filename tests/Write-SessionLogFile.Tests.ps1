@@ -1,18 +1,17 @@
 #Requires -Version 7.0
 # Tests for the session log file writer of issue #121.
 #
-# Real files in a real temporary folder, no mocked file system: "the file survives a crash" is a
-# statement about bytes on disk, and a mock cannot make it true or false.
+# Real files in a real temporary folder, no mocked file system: "the file survives a crash" and
+# "nothing is lost across a split" are statements about bytes on disk, and a mock cannot make them
+# true or false.
 #
-# The four claims worth reading first:
+# The claims worth reading first:
 #
-#   * a line written before the file has been opened is not lost - start-up is exactly where a
-#     session dies, so the lines from before the configuration was read have to reach the file too;
+#   * a line written before the file has been opened is not lost;
 #   * the file has its OWN level, which may be more verbose than the log window's;
-#   * every line is on disk before the call returns, readable by another handle, with nothing
-#     stopped or disposed - that is the whole crash-survival requirement;
-#   * a session that reaches the size ceiling rolls into a new part instead of stopping, because
-#     the end of a session is the part a crash report needs.
+#   * every line is on disk before the call returns, readable by another handle;
+#   * past the size limit the file is split into a numbered part and writing continues in a fresh
+#     OmadaSqlTroubleshooter.log, with the lines on either side of the boundary contiguous.
 
 BeforeAll {
     $ParentPath = Split-Path -Path $PSScriptRoot -Parent
@@ -24,23 +23,16 @@ BeforeAll {
 
     $Script:Tracer = [System.Diagnostics.Trace]
 
-    function New-SessionLogFolder {
-        $Folder = Join-Path ([System.IO.Path]::GetTempPath()) -ChildPath ("OmadaSqlLogWrite_{0}" -f ([guid]::NewGuid().ToString("N")))
-        New-Item -Path $Folder -ItemType Directory -Force | Out-Null
-        return $Folder
-    }
-
     # Opens the file for this test's state without going through Start-SessionLogFile, which reads
-    # the configuration. The writer is the subject here; start-up is Start-SessionLogFile.Tests.ps1.
+    # the configuration. -Numbered opens it the way a second instance does.
     function Open-TestSessionLogFile {
         param(
             [string]$Folder,
             [string]$LogLevel = "DEBUG",
-            [int]$MaxSizeMegabytes = 20
+            [long]$MaxBytes = 5MB,
+            [switch]$Numbered
         )
 
-        # Continues the state already in play, exactly as Start-SessionLogFile does, so the lines
-        # held before the file opened are still there to be flushed.
         $State = $Script:SessionLogFile
         if ($null -eq $State) {
             $State = New-SessionLogFileState -LogLevel $LogLevel
@@ -48,9 +40,20 @@ BeforeAll {
 
         $State.LogLevel = $LogLevel
         $State.Directory = $Folder
-        $State.MaxBytes = [long]$MaxSizeMegabytes * 1MB
-        $State.Path = Join-Path $Folder -ChildPath (Get-SessionLogFileName -StartTime $State.StartTime -ProcessId $State.ProcessId -Part $State.Part)
-        $State.Writer = Open-SessionLogFileWriter -Path $State.Path
+        $State.MaxBytes = $MaxBytes
+        $State.SessionKey = New-SessionLogFileSessionKey -StartTime $State.StartTime
+        $State.Part = 1
+        $State.UsesActiveName = -not $Numbered
+        if ($Numbered) {
+            $State.Path = Join-Path $Folder -ChildPath (Get-SessionLogFileName -SessionKey $State.SessionKey -Part 1)
+        }
+        else {
+            $State.Path = Join-Path $Folder -ChildPath (Get-SessionLogFileName)
+        }
+
+        $Opened = Open-SessionLogFileWriter -Path $State.Path -SessionKey $State.SessionKey -StartTime $State.StartTime -ProcessId $State.ProcessId
+        $State.Writer = $Opened.Writer
+        $State.BytesWritten = $Opened.BytesWritten
         $Script:SessionLogFile = $State
 
         $Pending = $State.Pending
@@ -70,29 +73,52 @@ BeforeAll {
         $Stream = [System.IO.FileStream]::new($Path, [System.IO.FileMode]::Open, [System.IO.FileAccess]::Read, ([System.IO.FileShare]::ReadWrite -bor [System.IO.FileShare]::Delete))
         try {
             $Reader = [System.IO.StreamReader]::new($Stream)
-            try {
-                return $Reader.ReadToEnd()
-            }
-            finally {
-                $Reader.Dispose()
-            }
+            return $Reader.ReadToEnd()
         }
         finally {
             $Stream.Dispose()
         }
+    }
+
+    # The log lines of one part, without its header.
+    function Get-SessionLogFileBody {
+        param([string]$Path)
+
+        return @((Read-SessionLogFileWhileOpen -Path $Path) -split "`r?`n" | Where-Object { $_ -ne "" } | Select-Object -Skip 1)
+    }
+
+    # Every part of the folder in order - numbered parts by name, then the active file - as one body.
+    function Get-WholeSessionBody {
+        param([string]$Folder)
+
+        $PartName = [System.Collections.Generic.List[string]]::new([string[]]@(Get-ChildItem -LiteralPath $Folder -Filter "OmadaSqlTroubleshooter_*.log" -File | ForEach-Object { $_.Name }))
+        $PartName.Sort([System.StringComparer]::Ordinal)
+
+        $Body = [System.Collections.Generic.List[string]]::new()
+        foreach ($Name in $PartName) {
+            $Body.AddRange([string[]]@(Get-SessionLogFileBody -Path (Join-Path $Folder -ChildPath $Name)))
+        }
+
+        $ActivePath = Join-Path $Folder -ChildPath "OmadaSqlTroubleshooter.log"
+        if (Test-Path -LiteralPath $ActivePath) {
+            $Body.AddRange([string[]]@(Get-SessionLogFileBody -Path $ActivePath))
+        }
+
+        return , $Body.ToArray()
     }
 }
 
 Describe "Write-SessionLogFile" {
 
     BeforeEach {
-        $Script:Folder = New-SessionLogFolder
+        $Script:Folder = Join-Path ([System.IO.Path]::GetTempPath()) -ChildPath ("OmadaSqlLogWrite_{0}" -f ([guid]::NewGuid().ToString("N")))
+        [System.IO.Directory]::CreateDirectory($Script:Folder) | Out-Null
         $Script:SessionLogFile = $null
     }
 
     AfterEach {
         Stop-SessionLogFile
-        Remove-Item -Path $Script:Folder -Recurse -Force -ErrorAction SilentlyContinue
+        Remove-Item -LiteralPath $Script:Folder -Recurse -Force -ErrorAction SilentlyContinue
     }
 
     Context "Before the file has been opened" {
@@ -126,8 +152,6 @@ Describe "Write-SessionLogFile" {
         }
 
         It "applies the resolved level to the held lines, not the provisional one" {
-            # The level the file ends up running at is only known once the configuration has been
-            # read, which is after these lines were held.
             $Script:SessionLogFile = New-SessionLogFileState -LogLevel "DEBUG"
             Write-SessionLogFile -Line "a held debug line" -LogType "DEBUG"
             Write-SessionLogFile -Line "a held error line" -LogType "ERROR"
@@ -159,8 +183,6 @@ Describe "Write-SessionLogFile" {
         }
 
         It "is independent of the log window's level, which is the point of the setting" {
-            # The window is at WARNING - the shipped default - and the file is at VERBOSE, so the
-            # session that turns out to be interesting has detail the window never showed.
             $Script:RunTimeConfig = [PSCustomObject]@{ Logging = [PSCustomObject]@{ LogLevelSetting = "WARNING" } }
             $Script:SessionLogFile = Open-TestSessionLogFile -Folder $Script:Folder -LogLevel "VERBOSE"
 
@@ -173,8 +195,6 @@ Describe "Write-SessionLogFile" {
     Context "Flushed as it goes" {
 
         It "has the line on disk before the call returns, with nothing closed or disposed" {
-            # This is the crash-survival requirement stated as an assertion: no Stop, no Dispose, no
-            # end of session - just the bytes, readable by another handle.
             $Script:SessionLogFile = Open-TestSessionLogFile -Folder $Script:Folder
 
             Write-SessionLogFile -Line "the last thing before the crash" -LogType "ERROR"
@@ -182,51 +202,118 @@ Describe "Write-SessionLogFile" {
             Read-SessionLogFileWhileOpen -Path $Script:SessionLogFile.Path | Should -Match "the last thing before the crash"
         }
 
-        It "keeps every line written so far, in order" {
+        It "starts with the session header, then every line written so far, in order" {
             $Script:SessionLogFile = Open-TestSessionLogFile -Folder $Script:Folder
 
             foreach ($Index in 1..20) {
                 Write-SessionLogFile -Line ("line {0}" -f $Index) -LogType "INFO"
             }
 
-            $Line = (Read-SessionLogFileWhileOpen -Path $Script:SessionLogFile.Path) -split "`r?`n" | Where-Object { $_ }
-            ($Line | Measure-Object).Count | Should -Be 20
-            $Line[0] | Should -BeExactly "line 1"
-            $Line[19] | Should -BeExactly "line 20"
+            (Read-SessionLogFileHeader -Path $Script:SessionLogFile.Path).SessionKey | Should -BeExactly $Script:SessionLogFile.SessionKey
+            $Body = Get-SessionLogFileBody -Path $Script:SessionLogFile.Path
+            $Body.Count | Should -Be 20
+            $Body[0] | Should -BeExactly "line 1"
+            $Body[19] | Should -BeExactly "line 20"
         }
     }
 
-    Context "The size ceiling" {
+    Context "Splitting at the size limit" {
 
-        It "rolls into a new part instead of stopping, so the end of the session survives" {
-            # 1 MB ceiling, then write past it. A ceiling that simply stopped writing would throw
-            # away precisely the part a crash report is about.
-            $Script:SessionLogFile = Open-TestSessionLogFile -Folder $Script:Folder -MaxSizeMegabytes 1
-            $FirstPath = $Script:SessionLogFile.Path
-            $Padding = "x" * 1024
+        It "renames the full part to _<session>_001 and carries on in a fresh OmadaSqlTroubleshooter.log" {
+            $Script:SessionLogFile = Open-TestSessionLogFile -Folder $Script:Folder -MaxBytes 4096
+            $Padding = "x" * 100
 
-            foreach ($Index in 1..1100) {
+            foreach ($Index in 1..60) {
                 Write-SessionLogFile -Line $Padding -LogType "INFO"
             }
-            Write-SessionLogFile -Line "after the ceiling" -LogType "INFO"
 
-            $Script:SessionLogFile.Part | Should -BeGreaterThan 1
-            $Script:SessionLogFile.Path | Should -Not -BeExactly $FirstPath
-            Read-SessionLogFileWhileOpen -Path $Script:SessionLogFile.Path | Should -Match "after the ceiling"
+            $FirstPart = Join-Path $Script:Folder -ChildPath (Get-SessionLogFileName -SessionKey $Script:SessionLogFile.SessionKey -Part 1)
+            Test-Path -LiteralPath $FirstPart | Should -BeTrue
+            $Script:SessionLogFile.Path | Should -BeExactly (Join-Path $Script:Folder -ChildPath "OmadaSqlTroubleshooter.log")
+            Test-Path -LiteralPath $Script:SessionLogFile.Path | Should -BeTrue
+            $Script:SessionLogFile.Part | Should -Be 2
         }
 
-        It "keeps each part under the ceiling" {
-            $Script:SessionLogFile = Open-TestSessionLogFile -Folder $Script:Folder -MaxSizeMegabytes 1
-            $Padding = "x" * 1024
+        It "keeps the lines on either side of every split contiguous: nothing lost, nothing written twice" {
+            $Script:SessionLogFile = Open-TestSessionLogFile -Folder $Script:Folder -MaxBytes 2048
 
-            foreach ($Index in 1..1100) {
-                Write-SessionLogFile -Line $Padding -LogType "INFO"
+            foreach ($Index in 1..1000) {
+                Write-SessionLogFile -Line ("line {0:0000}" -f $Index) -LogType "INFO"
             }
 
-            foreach ($File in (Get-ChildItem -Path $Script:Folder -File)) {
-                # One line of slack: the ceiling is checked after the line that crossed it.
-                $File.Length | Should -BeLessOrEqual (1MB + 2048)
+            @(Get-ChildItem -LiteralPath $Script:Folder -Filter "OmadaSqlTroubleshooter_*.log" -File).Count | Should -BeGreaterThan 2
+            $Expected = 1..1000 | ForEach-Object { "line {0:0000}" -f $_ }
+            ((Get-WholeSessionBody -Folder $Script:Folder) -join "`n") | Should -BeExactly ($Expected -join "`n")
+        }
+
+        It "starts every part with the session's header" {
+            $Script:SessionLogFile = Open-TestSessionLogFile -Folder $Script:Folder -MaxBytes 2048
+
+            foreach ($Index in 1..500) {
+                Write-SessionLogFile -Line ("line {0:0000}" -f $Index) -LogType "INFO"
             }
+
+            foreach ($File in (Get-ChildItem -LiteralPath $Script:Folder -File)) {
+                (Read-SessionLogFileHeader -Path $File.FullName).SessionKey | Should -BeExactly $Script:SessionLogFile.SessionKey
+            }
+        }
+
+        It "keeps each finished part within one line of the limit" {
+            $Script:SessionLogFile = Open-TestSessionLogFile -Folder $Script:Folder -MaxBytes 2048
+
+            foreach ($Index in 1..500) {
+                Write-SessionLogFile -Line ("line {0:0000}" -f $Index) -LogType "INFO"
+            }
+
+            foreach ($File in (Get-ChildItem -LiteralPath $Script:Folder -Filter "OmadaSqlTroubleshooter_*.log" -File)) {
+                $File.Length | Should -BeLessOrEqual (2048 + 64)
+            }
+        }
+
+        It "numbers a second instance's parts from 001 and continues at 002" {
+            $Script:SessionLogFile = Open-TestSessionLogFile -Folder $Script:Folder -MaxBytes 1024 -Numbered
+            $SessionKey = $Script:SessionLogFile.SessionKey
+
+            foreach ($Index in 1..120) {
+                Write-SessionLogFile -Line ("line {0:0000}" -f $Index) -LogType "INFO"
+            }
+
+            Test-Path -LiteralPath (Join-Path $Script:Folder -ChildPath (Get-SessionLogFileName -SessionKey $SessionKey -Part 1)) | Should -BeTrue
+            Test-Path -LiteralPath (Join-Path $Script:Folder -ChildPath (Get-SessionLogFileName -SessionKey $SessionKey -Part 2)) | Should -BeTrue
+            Test-Path -LiteralPath (Join-Path $Script:Folder -ChildPath "OmadaSqlTroubleshooter.log") | Should -BeFalse
+            $Expected = 1..120 | ForEach-Object { "line {0:0000}" -f $_ }
+            ((Get-WholeSessionBody -Folder $Script:Folder) -join "`n") | Should -BeExactly ($Expected -join "`n")
+        }
+
+        It "keeps writing the same file, losing nothing, when something holds it and the rename is refused" {
+            $Script:SessionLogFile = Open-TestSessionLogFile -Folder $Script:Folder -MaxBytes 1024
+            # A reader that does not share Delete - the way many editors open a file.
+            $Holder = [System.IO.FileStream]::new($Script:SessionLogFile.Path, [System.IO.FileMode]::Open, [System.IO.FileAccess]::Read, [System.IO.FileShare]::ReadWrite)
+            try {
+                foreach ($Index in 1..200) {
+                    Write-SessionLogFile -Line ("line {0:0000}" -f $Index) -LogType "INFO"
+                }
+            }
+            finally {
+                $Holder.Dispose()
+            }
+
+            $Script:SessionLogFile.Failed | Should -BeFalse
+            @(Get-ChildItem -LiteralPath $Script:Folder -Filter "OmadaSqlTroubleshooter_*.log" -File).Count | Should -Be 0
+            $Expected = 1..200 | ForEach-Object { "line {0:0000}" -f $_ }
+            ((Get-WholeSessionBody -Folder $Script:Folder) -join "`n") | Should -BeExactly ($Expected -join "`n")
+        }
+
+        It "stops splitting at part 999 but never stops writing" {
+            $Script:SessionLogFile = Open-TestSessionLogFile -Folder $Script:Folder -MaxBytes 1024 -Numbered
+            $Script:SessionLogFile.Part = 999
+
+            foreach ($Index in 1..100) {
+                Write-SessionLogFile -Line ("line {0:0000}" -f $Index) -LogType "INFO"
+            }
+
+            @(Get-ChildItem -LiteralPath $Script:Folder -File).Count | Should -Be 1
+            (Get-SessionLogFileBody -Path $Script:SessionLogFile.Path).Count | Should -Be 100
         }
     }
 
@@ -281,10 +368,6 @@ Describe "Write-SessionLogFile" {
     Context "Concurrency" {
 
         It "carries a lock object for the state the synchronized writer does not cover" {
-            # TextWriter::Synchronized makes WriteLine atomic and nothing else. BytesWritten, Part,
-            # Path and the Writer reference itself are all read-modify-written around it, and the
-            # rollover disposes and replaces the writer - so two threads rolling at once could lose
-            # lines or abandon the file outright.
             $Script:SessionLogFile = New-SessionLogFileState -LogLevel "DEBUG"
 
             $Script:SessionLogFile.SyncRoot | Should -Not -BeNullOrEmpty
@@ -295,8 +378,7 @@ Describe "Write-SessionLogFile" {
             # the write must not return before it is released.
             $Script:SessionLogFile = Open-TestSessionLogFile -Folder $Script:Folder
             # A runspace, not a bare [System.Threading.Thread]: a PowerShell script block has no
-            # runspace on a raw .NET thread and the process dies trying. The SyncRoot instance is
-            # passed by reference, so both sides lock the same object.
+            # runspace on a raw .NET thread and the process dies trying.
             $Holder = [powershell]::Create()
             $Holder.AddScript({
                     param($SyncRoot)
@@ -311,7 +393,6 @@ Describe "Write-SessionLogFile" {
 
             try {
                 $Handle = $Holder.BeginInvoke()
-                # Let the holder actually take the lock before the timed write starts.
                 Start-Sleep -Milliseconds 150
                 $Elapsed = Measure-Command { Write-SessionLogFile -Line "behind the lock" -LogType "INFO" }
                 $Holder.EndInvoke($Handle)
