@@ -206,6 +206,21 @@ Describe 'Dependency lock packaging' -Tag 'Unit' {
             $Content | Should -Match 'Update-DependencyLock\.ps1 -Check' -Because "$Workflow must fail on a drifted pin"
         }
     }
+
+    It 'Should not run pr-validation.yml under a Windows PowerShell 5.1 leg' {
+        # This module is Core-only (CompatiblePSEditions = @('Core'), PowerShellVersion = '7.0'), and
+        # the 'powershell' matrix leg validated nothing under 5.1 - every step that ran the analyzer,
+        # Pester or the build was already pwsh-only. If a shell matrix comes back on a future workflow
+        # alignment, this must fail before it doubles validation time again.
+        $Content = Get-Content -Path (Join-Path $Script:RepositoryRoot -ChildPath '.github\workflows\pr-validation.yml') -Raw
+
+        # Deliberately not anchored to line start: a 'matrix:' key can come back block-style, flow-style
+        # ('matrix: { shell: [...] }'), or fully inline nested inside 'strategy: { ... }'. This workflow
+        # has no legitimate use of the substring 'matrix:' today, so any occurrence at all is a
+        # reintroduced build matrix.
+        $Content | Should -Not -Match 'matrix:' -Because 'the validate job must not reintroduce a build matrix'
+        $Content | Should -Not -Match '(?i)\bpowershell\b' -Because 'Windows PowerShell 5.1 is not a supported shell for this job'
+    }
 }
 
 Describe 'No second download path' -Tag 'Unit' {

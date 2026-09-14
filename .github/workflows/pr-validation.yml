@@ -92,17 +92,13 @@ jobs:
             });
 
   validate:
-    name: Validate (${{ matrix.shell }})
+    name: Validate
     needs: dispatch
     if: needs.dispatch.outputs.should_run == 'true'
     runs-on: windows-latest
     defaults:
       run:
-        shell: ${{ matrix.shell }}
-    strategy:
-      fail-fast: false
-      matrix:
-        shell: [pwsh, powershell]
+        shell: pwsh
 
     steps:
       - name: Checkout
@@ -131,14 +127,9 @@ jobs:
       - name: Install modules
         run: ./build/InstallModules.ps1
 
-      # Pinned to pwsh explicitly. This job's default shell is the matrix value, so on the
-      # 'powershell' leg an unpinned step would run under Windows PowerShell 5.1. The script is kept
-      # 5.1-clean anyway, but the build only ever runs it under pwsh, and CI should match.
-      #
       # Unlike the psake task, this runs without -SkipDownload, so it also re-hashes what the pinned
       # URL actually serves today.
       - name: Verify dependency lock
-        shell: pwsh
         run: ./build/Update-DependencyLock.ps1 -Check
 
       - name: Analyze, test and build
@@ -151,8 +142,7 @@ jobs:
           $exists = Test-Path 'buildoutput/TestResults.xml'
           "exists=$exists" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
 
-      # Reduce the JUnit report Pester emits to a small JSON summary. Kept compatible
-      # with Windows PowerShell 5.1, since this job runs under both shells.
+      # Reduce the JUnit report Pester emits to a small JSON summary.
       - name: Summarize test results
         id: summarize
         if: always() && steps.test-results.outputs.exists == 'True'
@@ -215,7 +205,7 @@ jobs:
             const lines = [
               `**${result.passed} passed** · **${result.failed} failed** · **${result.skipped} skipped** (${result.total} total)`,
               '',
-              `Validated \`${{ needs.dispatch.outputs.head_sha }}\` on \`${{ matrix.shell }}\`.`
+              `Validated \`${{ needs.dispatch.outputs.head_sha }}\`.`
             ];
             for (const failure of failures) {
               lines.push('', `### ❌ ${failure.name}`, '', '```',
@@ -229,7 +219,7 @@ jobs:
             await github.rest.checks.create({
               owner: context.repo.owner,
               repo: context.repo.repo,
-              name: 'Pester Tests (${{ matrix.shell }})',
+              name: 'Pester Tests (pwsh)',
               head_sha: '${{ needs.dispatch.outputs.head_sha }}',
               status: 'completed',
               conclusion: result.failed > 0 ? 'failure' : 'success',
