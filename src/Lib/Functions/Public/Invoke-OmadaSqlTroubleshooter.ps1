@@ -210,157 +210,167 @@ function Invoke-OmadaSqlTroubleshooter {
     #endregion
 
     #region process
+    # One outer try, from the point where the session log file can be open to the end, with the file
+    # closed in its finally - so the handle is released however the session ends. Both catch blocks
+    # below report through Write-LogOutput -LogType ERROR, which ends in Write-Error and is therefore
+    # terminating when the caller runs with $ErrorActionPreference = Stop; an error in the session, or
+    # Pop-Location failing, would otherwise skip the close and leave the file held open for as long as
+    # the PowerShell session lives - and the next run in that console would find it in use.
     try {
-        [System.Windows.Threading.Dispatcher]::CurrentDispatcher.Invoke([System.Windows.Threading.DispatcherPriority]::Background, [action]{})
+        try {
+            [System.Windows.Threading.Dispatcher]::CurrentDispatcher.Invoke([System.Windows.Threading.DispatcherPriority]::Background, [action]{})
 
-        "Application '{0}': Start initialization..." -f $Script:RunTimeConfig.ApplicationTitle | Write-Host -ForegroundColor Green
-        $Script:ConnectionStatus = $false
-        $Script:RunTimeConfig.ReconnectStatus = 0
-        Initialize-GlobalConfigSettings -Reset:$Reset
+            "Application '{0}': Start initialization..." -f $Script:RunTimeConfig.ApplicationTitle | Write-Host -ForegroundColor Green
+            $Script:ConnectionStatus = $false
+            $Script:RunTimeConfig.ReconnectStatus = 0
+            Initialize-GlobalConfigSettings -Reset:$Reset
 
-        # As early as it can be: the configuration is what says whether a file is wanted at all,
-        # where it goes, at which level and how much is kept. Everything logged before this point
-        # was held and is written here, so the file starts at the first line of the session rather
-        # than at this one. It writes nothing unless EnableSessionLogFile is on.
-        Start-SessionLogFile | Out-Null
+            # As early as it can be: the configuration is what says whether a file is wanted at all,
+            # where it goes, at which level and how much is kept. Everything logged before this point
+            # was held and is written here, so the file starts at the first line of the session rather
+            # than at this one. It writes nothing unless EnableSessionLogFile is on.
+            Start-SessionLogFile | Out-Null
 
-        Close-SplashScreenForm
-    }
-    catch {
-        $_.Exception.Message | Write-LogOutput -LogType ERROR -SkipDialog
-        Close-SplashScreenForm
-        #Clear-Variables
-    }
+            Close-SplashScreenForm
+        }
+        catch {
+            $_.Exception.Message | Write-LogOutput -LogType ERROR -SkipDialog
+            Close-SplashScreenForm
+            #Clear-Variables
+        }
 
-    try {
-        $Message = "Application '{0}': Initialized!" -f $Script:RunTimeConfig.ApplicationTitle
-        $Message | Write-Host -ForegroundColor Green
-        $Message | Write-LogOutput -LogType DEBUG
-        "Loading Main form with settings:`r`n{0}" -f (ConvertTo-RedactedLogString -InputObject $Script:AppConfig) | Write-LogOutput -LogType DEBUG
+        try {
+            $Message = "Application '{0}': Initialized!" -f $Script:RunTimeConfig.ApplicationTitle
+            $Message | Write-Host -ForegroundColor Green
+            $Message | Write-LogOutput -LogType DEBUG
+            "Loading Main form with settings:`r`n{0}" -f (ConvertTo-RedactedLogString -InputObject $Script:AppConfig) | Write-LogOutput -LogType DEBUG
 
-        # End-to-end automation hook. Inert during normal use; only active when OMADASQL_E2E_SCRIPT is
-        # set (by the local E2E harness). Once the window is loaded and the dispatcher goes idle (so the
-        # first tab exists), dot-source the automation script - which installs script:-scoped mocks and
-        # drives the app - then close. A watchdog force-closes and writes a failing report if the
-        # automation never runs or hangs, so the harness process can never wait forever.
-        if (![string]::IsNullOrWhiteSpace($env:OMADASQL_E2E_SCRIPT)) {
-            $Script:E2EWatchdog = New-Object System.Windows.Threading.DispatcherTimer
-            $Script:E2EWatchdog.Interval = [TimeSpan]::FromSeconds(90)
-            $Script:E2EWatchdog.Add_Tick({
-                    try {
-                        $Script:E2EWatchdog.Stop()
-                        if (![string]::IsNullOrWhiteSpace($env:OMADASQL_E2E_RESULTS)) {
-                            '<testsuites><testsuite name="E2E" tests="1" failures="1"><testcase classname="E2E" name="watchdog"><failure message="E2E watchdog fired: automation did not complete"/></testcase></testsuite></testsuites>' | Set-Content -Path $env:OMADASQL_E2E_RESULTS -Encoding UTF8
-                            New-Item -Path ("{0}.done" -f $env:OMADASQL_E2E_RESULTS) -ItemType File -Force | Out-Null
-                        }
-                    }
-                    catch {
-                        $_.Exception.Message | Write-Host -ForegroundColor Red
-                    }
-                    finally {
-                        try {
-                            $Script:MainForm.Definition.Close()
-                        }
-                        catch {
-                            $_.Exception.Message | Write-Host -ForegroundColor Red
-                        }
-                    }
-                })
-            $Script:E2EWatchdog.Start()
-
-            $Script:MainForm.Definition.Dispatcher.BeginInvoke(
-                [System.Windows.Threading.DispatcherPriority]::ApplicationIdle,
-                [action]{
-                    try {
-                        . $env:OMADASQL_E2E_SCRIPT
-                    }
-                    catch {
-                        "E2E automation failed: {0}" -f $_.Exception.Message | Write-Host -ForegroundColor Red
-                    }
-                    finally {
+            # End-to-end automation hook. Inert during normal use; only active when OMADASQL_E2E_SCRIPT is
+            # set (by the local E2E harness). Once the window is loaded and the dispatcher goes idle (so the
+            # first tab exists), dot-source the automation script - which installs script:-scoped mocks and
+            # drives the app - then close. A watchdog force-closes and writes a failing report if the
+            # automation never runs or hangs, so the harness process can never wait forever.
+            if (![string]::IsNullOrWhiteSpace($env:OMADASQL_E2E_SCRIPT)) {
+                $Script:E2EWatchdog = New-Object System.Windows.Threading.DispatcherTimer
+                $Script:E2EWatchdog.Interval = [TimeSpan]::FromSeconds(90)
+                $Script:E2EWatchdog.Add_Tick({
                         try {
                             $Script:E2EWatchdog.Stop()
+                            if (![string]::IsNullOrWhiteSpace($env:OMADASQL_E2E_RESULTS)) {
+                                '<testsuites><testsuite name="E2E" tests="1" failures="1"><testcase classname="E2E" name="watchdog"><failure message="E2E watchdog fired: automation did not complete"/></testcase></testsuite></testsuites>' | Set-Content -Path $env:OMADASQL_E2E_RESULTS -Encoding UTF8
+                                New-Item -Path ("{0}.done" -f $env:OMADASQL_E2E_RESULTS) -ItemType File -Force | Out-Null
+                            }
                         }
                         catch {
                             $_.Exception.Message | Write-Host -ForegroundColor Red
                         }
+                        finally {
+                            try {
+                                $Script:MainForm.Definition.Close()
+                            }
+                            catch {
+                                $_.Exception.Message | Write-Host -ForegroundColor Red
+                            }
+                        }
+                    })
+                $Script:E2EWatchdog.Start()
+
+                $Script:MainForm.Definition.Dispatcher.BeginInvoke(
+                    [System.Windows.Threading.DispatcherPriority]::ApplicationIdle,
+                    [action]{
                         try {
-                            $Script:MainForm.Definition.Close()
+                            . $env:OMADASQL_E2E_SCRIPT
                         }
                         catch {
-                            $_.Exception.Message | Write-Host -ForegroundColor Red
+                            "E2E automation failed: {0}" -f $_.Exception.Message | Write-Host -ForegroundColor Red
                         }
-                    }
-                }) | Out-Null
-        }
-
-        # Mock-instance automation hook. Inert during normal use; only active when OMADASQL_MOCK_SCRIPT
-        # is set (by tests/mock/Launch-AppOnMock.ps1). Unlike the E2E hook above it installs NO watchdog
-        # and does NOT auto-close the window, so the app can be driven against the local mock server
-        # both interactively (click around, no live Omada) and unattended (the dot-sourced script drives
-        # and closes itself). It runs on the dispatcher thread inside the module session, so a
-        # "function script:Invoke-OmadaRestMethod" it installs shadows OmadaWeb.PS for every caller.
-        if (![string]::IsNullOrWhiteSpace($env:OMADASQL_MOCK_SCRIPT)) {
-            $Script:MainForm.Definition.Dispatcher.BeginInvoke(
-                [System.Windows.Threading.DispatcherPriority]::ApplicationIdle,
-                [action]{
-                    try {
-                        # Only ever dot-source an existing local .ps1. The path comes from the
-                        # environment, so validate it here: a typo'd or unexpected value fails with a
-                        # clear message instead of silently running something else.
-                        $MockScriptPath = $env:OMADASQL_MOCK_SCRIPT
-                        if (-not (Test-Path -LiteralPath $MockScriptPath -PathType Leaf)) {
-                            throw "OMADASQL_MOCK_SCRIPT does not point to an existing file: '$MockScriptPath'"
+                        finally {
+                            try {
+                                $Script:E2EWatchdog.Stop()
+                            }
+                            catch {
+                                $_.Exception.Message | Write-Host -ForegroundColor Red
+                            }
+                            try {
+                                $Script:MainForm.Definition.Close()
+                            }
+                            catch {
+                                $_.Exception.Message | Write-Host -ForegroundColor Red
+                            }
                         }
-                        if ([System.IO.Path]::GetExtension($MockScriptPath) -ne ".ps1") {
-                            throw "OMADASQL_MOCK_SCRIPT must be a .ps1 file: '$MockScriptPath'"
+                    }) | Out-Null
+            }
+
+            # Mock-instance automation hook. Inert during normal use; only active when OMADASQL_MOCK_SCRIPT
+            # is set (by tests/mock/Launch-AppOnMock.ps1). Unlike the E2E hook above it installs NO watchdog
+            # and does NOT auto-close the window, so the app can be driven against the local mock server
+            # both interactively (click around, no live Omada) and unattended (the dot-sourced script drives
+            # and closes itself). It runs on the dispatcher thread inside the module session, so a
+            # "function script:Invoke-OmadaRestMethod" it installs shadows OmadaWeb.PS for every caller.
+            if (![string]::IsNullOrWhiteSpace($env:OMADASQL_MOCK_SCRIPT)) {
+                $Script:MainForm.Definition.Dispatcher.BeginInvoke(
+                    [System.Windows.Threading.DispatcherPriority]::ApplicationIdle,
+                    [action]{
+                        try {
+                            # Only ever dot-source an existing local .ps1. The path comes from the
+                            # environment, so validate it here: a typo'd or unexpected value fails with a
+                            # clear message instead of silently running something else.
+                            $MockScriptPath = $env:OMADASQL_MOCK_SCRIPT
+                            if (-not (Test-Path -LiteralPath $MockScriptPath -PathType Leaf)) {
+                                throw "OMADASQL_MOCK_SCRIPT does not point to an existing file: '$MockScriptPath'"
+                            }
+                            if ([System.IO.Path]::GetExtension($MockScriptPath) -ne ".ps1") {
+                                throw "OMADASQL_MOCK_SCRIPT must be a .ps1 file: '$MockScriptPath'"
+                            }
+
+                            . $MockScriptPath
                         }
+                        catch {
+                            "Mock automation failed: {0}" -f $_.Exception.Message | Write-Host -ForegroundColor Red
+                        }
+                    }) | Out-Null
+            }
 
-                        . $MockScriptPath
+            [void]$Script:MainForm.Definition.ShowDialog()
+            $Message = "Application '{0}': Closed, cleaning-up!" -f $Script:RunTimeConfig.ApplicationTitle
+            # Each tab's own password/connection state was already persisted (subject to its own
+            # SavePassword checkbox) by Save-TabSessions, wired into MainForm.Definition's
+            # Add_Closing - which already ran by the time ShowDialog() returns here.
+            $Message | Write-Host -ForegroundColor Green
+            $Message | Write-LogOutput -LogType DEBUG
+            "Set-ConfigProperty" | Write-LogOutput -LogType DEBUG
+            Set-ConfigProperty
+            "Close Main Form" | Write-LogOutput -LogType DEBUG
+            $Script:MainForm.Definition.Close() | Out-Null
+            foreach ($Tab in $Script:Tabs) {
+                try {
+                    # A lazily-restored tab that was never viewed has no WebView2 yet (Object is $null) -
+                    # skip it rather than calling Dispose() on null (matches Complete-TabClose's guard).
+                    if ($null -ne $Tab.WebView -and $null -ne $Tab.WebView.Object) {
+                        $Tab.WebView.Object.Dispose() | Out-Null
                     }
-                    catch {
-                        "Mock automation failed: {0}" -f $_.Exception.Message | Write-Host -ForegroundColor Red
-                    }
-                }) | Out-Null
-        }
-
-        [void]$Script:MainForm.Definition.ShowDialog()
-        $Message = "Application '{0}': Closed, cleaning-up!" -f $Script:RunTimeConfig.ApplicationTitle
-        # Each tab's own password/connection state was already persisted (subject to its own
-        # SavePassword checkbox) by Save-TabSessions, wired into MainForm.Definition's
-        # Add_Closing - which already ran by the time ShowDialog() returns here.
-        $Message | Write-Host -ForegroundColor Green
-        $Message | Write-LogOutput -LogType DEBUG
-        "Set-ConfigProperty" | Write-LogOutput -LogType DEBUG
-        Set-ConfigProperty
-        "Close Main Form" | Write-LogOutput -LogType DEBUG
-        $Script:MainForm.Definition.Close() | Out-Null
-        foreach ($Tab in $Script:Tabs) {
-            try {
-                # A lazily-restored tab that was never viewed has no WebView2 yet (Object is $null) -
-                # skip it rather than calling Dispose() on null (matches Complete-TabClose's guard).
-                if ($null -ne $Tab.WebView -and $null -ne $Tab.WebView.Object) {
-                    $Tab.WebView.Object.Dispose() | Out-Null
+                }
+                catch {
+                    "Failed to dispose WebView2 for tab '{0}': {1}" -f $Tab.DisplayName, $_.Exception.Message | Write-LogOutput -LogType WARNING
                 }
             }
-            catch {
-                "Failed to dispose WebView2 for tab '{0}': {1}" -f $Tab.DisplayName, $_.Exception.Message | Write-LogOutput -LogType WARNING
-            }
         }
-    }
-    catch {
-        $_.Exception.Message | Write-LogOutput -LogType ERROR -SkipDialog
-        Close-SplashScreenForm
+        catch {
+            $_.Exception.Message | Write-LogOutput -LogType ERROR -SkipDialog
+            Close-SplashScreenForm
+            #Clear-Variables
+        }
+
+        Pop-Location
         #Clear-Variables
+        "Application '{0}': Clean-up complete!" -f $Script:RunTimeConfig.ApplicationTitle | Write-Host -ForegroundColor Green
+    }
+    finally {
+        # Durability does not depend on reaching this: every line was flushed as it was written, which
+        # is what makes the file survive the crash that never reaches here at all. This only releases
+        # the handle, and it is safe when no file was ever opened.
+        Stop-SessionLogFile
     }
 
-    Pop-Location
-    #Clear-Variables
-    "Application '{0}': Clean-up complete!" -f $Script:RunTimeConfig.ApplicationTitle | Write-Host -ForegroundColor Green
-
-    # Outside the try/catch above on purpose, so the handle is released however the session ended.
-    # Durability does not depend on reaching this: every line was flushed as it was written, which
-    # is what makes the file survive the crash that never reaches here at all.
-    Stop-SessionLogFile
     #endregion
 }
