@@ -21,6 +21,14 @@ BeforeAll {
             [string]$ErrorAction
         )
     }
+
+    function Remove-Module {
+        param(
+            [string]$Name,
+            [switch]$Force,
+            [string]$ErrorAction
+        )
+    }
 }
 
 Describe 'Import-OmadaWebPSModule' -Tag 'Unit' {
@@ -48,8 +56,42 @@ Describe 'Import-OmadaWebPSModule' -Tag 'Unit' {
         Mock Import-Module {
             [PSCustomObject]@{ Name = 'OmadaWeb.PS'; Version = [version]'2026.1.1.1' }
         }
+        Mock Remove-Module { }
 
         { Import-OmadaWebPSModule -MinimumVersion '2026.07.09.9' -ErrorAction Stop } | Should -Throw '*OmadaWeb.PS module version 2026.07.09.9 or higher is required.*'
+    }
+
+    It 'Should remove the too-old module it imported before terminating, since it was not already loaded' {
+        Mock Get-Module { $null }
+        Mock Import-Module {
+            [PSCustomObject]@{ Name = 'OmadaWeb.PS'; Version = [version]'2026.1.1.1' }
+        }
+        Mock Remove-Module { }
+
+        { Import-OmadaWebPSModule -MinimumVersion '2026.07.09.9' -ErrorAction Stop } | Should -Throw
+
+        Should -Invoke Remove-Module -Times 1 -ParameterFilter { $Name -eq 'OmadaWeb.PS' }
+    }
+
+    It 'Should not remove the too-old module when it was already loaded before this function ran' {
+        Mock Get-Module {
+            [PSCustomObject]@{ Name = 'OmadaWeb.PS'; Version = [version]'2026.1.1.1' }
+        }
+        Mock Import-Module {
+            [PSCustomObject]@{ Name = 'OmadaWeb.PS'; Version = [version]'2026.1.1.1' }
+        }
+        Mock Remove-Module { }
+
+        { Import-OmadaWebPSModule -MinimumVersion '2026.07.09.9' -ErrorAction Stop } | Should -Throw
+
+        Should -Invoke Remove-Module -Times 0
+    }
+
+    It 'Should terminate instead of dereferencing a null module object when the PassThru result has no match' {
+        Mock Get-Module { $null }
+        Mock Import-Module { @() }
+
+        { Import-OmadaWebPSModule -MinimumVersion '2026.07.09.9' -ErrorAction Stop } | Should -Throw '*version could not be confirmed*'
     }
 
     It 'Should terminate when no module is available to import' {
