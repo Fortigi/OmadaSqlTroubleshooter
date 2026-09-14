@@ -717,13 +717,23 @@
                                         </StatusBarItem>
                                         <Separator Grid.Column="5" Background="Gray" Opacity="0.50" Margin="2,5,2,5" />
                                         <StatusBarItem Grid.Column="6" HorizontalContentAlignment="Stretch">
-                                                <!-- "00:00:00.0000000" is the widest value this can ever hold, so the ceiling
-                                                     only has to clear that. -->
+                                                <!-- The Text here is a design-time placeholder only: every runtime write comes
+                                                     from Format-ElapsedTime, which renders hh:mm:ss.f - one fractional digit,
+                                                     with hours growing past two rather than rolling over at 24. Measured in
+                                                     Segoe UI 12: "00:00:02.3" is 53px and even "9999:59:59.9" (416 days) is
+                                                     66px, so 120 clears the widest form with room over. MinWidth=100 is what
+                                                     stops the column resizing under the indicator while it counts. -->
                                                 <TextBlock Name="TextBlockStatusBarQueryTime" Text="00:00:00.0000000" MinWidth="100" MaxWidth="120" Style="{StaticResource StatusBarTextStyle}" />
                                         </StatusBarItem>
                                         <Separator Grid.Column="7" Background="Gray" Opacity="0.50" Margin="2,5,2,5" />
                                         <StatusBarItem Grid.Column="8" HorizontalContentAlignment="Stretch">
-                                                <TextBlock Name="TextBlockStatusBarRows" Text="0 rows" MinWidth="50" MaxWidth="90" Style="{StaticResource StatusBarTextStyle}" />
+                                                <!-- Invoke-ExecuteQuery writes "{0:n0} rows" over an [Int], so the widest value
+                                                     this can hold is "2,147,483,647 rows" - 101px measured, thousands
+                                                     separators included. 110 clears it; 90 did not, and would have ellipsised
+                                                     the row count on the one screen that exists to report it. The column is
+                                                     Auto, so the extra 20px costs the message nothing until the text is
+                                                     actually that long. -->
+                                                <TextBlock Name="TextBlockStatusBarRows" Text="0 rows" MinWidth="50" MaxWidth="110" Style="{StaticResource StatusBarTextStyle}" />
                                         </StatusBarItem>
                                 </StatusBar>
 

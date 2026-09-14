@@ -24,6 +24,14 @@
 #   column 0 arranged to 760px   TextBlockStatusBarMessage ActualWidth 754px   all 81 characters
 #   column 2 = 260 (URL trimmed with an ellipsis)   column 4 = 253   column 6 = 106   column 8 = 56
 #
+# The same harness settled the two things the ceilings could plausibly have broken. All five blocks
+# arrange to Y=7.02, height 15.96, baseline 19.97 in the 30px bar - one shared baseline, 7.02px clear
+# top and bottom - and the four separators sit in 5px gaps between items with no overlap. The
+# ceilings clear the widest value each field can carry, in Segoe UI 12: the elapsed time is written
+# by Format-ElapsedTime as hh:mm:ss.f, 53px for "00:00:02.3" and 66px even for "9999:59:59.9",
+# against a 120px ceiling; the row count is "{0:n0} rows" over an [Int], so 101px at
+# "2,147,483,647 rows" - which is why that ceiling is 110 and not the 90 it was first written as.
+#
 # These tests cannot repeat that measurement: the CI lane runs headless pwsh where System.Windows.*
 # does not resolve. Everything here is asserted against the XAML as parsed XML instead, the way
 # MessagesPaneFillsItsTab.Tests.ps1 does. What they guard is the property that made the measurement
@@ -43,7 +51,7 @@ $StatusBarItems = @(
     @{ Name = "TextBlockStatusBarUrl";          Column = "2"; MinWidth = "135"; MaxWidth = "260" }
     @{ Name = "TextBlockStatusBarDatabaseName"; Column = "4"; MinWidth = "135"; MaxWidth = "260" }
     @{ Name = "TextBlockStatusBarQueryTime";    Column = "6"; MinWidth = "100"; MaxWidth = "120" }
-    @{ Name = "TextBlockStatusBarRows";         Column = "8"; MinWidth = "50";  MaxWidth = "90" }
+    @{ Name = "TextBlockStatusBarRows";         Column = "8"; MinWidth = "50";  MaxWidth = "110" }
 )
 
 $CappedStatusBarItems = $StatusBarItems | Where-Object { $null -ne $PSItem.MaxWidth }
