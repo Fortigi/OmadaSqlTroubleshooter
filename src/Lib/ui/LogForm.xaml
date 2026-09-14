@@ -256,7 +256,7 @@
             </Grid.ColumnDefinitions>
             <Button Grid.Column="0"
                     x:Name="ButtonOpenLogFolder"
-                    TabIndex="15"
+                    TabIndex="16"
                     ToolTip="Open the folder this session's log file is written to"
                     IsEnabled="True">
                 <Grid HorizontalAlignment="Center"
@@ -273,7 +273,7 @@
                                Text="&#xE838;"/>
                     <AccessText Grid.Column="3"
                                 x:Name="ButtonOpenLogFolderText"
-                                Text="F_older"
+                                Text="_Folder"
                                 Style="{StaticResource ButtonAccessTextStyle}"
                                 IsHitTestVisible="False"/>
                 </Grid>
