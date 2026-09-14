@@ -10,6 +10,20 @@
                         <Setter Property="Width" Value="300" />
                         <Setter Property="Background" Value="{DynamicResource {x:Static SystemColors.WindowBrushKey}}" />
                 </Style>
+                <!-- The implicit style above pins EVERY TextBox in this control to 300x25 for the
+                     connection fields, which is why the Messages pane rendered as a small centred
+                     block however hard its own markup asked to stretch (issue #116): a Width or a
+                     Height from a style beats HorizontalAlignment/VerticalAlignment="Stretch".
+                     A TextBox that carries an explicit Style does not get the implicit one at all,
+                     so this keyed style is what keeps the pane free of the fixed size - and free of
+                     whatever the implicit style grows next. It therefore sets no Width and no
+                     Height on purpose. -->
+                <Style x:Key="FillingTextBoxStyle" TargetType="TextBox">
+                        <Setter Property="VerticalContentAlignment" Value="Top" />
+                        <Setter Property="HorizontalContentAlignment" Value="Left" />
+                        <Setter Property="Padding" Value="4" />
+                        <Setter Property="Background" Value="{DynamicResource {x:Static SystemColors.WindowBrushKey}}" />
+                </Style>
                 <Style TargetType="PasswordBox">
                         <Setter Property="VerticalContentAlignment" Value="Center" />
                         <Setter Property="Height" Value="25" />
@@ -628,11 +642,11 @@
                                                                 <!-- A read-only TextBox rather than a TextBlock: issue #93 requires the error
                                                                      text to be selectable and copyable, which a TextBox gives without any
                                                                      selection handling of our own. -->
-                                                                <TextBox x:Name="TextBoxQueryMessages" IsReadOnly="True" IsReadOnlyCaretVisible="True"
+                                                                <TextBox x:Name="TextBoxQueryMessages" Style="{StaticResource FillingTextBoxStyle}"
+                                                                         IsReadOnly="True" IsReadOnlyCaretVisible="True"
                                                                          FontFamily="Consolas" TextWrapping="Wrap" AcceptsReturn="True"
                                                                          BorderThickness="0" HorizontalAlignment="Stretch" VerticalAlignment="Stretch"
-                                                                         VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Auto"
-                                                                         Background="{DynamicResource {x:Static SystemColors.WindowBrushKey}}" />
+                                                                         VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Auto" />
                                                         </TabItem>
                                                 </TabControl>
                                         </Grid>
