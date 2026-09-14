@@ -50,13 +50,15 @@ jobs:
           # and the two are mutually exclusive.
           #
           # The list is every licence actually in this repository's dependency graph today, per
-          # THIRD-PARTY-NOTICES.md and `gh api repos/Fortigi/OmadaSqlTroubleshooter/dependency-graph/sbom`:
+          # THIRD-PARTY-NOTICES.md and `gh api repos/Fortigi/OmadaSqlTroubleshooter/dependency-graph/sbom`,
+          # plus the licences of the `github-actions` this PR itself adds:
           #   - MIT             - Monaco Editor code, Microsoft.SqlServer.TransactSql.ScriptDom
           #                       (declared `<license type="expression">MIT</license>` in its
           #                       .nuspec; GitHub's dependency graph currently reports no
           #                       concluded license for it at all, which the action treats as an
           #                       "unknown license" warning rather than a failure - see "Decisions
-          #                       worth reviewing" in the PR description)
+          #                       worth reviewing" in the PR description), and
+          #                       actions/dependency-review-action itself
           #   - CC-BY-4.0       - Codicons icon glyphs, bundled inside Monaco
           #   - BSD-3-Clause    - Microsoft.Web.WebView2. Its LICENSE.txt is a Microsoft-authored,
           #                       non-SPDX BSD-3-Clause-style grant (see THIRD-PARTY-NOTICES.md
@@ -64,4 +66,5 @@ jobs:
           #                       BSD-3-Clause, which is the identifier that has to be allow-listed
           #                       for the SPDX-based check to pass, not a claim that Microsoft
           #                       labelled it that way itself.
-          allow-licenses: MIT, CC-BY-4.0, BSD-3-Clause
+          #   - Apache-2.0      - step-security/harden-runner (phase 3 of #113, added by this PR)
+          allow-licenses: MIT, CC-BY-4.0, BSD-3-Clause, Apache-2.0
