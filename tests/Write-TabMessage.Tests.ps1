@@ -120,6 +120,18 @@ Describe "Set-TabOutputSelection" {
         { Set-TabOutputSelection -TabSession $Bare -Pane Messages } | Should -Not -Throw
     }
 
+    It "requires the pane, so a call site that forgot it fails instead of selecting Results" {
+        # Asserted through the parameter metadata rather than by calling without -Pane: PowerShell
+        # answers a missing mandatory parameter with a prompt, which in a test run hangs rather than
+        # throws. Left optional the parameter would bind to the empty string, satisfy ValidateSet on
+        # an unbound parameter, and fall through to Results - silently hiding the pane this function
+        # exists to bring forward.
+        $Parameter = (Get-Command Set-TabOutputSelection).Parameters["Pane"]
+        $Attribute = $Parameter.Attributes | Where-Object { $_ -is [System.Management.Automation.ParameterAttribute] } | Select-Object -First 1
+
+        $Attribute.Mandatory | Should -BeTrue
+    }
+
     It "does not throw when the tab has no output tab control" {
         $Legacy = [pscustomobject]@{
             Id            = "tab-legacy"

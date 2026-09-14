@@ -27,11 +27,15 @@ function Set-TabOutputSelection {
     is the tab the work belongs to.
 
     .PARAMETER Pane
-    Which pane to select: Results or Messages.
+    Which pane to select: Results or Messages. Mandatory, because it is the whole instruction: left
+    optional it would bind to the empty string, pass ValidateSet's check on an unbound parameter, and
+    fall through to Results - so a call site that forgot to say which pane it wanted would silently
+    select the one that hides the Messages this function exists to bring forward.
     #>
     [CmdLetBinding()]
     param(
         $TabSession,
+        [Parameter(Mandatory = $true)]
         [ValidateSet("Results", "Messages")]
         [string]$Pane
     )
