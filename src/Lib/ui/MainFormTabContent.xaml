@@ -85,6 +85,26 @@
                         <Setter Property="IsHitTestVisible" Value="False" />
                 </Style>
 
+                <!-- The status bar's five TextBlocks. Same trap as the Messages pane in issue #116:
+                     the implicit <Style TargetType="TextBlock"> above pins Width to 100 for the form's
+                     field labels, and an implicit style reaches every TextBlock in this control - so
+                     the message block rendered exactly 100px wide no matter how much room its column
+                     had. Measured on the unfixed markup in a real WPF layout pass, at MainForm's own
+                     MinWidth of 1461: column 0 arranged to 943px while TextBlockStatusBarMessage sat
+                     at 100px and CharacterEllipsis cut the text to "Query 'MvE: Rop...". The column
+                     was never starved; the TextBlock simply refused to use it (issue #118).
+                     A TextBlock that carries an explicit Style does not get the implicit one at all,
+                     so this keyed style sets no Width and no Height on purpose, and stretches instead.
+                     TextTrimming belongs here too: every item on the bar can overflow, and a clipped
+                     half-character reads as a rendering fault where an ellipsis reads as "there is
+                     more". Per-element MaxWidth caps the four Auto columns so a long tenant URL or
+                     data connection name still cannot eat the message's column. -->
+                <Style x:Key="StatusBarTextStyle" TargetType="TextBlock">
+                        <Setter Property="HorizontalAlignment" Value="Stretch" />
+                        <Setter Property="VerticalAlignment" Value="Center" />
+                        <Setter Property="TextTrimming" Value="CharacterEllipsis" />
+                </Style>
+
                 <Style x:Key="CheckboxAccessTextStyle" TargetType="AccessText">
                         <Setter Property="HorizontalAlignment" Value="Center" />
                         <Setter Property="VerticalAlignment" Value="Center" />
@@ -656,7 +676,11 @@
                                                 <ItemsPanelTemplate>
                                                         <Grid>
                                                                 <Grid.ColumnDefinitions>
-                                                                        <ColumnDefinition Width="*" />
+                                                                        <!-- Column 0 is the message. Its MinWidth is the floor the four Auto
+                                                                             columns have to give way for: without it a narrow window lets
+                                                                             their MinWidths add up to the whole bar and the message is back
+                                                                             to a handful of characters (issue #118). -->
+                                                                        <ColumnDefinition Width="*" MinWidth="180" />
                                                                         <ColumnDefinition Width="6" />
                                                                         <ColumnDefinition Width="Auto" />
                                                                         <ColumnDefinition Width="6" />
@@ -669,26 +693,47 @@
                                                         </Grid>
                                                 </ItemsPanelTemplate>
                                         </StatusBar.ItemsPanel>
-                                        <StatusBarItem Grid.Column="0">
+                                        <!-- Every item stretches its content across the column it was given. StatusBarItem
+                                             aligns content left by default, which would leave the message block at its
+                                             desired width instead of the column's. -->
+                                        <StatusBarItem Grid.Column="0" HorizontalContentAlignment="Stretch">
                                                 <!-- The stretchy column. Carries the most recent state change on this tab -
-                                                     connection, execution, completion - written only by Set-TabStatusMessage. -->
-                                                <TextBlock Name="TextBlockStatusBarMessage" Text="Disconnected" TextTrimming="CharacterEllipsis" />
+                                                     connection, execution, completion - written only by Set-TabStatusMessage.
+                                                     The explicit Style is what keeps the implicit TextBlock style's Width="100"
+                                                     off this element; see StatusBarTextStyle in UserControl.Resources. It also
+                                                     carries the TextTrimming, so no MaxWidth here: the message is the one item
+                                                     on the bar that is allowed all the room that is left. -->
+                                                <TextBlock Name="TextBlockStatusBarMessage" Text="Disconnected" Style="{StaticResource StatusBarTextStyle}" />
                                         </StatusBarItem>
                                         <Separator Grid.Column="1" Background="Gray" Opacity="0.50" Margin="2,5,2,5" />
-                                        <StatusBarItem Grid.Column="2">
-                                                <TextBlock Name="TextBlockStatusBarUrl" Text="-" MinWidth="135" />
+                                        <StatusBarItem Grid.Column="2" HorizontalContentAlignment="Stretch">
+                                                <!-- MaxWidth is the ceiling Auto never had. A tenant URL is long and constant;
+                                                     past this width it is trimmed rather than charged to the message. -->
+                                                <TextBlock Name="TextBlockStatusBarUrl" Text="-" MinWidth="135" MaxWidth="260" Style="{StaticResource StatusBarTextStyle}" />
                                         </StatusBarItem>
                                         <Separator Grid.Column="3" Background="Gray" Opacity="0.50" Margin="2,5,2,5" />
-                                        <StatusBarItem Grid.Column="4">
-                                                <TextBlock Name="TextBlockStatusBarDatabaseName" Text="-" MinWidth="135" />
+                                        <StatusBarItem Grid.Column="4" HorizontalContentAlignment="Stretch">
+                                                <TextBlock Name="TextBlockStatusBarDatabaseName" Text="-" MinWidth="135" MaxWidth="260" Style="{StaticResource StatusBarTextStyle}" />
                                         </StatusBarItem>
                                         <Separator Grid.Column="5" Background="Gray" Opacity="0.50" Margin="2,5,2,5" />
-                                        <StatusBarItem Grid.Column="6">
-                                                <TextBlock Name="TextBlockStatusBarQueryTime" Text="00:00:00.0000000" MinWidth="100" />
+                                        <StatusBarItem Grid.Column="6" HorizontalContentAlignment="Stretch">
+                                                <!-- The Text here is a design-time placeholder only: every runtime write comes
+                                                     from Format-ElapsedTime, which renders hh:mm:ss.f - one fractional digit,
+                                                     with hours growing past two rather than rolling over at 24. Measured in
+                                                     Segoe UI 12: "00:00:02.3" is 53px and even "9999:59:59.9" (416 days) is
+                                                     66px, so 120 clears the widest form with room over. MinWidth=100 is what
+                                                     stops the column resizing under the indicator while it counts. -->
+                                                <TextBlock Name="TextBlockStatusBarQueryTime" Text="00:00:00.0000000" MinWidth="100" MaxWidth="120" Style="{StaticResource StatusBarTextStyle}" />
                                         </StatusBarItem>
                                         <Separator Grid.Column="7" Background="Gray" Opacity="0.50" Margin="2,5,2,5" />
-                                        <StatusBarItem Grid.Column="8">
-                                                <TextBlock Name="TextBlockStatusBarRows" Text="0 rows" MinWidth="50" />
+                                        <StatusBarItem Grid.Column="8" HorizontalContentAlignment="Stretch">
+                                                <!-- Invoke-ExecuteQuery writes "{0:n0} rows" over an [Int], so the widest value
+                                                     this can hold is "2,147,483,647 rows" - 101px measured, thousands
+                                                     separators included. 110 clears it; 90 did not, and would have ellipsised
+                                                     the row count on the one screen that exists to report it. The column is
+                                                     Auto, so the extra 20px costs the message nothing until the text is
+                                                     actually that long. -->
+                                                <TextBlock Name="TextBlockStatusBarRows" Text="0 rows" MinWidth="50" MaxWidth="110" Style="{StaticResource StatusBarTextStyle}" />
                                         </StatusBarItem>
                                 </StatusBar>
 
