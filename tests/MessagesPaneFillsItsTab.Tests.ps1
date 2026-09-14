@@ -40,6 +40,26 @@ BeforeAll {
 
         $StyleNode.SelectSingleNode(("d:Setter[@Property='{0}']" -f $PropertyName), $Script:Namespaces)
     }
+
+    function Get-StyleSetterValue {
+        param(
+            [System.Xml.XmlNode] $StyleNode,
+            [string] $PropertyName
+        )
+
+        # GetAttribute rather than the adapted .Value property. On an XmlElement the underlying
+        # XmlNode.Value is null and only PowerShell's adapter makes ".Value" reach the attribute -
+        # and it reaches whichever of the two a Setter used, because WPF also writes values in
+        # element form, <Setter Property="Template"><Setter.Value>..., which this same file does
+        # twice. Asking for the attribute by name can only ever mean the attribute.
+        $Private:Setter = Get-StyleSetter -StyleNode $StyleNode -PropertyName $PropertyName
+
+        if ($null -eq $Private:Setter) {
+            return $null
+        }
+
+        $Private:Setter.GetAttribute("Value")
+    }
 }
 
 Describe "The implicit TextBox style is still the trap it was" {
@@ -56,8 +76,8 @@ Describe "The implicit TextBox style is still the trap it was" {
     }
 
     It "fixes a Width and a Height, which is what overrode Stretch" {
-        (Get-StyleSetter -StyleNode $Script:ImplicitStyle -PropertyName "Width").Value | Should -Be "300"
-        (Get-StyleSetter -StyleNode $Script:ImplicitStyle -PropertyName "Height").Value | Should -Be "25"
+        Get-StyleSetterValue -StyleNode $Script:ImplicitStyle -PropertyName "Width" | Should -Be "300"
+        Get-StyleSetterValue -StyleNode $Script:ImplicitStyle -PropertyName "Height" | Should -Be "25"
     }
 }
 
@@ -120,8 +140,8 @@ Describe "The pane fills its tab and starts at the top left" {
         # The implicit style centred content vertically. Inherited into a full-height pane that would
         # float a two-line warning down the middle of the tab, which is the same complaint as the
         # original bug one level down.
-        (Get-StyleSetter -StyleNode $Script:PaneStyle -PropertyName "VerticalContentAlignment").Value | Should -Be "Top"
-        (Get-StyleSetter -StyleNode $Script:PaneStyle -PropertyName "HorizontalContentAlignment").Value | Should -Be "Left"
+        Get-StyleSetterValue -StyleNode $Script:PaneStyle -PropertyName "VerticalContentAlignment" | Should -Be "Top"
+        Get-StyleSetterValue -StyleNode $Script:PaneStyle -PropertyName "HorizontalContentAlignment" | Should -Be "Left"
     }
 
     It "wraps its text and scrolls vertically when it overflows" {
