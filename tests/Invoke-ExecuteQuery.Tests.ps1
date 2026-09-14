@@ -607,8 +607,8 @@ Describe "Complete-ExecuteQueryResult" {
 
     It "leaves the outcome standing after the UI teardown" {
         # Outcomes do not revert - see Reset-TabStatusMessage. Only transient progress messages go
-        # back to the connection state, and the teardown Complete-ExecuteQueryResult ends with must
-        # not take the result off the bar with it.
+        # back to the connection state. Complete-ExecuteQueryResult ends by calling
+        # Reset-ExecuteQueryUiState, and that teardown must leave the outcome on the bar.
         Complete-ExecuteQueryResult -QueryResult (New-ResultResponse -RowCount 0) -SaveResult ([pscustomobject]@{ Id = 100; DisplayName = "TestQuery" }) -TempQueryDoId $null
 
         $Script:TestTabSession.Elements.TextBlockStatusBarMessage.Text | Should -Be "Query 'TestQuery' returned no rows - see Messages"
