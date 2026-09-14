@@ -48,16 +48,34 @@ function Test-LogLevelThreshold {
         return $false
     }
 
-    $IncludedLogType = switch ($Level.Trim().ToUpperInvariant()) {
-        "VERBOSE2" { @("DEBUG", "INFO", "ERROR", "VERBOSE", "WARNING", "FATAL", "LOG", "VERBOSE2") }
-        "VERBOSE" { @("DEBUG", "INFO", "ERROR", "VERBOSE", "WARNING", "FATAL", "LOG") }
-        "DEBUG" { @("DEBUG", "INFO", "ERROR", "WARNING", "FATAL", "LOG") }
-        "INFO" { @("INFO", "ERROR", "WARNING", "FATAL", "LOG") }
-        "WARNING" { @("ERROR", "WARNING", "FATAL", "LOG") }
-        "ERROR" { @("ERROR", "FATAL", "LOG") }
-        "FATAL" { @("ERROR", "FATAL", "LOG") }
-        default { @() }
+    # A rank for the level and a rank for the log type, rather than a list of included types per
+    # level: a message survives when its type's rank is no higher than the level's. It is the same
+    # table the switch statement in Write-LogOutput applied - asserted for all 64 combinations - but
+    # without building an array on every call, and this runs twice for every message written.
+    $LevelRank = switch ($Level.Trim().ToUpperInvariant()) {
+        "VERBOSE2" { 5 }
+        "VERBOSE" { 4 }
+        "DEBUG" { 3 }
+        "INFO" { 2 }
+        "WARNING" { 1 }
+        "ERROR" { 0 }
+        "FATAL" { 0 }
+        # A level the application does not know includes nothing, as the switch's default branch did.
+        default { -1 }
     }
 
-    return ($IncludedLogType -contains $LogType.Trim().ToUpperInvariant())
+    $LogTypeRank = switch ($LogType.Trim().ToUpperInvariant()) {
+        "VERBOSE2" { 5 }
+        "VERBOSE" { 4 }
+        "DEBUG" { 3 }
+        "INFO" { 2 }
+        "WARNING" { 1 }
+        "ERROR" { 0 }
+        "FATAL" { 0 }
+        "LOG" { 0 }
+        # A log type the application does not emit survives no level.
+        default { 6 }
+    }
+
+    return ($LogTypeRank -le $LevelRank)
 }
