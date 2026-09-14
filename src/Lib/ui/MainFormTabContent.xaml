@@ -702,8 +702,21 @@
                                                      The explicit Style is what keeps the implicit TextBlock style's Width="100"
                                                      off this element; see StatusBarTextStyle in UserControl.Resources. It also
                                                      carries the TextTrimming, so no MaxWidth here: the message is the one item
-                                                     on the bar that is allowed all the room that is left. -->
-                                                <TextBlock Name="TextBlockStatusBarMessage" Text="Disconnected" Style="{StaticResource StatusBarTextStyle}" />
+                                                     on the bar that is allowed all the room that is left.
+
+                                                     The ToolTip is bound to the block's own Text, so it always holds the full,
+                                                     untrimmed message and no code assigns it. It cannot go stale when the text
+                                                     changes. Whether it opens is decided at hover time by the ToolTipOpening
+                                                     handler (MainFormTabContent.Elements.TextBlockStatusBarMessage.ps1), which
+                                                     cancels it unless the text is trimmed at the width the block has right
+                                                     then. Deciding at hover time is what keeps a window resize from leaving a
+                                                     wrong answer behind (issue #119).
+
+                                                     ShowDuration is pinned rather than inherited. On this app's runtime
+                                                     (.NET 10) the registered default is already Int32.MaxValue, not the five
+                                                     seconds of the .NET Framework documentation. Pinning it states what the
+                                                     bar needs instead of depending on a default that has changed before. -->
+                                                <TextBlock Name="TextBlockStatusBarMessage" Text="Disconnected" ToolTip="{Binding Text, RelativeSource={RelativeSource Self}}" ToolTipService.ShowDuration="2147483647" Style="{StaticResource StatusBarTextStyle}" />
                                         </StatusBarItem>
                                         <Separator Grid.Column="1" Background="Gray" Opacity="0.50" Margin="2,5,2,5" />
                                         <StatusBarItem Grid.Column="2" HorizontalContentAlignment="Stretch">
