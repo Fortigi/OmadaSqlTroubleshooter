@@ -480,8 +480,9 @@ function Complete-ExecuteQueryResult {
     be carrying. That distinction is the whole point of issue #44, so it does not get to be a guess.
 
     The error detail itself is already in the Messages pane by the time this runs -
-    Write-ContainedErrorLog -TabScoped put it there. This decides what the status bar says, and,
-    together with the row count, which of the two output tabs is left selected (issue #115).
+    Write-ContainedErrorLog -TabScoped put it there. Together with the row count this decides both
+    which of the three status bar outcomes is written (issue #117) and which of the two output tabs
+    is left selected (issue #115).
     #>
     [CmdLetBinding()]
     param(
@@ -582,14 +583,41 @@ function Complete-ExecuteQueryResult {
             Set-TabOutputSelection -TabSession (Get-ActiveTabSession) -Pane Results
         }
 
-        # The last state change, on this tab's status bar. Both messages point at the pane rather
-        # than carrying the detail themselves: the bar is one line in a 30px strip, and a SQL Server
-        # error is neither short enough to fit nor useful when truncated.
-        if ($Failed) {
-            Set-TabStatusMessage -Message "Query completed with errors - see Messages"
+        # The last state change, on this tab's status bar. All three messages point at the pane
+        # rather than carrying the detail themselves: the bar is one line in a 30px strip, and a SQL
+        # Server error is neither short enough to fit nor useful when truncated.
+        #
+        # Three outcomes, not two (issue #117). The bar used to branch on $Failed alone, so a query
+        # that ran and found nothing was reported as "executed successfully" over a blank grid -
+        # strictly true, and the least helpful reading of what just happened. It is the "empty result
+        # vs failed query" ambiguity of issue #44, moved from a dialog into the status bar.
+        #
+        # The third outcome needs no new signal: $Private:ReturnedRows is the same flag the block
+        # above uses to pick the output pane, decided once by the branch that actually bound the
+        # grid. Deciding it a second way here would let the bar and the selected pane disagree about
+        # what the same execute did.
+        $Private:StatusQueryName = $Script:AppConfig.CurrentSqlQuery.DisplayName
+        $Private:StatusSubject = if ([string]::IsNullOrWhiteSpace($Private:StatusQueryName)) {
+            # Should not happen - the Execute button refuses a tab with no CurrentSqlQuery.DoId -
+            # but a status bar reading "Query '' failed" would be worse than one that simply does
+            # not name what it cannot name.
+            "The query"
         }
         else {
-            Set-TabStatusMessage -Message ("Query '{0}' executed successfully - see Messages" -f $Script:AppConfig.CurrentSqlQuery.DisplayName)
+            "Query '{0}'" -f $Private:StatusQueryName
+        }
+
+        # Named in all three, failures included. Naming only the successes was backwards: with
+        # several tabs open and queries running in the background (issue #40), a failure that does
+        # not say WHICH query failed is the one that most needs to.
+        if ($Failed) {
+            Set-TabStatusMessage -Message ("{0} failed - see Messages" -f $Private:StatusSubject)
+        }
+        elseif (-not $Private:ReturnedRows) {
+            Set-TabStatusMessage -Message ("{0} returned no rows - see Messages" -f $Private:StatusSubject)
+        }
+        else {
+            Set-TabStatusMessage -Message ("{0} executed successfully - see Messages" -f $Private:StatusSubject)
         }
 
         Reset-ExecuteQueryUiState

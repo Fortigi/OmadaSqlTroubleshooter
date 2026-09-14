@@ -189,8 +189,11 @@ BeforeAll {
             QueryMessages = [System.Collections.Generic.List[string]]::new()
         }
         $Script:Tabs = @($Script:TestTabSession)
+        # DisplayName as well as FullName: the status bar names the query in all three outcomes
+        # (issue #117), and it reads the name from here - the same property the success message has
+        # always used - rather than introducing a second source for the same string.
         $Script:AppConfig = [PSCustomObject]@{
-            CurrentSqlQuery = [PSCustomObject]@{ DoId = 100; FullName = "TestQuery - 100" }
+            CurrentSqlQuery = [PSCustomObject]@{ DoId = 100; DisplayName = "TestQuery"; FullName = "TestQuery - 100" }
         }
         $Script:RunTimeData = [PSCustomObject]@{
             QueryResult     = $null
@@ -513,6 +516,104 @@ Describe "Complete-ExecuteQueryResult" {
         { Complete-ExecuteQueryResult -QueryResult $ErrorRecord -SaveResult ([pscustomobject]@{ Id = 100; DisplayName = "TestQuery" }) -TempQueryDoId $null } | Should -Not -Throw
         $Script:MainForm.Elements.ButtonExecuteQuery.IsEnabled | Should -BeTrue
     }
+
+    # --- The status bar's three outcomes (issue #117) ----------------------------------------------
+    # The bar used to branch on $Failed alone, so a query that ran and found nothing was reported as
+    # "executed successfully" over a blank grid, and a query that failed was reported without saying
+    # which query it was.
+
+    It "says the query executed successfully when it returned rows" {
+        Complete-ExecuteQueryResult -QueryResult (New-ResultResponse -RowCount 2) -SaveResult ([pscustomobject]@{ Id = 100; DisplayName = "TestQuery" }) -TempQueryDoId $null
+
+        $Script:TestTabSession.Elements.TextBlockStatusBarMessage.Text |
+            Should -Be "Query 'TestQuery' executed successfully - see Messages"
+    }
+
+    It "says the query returned no rows when the execute completed with zero rows" {
+        # The bug in the issue. Strictly the run did succeed, and saying only that over a blank grid
+        # is the least helpful reading of what just happened.
+        Complete-ExecuteQueryResult -QueryResult (New-ResultResponse -RowCount 0) -SaveResult ([pscustomobject]@{ Id = 100; DisplayName = "TestQuery" }) -TempQueryDoId $null
+
+        $Script:TestTabSession.Elements.TextBlockStatusBarMessage.Text |
+            Should -Be "Query 'TestQuery' returned no rows - see Messages"
+    }
+
+    It "says the query returned no rows when the result never arrived at all" {
+        # Same outcome, reached by the other route into the empty branch: a null result is treated as
+        # no rows, not as a failure, unless the caller says it failed.
+        Complete-ExecuteQueryResult -QueryResult $null -SaveResult ([pscustomobject]@{ Id = 100; DisplayName = "TestQuery" }) -TempQueryDoId $null
+
+        $Script:TestTabSession.Elements.TextBlockStatusBarMessage.Text |
+            Should -Be "Query 'TestQuery' returned no rows - see Messages"
+    }
+
+    It "names the query when the execute failed" {
+        # "Query completed with errors" named nothing. With several tabs open and queries running in
+        # the background (issue #40), a failure that does not say which query failed is the one that
+        # most needs to.
+        Complete-ExecuteQueryResult -QueryResult $null -SaveResult ([pscustomobject]@{ Id = 100; DisplayName = "TestQuery" }) -TempQueryDoId $null -Failed
+
+        $Script:TestTabSession.Elements.TextBlockStatusBarMessage.Text |
+            Should -Be "Query 'TestQuery' failed - see Messages"
+    }
+
+    It "reports a failure as failed rather than as an empty result" {
+        # The distinction issue #44 is about, stated on the bar: a failed execute and one that found
+        # nothing both arrive with nothing to bind to the grid, and they must not read the same.
+        Complete-ExecuteQueryResult -QueryResult $null -SaveResult ([pscustomobject]@{ Id = 100; DisplayName = "TestQuery" }) -TempQueryDoId $null -Failed
+        $Failed = $Script:TestTabSession.Elements.TextBlockStatusBarMessage.Text
+
+        Initialize-ExecuteQueryTestState
+        Complete-ExecuteQueryResult -QueryResult (New-ResultResponse -RowCount 0) -SaveResult ([pscustomobject]@{ Id = 100; DisplayName = "TestQuery" }) -TempQueryDoId $null
+        $Empty = $Script:TestTabSession.Elements.TextBlockStatusBarMessage.Text
+
+        $Failed | Should -Not -Be $Empty
+    }
+
+    It "points every outcome at the Messages pane rather than carrying the detail" {
+        # The bar is one line in a 30px strip. Whatever happened, the detail lives in the pane.
+        foreach ($Case in @(@{ Rows = 2; Failed = $false }, @{ Rows = 0; Failed = $false }, @{ Rows = 0; Failed = $true })) {
+            Initialize-ExecuteQueryTestState
+            Complete-ExecuteQueryResult -QueryResult (New-ResultResponse -RowCount $Case.Rows) -SaveResult ([pscustomobject]@{ Id = 100; DisplayName = "TestQuery" }) -TempQueryDoId $null -Failed:$Case.Failed
+
+            $Script:TestTabSession.Elements.TextBlockStatusBarMessage.Text | Should -BeLike "Query 'TestQuery' * - see Messages"
+        }
+    }
+
+    It "writes the outcome to the owning tab's status bar and no other" {
+        # Per tab, like the rest of the bar: a background completion on this tab must leave the tab
+        # the user is looking at alone.
+        $Other = [pscustomobject]@{
+            Id            = "tab-B"
+            QueryMessages = [System.Collections.Generic.List[string]]::new()
+            Elements      = (New-TabElementStub)
+        }
+
+        Complete-ExecuteQueryResult -QueryResult (New-ResultResponse -RowCount 0) -SaveResult ([pscustomobject]@{ Id = 100; DisplayName = "TestQuery" }) -TempQueryDoId $null
+
+        $Script:TestTabSession.Elements.TextBlockStatusBarMessage.Text | Should -Be "Query 'TestQuery' returned no rows - see Messages"
+        $Other.Elements.TextBlockStatusBarMessage.Text | Should -Be ""
+    }
+
+    It "leaves the outcome standing after the UI teardown" {
+        # Outcomes do not revert - see Reset-TabStatusMessage. Only transient progress messages go
+        # back to the connection state, and the teardown Complete-ExecuteQueryResult ends with must
+        # not take the result off the bar with it.
+        Complete-ExecuteQueryResult -QueryResult (New-ResultResponse -RowCount 0) -SaveResult ([pscustomobject]@{ Id = 100; DisplayName = "TestQuery" }) -TempQueryDoId $null
+
+        $Script:TestTabSession.Elements.TextBlockStatusBarMessage.Text | Should -Be "Query 'TestQuery' returned no rows - see Messages"
+        $Script:TestTabSession.Elements.TextBlockStatusBarMessage.Text | Should -Not -Be "Connected"
+    }
+
+    It "does not leave an empty name in quotes when the query has no display name" {
+        # Should not be reachable - the Execute button refuses a tab with no CurrentSqlQuery.DoId -
+        # but "Query '' failed" would be worse than a bar that simply does not name what it cannot.
+        $Script:AppConfig.CurrentSqlQuery.DisplayName = "  "
+
+        Complete-ExecuteQueryResult -QueryResult $null -SaveResult ([pscustomobject]@{ Id = 100; DisplayName = "TestQuery" }) -TempQueryDoId $null -Failed
+
+        $Script:TestTabSession.Elements.TextBlockStatusBarMessage.Text | Should -Be "The query failed - see Messages"
+    }
 }
 
 Describe "Complete-ExecuteQueryPipeline falls back to the UI thread" {
@@ -637,7 +738,7 @@ Describe "Complete-ExecuteQueryPipeline does not retry a tab that was torn down"
 
         # Disconnected, so the query controls stay disabled - but the stopwatch is stopped, the
         # button reads Execute rather than Cancel, and the failure is on the tab's status bar.
-        $Script:TestTabSession.Elements.TextBlockStatusBarMessage.Text | Should -Match "errors"
+        $Script:TestTabSession.Elements.TextBlockStatusBarMessage.Text | Should -Match "failed"
         $Script:MainForm.Elements.ButtonExecuteQueryText.Text | Should -Be "_Execute"
         $Script:RunTimeData.StopWatch.IsRunning | Should -BeFalse
     }

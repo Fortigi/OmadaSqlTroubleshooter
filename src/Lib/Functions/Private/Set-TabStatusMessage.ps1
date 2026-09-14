@@ -84,8 +84,9 @@ function Reset-TabStatusMessage {
     answered by something else entirely, for as long as the user does not run a query.
 
     So transient operations revert here and the connection state comes back. A query OUTCOME does not
-    revert: "executed successfully" and "completed with errors" are the last real state change on that
-    tab, which is what issue #93 asks the bar to carry, and they stand until the next execute.
+    revert: all three of them - executed successfully, returned no rows, failed (issue #117) - are the
+    last real state change on that tab, which is what issue #93 asks the bar to carry, and they stand
+    until the next execute.
 
     This is also why column 0 could absorb the connection state in the first place. It is not that
     connection state stopped mattering - it is that it became the thing the bar falls back to.
