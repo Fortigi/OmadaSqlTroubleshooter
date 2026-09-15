@@ -59,7 +59,7 @@ Describe 'Workflow action pins' -Tag 'Unit' {
             # rewrites alongside the SHA on every bump - a SHA with no `# vX.Y.Z` comment is
             # correctly pinned but not maintainable.
             $Uncommented = $Script:UsesLines | Where-Object {
-                $_.Ref -match '^[0-9a-f]{40}$' -and ([string]::IsNullOrWhiteSpace($_.Comment) -or $_.Comment -notmatch '^v\d')
+                $_.Ref -match '^[0-9a-f]{40}$' -and ([string]::IsNullOrWhiteSpace($_.Comment) -or $_.Comment -notmatch '^v\d+\.\d+\.\d+')
             }
             $Detail = ($Uncommented | ForEach-Object { "$($_.File):$($_.Line)  $($_.Raw)" }) -join "`n"
             $Uncommented | Should -BeNullOrEmpty -Because "the SHA pin needs a human-readable '# vX.Y.Z' comment for review and for Dependabot to rewrite`n$Detail"

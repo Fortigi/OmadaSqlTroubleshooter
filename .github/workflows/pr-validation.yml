@@ -32,9 +32,8 @@ jobs:
     name: Dispatch
     runs-on: ubuntu-latest
     if: github.event_name == 'workflow_dispatch' || (github.event.issue.pull_request != null && startsWith(github.event.comment.body, '/validate'))
-    # Narrower than the workflow-level grant above: this job only reads the PR, reacts to the
-    # triggering comment and writes the pending commit status - it never checks anything out and
-    # never touches a check run.
+    # The workflow-level grant above is empty; this job declares only what it actually calls -
+    # reads the PR, reacts to the triggering comment, and writes the pending commit status.
     permissions:
       pull-requests: read
       issues: write
@@ -107,8 +106,8 @@ jobs:
     needs: dispatch
     if: needs.dispatch.outputs.should_run == 'true'
     runs-on: windows-latest
-    # Narrower than the workflow-level grant above: this job checks out the PR head and publishes
-    # a check run for its own Pester results - nothing here touches a PR, an issue or a status.
+    # The workflow-level grant above is empty; this job declares only what it actually calls -
+    # checks out the PR head and publishes a check run for its own Pester results.
     permissions:
       contents: read
       checks: write
@@ -260,7 +259,8 @@ jobs:
     # run must not overwrite the status the newer run is already writing for the same SHA.
     if: always() && !cancelled() && needs.dispatch.outputs.should_run == 'true'
     runs-on: ubuntu-latest
-    # Narrower than the workflow-level grant above: this job only writes the final commit status.
+    # The workflow-level grant above is empty; this job declares only what it actually calls -
+    # writes the final commit status.
     permissions:
       statuses: write
     steps:

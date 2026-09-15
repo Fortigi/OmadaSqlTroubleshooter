@@ -95,8 +95,9 @@ Out of scope:
 
 Repository setting — *Settings > Rules > Rulesets* — a ruleset named **"Protect Main"** requires a
 pull request (squash merges only) before merging to `main`, blocks force pushes and branch
-deletion, and requires the `PR Validation` and `Dependency Review` status checks together with
-conversation resolution.
+deletion, and requires the `PR Validation` status check. The lead is adding the `Dependency Review`
+status check and required conversation resolution to this same ruleset immediately after this pull
+request merges - `dependency-review.yml` did not exist for the ruleset to reference before now.
 
 - **`PR Validation` as a required check is a deliberate human gate, not an oversight.** It reports
   a commit status from the comment-triggered `/validate` workflow (see
