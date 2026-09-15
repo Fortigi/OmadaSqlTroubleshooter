@@ -21,25 +21,35 @@ concurrency:
   group: pr-validation-${{ github.event.issue.number || github.ref }}
   cancel-in-progress: true
 
-permissions:
-  contents: read
-  checks: write
-  pull-requests: write
-  issues: write
-  statuses: write
+# Every job below declares its own permissions: block, each scoped to only the API calls that job
+# actually makes - a job-level block fully replaces this one rather than narrowing it, so leaving
+# a broad grant here would be dead weight that only widens the default for a future job that
+# forgets to declare its own.
+permissions: {}
 
 jobs:
   dispatch:
     name: Dispatch
     runs-on: ubuntu-latest
     if: github.event_name == 'workflow_dispatch' || (github.event.issue.pull_request != null && startsWith(github.event.comment.body, '/validate'))
+    # The workflow-level grant above is empty; this job declares only what it actually calls -
+    # reads the PR, reacts to the triggering comment, and writes the pending commit status.
+    permissions:
+      pull-requests: read
+      issues: write
+      statuses: write
     outputs:
       should_run: ${{ steps.resolve.outputs.should_run }}
       head_sha: ${{ steps.resolve.outputs.head_sha }}
     steps:
+      - name: Harden the runner (audit all outgoing network calls)
+        uses: step-security/harden-runner@e14015d583714f6e62063499dc959a02595150a1 # v2.21.1
+        with:
+          egress-policy: audit
+
       - name: Resolve trigger context
         id: resolve
-        uses: actions/github-script@v7
+        uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b # v7.1.0
         with:
           script: |
             if (context.eventName === 'workflow_dispatch') {
@@ -66,7 +76,7 @@ jobs:
 
       - name: Set pending status
         if: steps.resolve.outputs.should_run == 'true'
-        uses: actions/github-script@v7
+        uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b # v7.1.0
         with:
           script: |
             await github.rest.repos.createCommitStatus({
@@ -81,7 +91,7 @@ jobs:
 
       - name: Acknowledge comment
         if: github.event_name == 'issue_comment' && steps.resolve.outputs.should_run == 'true'
-        uses: actions/github-script@v7
+        uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b # v7.1.0
         with:
           script: |
             await github.rest.reactions.createForIssueComment({
@@ -96,13 +106,23 @@ jobs:
     needs: dispatch
     if: needs.dispatch.outputs.should_run == 'true'
     runs-on: windows-latest
+    # The workflow-level grant above is empty; this job declares only what it actually calls -
+    # checks out the PR head and publishes a check run for its own Pester results.
+    permissions:
+      contents: read
+      checks: write
     defaults:
       run:
         shell: pwsh
 
     steps:
+      - name: Harden the runner (audit all outgoing network calls)
+        uses: step-security/harden-runner@e14015d583714f6e62063499dc959a02595150a1 # v2.21.1
+        with:
+          egress-policy: audit
+
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
           ref: ${{ needs.dispatch.outputs.head_sha }}
           fetch-depth: 0
@@ -190,7 +210,7 @@ jobs:
         # failed there is no TestSummary.json, and the reader's ENOENT would bury the
         # real error.
         if: always() && steps.summarize.outcome == 'success'
-        uses: actions/github-script@v7
+        uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b # v7.1.0
         with:
           script: |
             const fs = require('fs');
@@ -239,9 +259,18 @@ jobs:
     # run must not overwrite the status the newer run is already writing for the same SHA.
     if: always() && !cancelled() && needs.dispatch.outputs.should_run == 'true'
     runs-on: ubuntu-latest
+    # The workflow-level grant above is empty; this job declares only what it actually calls -
+    # writes the final commit status.
+    permissions:
+      statuses: write
     steps:
+      - name: Harden the runner (audit all outgoing network calls)
+        uses: step-security/harden-runner@e14015d583714f6e62063499dc959a02595150a1 # v2.21.1
+        with:
+          egress-policy: audit
+
       - name: Set final commit status
-        uses: actions/github-script@v7
+        uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b # v7.1.0
         with:
           script: |
             const success = '${{ needs.validate.result }}' === 'success';
