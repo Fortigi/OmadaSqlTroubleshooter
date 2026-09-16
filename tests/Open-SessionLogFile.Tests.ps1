@@ -100,6 +100,37 @@ Describe "Open-SessionLogFile" {
         }
     }
 
+    Context "A session resuming (issue #138)" {
+
+        # The "Write log file" checkbox can stop and start the file within one application session.
+        # Its earlier file has just been rotated to a numbered part of its own key, so a fresh key
+        # would split one session into two - and Get-UnusedSessionLogFileSessionKey would refuse the
+        # original anyway, because this session's own parts are what make it look taken.
+
+        It "keeps the key it is given instead of choosing a new one" {
+            New-ClosedSessionLogFile -Path (Join-Path $Script:Folder -ChildPath "OmadaSqlTroubleshooter_20260914-080503_001.log") -SessionKey "20260914-080503"
+
+            $Result = Open-SessionLogFile -Directory $Script:Folder -StartTime $Script:StartTime -ProcessId 5151 -SessionKey "20260914-080503"
+            $Script:Writers.Add($Result.Writer)
+
+            $Result.SessionKey | Should -BeExactly "20260914-080503"
+            $Result.Path | Should -BeExactly $Script:ActivePath
+            (Read-SessionLogFileHeader -Path $Script:ActivePath).SessionKey | Should -BeExactly "20260914-080503"
+        }
+
+        It "rotates its own closed file first, so nothing it wrote before is overwritten" {
+            New-ClosedSessionLogFile -Path $Script:ActivePath -SessionKey "20260914-080503" -Line @("written before the box was unticked")
+
+            $Result = Open-SessionLogFile -Directory $Script:Folder -StartTime $Script:StartTime -ProcessId 5151 -SessionKey "20260914-080503"
+            $Script:Writers.Add($Result.Writer)
+
+            $Rotated = Join-Path $Script:Folder -ChildPath "OmadaSqlTroubleshooter_20260914-080503_001.log"
+            $Result.RotatedPath | Should -BeExactly $Rotated
+            Get-Content -LiteralPath $Rotated -Raw | Should -Match "written before the box was unticked"
+            $Result.SessionKey | Should -BeExactly "20260914-080503"
+        }
+    }
+
     Context "Two sessions in the same second" {
 
         It "never takes the key of a session already in the folder" {

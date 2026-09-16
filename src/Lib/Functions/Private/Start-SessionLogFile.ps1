@@ -72,9 +72,16 @@ function Start-SessionLogFile {
             # handling; this overload is literal by construction, and already idempotent.
             [System.IO.Directory]::CreateDirectory($Setting.Directory) | Out-Null
 
+            # A session resuming after the "Write log file" checkbox was switched off and on again
+            # (issue #138) keeps its own key, so its files stay one session to rotation, to pruning
+            # and to anyone reading the folder. Failed is cleared with it: the state is about to be
+            # given a working writer, and a stale flag would make Write-SessionLogFile drop every
+            # line into the file that was just opened for it.
+            $State.Failed = $false
+
             $Mutex = Enter-SessionLogFileMutex -Directory $Setting.Directory
             try {
-                $Opened = Open-SessionLogFile -Directory $Setting.Directory -StartTime $State.StartTime -ProcessId $State.ProcessId
+                $Opened = Open-SessionLogFile -Directory $Setting.Directory -StartTime $State.StartTime -ProcessId $State.ProcessId -SessionKey $State.SessionKey
 
                 $State.Path = $Opened.Path
                 $State.Writer = $Opened.Writer

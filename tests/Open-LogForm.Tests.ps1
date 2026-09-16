@@ -159,6 +159,8 @@ Describe 'Session log file, from the log window (issue #121)' {
         $Script:SessionLogPathTextBlock = $Script:LogFormXaml.SelectSingleNode("//w:TextBlock[@x:Name='TextBlockSessionLogPath']", $Script:XamlNamespace)
         $Script:OpenLogFolderEventSource = Get-Content (Join-Path $ParentPath -ChildPath "src\lib\Events\LogForm.Elements.ButtonOpenLogFolder.ps1") -Raw
         $Script:EntryPointSource = Get-Content (Join-Path $ParentPath -ChildPath "src\lib\functions\Public\Invoke-OmadaSqlTroubleshooter.ps1") -Raw
+        # The row moved into its own function when the checkbox made it reachable twice (issue #138).
+        $Script:UpdateSessionLogPathSource = Get-Content (Join-Path $ParentPath -ChildPath "src\lib\functions\Private\Update-LogFormSessionLogPath.ps1") -Raw
     }
 
     Context 'The window says where the file is' {
@@ -171,8 +173,9 @@ Describe 'Session log file, from the log window (issue #121)' {
         }
 
         It 'fills the path in when the window opens' {
-            $Script:OpenLogFormSource | Should -Match 'TextBlockSessionLogPath'
-            $Script:OpenLogFormSource | Should -Match '\$Script:SessionLogFile'
+            $Script:OpenLogFormSource | Should -Match 'Update-LogFormSessionLogPath'
+            $Script:UpdateSessionLogPathSource | Should -Match 'TextBlockSessionLogPath'
+            $Script:UpdateSessionLogPathSource | Should -Match '\$Script:SessionLogFile'
         }
 
         It 'checks both new elements are there before touching either' {
@@ -180,7 +183,7 @@ Describe 'Session log file, from the log window (issue #121)' {
             # logging an ERROR under $ErrorActionPreference = Stop throws again - so a XAML mismatch
             # or a partial harness would turn "the log window opens" into an error cascade. Guarding
             # only the TextBlock and then dereferencing the Button was exactly that hole.
-            $Script:OpenLogFormSource | Should -Match '\$null -ne \$Script:LogForm\.Elements\.TextBlockSessionLogPath -and \$null -ne \$Script:LogForm\.Elements\.ButtonOpenLogFolder'
+            $Script:UpdateSessionLogPathSource | Should -Match '\$null -eq \$Script:LogForm\.Elements\.TextBlockSessionLogPath -or \$null -eq \$Script:LogForm\.Elements\.ButtonOpenLogFolder'
         }
 
         It 'offers a button that opens the folder' {
@@ -236,6 +239,107 @@ Describe 'Session log file, from the log window (issue #121)' {
             # acquired any knowledge of the file's writer along the way.
             $Script:OpenLogFormSource | Should -Match 'AppLogObject.Clear\(\)'
             $Script:OpenLogFormSource | Should -Not -Match 'Stop-SessionLogFile'
+        }
+    }
+}
+
+Describe 'Write log file checkbox (issue #138)' {
+
+    BeforeAll {
+        $ParentPath = Split-Path -Path $PSScriptRoot -Parent
+        $Script:SessionLogFileCheckBox = $Script:LogFormXaml.SelectSingleNode("//w:CheckBox[@x:Name='CheckboxSessionLogFile']", $Script:XamlNamespace)
+        $Script:SessionLogFileEventSource = Get-Content (Join-Path $ParentPath -ChildPath "src\lib\Events\LogForm.Elements.CheckboxSessionLogFile.ps1") -Raw
+        $Script:SetSessionLogFileEnabledSource = Get-Content (Join-Path $ParentPath -ChildPath "src\lib\functions\Private\Set-SessionLogFileEnabled.ps1") -Raw
+        $Script:GlobalConfigSchema = Get-Content (Join-Path $ParentPath -ChildPath "src\lib\schema\appGlobalConfigSchema.json") -Raw | ConvertFrom-Json
+    }
+
+    Context 'Checkbox' {
+
+        It 'sits in the row that shows the file, next to the Folder button' {
+            $Script:SessionLogFileCheckBox | Should -Not -BeNullOrEmpty
+            $Script:SessionLogFileCheckBox.GetAttribute("Content") | Should -Be "Write log file"
+            $Script:SessionLogFileCheckBox.ParentNode.SelectSingleNode("w:Button[@x:Name='ButtonOpenLogFolder']", $Script:XamlNamespace) | Should -Not -BeNullOrEmpty
+            $Script:SessionLogFileCheckBox.ParentNode.SelectSingleNode("w:TextBlock[@x:Name='TextBlockSessionLogPath']", $Script:XamlNamespace) | Should -Not -BeNullOrEmpty
+        }
+
+        It 'starts unchecked, so off-by-default survives a fresh install' {
+            # Open-LogForm sets the state from the resolved setting; a checked default in the XAML
+            # would be a second answer to the same question.
+            $Script:SessionLogFileCheckBox.Attributes["IsChecked"] | Should -BeNullOrEmpty
+        }
+
+        It 'states in its tooltip that a file started now has only what follows' {
+            $ToolTip = $Script:SessionLogFileCheckBox.GetAttribute("ToolTip")
+
+            $ToolTip | Should -Match "from this moment on"
+            $ToolTip | Should -Match "Export Log File"
+        }
+    }
+
+    Context 'Event handler' {
+
+        It 'routes both directions through the single state writer' {
+            $Script:SessionLogFileEventSource | Should -Match 'Add_Checked'
+            $Script:SessionLogFileEventSource | Should -Match 'Add_UnChecked'
+            $Script:SessionLogFileEventSource | Should -Match 'Set-SessionLogFileEnabled -Enabled \$true'
+            $Script:SessionLogFileEventSource | Should -Match 'Set-SessionLogFileEnabled -Enabled \$false'
+        }
+
+        It 'puts the path label and the Folder button back in step afterwards' {
+            ($Script:SessionLogFileEventSource | Select-String -Pattern 'Update-LogFormSessionLogPath' -AllMatches).Matches.Count | Should -Be 2
+        }
+    }
+
+    Context 'State writer' {
+
+        It 'persists the choice like the other log viewer checkboxes do' {
+            $Script:SetSessionLogFileEnabledSource | Should -Match 'Set-ConfigProperty -Property "EnableSessionLogFile"'
+        }
+
+        It 'persists before it starts, because the start reads the persisted value' {
+            # Start-SessionLogFile asks Get-LogFileSetting whether a file is wanted, and that reads
+            # $Script:AppGlobalConfig - which is what Set-ConfigProperty updates. The other order
+            # reads the old value and writes nothing.
+            # The call forms, not the names: both are discussed in the comments above the code, so
+            # the first textual mention of either is prose rather than the statement being ordered.
+            $PersistIndex = $Script:SetSessionLogFileEnabledSource.IndexOf('$Enabled | Set-ConfigProperty -Property "EnableSessionLogFile"')
+            $StartIndex = $Script:SetSessionLogFileEnabledSource.IndexOf('Start-SessionLogFile | Out-Null')
+
+            $PersistIndex | Should -BeGreaterThan -1
+            $StartIndex | Should -BeGreaterThan $PersistIndex
+        }
+
+        It 'stops the file through the function that closes it under the write lock' {
+            $Script:SetSessionLogFileEnabledSource | Should -Match 'Stop-SessionLogFile'
+        }
+
+        It 'reports a failure without unwinding the click handler' {
+            $Script:SetSessionLogFileEnabledSource | Should -Match 'Write-ContainedErrorLog'
+            $Script:SetSessionLogFileEnabledSource | Should -Not -Match 'Write-LogOutput -LogType ERROR'
+        }
+
+        It 'is a known global config property, so Set-ConfigProperty stores it instead of warning' {
+            ($Script:GlobalConfigSchema | Where-Object { $_.Name -eq "EnableSessionLogFile" }).Type | Should -Be "Bool"
+        }
+    }
+
+    Context 'Opening the window' {
+
+        It 'reflects the resolved setting in the checkbox' {
+            $Script:OpenLogFormSource | Should -Match 'CheckboxSessionLogFile.IsChecked = \(Get-LogFileSetting\).Enabled'
+        }
+
+        It 'does so before the handlers are wired, so opening the window starts nothing' {
+            # Setting IsChecked raises Checked/UnChecked. With the handler already wired, merely
+            # opening the window would rewrite the setting, and a session whose file could not be
+            # opened would retry the open and warn again on every open.
+            # The call form: the comment above the assignment names Import-EventObjects too, and the
+            # point being asserted is where the statement is.
+            $CheckboxIndex = $Script:OpenLogFormSource.IndexOf('Elements.CheckboxSessionLogFile.IsChecked = (Get-LogFileSetting).Enabled')
+            $ImportIndex = $Script:OpenLogFormSource.IndexOf('Import-EventObjects -ClassName')
+
+            $CheckboxIndex | Should -BeGreaterThan -1
+            $ImportIndex | Should -BeGreaterThan $CheckboxIndex
         }
     }
 }

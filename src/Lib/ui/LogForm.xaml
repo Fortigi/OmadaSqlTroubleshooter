@@ -252,6 +252,8 @@
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="Auto"/>
                 <ColumnDefinition Width="8"/>
+                <ColumnDefinition Width="Auto"/>
+                <ColumnDefinition Width="8"/>
                 <ColumnDefinition Width="*"/>
             </Grid.ColumnDefinitions>
             <Button Grid.Column="0"
@@ -278,7 +280,13 @@
                                 IsHitTestVisible="False"/>
                 </Grid>
             </Button>
-            <TextBlock Grid.Column="2"
+            <CheckBox Grid.Column="2"
+                      x:Name="CheckboxSessionLogFile"
+                      Content="Write log file"
+                      TabIndex="17"
+                      VerticalAlignment="Center"
+                      ToolTip="Write this session's log to a file, from now on, and remember the choice for the next start (issue #138). A file started now holds only what is logged from this moment on - the lines before it are not in it. Export Log File still saves everything this window is showing."/>
+            <TextBlock Grid.Column="4"
                        x:Name="TextBlockSessionLogPath"
                        Text="No session log file is being written."
                        FontSize="11"
