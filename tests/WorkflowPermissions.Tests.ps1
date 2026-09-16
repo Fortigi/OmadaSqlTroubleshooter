@@ -6,6 +6,20 @@ BeforeAll {
 
     $Script:WorkflowFiles = @(Get-ChildItem -Path $Script:WorkflowsPath -Filter '*.yml' -File) +
         @(Get-ChildItem -Path $Script:WorkflowsPath -Filter '*.yaml' -File)
+
+    # Strips a trailing YAML comment before any of the permissions matching below runs. Kept
+    # deliberately simple - everything from the first `#` to end of line is dropped - rather than a
+    # full quoting-aware parser, because none of these workflow files ever puts a literal `#` inside
+    # a quoted scope value. Without this, "permissions: {} # do not write to anything here" would
+    # fail the compliant-block check, and "contents: write # needed for tags" would slip past it.
+    function Get-YamlLineWithoutComment {
+        param(
+            [Parameter(Mandatory = $true)]
+            [string] $Line
+        )
+
+        return ($Line -replace '#.*$', '').TrimEnd()
+    }
 }
 
 Describe 'Workflow permissions' -Tag 'Unit' {
@@ -51,7 +65,8 @@ Describe 'Workflow permissions' -Tag 'Unit' {
                 }
 
                 $PermissionsLine = $Lines[$PermissionsLineIndex]
-                if ($PermissionsLine -match '^permissions:\s*\{\}\s*$') {
+                $PermissionsLineStripped = Get-YamlLineWithoutComment -Line $PermissionsLine
+                if ($PermissionsLineStripped -match '^permissions:\s*\{\}\s*$') {
                     continue
                 }
 
@@ -59,9 +74,12 @@ Describe 'Workflow permissions' -Tag 'Unit' {
                 # broadest grant GitHub offers, every scope, write, to every job. It never appears
                 # as an indented child line below, so without this branch the inner loop would walk
                 # straight past it and this test would be blind to the worst possible offender.
-                $InlineValue = [regex]::Match($PermissionsLine, '^permissions:\s*(?<Value>\S.*)$').Groups['Value'].Value
+                # Matched as a whole token (`^(write|write-all)$`), not a substring, so a trailing
+                # comment mentioning "write" in prose can never turn a compliant line into a false
+                # offender.
+                $InlineValue = [regex]::Match($PermissionsLineStripped, '^permissions:\s*(?<Value>\S.*)$').Groups['Value'].Value.Trim()
                 if (-not [string]::IsNullOrWhiteSpace($InlineValue)) {
-                    if ($InlineValue -match 'write') {
+                    if ($InlineValue -match '^(write|write-all)$') {
                         [PSCustomObject]@{
                             File = $File.Name
                             Line = $PermissionsLineIndex + 1
@@ -76,7 +94,8 @@ Describe 'Workflow permissions' -Tag 'Unit' {
                     if ($ScopeLine -notmatch '^\s+\S') {
                         break
                     }
-                    if ($ScopeLine -match '^\s+[a-z-]+:\s*write\s*$') {
+                    $ScopeLineStripped = Get-YamlLineWithoutComment -Line $ScopeLine
+                    if ($ScopeLineStripped -match '^\s+[a-z-]+:\s*(?<Value>\S+)\s*$' -and $Matches.Value -eq 'write') {
                         [PSCustomObject]@{
                             File = $File.Name
                             Line = $LineIndex + 1
