@@ -75,8 +75,8 @@ function Start-SessionLogFile {
             # A session resuming after the "Write log file" checkbox was switched off and on again
             # (issue #138) keeps its own key, so its files stay one session to rotation, to pruning
             # and to anyone reading the folder. Failed is cleared with it: the state is about to be
-            # given a working writer, and a stale flag would make Write-SessionLogFile drop every
-            # line into the file that was just opened for it.
+            # given a working writer, and a stale flag would make Write-SessionLogFile return early
+            # for every line - discarding them instead of writing them to the file just opened.
             $State.Failed = $false
 
             $Mutex = Enter-SessionLogFileMutex -Directory $Setting.Directory
