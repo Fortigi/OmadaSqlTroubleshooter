@@ -1,7 +1,9 @@
 #Requires -Version 7.0
-# Direct tests for Resolve-SessionLogFileBooleanSetting (issue #143): the stored value wins when it
-# is a genuine boolean, the schema default fills in next, and the caller's hard fallback covers
-# everything else - including a stored value that merely looks like a boolean.
+# Direct tests for Resolve-SessionLogFileBooleanSetting (issue #143): the stored value wins when
+# Resolve-StrictBoolean can parse it - a real [bool], a string such as "true"/"false" in any casing,
+# or the integers 0/1 the way a bit column carries them - the schema default fills in next, and the
+# caller's hard fallback covers everything else, including a stored value such as "maybe" that
+# parses as neither.
 
 BeforeAll {
     $ParentPath = Split-Path -Path $PSScriptRoot -Parent
@@ -50,7 +52,7 @@ Describe "Resolve-SessionLogFileBooleanSetting" -Tag "Unit" {
 
     Context "A stored configuration value" {
 
-        It "wins over the schema default when it is a genuine boolean" {
+        It "wins over the schema default when it is a string the strict parser accepts" {
             Mock -CommandName Get-ConfigSchemaDefault -MockWith { return "true" }
             $Script:AppGlobalConfig = [PSCustomObject]@{ EnableSessionLogFile = "false" }
 
