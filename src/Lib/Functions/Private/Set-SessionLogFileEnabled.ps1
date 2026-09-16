@@ -75,15 +75,19 @@ function Set-SessionLogFileEnabled {
             return $false
         }
 
-        $ClosedPath = $State.Path
-
         # Under the state's own lock, the one Write-SessionLogFile takes, so a line being written on
         # another thread cannot have the writer disposed out from under it - and so nothing reads a
         # Path that is about to be cleared. Monitor is reentrant, so Stop-SessionLogFile taking it
         # again is fine.
+        $ClosedPath = $null
         $LockTaken = $false
         try {
             [System.Threading.Monitor]::Enter($State.SyncRoot, [ref]$LockTaken)
+
+            # Read inside the lock, not before it: a line written on another thread can cross the
+            # size limit and split the file, which renames the part and replaces Path. A value read
+            # before the lock could name a file that is no longer the one being closed.
+            $ClosedPath = $State.Path
 
             Stop-SessionLogFile
 
