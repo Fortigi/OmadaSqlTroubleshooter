@@ -35,7 +35,12 @@ jobs:
     # The workflow-level grant above is empty; this job declares only what it actually calls -
     # reads the PR, reacts to the triggering comment, and writes the pending commit status.
     permissions:
-      pull-requests: read
+      # write, not read: "Acknowledge comment" reacts to the comment that triggered this run, and a
+      # comment on a pull request is an issue comment whose reactions endpoint the token maps to the
+      # pull-requests scope. With read it fails as "Resource not accessible by integration", and
+      # because that step is in the dispatch job, the whole Validate job is then skipped - so the
+      # first /validate after the grants were tightened reported FAILURE having run no tests at all.
+      pull-requests: write
       issues: write
       statuses: write
     outputs:
