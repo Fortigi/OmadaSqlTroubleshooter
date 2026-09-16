@@ -150,5 +150,27 @@ Describe "ConvertTo-JavaScriptLiteral" -Tag "Unit" {
             $Content = Get-Content -Path $Path -Raw
             $Content | Should -Not -Match ([regex]::Escape('-replace "''", "\''"'))
         }
+
+        It "actually calls ConvertTo-JavaScriptLiteral in <Path>" -ForEach @(
+            $Script:MigratedCallSites | ForEach-Object { @{ Path = $_ } }
+        ) {
+            # A missing old-style escape chain is not proof of a correct migration - it also
+            # passes for a file rewritten some other way, or one that stopped pushing to the
+            # editor entirely. The positive half of the property is that the new helper is the
+            # one doing the escaping.
+            $Content = Get-Content -Path $Path -Raw
+            $Content | Should -Match ([regex]::Escape('ConvertTo-JavaScriptLiteral'))
+        }
+
+        It "does not re-wrap the literal in its own quotes in <Path>" -ForEach @(
+            $Script:MigratedCallSites | ForEach-Object { @{ Path = $_ } }
+        ) {
+            # ConvertTo-JavaScriptLiteral's return value already carries its own surrounding
+            # double quotes. "setEditorValue('" - an opening single quote immediately after the
+            # call - is the shape of the old hand-quoted call site; its presence here would mean
+            # the literal got double-quoted, which breaks the payload rather than escaping it.
+            $Content = Get-Content -Path $Path -Raw
+            $Content | Should -Not -Match ([regex]::Escape("setEditorValue('"))
+        }
     }
 }
