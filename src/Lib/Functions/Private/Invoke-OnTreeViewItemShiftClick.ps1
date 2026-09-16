@@ -63,11 +63,11 @@ function Invoke-OnTreeViewItemShiftClick {
     const position = editor.getPosition();
     const range = new monaco.Range(position.lineNumber, position.column, position.lineNumber, position.column);
     console.log('Range:', range);
-    editor.executeEdits('', [{{ range, text: '{0}', forceMoveMarkers: true }}]);
+    editor.executeEdits('', [{{ range, text: {0}, forceMoveMarkers: true }}]);
     console.log('Edit executed successfully');
 }} catch (error) {{
     console.error('Edit failed:', error);
-}}" -f $ItemValue
+}}" -f (ConvertTo-JavaScriptLiteral -Value $ItemValue)
 
                 $Script:SenderTest = $Sender
                 "Execute script in in Monaco Editor:`r`n{0}" -f $ScriptToExecute | Write-LogOutput -LogType DEBUG
