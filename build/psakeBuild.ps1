@@ -365,11 +365,14 @@ Task Build -Depends Test, Dependencies, TestAssemblies {
         "Copy nuspec file" | Write-Host
         Copy-Item -Path "$ParentPath\OmadaSqlTroubleShooter.nuspec" -Destination "$OutputDir" -Force
 
-        # Ship the licence and the third-party notices with the module. The MIT licence of the
-        # bundled Monaco editor requires its copyright notice to travel with the redistribution,
-        # so THIRD-PARTY-NOTICES.md must be part of every published package, not just the repo.
-        "Copy licence and third-party notices" | Write-Host
-        "LICENSE", "THIRD-PARTY-NOTICES.md", "README.md", "SECURITY.md" | ForEach-Object {
+        # Ship the licence, the third-party notices, the readme, the security policy and the
+        # changelog with the module. The MIT licence of the bundled Monaco editor requires its
+        # copyright notice to travel with the redistribution, so THIRD-PARTY-NOTICES.md must be
+        # part of every published package, not just the repo. CHANGELOG.md ships alongside them so
+        # a package installed from the gallery can be inspected for what changed without a repo
+        # checkout.
+        "Copy licence, notices, readme, security policy and changelog" | Write-Host
+        "LICENSE", "THIRD-PARTY-NOTICES.md", "README.md", "SECURITY.md", "CHANGELOG.md" | ForEach-Object {
             $NoticeSourcePath = Join-Path $ParentPath -ChildPath $_
             if (-not (Test-Path $NoticeSourcePath -PathType Leaf)) {
                 "Required file '{0}' was not found at '{1}'" -f $_, $NoticeSourcePath | Write-Error -ErrorAction Stop
