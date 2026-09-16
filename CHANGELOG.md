@@ -10,9 +10,14 @@ semantic version.
 
 ## [Unreleased]
 
-## [v2026.09.16.93-nightly] - 2026-09-16
+## [Baseline] - 2026-09-16
 
-### Added
+*This changelog was introduced on this date; earlier releases are not itemised here. The
+highlights below summarise the feature set as it stands at tag `v2026.09.16.93-nightly`.
+Per-release history before this point is on the
+[GitHub Releases page](https://github.com/Fortigi/OmadaSqlTroubleshooter/releases).*
+
+### Highlights
 
 - Opt-in session log file, rotated per session and split into 5 MB parts, with an on/off toggle in
   the log window.
@@ -31,25 +36,13 @@ semantic version.
 - Mock Omada instance for testing without a live tenant.
 - Third-party notices and privacy documentation.
 - Nightly builds published to the PowerShell Gallery as pre-release packages.
-
-### Changed
-
-- Replaced popups and modals with a status bar and a Messages tab; the status bar message can be
+- A status bar and a Messages tab in place of popups and modals; the status bar message can be
   shown in full on hover and reports what an execute did and which query it ran.
-- Retyped "Copy as SQL/PowerShell array" and the array copy from the SQL schema/column types
-  instead of sniffing rendered text.
-- Single-sourced tab connection state so the UI cannot disagree with itself, and stopped the
-  startup schema push from silently connecting a disconnected tab.
-- Dropped the Windows PowerShell 5.1 leg from PR validation; aligned GitHub Actions workflows.
-- PR validation now reports results against the PR head instead of main.
-- Persisted the chosen log level in the log viewer across restarts.
-
-### Fixed
-
-- Fixed the update check when the newest PowerShell Gallery package is a prerelease.
-- Fixed "allow pre-release" handling to use `Save-Module` instead of `Install-Module`.
-- Fixed the tab strip stealing Home/End from the editor, and Alt key collisions.
-- Fixed the gallery version and module info lookup.
+- Single-sourced tab connection state, so the UI cannot disagree with itself and a disconnected tab
+  cannot be silently reconnected by the startup schema push.
+- PR validation reports results against the PR head instead of main, and no longer runs a Windows
+  PowerShell 5.1 leg.
+- The chosen log level in the log viewer persists across restarts.
 
 [Unreleased]: https://github.com/Fortigi/OmadaSqlTroubleshooter/compare/v2026.09.16.93-nightly...HEAD
-[v2026.09.16.93-nightly]: https://github.com/Fortigi/OmadaSqlTroubleshooter/releases/tag/v2026.09.16.93-nightly
+[Baseline]: https://github.com/Fortigi/OmadaSqlTroubleshooter/releases/tag/v2026.09.16.93-nightly
