@@ -187,6 +187,38 @@ Describe "Start-SessionLogFile" {
         }
     }
 
+    Context "Resuming a session the checkbox switched off (issue #138)" {
+
+        It "keeps the session key, so one application session stays one session in the folder" {
+            Start-SessionLogFile | Out-Null
+            $SessionKey = $Script:SessionLogFile.SessionKey
+            Write-SessionLogFile -Line "before the checkbox was unticked" -LogType "ERROR"
+            Stop-SessionLogFile
+
+            $Path = Start-SessionLogFile
+
+            $Script:SessionLogFile.SessionKey | Should -BeExactly $SessionKey
+            $Path | Should -BeExactly (Join-Path $Script:LogFolder -ChildPath "OmadaSqlTroubleshooter.log")
+            $Rotated = Join-Path $Script:LogFolder -ChildPath (Get-SessionLogFileName -SessionKey $SessionKey -Part 1)
+            Get-Content -LiteralPath $Rotated -Raw | Should -Match "before the checkbox was unticked"
+            Get-Content -LiteralPath $Path -Raw | Should -Not -Match "before the checkbox was unticked"
+        }
+
+        It "clears the failure flag, so lines actually reach the file it just opened" {
+            # A write that failed earlier disabled the file for the rest of the session. Reopening it
+            # deliberately has to lift that, or the checkbox would report a file nothing is written to.
+            Start-SessionLogFile | Out-Null
+            Stop-SessionLogFile
+            $Script:SessionLogFile.Failed = $true
+
+            $Path = Start-SessionLogFile
+            Write-SessionLogFile -Line "after the checkbox was ticked again" -LogType "ERROR"
+
+            $Script:SessionLogFile.Failed | Should -BeFalse
+            Get-Content -LiteralPath $Path -Raw | Should -Match "after the checkbox was ticked again"
+        }
+    }
+
     Context "Retention" {
 
         It "keeps at most ten sessions by default, the one starting included" {

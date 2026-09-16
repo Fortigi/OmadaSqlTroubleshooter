@@ -7,6 +7,16 @@ function Open-LogForm {
 
         "Opening Log form" | Write-LogOutput -LogType DEBUG
         $Script:LogForm = Initialize-FormObject -FormPath (Join-Path $Script:RunTimeConfig.ModuleFolder -ChildPath "lib\ui\LogForm.xaml") -ParentForm $Script:MainForm.Definition
+
+        # BEFORE Import-EventObjects, deliberately (issue #138). Setting IsChecked raises
+        # Checked/UnChecked, and that handler is the single writer of both the persisted setting and
+        # the file itself - so with the handler already wired, merely opening the window would
+        # rewrite the setting, and a session whose file could not be opened would retry the open and
+        # warn about it again on every open. Reflecting the resolved setting is all that happens here.
+        if ($null -ne $Script:LogForm.Elements.CheckboxSessionLogFile) {
+            $Script:LogForm.Elements.CheckboxSessionLogFile.IsChecked = (Get-LogFileSetting).Enabled
+        }
+
         Import-EventObjects -ClassName "LogForm"
         [Int]$Script:LogForm.PositionManager.PositionOffSetLeft = 1200
 
@@ -71,25 +81,9 @@ function Open-LogForm {
             $Script:RunTimeConfig.Logging.LogLevelSetting = $LogForm.Elements.ComboBoxSelectLogLevel.SelectedValue.Content
         }
 
-        # Where this session's log is being written (issue #121). Shown rather than only offered
-        # behind the "Folder" button, because the commonest thing a user needs to do with it is put
-        # it in a support ticket - and because a session that could not open a file has to be able to
-        # say so, which a button cannot.
-        # Both, not just the TextBlock. Assigning to a property of $null throws, this function's
-        # catch logs an ERROR, and an ERROR under $ErrorActionPreference = Stop throws again - so a
-        # XAML mismatch would turn "open the log window" into an error cascade over a label.
-        if ($null -ne $Script:LogForm.Elements.TextBlockSessionLogPath -and $null -ne $Script:LogForm.Elements.ButtonOpenLogFolder) {
-            if ($null -ne $Script:SessionLogFile -and ![string]::IsNullOrWhiteSpace($Script:SessionLogFile.Path)) {
-                $Script:LogForm.Elements.TextBlockSessionLogPath.Text = $Script:SessionLogFile.Path
-                $Script:LogForm.Elements.TextBlockSessionLogPath.ToolTip = $Script:SessionLogFile.Path
-                $Script:LogForm.Elements.ButtonOpenLogFolder.IsEnabled = $true
-            }
-            else {
-                $Script:LogForm.Elements.TextBlockSessionLogPath.Text = "No session log file is being written."
-                $Script:LogForm.Elements.TextBlockSessionLogPath.ToolTip = "Off by default: set EnableSessionLogFile to true in the settings file to write one. If it is on, the file could not be opened. Export Log File still saves what this window is showing."
-                $Script:LogForm.Elements.ButtonOpenLogFolder.IsEnabled = $false
-            }
-        }
+        # Where this session's log is being written (issue #121), in the one place that also has to
+        # say it again whenever the "Write log file" checkbox starts or stops the file (issue #138).
+        Update-LogFormSessionLogPath
 
         if ($null -ne ($Script:LogForm.Definition | Get-FormPositionConfig)) {
             $Position = $Script:LogForm.Definition | Get-FormPositionConfig

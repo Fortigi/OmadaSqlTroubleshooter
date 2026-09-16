@@ -53,11 +53,11 @@ Starts the Omada SQL Troubleshooter application logging the executed query text,
 .NOTES
 Requires PowerShell 7.0 or higher and the OmadaWeb.PS module.
 
-A session log file is off by default. Set EnableSessionLogFile to true in the configuration file to write one for the whole lifetime of every session, under %APPDATA%\OmadaSqlTroubleshooter\logs.
+A session log file is off by default. Tick "Write log file" in the log window to write one, under %APPDATA%\OmadaSqlTroubleshooter\logs; it starts and stops immediately, without a restart, and the choice is remembered for the next start (it is the EnableSessionLogFile setting, which can also be set by hand). A file started mid-session holds only what is logged from that moment on - the lines before it are not in it, and Export Log File still saves everything the log window is showing.
 The running session writes OmadaSqlTroubleshooter.log. Past SessionLogFileMaxSizeMegabytes (5 by default) it is split off as OmadaSqlTroubleshooter_<start>_<part>.log and continues in a fresh OmadaSqlTroubleshooter.log; the next start renames the leftover file the same way. A second instance running at the same time writes numbered parts of its own.
 Each line is flushed as it is written, so the file is complete up to the moment the application stopped even when it crashed, and it is unaffected by the log window's Clear.
 It goes through the same redaction gate as the log window and has its own log level - DEBUG by default, so it is more detailed than the window usually is.
-At most SessionLogFileRetentionCount sessions (10 by default, the running one included) are kept; older sessions are deleted whole on start-up. The log window shows the file's path and opens its folder.
+At most SessionLogFileRetentionCount sessions (10 by default, the running one included) are kept; older sessions are deleted whole on start-up. The log window shows the file's path, opens its folder, and switches the file on and off.
 SessionLogFileLogLevel and SessionLogFileDirectory change the level and the folder.
 
 #>

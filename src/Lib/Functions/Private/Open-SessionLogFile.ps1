@@ -26,6 +26,14 @@ function Open-SessionLogFile {
     .PARAMETER ProcessId
         This process's id, for the header.
 
+    .PARAMETER SessionKey
+        The key of a session that is resuming - the log window's "Write log file" checkbox switched
+        off and on again (issue #138). Its own earlier file has just been rotated to a numbered part
+        of this key, so choosing a fresh key here would split one application session into two, and
+        Get-UnusedSessionLogFileSessionKey would refuse the original anyway: this session's own parts
+        are exactly what makes it look taken. Left out by a session opening its first file, which is
+        the case the key is chosen for.
+
     .OUTPUTS
         [PSCustomObject] with Path, Writer, BytesWritten, SessionKey, Part, UsesActiveName and
         RotatedPath (the previous active file's new name, or nothing).
@@ -42,7 +50,9 @@ function Open-SessionLogFile {
         [Parameter(Mandatory = $true)]
         [datetime]$StartTime,
         [Parameter(Mandatory = $true)]
-        [int]$ProcessId
+        [int]$ProcessId,
+        [Parameter(Mandatory = $false)]
+        [string]$SessionKey
     )
 
     $ActivePath = Join-Path $Directory -ChildPath (Get-SessionLogFileName)
@@ -56,9 +66,11 @@ function Open-SessionLogFile {
         }
     }
 
-    $SessionKey = Get-UnusedSessionLogFileSessionKey -Directory $Directory -StartTime $StartTime
-    if ($null -eq $SessionKey) {
-        throw "every session key for {0} is already taken" -f $StartTime.ToString("yyyyMMdd-HHmmss", [System.Globalization.CultureInfo]::InvariantCulture)
+    if ([string]::IsNullOrWhiteSpace($SessionKey)) {
+        $SessionKey = Get-UnusedSessionLogFileSessionKey -Directory $Directory -StartTime $StartTime
+        if ($null -eq $SessionKey) {
+            throw "every session key for {0} is already taken" -f $StartTime.ToString("yyyyMMdd-HHmmss", [System.Globalization.CultureInfo]::InvariantCulture)
+        }
     }
 
     if (-not $ActiveInUse) {
