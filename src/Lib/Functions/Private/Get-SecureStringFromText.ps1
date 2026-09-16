@@ -33,7 +33,7 @@
             }
         }
         catch {
-            throw "Get-SecureStringFromText: Error occured. Is the password file correct? If not, re-run the Set-StoredCredentials Cmdlet"
+            throw "Get-SecureStringFromText: Error occurred. Is the password file correct? If not, re-enter and save your credentials through the application's credential entry screen"
         }
 
     }
