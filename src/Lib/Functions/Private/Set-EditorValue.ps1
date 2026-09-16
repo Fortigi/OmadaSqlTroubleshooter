@@ -39,7 +39,7 @@ function Set-EditorValue {
 
                 if ($null -ne $Script:Webview.Object.CoreWebView2) {
                     "Push query to editor!" | Write-LogOutput -LogType DEBUG
-                    $SafeQuery = $Private:Result.C_QUERY -replace "`n", "\n" -replace "`r", "\r" -replace "`t", "\t" -replace "'", "\'"
+                    $QueryLiteral = ConvertTo-JavaScriptLiteral -Value $Private:Result.C_QUERY
                     $ScriptToExecute = @"
 (function() {
     let retryCount = 0;
@@ -48,7 +48,7 @@ function Set-EditorValue {
     function setEditorValue() {
         if (typeof editor !== 'undefined' && editor && typeof editor.setValue === 'function') {
             try {
-                window.setEditorValue('$SafeQuery');
+                window.setEditorValue($QueryLiteral);
                 console.log('Editor value set successfully');
                 return true;
             } catch (e) {
