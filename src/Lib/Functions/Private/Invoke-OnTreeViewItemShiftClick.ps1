@@ -70,7 +70,11 @@ function Invoke-OnTreeViewItemShiftClick {
 }}" -f (ConvertTo-JavaScriptLiteral -Value $ItemValue)
 
                 $Script:SenderTest = $Sender
-                "Execute script in in Monaco Editor:`r`n{0}" -f $ScriptToExecute | Write-LogOutput -LogType DEBUG
+
+                # Shape, not content - see Push-ToEditor's header comment (issue #111). This
+                # payload carries tenant-derived schema/table/column text; logging it verbatim
+                # would put that text in the trace, which the log window can export.
+                "Execute script in Monaco Editor: <{0} characters>" -f $ScriptToExecute.Length | Write-LogOutput -LogType DEBUG
                 $OnCompletedScriptBlock = {
                     try {
                         if (!$Script:Task.Status -eq "RanToCompletion") {

@@ -151,6 +151,18 @@ Describe "ConvertTo-JavaScriptLiteral" -Tag "Unit" {
             $Content | Should -Not -Match ([regex]::Escape('-replace "''", "\''"'))
         }
 
+        It "does not contain the old newline-escaping fragment of that chain in <Path>" -ForEach @(
+            $Script:MigratedCallSites | ForEach-Object { @{ Path = $_ } }
+        ) {
+            # The quote-escape fragment above is not the only piece of the old chain that could
+            # come back. Reintroducing only the earlier `n replacement would not trip that guard,
+            # so this matches the literal SOURCE TEXT -replace "`n", "\n" as it appears in the
+            # file - read with -Raw so the backtick-n stays two source characters and is never
+            # collapsed into an actual newline.
+            $Content = Get-Content -Path $Path -Raw
+            $Content | Should -Not -Match ([regex]::Escape('-replace "`n", "\n"'))
+        }
+
         It "actually calls ConvertTo-JavaScriptLiteral in <Path>" -ForEach @(
             $Script:MigratedCallSites | ForEach-Object { @{ Path = $_ } }
         ) {
