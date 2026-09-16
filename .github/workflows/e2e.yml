@@ -19,10 +19,7 @@ on:
       - 'tests/mock/**'
       - '.github/workflows/e2e.yml'
 
-permissions:
-  contents: read
-  checks: write
-  issues: write
+permissions: {}
 
 jobs:
   e2e:
@@ -32,6 +29,10 @@ jobs:
     defaults:
       run:
         shell: pwsh
+
+    permissions:
+      contents: read
+      checks: write
 
     steps:
       - name: Harden the runner (audit all outgoing network calls)
@@ -96,6 +97,10 @@ jobs:
     # started it, and a red lane nobody is watching is exactly what this job exists to prevent.
     if: always() && needs.e2e.result == 'failure' && github.event_name == 'schedule'
     runs-on: ubuntu-latest
+
+    permissions:
+      issues: write
+
     steps:
       - name: Harden the runner (audit all outgoing network calls)
         uses: step-security/harden-runner@e14015d583714f6e62063499dc959a02595150a1 # v2.21.1

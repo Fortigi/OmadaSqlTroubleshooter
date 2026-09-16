@@ -5,10 +5,15 @@ on:
     - cron: '17 1 * * *'
   workflow_dispatch: {}
 
+permissions: {}
+
 jobs:
   check:
     name: Check for new commits
     runs-on: ubuntu-latest
+
+    permissions:
+      contents: read
 
     outputs:
       should_build: ${{ steps.check.outputs.should_build }}
@@ -57,6 +62,9 @@ jobs:
     runs-on: windows-latest
     needs: check
     if: needs.check.outputs.should_build == 'true'
+
+    permissions:
+      contents: read
 
     outputs:
       build_version: ${{ steps.versioning.outputs.build_version }}
@@ -107,6 +115,9 @@ jobs:
     runs-on: windows-latest
     needs: [check, build]
     if: needs.check.outputs.should_build == 'true'
+
+    permissions:
+      contents: write
 
     env:
       BUILD_VERSION: ${{ needs.build.outputs.build_version }}
