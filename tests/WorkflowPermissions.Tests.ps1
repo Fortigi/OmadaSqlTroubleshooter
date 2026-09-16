@@ -55,6 +55,22 @@ Describe 'Workflow permissions' -Tag 'Unit' {
                     continue
                 }
 
+                # An inline value on the permissions: line itself, most notably `write-all` - the
+                # broadest grant GitHub offers, every scope, write, to every job. It never appears
+                # as an indented child line below, so without this branch the inner loop would walk
+                # straight past it and this test would be blind to the worst possible offender.
+                $InlineValue = [regex]::Match($PermissionsLine, '^permissions:\s*(?<Value>\S.*)$').Groups['Value'].Value
+                if (-not [string]::IsNullOrWhiteSpace($InlineValue)) {
+                    if ($InlineValue -match 'write') {
+                        [PSCustomObject]@{
+                            File = $File.Name
+                            Line = $PermissionsLineIndex + 1
+                            Raw  = $PermissionsLine.Trim()
+                        }
+                    }
+                    continue
+                }
+
                 for ($LineIndex = $PermissionsLineIndex + 1; $LineIndex -lt $Lines.Count; $LineIndex++) {
                     $ScopeLine = $Lines[$LineIndex]
                     if ($ScopeLine -notmatch '^\s+\S') {
