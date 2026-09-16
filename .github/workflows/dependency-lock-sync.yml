@@ -27,8 +27,7 @@ on:
         required: true
         type: string
 
-permissions:
-  contents: write
+permissions: {}
 
 concurrency:
   group: dependency-lock-sync-${{ inputs.branch }}
@@ -38,6 +37,9 @@ jobs:
   sync:
     name: Refresh pinned hashes
     runs-on: windows-latest
+
+    permissions:
+      contents: write
 
     steps:
       - name: Harden the runner (audit all outgoing network calls)
