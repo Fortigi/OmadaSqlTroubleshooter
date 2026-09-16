@@ -15,10 +15,24 @@ BeforeAll {
     function Get-YamlLineWithoutComment {
         param(
             [Parameter(Mandatory = $true)]
+            [AllowEmptyString()]
             [string] $Line
         )
 
         return ($Line -replace '#.*$', '').TrimEnd()
+    }
+
+    # YAML treats a quoted scalar and its bare equivalent identically, so "write" and 'write' and
+    # write must all compare equal. Strips one matching pair of leading/trailing quotes, if present,
+    # after the value has already been trimmed of surrounding whitespace.
+    function Get-YamlValueWithoutQuote {
+        param(
+            [Parameter(Mandatory = $true)]
+            [AllowEmptyString()]
+            [string] $Value
+        )
+
+        return ($Value.Trim() -replace '^([''"])(.*)\1$', '$2')
     }
 }
 
@@ -66,40 +80,74 @@ Describe 'Workflow permissions' -Tag 'Unit' {
 
                 $PermissionsLine = $Lines[$PermissionsLineIndex]
                 $PermissionsLineStripped = Get-YamlLineWithoutComment -Line $PermissionsLine
-                if ($PermissionsLineStripped -match '^permissions:\s*\{\}\s*$') {
-                    continue
-                }
 
-                # An inline value on the permissions: line itself, most notably `write-all` - the
-                # broadest grant GitHub offers, every scope, write, to every job. It never appears
-                # as an indented child line below, so without this branch the inner loop would walk
-                # straight past it and this test would be blind to the worst possible offender.
-                # Matched as a whole token (`^(write|write-all)$`), not a substring, so a trailing
-                # comment mentioning "write" in prose can never turn a compliant line into a false
-                # offender.
+                # Whatever follows `permissions:` on its own line - empty means a block mapping
+                # follows on subsequent lines, handled by the indented-line scan below.
                 $InlineValue = [regex]::Match($PermissionsLineStripped, '^permissions:\s*(?<Value>\S.*)$').Groups['Value'].Value.Trim()
+
                 if (-not [string]::IsNullOrWhiteSpace($InlineValue)) {
-                    if ($InlineValue -match '^(write|write-all)$') {
-                        [PSCustomObject]@{
-                            File = $File.Name
-                            Line = $PermissionsLineIndex + 1
-                            Raw  = $PermissionsLine.Trim()
-                        }
+                    if ($InlineValue -match '^\{\s*\}$') {
+                        # An empty flow mapping - `permissions: {}` or `permissions: { }` - grants
+                        # nothing and is compliant.
+                        continue
                     }
-                    continue
+                    elseif ($InlineValue -match '^\{(?<Body>.*)\}$') {
+                        # A non-empty YAML flow mapping written on one line, e.g.
+                        # `permissions: { contents: write }`. Parsed the same way the indented block
+                        # below is: split on comma, then key: value per pair.
+                        foreach ($Pair in ($Matches.Body -split ',')) {
+                            if ($Pair -match '^\s*[a-z-]+:\s*(?<Value>.+?)\s*$') {
+                                $PairValue = Get-YamlValueWithoutQuote -Value $Matches.Value
+                                if ($PairValue -eq 'write') {
+                                    [PSCustomObject]@{
+                                        File = $File.Name
+                                        Line = $PermissionsLineIndex + 1
+                                        Raw  = $PermissionsLine.Trim()
+                                    }
+                                }
+                            }
+                        }
+                        continue
+                    }
+                    else {
+                        # A bare scalar, most notably `write-all` - the broadest grant GitHub offers,
+                        # every scope, write, to every job. Matched as a whole token, not a
+                        # substring, so a trailing comment mentioning "write" in prose can never turn
+                        # a compliant line into a false offender.
+                        $PlainValue = Get-YamlValueWithoutQuote -Value $InlineValue
+                        if ($PlainValue -match '^(write|write-all)$') {
+                            [PSCustomObject]@{
+                                File = $File.Name
+                                Line = $PermissionsLineIndex + 1
+                                Raw  = $PermissionsLine.Trim()
+                            }
+                        }
+                        continue
+                    }
                 }
 
                 for ($LineIndex = $PermissionsLineIndex + 1; $LineIndex -lt $Lines.Count; $LineIndex++) {
                     $ScopeLine = $Lines[$LineIndex]
+                    $ScopeLineStripped = Get-YamlLineWithoutComment -Line $ScopeLine
+
+                    if ($ScopeLineStripped -match '^\s*$') {
+                        # A blank line, or a line that was nothing but a comment - YAML permits
+                        # either inside a block mapping, so keep scanning instead of stopping here.
+                        continue
+                    }
                     if ($ScopeLine -notmatch '^\s+\S') {
+                        # A genuinely non-indented, non-blank line - the next top-level key, so the
+                        # workflow-level permissions block has ended.
                         break
                     }
-                    $ScopeLineStripped = Get-YamlLineWithoutComment -Line $ScopeLine
-                    if ($ScopeLineStripped -match '^\s+[a-z-]+:\s*(?<Value>\S+)\s*$' -and $Matches.Value -eq 'write') {
-                        [PSCustomObject]@{
-                            File = $File.Name
-                            Line = $LineIndex + 1
-                            Raw  = $ScopeLine.Trim()
+                    if ($ScopeLineStripped -match '^\s+[a-z-]+:\s*(?<Value>.+)$') {
+                        $Value = Get-YamlValueWithoutQuote -Value $Matches.Value
+                        if ($Value -eq 'write') {
+                            [PSCustomObject]@{
+                                File = $File.Name
+                                Line = $LineIndex + 1
+                                Raw  = $ScopeLine.Trim()
+                            }
                         }
                     }
                 }
