@@ -294,8 +294,8 @@ function Initialize-WebViewForTab {
                                     # A duplicated tab carries the source tab's SQL here until its own
                                     # Monaco editor has loaded (now). Push it and clear the pending text.
                                     if (![string]::IsNullOrEmpty($HandlerTab.PendingEditorText)) {
-                                        $SafeDuplicateText = $HandlerTab.PendingEditorText -replace "\\", "\\\\" -replace "`r", "\r" -replace "`n", "\n" -replace "`t", "\t" -replace "'", "\'"
-                                        Push-ToEditor -ScriptToExecute ("window.setEditorValue('{0}');" -f $SafeDuplicateText)
+                                        $DuplicateTextLiteral = ConvertTo-JavaScriptLiteral -Value $HandlerTab.PendingEditorText
+                                        Push-ToEditor -ScriptToExecute ("window.setEditorValue({0});" -f $DuplicateTextLiteral)
                                         $HandlerTab.PendingEditorText = $null
                                     }
 
