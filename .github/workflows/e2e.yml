@@ -41,7 +41,7 @@ jobs:
           egress-policy: audit
 
       - name: Checkout
-        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Install modules
         run: ./build/InstallModules.ps1
@@ -75,7 +75,7 @@ jobs:
           "exists=$exists" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
 
       - name: Publish results
-        uses: dorny/test-reporter@31a54ee7ebcacc03a09ea97a7e5465a47b84aea5 # v1.9.1
+        uses: dorny/test-reporter@a43b3a5f7366b97d083190328d2c652e1a8b6aa2 # v3.0.0
         if: always() && steps.results.outputs.exists == 'True'
         with:
           name: E2E Scenarios
@@ -83,7 +83,7 @@ jobs:
           reporter: java-junit
 
       - name: Upload results
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         if: always()
         with:
           name: E2EResults
@@ -108,7 +108,7 @@ jobs:
           egress-policy: audit
 
       - name: Open or update the tracking issue
-        uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b # v7.1.0
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
         with:
           script: |
             const title = 'E2E suite is failing';
