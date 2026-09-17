@@ -149,6 +149,10 @@ Task Test -Depends Analyze {
             # name - the mapping below has nothing to associate it with, so without this it would
             # skip on exactly the pull requests that add a new unpinned action reference (#113).
             'WorkflowActionPins.Tests.ps1'
+            # Guards every .github/workflows/*.yml for a workflow-level permissions: block, not one
+            # source file with a matching name - the mapping below has nothing to associate it with,
+            # so without this it would skip on exactly the pull requests that remove the block (#140).
+            'WorkflowPermissions.Tests.ps1'
         )
 
         if ($ChangedFiles.Count -gt 0) {

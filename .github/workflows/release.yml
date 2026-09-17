@@ -8,14 +8,16 @@ on:
       - 'src/**'
   workflow_dispatch: {}
 
-permissions:
-  contents: write
-  checks: write
+permissions: {}
 
 jobs:
   build:
     name: Build
     runs-on: windows-latest
+
+    permissions:
+      contents: read
+      checks: write
 
     outputs:
       build_version: ${{ steps.versioning.outputs.build_version }}
@@ -88,6 +90,9 @@ jobs:
     # push to main, so publishing always needs a deliberate human action.
     if: github.event_name == 'workflow_dispatch'
     environment: release
+
+    permissions:
+      contents: write
 
     env:
       BUILD_VERSION: ${{ needs.build.outputs.build_version }}
