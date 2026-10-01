@@ -76,6 +76,51 @@ function Invoke-ExecuteQuery {
                         }
                     }
 
+                    # Explicit database selection (issue #152). Runs on the text that will actually
+                    # execute - the selection when there is one, so selection execution behaves
+                    # identically (criterion 11) - and decides BEFORE anything is posted: an unknown
+                    # database, a cross-database query and a four-part name all stop here, with no
+                    # request made and no data object written.
+                    #
+                    # Unlike the validation gate above, this one does not ask. A query naming a
+                    # database that cannot be resolved has no correct target to run against, so
+                    # "execute anyway" would mean "execute against something else", which is the
+                    # silent wrong-database behaviour the issue exists to end.
+                    $Private:DatabaseTarget = Resolve-SqlDatabaseTarget -SqlText $Private:TextToValidate
+
+                    if ($Private:DatabaseTarget.Status -eq "Rejected") {
+                        # Write-ContainedErrorLog, not Write-LogOutput -LogType ERROR: this is a
+                        # completion block, where logging an ERROR is terminating. It would throw
+                        # past Reset-ExecuteQueryUiState - leaving the Execute button stuck as
+                        # Cancel - and the block's own catch would then report the throw as a second
+                        # error on top of this one. The UI is restored first either way.
+                        Reset-ExecuteQueryUiState
+                        $Private:DatabaseTarget.Message | Write-ContainedErrorLog -TabScoped
+                        return
+                    }
+
+                    # USE is sticky, an inline prefix is not (#152 open question 2). Applying it here
+                    # - before the pipeline context is built - means the rest of this execution and
+                    # every later one see the new connection.
+                    #
+                    # Set-ConfigProperty then Set-DataConnection, the same pair Set-EditorValue and
+                    # Complete-TabMaterialization use: Set-DataConnection finds the dropdown entry by
+                    # the FullName the config now holds, so the config has to be written first.
+                    # Assigning SelectedItem raises Add_SelectionChanged, which is what updates the
+                    # status bar and reloads the schema - the existing path #152 section 2 asks for,
+                    # so there is deliberately no Get-SqlSchemaObject call here to duplicate it.
+                    if (![string]::IsNullOrWhiteSpace($Private:DatabaseTarget.UseDatabase)) {
+                        "USE [{0}]: switching the data connection." -f $Private:DatabaseTarget.UseDatabase | Write-LogOutput -LogType DEBUG
+                        $Private:DatabaseTarget.TargetFullName | Set-ConfigProperty -Property "CurrentDataConnection"
+                        Set-DataConnection
+                    }
+
+                    if ($Private:DatabaseTarget.Status -eq "SwitchOnly") {
+                        $Private:DatabaseTarget.Message | Write-LogOutput
+                        Reset-ExecuteQueryUiState
+                        return
+                    }
+
                     # C1-5: the whole dependent chain - fetch the query, save it if it changed,
                     # create the temporary selection object, execute, delete the temporary object -
                     # runs as ONE background job. Up to five round-trips, none of them on the UI
@@ -103,6 +148,22 @@ function Invoke-ExecuteQuery {
                         SelectionText      = $Private:SelectionText
                         TempName           = "TMP_$($Script:RunTimeConfig.InstanceGuid)"
                         SkipSave           = $false
+                    }
+
+                    # A resolved database is expressed as a selection-style execution: the REWRITTEN
+                    # text (prefixes and USE stripped) goes onto the temporary object, pointed at the
+                    # RESOLVED connection, and QueryText - the original, prefixes included - is what
+                    # Save-Query writes to the user's own query object. So the stored query is never,
+                    # not even briefly, the rewritten one (#152 criteria 6 and 7), and the temporary
+                    # object's existing finally still cleans up.
+                    #
+                    # TempDataConnectionDoId is separate from DataConnectionDoId on purpose: the save
+                    # step writes DataConnectionDoId onto the USER's query object, and an inline
+                    # prefix must not change which connection that query is saved against.
+                    if ($Private:DatabaseTarget.Status -eq "Ok") {
+                        "Database '{0}' resolved to data connection {1}; executing through the temporary query object." -f $Private:DatabaseTarget.TargetName, $Private:DatabaseTarget.TargetDoId | Write-LogOutput -LogType DEBUG
+                        $Private:PipelineContext.SelectionText = $Private:DatabaseTarget.RewrittenText
+                        $Private:PipelineContext.TempDataConnectionDoId = $Private:DatabaseTarget.TargetDoId
                     }
 
                     "Retrieve query output, please wait..." | Write-LogOutput

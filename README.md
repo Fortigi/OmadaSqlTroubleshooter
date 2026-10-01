@@ -18,6 +18,25 @@ OmadaSqlTroubleshooter is a PowerShell Module that contains an interactive deskt
   - Compare changes for each updated query
   - Export historic queries (JSON, CSV, TXT)
 
+#### Choosing the database from the query
+- Name the database in the SQL itself instead of changing the **Data connection** dropdown first:
+  - `SELECT * FROM [DatabaseA].[Schema].[Table]` runs against `DatabaseA` whatever the dropdown has selected. `Db.Schema.Table` and the two-dot `[Db]..[Table]` form work too, in any mix of bracketed and bare identifiers, matched case-insensitively
+  - An explicit database governs the **whole statement**, so unqualified names in that same statement resolve inside it as well
+  - `USE [DatabaseA]` switches the dropdown, the status bar and the loaded schema, and **sticks** for later executions — exactly as in SSMS. `USE` on its own switches and executes nothing; `USE` followed by other statements switches first and runs the rest against that database
+  - An inline prefix is **not** sticky: it applies to that one execution and leaves the dropdown alone
+  - Everything above behaves identically when you execute a selection
+- The database name is matched against the **data connection's name** in the dropdown. Omada exposes only the connection's name and id, never the physical database name, so a tenant whose connections are named differently from its databases writes the connection name
+- The query stored on the Omada data object is always the **original** text you wrote, prefixes included. The rewritten, unqualified text goes to a temporary object that is deleted again after the run
+- Checks that happen **before** anything is sent to Omada — the query is not posted at all when one fails:
+  - An unknown database name is rejected, naming the database and listing the connections that do exist
+  - A query addressing **two different databases is rejected**: Omada executes a query against one data connection, so a cross-database join cannot work. Split it into one query per database
+  - A four-part (linked server) name is rejected for the same reason
+- Limitations worth knowing:
+  - A database prefix inside a string literal or a comment is left untouched, by design — so a query building dynamic SQL is not rewritten for you
+  - A query **saved** with a database prefix will not run from Omada's own UI, because what is stored is what you wrote
+  - Resolving a name proves the connection exists, not that your account may read from it — per-connection permissions still apply
+  - A query with no database prefix costs nothing: no extra request, no extra data object
+
 #### Editor & IntelliSense
 - Context-aware SQL IntelliSense (T-SQL):
   - Tables (schema-qualified) are suggested after `FROM` / `JOIN`

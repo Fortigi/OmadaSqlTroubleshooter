@@ -10,6 +10,18 @@ semantic version.
 
 ## [Unreleased]
 
+### Added
+
+- Explicit database selection inside the SQL query (#152). `SELECT * FROM [Db].[Schema].[Table]`,
+  `Db.Schema.Table` and `[Db]..[Table]` now run against the named database whatever the **Data
+  connection** dropdown has selected, and `USE [Db]` switches the dropdown, the status bar and the
+  loaded schema and sticks for later executions. The name is resolved client-side against the data
+  connection list, so nothing changes about what Omada receives: the prefix and the `USE` are
+  stripped from the text that is posted, and the query stored on the data object stays the original
+  text. An unknown database, a query addressing two databases, and a four-part linked-server name
+  are all rejected before any request is made. Works identically for selection execution, and costs
+  a query with no prefix nothing.
+
 ## [Baseline] - 2026-09-16
 
 *This changelog was introduced on this date; earlier releases are not itemised here. The

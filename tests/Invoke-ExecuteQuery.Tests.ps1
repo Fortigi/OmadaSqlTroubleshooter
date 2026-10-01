@@ -992,3 +992,192 @@ Describe "A chain that already ran on the UI thread does not try to fall back to
         $Script:MainForm.Elements.ButtonExecuteQuery.IsEnabled | Should -BeTrue
     }
 }
+
+Describe "Invoke-ExecuteQuery resolves the database before executing (issue #152)" {
+    # The four resolver functions are unit-tested on their own; what is guarded here is the WIRING in
+    # the completion block, which is where each status turns into control flow. Criterion 5's UI
+    # effect in particular has no other test: it is the Set-ConfigProperty + Set-DataConnection pair
+    # below, and nothing else in the suite drives it.
+
+    BeforeEach {
+        Initialize-ExecuteQueryTestState
+
+        # The pipeline context is gathered from these two, which the shared stub does not carry
+        # because nothing before #152 read them on this path.
+        $Script:MainForm.Elements.TextBoxDisplayName = [pscustomobject]@{ Text = "TestQuery" }
+        $Script:AppConfig | Add-Member -NotePropertyName CurrentDataConnection -NotePropertyValue ([pscustomobject]@{ DoId = "42"; DisplayName = "OISES"; FullName = "OISES - 42" }) -Force
+
+        # The completion block stores the editor's text on RunTimeData before anything else. A
+        # PSCustomObject refuses an assignment to a property it does not already have, so without
+        # these the block throws there and never reaches the gate under test.
+        $Script:RunTimeData | Add-Member -NotePropertyName QueryText -NotePropertyValue $null -Force
+        $Script:RunTimeData | Add-Member -NotePropertyName CurrentQueryText -NotePropertyValue $null -Force
+
+        $script:CapturedCompletion = $null
+        function Invoke-ExecuteScriptWithResultAsync {
+            param($ScriptToExecute, $OnCompletedScriptBlock)
+            $script:CapturedCompletion = $OnCompletedScriptBlock
+        }
+
+        function Test-ConnectionRequirements { return $true }
+
+        # The validation gate of #61 is a separate feature with its own tests; switching all three
+        # passes off keeps these cases about the database gate alone.
+        function Get-SqlValidationSetting {
+            return [pscustomobject]@{ Enabled = $false; SchemaEnabled = $false; OmadaEnabled = $false }
+        }
+
+        function Save-Query {
+            param([switch]$NewQuery)
+            return [pscustomobject]@{ Id = 100; DisplayName = "TestQuery" }
+        }
+
+        # Capture what WOULD be dispatched, and return a pending item so Invoke-ExecuteQuery takes
+        # its normal early return instead of falling through to the inline pipeline.
+        $script:DispatchedContext = $null
+        function Invoke-OmadaPSWebRequestWrapperAsync {
+            param($Description, $PipelineContext, $Context, $OnResultScriptBlock)
+            $script:DispatchedContext = $PipelineContext
+            return [pscustomobject]@{ Description = $Description }
+        }
+
+        $script:ConnectionSwitches = 0
+        function Set-DataConnection { $script:ConnectionSwitches++ }
+
+        $script:SchemaReloads = 0
+        function Get-SqlSchemaObject { $script:SchemaReloads++ }
+
+        $script:ContainedErrors = [System.Collections.Generic.List[string]]::new()
+        function Write-ContainedErrorLog {
+            param(
+                [Parameter(ValueFromPipeline = $true)][string]$Message,
+                $ErrorObject,
+                [switch]$TabScoped
+            )
+            process { $script:ContainedErrors.Add($Message) }
+        }
+
+        $Script:Task = [pscustomobject]@{
+            Status = "RanToCompletion"
+            Result = (@{ fullText = "SELECT * FROM [ODW].[dbo].[Person]"; selectedText = $null; selectionStartLine = 1; selectionStartColumn = 1 } | ConvertTo-Json)
+        }
+    }
+
+    Context "a query that names no database" {
+        It "dispatches unchanged, with no temporary object and no connection switch" {
+            function Resolve-SqlDatabaseTarget {
+                param($SqlText, $OptionList)
+                return [pscustomobject]@{ Status = "None"; TargetDoId = $null; TargetName = $null; TargetFullName = $null; RewrittenText = $null; UseDatabase = $null; Message = $null }
+            }
+
+            Invoke-ExecuteQuery
+            & $script:CapturedCompletion
+
+            $script:DispatchedContext | Should -Not -BeNullOrEmpty
+            # No SelectionText means no temporary object, which is criterion 14's "no extra request".
+            $script:DispatchedContext.SelectionText | Should -BeNullOrEmpty
+            $script:DispatchedContext.ContainsKey("TempDataConnectionDoId") | Should -BeFalse
+            $script:DispatchedContext.DataConnectionDoId | Should -Be "42"
+            $script:ConnectionSwitches | Should -Be 0
+        }
+    }
+
+    Context "a resolved database" {
+        BeforeEach {
+            function Resolve-SqlDatabaseTarget {
+                param($SqlText, $OptionList)
+                return [pscustomobject]@{ Status = "Ok"; TargetDoId = "99"; TargetName = "ODW"; TargetFullName = "ODW - 99"; RewrittenText = "SELECT * FROM [dbo].[Person]"; UseDatabase = $null; Message = $null }
+            }
+        }
+
+        It "sends the rewritten text to the temporary object at the resolved connection" {
+            Invoke-ExecuteQuery
+            & $script:CapturedCompletion
+
+            $script:DispatchedContext.SelectionText | Should -Be "SELECT * FROM [dbo].[Person]"
+            $script:DispatchedContext.TempDataConnectionDoId | Should -Be "99"
+        }
+
+        It "keeps the ORIGINAL text and the user's own connection on the saved query (criterion 7)" {
+            Invoke-ExecuteQuery
+            & $script:CapturedCompletion
+
+            $script:DispatchedContext.QueryText | Should -Be "SELECT * FROM [ODW].[dbo].[Person]"
+            $script:DispatchedContext.DataConnectionDoId | Should -Be "42"
+        }
+
+        It "does not touch the dropdown, because an inline prefix is not sticky" {
+            Invoke-ExecuteQuery
+            & $script:CapturedCompletion
+
+            $script:ConnectionSwitches | Should -Be 0
+            @($script:ConfigWrites | Where-Object { $_.Property -eq "CurrentDataConnection" }).Count | Should -Be 0
+        }
+    }
+
+    Context "USE" {
+        It "switches the connection and still executes the rest (criterion 5)" {
+            function Resolve-SqlDatabaseTarget {
+                param($SqlText, $OptionList)
+                return [pscustomobject]@{ Status = "Ok"; TargetDoId = "99"; TargetName = "ODW"; TargetFullName = "ODW - 99"; RewrittenText = "SELECT * FROM [dbo].[Person]"; UseDatabase = "ODW"; Message = $null }
+            }
+
+            Invoke-ExecuteQuery
+            & $script:CapturedCompletion
+
+            # The config is written first so Set-DataConnection can find the entry by FullName.
+            $Private:Write = @($script:ConfigWrites | Where-Object { $_.Property -eq "CurrentDataConnection" })
+            $Private:Write.Count | Should -Be 1
+            $Private:Write[0].Value | Should -Be "ODW - 99"
+            $script:ConnectionSwitches | Should -Be 1
+            # Set-DataConnection raises Add_SelectionChanged, which reloads the schema - so this path
+            # must NOT call Get-SqlSchemaObject itself and reload it a second time.
+            $script:SchemaReloads | Should -Be 0
+            $script:DispatchedContext | Should -Not -BeNullOrEmpty
+        }
+
+        It "switches and executes nothing when USE stands alone" {
+            function Resolve-SqlDatabaseTarget {
+                param($SqlText, $OptionList)
+                return [pscustomobject]@{ Status = "SwitchOnly"; TargetDoId = "99"; TargetName = "ODW"; TargetFullName = "ODW - 99"; RewrittenText = ""; UseDatabase = "ODW"; Message = "Data connection changed. Nothing to execute." }
+            }
+
+            Invoke-ExecuteQuery
+            & $script:CapturedCompletion
+
+            $script:ConnectionSwitches | Should -Be 1
+            $script:DispatchedContext | Should -BeNullOrEmpty
+            $Script:MainForm.Elements.ButtonExecuteQuery.IsEnabled | Should -BeTrue
+        }
+    }
+
+    Context "a rejected query" {
+        BeforeEach {
+            function Resolve-SqlDatabaseTarget {
+                param($SqlText, $OptionList)
+                return [pscustomobject]@{ Status = "Rejected"; TargetDoId = $null; TargetName = $null; TargetFullName = $null; RewrittenText = $null; UseDatabase = $null; Message = "The database does not match any data connection. Available: OISES." }
+            }
+        }
+
+        It "posts nothing at all (criteria 8, 9, 10)" {
+            Invoke-ExecuteQuery
+            & $script:CapturedCompletion
+
+            $script:DispatchedContext | Should -BeNullOrEmpty
+            @($script:InlinePipelineRuns).Count | Should -Be 0
+        }
+
+        It "reports the reason once, contained, and restores the UI" {
+            # Write-ContainedErrorLog, not Write-LogOutput -LogType ERROR: the latter is terminating
+            # here, so it would throw past the UI reset and the catch would report it a second time.
+            Invoke-ExecuteQuery
+            { & $script:CapturedCompletion } | Should -Not -Throw
+
+            @($script:ContainedErrors).Count | Should -Be 1
+            $script:ContainedErrors[0] | Should -Match "does not match any data connection"
+            $Script:MainForm.Elements.ButtonExecuteQuery.IsEnabled | Should -BeTrue
+            $Script:RunTimeData.StopWatch.IsRunning | Should -BeFalse
+        }
+    }
+}
+

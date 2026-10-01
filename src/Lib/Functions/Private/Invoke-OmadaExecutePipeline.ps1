@@ -31,6 +31,10 @@ function Invoke-OmadaExecutePipeline {
       Parameters   the prepared Invoke-OmadaRestMethod splat (Uri, Method and Body are overwritten
                    per step; everything else - SessionKey, authentication, redaction - carries).
       SkipSave     $true to leave the query untouched (nothing to save).
+      TempDataConnectionDoId
+                   the data connection the TEMPORARY object must point at, when the query named a
+                   database explicitly (issue #152). Absent for every other execution, in which case
+                   the temporary object uses DataConnectionDoId like the save does.
 
     .OUTPUTS
     Hashtable:
@@ -188,6 +192,14 @@ function Invoke-OmadaExecutePipeline {
 
             $Private:UpsertContext = $Context.Clone()
             $Private:UpsertContext.TempQueryDoId = $Private:ReuseDoId
+
+            # Issue #152: a database-qualified query resolves to a connection that is not the one
+            # the dropdown has selected, and only the TEMPORARY object may point at it. The save
+            # step above deliberately keeps using DataConnectionDoId, so the user's own query object
+            # stays attached to the connection they chose.
+            if (![string]::IsNullOrWhiteSpace($Context.TempDataConnectionDoId)) {
+                $Private:UpsertContext.DataConnectionDoId = $Context.TempDataConnectionDoId
+            }
             $Private:Upsert = & $Invoke "TempQueryUpsert" (New-OmadaQueryRequest -Kind "TempQueryUpsert" -Context $Private:UpsertContext)
 
             if ($null -ne $Private:Upsert.ErrorRecord) {

@@ -192,6 +192,34 @@ Describe "Invoke-OmadaExecutePipeline - execute selection" {
         $Execute.Body["dataTypeArgs"]["targetId"] | Should -Be 777
     }
 
+    It "points only the temporary object at the resolved connection, leaving the save on the user's" {
+        # Issue #152: a database-qualified query resolves to a connection that is not the one the
+        # dropdown has selected. TempDataConnectionDoId exists so that ONLY the temporary object
+        # follows it - the save must keep writing DataConnectionDoId, or executing a prefixed query
+        # would silently move the user's saved query onto another connection.
+        $Context = New-PipelineContext -QueryText "SELECT 2" -SelectionText "SELECT * FROM [dbo].[Person]"
+        $Context.TempDataConnectionDoId = "99"
+
+        Invoke-OmadaExecutePipeline -Context $Context | Out-Null
+
+        $Temp = $script:Calls | Where-Object { $_.Key -in @("temp-put", "temp-post") } | Select-Object -First 1
+        $Temp | Should -Not -BeNullOrEmpty
+        $Temp.Body["C_SQLTROUBLESHOOTING_DATACONNECTION"]["Id"] | Should -Be "99"
+
+        $Save = $script:Calls | Where-Object { $_.Key -eq "save" } | Select-Object -First 1
+        $Save | Should -Not -BeNullOrEmpty
+        $Save.Body["C_SQLTROUBLESHOOTING_DATACONNECTION"]["Id"] | Should -Be "42"
+    }
+
+    It "leaves the temporary object on the selected connection when no database was resolved" {
+        # The absence of TempDataConnectionDoId must change nothing: this is what keeps an ordinary
+        # execute-selection run byte-for-byte what it was before #152.
+        Invoke-OmadaExecutePipeline -Context (New-PipelineContext -SelectionText "SELECT TOP 1 *") | Out-Null
+
+        $Temp = $script:Calls | Where-Object { $_.Key -in @("temp-put", "temp-post") } | Select-Object -First 1
+        $Temp.Body["C_SQLTROUBLESHOOTING_DATACONNECTION"]["Id"] | Should -Be "42"
+    }
+
     It "undeletes and reuses a soft-deleted temporary object rather than creating another" {
         # Without this the shared TMP_<InstanceGuid> object would be recreated on every run and stale
         # ones would pile up on the tenant.
