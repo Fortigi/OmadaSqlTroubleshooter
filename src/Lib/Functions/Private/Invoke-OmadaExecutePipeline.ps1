@@ -51,24 +51,37 @@ function Invoke-OmadaExecutePipeline {
     )
 
     $Outcome = @{
-        SaveResult     = $null
-        SaveSkipped    = $false
-        TempQueryDoId  = $null
-        QueryResult    = $null
-        ErrorRecord    = $null
-        FailedStep     = $null
-        Steps          = [System.Collections.Generic.List[object]]::new()
+        SaveResult       = $null
+        SaveSkipped      = $false
+        TempQueryDoId    = $null
+        # QueryResult, ErrorRecord and FailedStep describe the FIRST statement of the run, which for a
+        # single-statement execute is the whole of it. They are kept because everything that consumed
+        # this outcome before issue #151 reads them, and a single execute must stay byte-identical to
+        # what it was. StatementOutcome below is the complete picture.
+        QueryResult      = $null
+        ErrorRecord      = $null
+        FailedStep       = $null
+        # One entry per statement that was attempted, in editor order (issue #151): Ordinal, Text,
+        # QueryResult, ErrorRecord and FailedStep. A run continues past a failing statement - SSMS
+        # behaviour - so this can hold both results and failures at once, and it is the only place
+        # that records which was which.
+        #
+        # Deliberately carries no row count: Complete-ExecuteQueryResult already derives rows from
+        # d.Records, and computing it a second time in the worker would be two places that could
+        # disagree about how many rows a statement returned.
+        StatementOutcome = [System.Collections.Generic.List[object]]::new()
+        Steps            = [System.Collections.Generic.List[object]]::new()
         # How many requests came back WITHOUT an error. The caller uses this to tell "the worker
         # could not talk to the tenant at all" from "the tenant refused something": only the first is
         # safe to retry on the UI thread, because only then is it certain that nothing was changed
         # server-side by the attempt.
-        CompletedSteps = 0
+        CompletedSteps   = 0
         # What the worker WOULD have logged, had it been able to. Replayed verbatim on the UI thread
         # by Complete-ExecuteQueryPipeline, at these levels, so the log of a background execute reads
         # the same as it did when every request was made inline. Without this, moving the chain into a
         # worker silently cost this application most of its diagnostic value - which for a
         # troubleshooting tool is not an acceptable trade for responsiveness.
-        Log            = [System.Collections.Generic.List[object]]::new()
+        Log              = [System.Collections.Generic.List[object]]::new()
     }
 
     # Entries carry either finished text, or an object plus a format string. The object form exists
@@ -162,10 +175,30 @@ function Invoke-OmadaExecutePipeline {
             }
         }
 
-        # --- 2. The temporary object, for an execute-selection run ---------------------------------
-        if (![string]::IsNullOrWhiteSpace($Context.SelectionText)) {
-            & $Log "DEBUG" "Execute selection mode: creating temporary query object"
-            $Private:ReuseDoId = $null
+        # --- 2. What runs, and whether it needs the temporary object --------------------------------
+        # Issue #151. The caller splits the text that is about to run into statements and passes them
+        # here; each one becomes its own query, in editor order. A caller that passes NONE still gets
+        # exactly one execute of exactly the text it always executed - which is what keeps the inline
+        # fallback and every pre-existing test of this function behaving as before.
+        $Private:Statement = @($Context.Statements)
+        if ($Private:Statement.Count -eq 0) {
+            $Private:Statement = @([PSCustomObject]@{ Ordinal = 1; Text = $Context.SelectionText })
+        }
+
+        # The temporary object carries the text that actually runs, so it is needed whenever that text
+        # is not the saved query itself: for a selection, as it always was, and now for every
+        # multi-statement run, because each statement differs from the saved query.
+        #
+        # The single exception is the case that has to stay identical to today: ONE statement with no
+        # selection executes the saved query directly, with no temporary object created at all.
+        $Private:NeedTempObject = $Private:Statement.Count -gt 1 -or ![string]::IsNullOrWhiteSpace($Context.SelectionText)
+        $Private:ReuseDoId = $null
+
+        # Probed and undeleted ONCE for the whole run, not per statement. There is one
+        # TMP_<InstanceGuid> object per application instance, so finding it is a property of the run;
+        # only its CONTENT changes from statement to statement, which is the upsert inside the loop.
+        if ($Private:NeedTempObject) {
+            & $Log "DEBUG" "Creating temporary query object"
 
             # A probe failure is not fatal, exactly as it is not on the UI thread: the existing
             # New-TemporarySqlQueryObject swallows it and falls through to creating a new object.
@@ -185,48 +218,87 @@ function Invoke-OmadaExecutePipeline {
                     [void](& $Invoke "TempQueryUndelete" (New-OmadaQueryRequest -Kind "TempQueryUndelete" -Context $Private:UndeleteContext))
                 }
             }
-
-            $Private:UpsertContext = $Context.Clone()
-            $Private:UpsertContext.TempQueryDoId = $Private:ReuseDoId
-            $Private:Upsert = & $Invoke "TempQueryUpsert" (New-OmadaQueryRequest -Kind "TempQueryUpsert" -Context $Private:UpsertContext)
-
-            if ($null -ne $Private:Upsert.ErrorRecord) {
-                $Outcome.ErrorRecord = $Private:Upsert.ErrorRecord
-                $Outcome.FailedStep = "TempQueryUpsert"
-                return $Outcome
-            }
-
-            # A PUT onto the reused object answers without an Id, so fall back to the id that was
-            # reused - it is the object the query must run against either way.
-            $Outcome.TempQueryDoId = if ($null -ne $Private:Upsert.Result -and $null -ne $Private:Upsert.Result.Id) { $Private:Upsert.Result.Id } else { $Private:ReuseDoId }
-
-            # Published to the UI thread the moment it is known, through the synchronized table
-            # Start-OmadaBackgroundRequest put on the pending item. Cancellation kills this frame
-            # outright, so the finally below never runs - and without this the UI would have no idea
-            # which object to clean up. It is the one piece of state that has to escape the worker
-            # before the worker finishes.
-            if ($null -ne $Context.Progress) {
-                $Context.Progress.TempQueryDoId = $Outcome.TempQueryDoId
-            }
-
-            if ($null -eq $Outcome.TempQueryDoId) {
-                $Outcome.FailedStep = "TempQueryUpsert"
-                return $Outcome
-            }
         }
 
-        # --- 3. The query itself -------------------------------------------------------------------
-        $Private:ExecuteContext = $Context.Clone()
-        $Private:ExecuteContext.TargetQueryDoId = if ($null -ne $Outcome.TempQueryDoId) { $Outcome.TempQueryDoId } else { $Context.QueryDoId }
-        & $Log "INFO" "Retrieve query output, please wait..."
-        $Private:Execute = & $Invoke "ExecuteQuery" (New-OmadaQueryRequest -Kind "ExecuteQuery" -Context $Private:ExecuteContext)
+        # --- 3. The statements, one at a time ------------------------------------------------------
+        # Sequential, and NOT as a simplification. The temporary object is named TMP_<InstanceGuid> -
+        # one per application instance - so two statements in flight would overwrite each other's SQL
+        # on the same tenant object and each would execute the other's query. One execute is
+        # outstanding at a time, in editor order, which also keeps the results in the order the user
+        # wrote them.
+        #
+        # A failing statement does not stop the run: the remaining statements are still attempted and
+        # the failure is recorded against the statement it belongs to. That is SSMS's behaviour and it
+        # is the behaviour this issue was delivered with.
+        foreach ($Private:Current in $Private:Statement) {
+            $Private:StatementError = $null
+            $Private:StatementFailedStep = $null
+            $Private:StatementResult = $null
 
-        if ($null -ne $Private:Execute.ErrorRecord) {
-            $Outcome.ErrorRecord = $Private:Execute.ErrorRecord
-            $Outcome.FailedStep = "ExecuteQuery"
-        }
-        else {
-            $Outcome.QueryResult = $Private:Execute.Result
+            if ($Private:NeedTempObject) {
+                # This statement's own SQL goes onto the temporary object. SelectionText is the key
+                # New-OmadaQueryRequest reads for C_QUERY, so the per-statement text travels in it
+                # rather than in a second key that would mean the same thing.
+                $Private:UpsertContext = $Context.Clone()
+                $Private:UpsertContext.SelectionText = $Private:Current.Text
+                $Private:UpsertContext.TempQueryDoId = if ($null -ne $Outcome.TempQueryDoId) { $Outcome.TempQueryDoId } else { $Private:ReuseDoId }
+                $Private:Upsert = & $Invoke "TempQueryUpsert" (New-OmadaQueryRequest -Kind "TempQueryUpsert" -Context $Private:UpsertContext)
+
+                if ($null -ne $Private:Upsert.ErrorRecord) {
+                    $Private:StatementError = $Private:Upsert.ErrorRecord
+                    $Private:StatementFailedStep = "TempQueryUpsert"
+                }
+                else {
+                    # A PUT onto the reused object answers without an Id, so fall back to the id that
+                    # was reused - it is the object the query must run against either way.
+                    $Outcome.TempQueryDoId = if ($null -ne $Private:Upsert.Result -and $null -ne $Private:Upsert.Result.Id) { $Private:Upsert.Result.Id } else { $Private:UpsertContext.TempQueryDoId }
+
+                    # Published to the UI thread the moment it is known, through the synchronized
+                    # table Start-OmadaBackgroundRequest put on the pending item. Cancellation kills
+                    # this frame outright, so the finally below never runs - and without this the UI
+                    # would have no idea which object to clean up. It is the one piece of state that
+                    # has to escape the worker before the worker finishes.
+                    if ($null -ne $Context.Progress) {
+                        $Context.Progress.TempQueryDoId = $Outcome.TempQueryDoId
+                    }
+
+                    if ($null -eq $Outcome.TempQueryDoId) {
+                        $Private:StatementFailedStep = "TempQueryUpsert"
+                    }
+                }
+            }
+
+            if ($null -eq $Private:StatementError -and $null -eq $Private:StatementFailedStep) {
+                $Private:ExecuteContext = $Context.Clone()
+                $Private:ExecuteContext.TargetQueryDoId = if ($null -ne $Outcome.TempQueryDoId) { $Outcome.TempQueryDoId } else { $Context.QueryDoId }
+                & $Log "INFO" "Retrieve query output, please wait..."
+                $Private:Execute = & $Invoke "ExecuteQuery" (New-OmadaQueryRequest -Kind "ExecuteQuery" -Context $Private:ExecuteContext)
+
+                if ($null -ne $Private:Execute.ErrorRecord) {
+                    $Private:StatementError = $Private:Execute.ErrorRecord
+                    $Private:StatementFailedStep = "ExecuteQuery"
+                }
+                else {
+                    $Private:StatementResult = $Private:Execute.Result
+                }
+            }
+
+            $Outcome.StatementOutcome.Add(@{
+                    Ordinal     = $Private:Current.Ordinal
+                    Text        = $Private:Current.Text
+                    QueryResult = $Private:StatementResult
+                    ErrorRecord = $Private:StatementError
+                    FailedStep  = $Private:StatementFailedStep
+                })
+
+            # The first statement's outcome is also the run's outcome, for every consumer that
+            # predates issue #151. Written once, from the first statement only, so a later statement
+            # cannot overwrite what a single-statement execute reported.
+            if ($Outcome.StatementOutcome.Count -eq 1) {
+                $Outcome.QueryResult = $Private:StatementResult
+                $Outcome.ErrorRecord = $Private:StatementError
+                $Outcome.FailedStep = $Private:StatementFailedStep
+            }
         }
 
         return $Outcome
