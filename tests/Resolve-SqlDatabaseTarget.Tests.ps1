@@ -114,15 +114,23 @@ Describe 'Resolve-SqlDatabaseTarget' {
     }
 
     Context 'selection execution (criterion 11)' {
-        It 'treats a selected fragment exactly like full-text execution' {
-            # Selection execution differs only in which text is passed in, so the same input must
-            # produce the same decision - that is what makes criterion 11 true by construction.
-            $Sql = "SELECT * FROM [ODW].[dbo].[Person]"
-            $Full = Resolve-SqlDatabaseTarget -SqlText $Sql -OptionList $Script:OptionList
-            $Selected = Resolve-SqlDatabaseTarget -SqlText $Sql -OptionList $Script:OptionList
-            $Selected.Status | Should -Be $Full.Status
-            $Selected.TargetDoId | Should -Be $Full.TargetDoId
-            $Selected.RewrittenText | Should -Be $Full.RewrittenText
+        It 'resolves a selected fragment of a larger script on its own' {
+            # The function has no notion of a selection: it only ever sees SqlText, which is why
+            # criterion 11 holds. So the thing worth asserting is the concrete result for a fragment
+            # that is NOT the whole editor - here the second statement of a two-statement script,
+            # resolved without the first statement's database influencing it at all.
+            $Result = Resolve-SqlDatabaseTarget -SqlText "SELECT * FROM [ODW].[dbo].[Person]" -OptionList $Script:OptionList
+            $Result.Status | Should -Be "Ok"
+            $Result.TargetDoId | Should -Be "2003044"
+            $Result.RewrittenText | Should -Be "SELECT * FROM [dbo].[Person]"
+        }
+
+        It 'rejects a selection spanning two databases even when each alone would resolve' {
+            # Selecting across statements is how a user most easily produces a cross-database text
+            # by accident, so the rejection has to hold for a fragment too.
+            $Result = Resolve-SqlDatabaseTarget -SqlText "SELECT * FROM [OISES].[dbo].[X]`r`nSELECT * FROM [ODW].[dbo].[Y]" -OptionList $Script:OptionList
+            $Result.Status | Should -Be "Rejected"
+            $Result.Message | Should -Match "OISES, ODW"
         }
     }
 }

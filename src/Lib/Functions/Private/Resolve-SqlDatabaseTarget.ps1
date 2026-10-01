@@ -98,8 +98,17 @@ function Resolve-SqlDatabaseTarget {
             # Not yet populated rather than genuinely empty: refresh once before deciding that a
             # name cannot be resolved, so a query executed early in the session is not rejected for
             # a list that simply had not loaded.
-            "The data connection list is empty; refreshing it before resolving the database." | Write-LogOutput -LogType DEBUG
-            Update-DataConnectionList -NotShowPopupWindow
+            #
+            # The SYNCHRONOUS pair, not Update-DataConnectionList. Since #90 that function is
+            # async-first: when a worker is eligible it dispatches and returns, and the list is
+            # repopulated later from the completion-poll timer. Calling it here would therefore
+            # return before anything arrived, the re-read below would still see an empty list, and a
+            # query naming a perfectly valid database would be rejected with "no data connections
+            # are available" purely because it ran before the list had loaded. This is the same pair
+            # Update-DataConnectionList itself falls back to when no worker is available.
+            "The data connection list is empty; refreshing it synchronously before resolving the database." | Write-LogOutput -LogType DEBUG
+            $Private:Inline = Get-DataConnectionPageInline
+            Complete-DataConnectionListUpdate -DataObjectHtml $Private:Inline.Html -HasRows:$Private:Inline.HasRows -NotShowPopupWindow
             $OptionList = @($Script:MainForm.Elements.ComboBoxSelectDataConnection.Items | ForEach-Object { [string]$_.Content })
         }
     }
