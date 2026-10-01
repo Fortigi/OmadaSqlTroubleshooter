@@ -459,7 +459,9 @@ function Complete-ExecuteQueryPipeline {
 
         # TempQueryDoId is passed as $null on purpose: the pipeline already deleted the temporary
         # object in its own finally, whatever the outcome. Passing it would delete it twice.
-        Complete-ExecuteQueryResult -QueryResult $Outcome.QueryResult -SaveResult $Outcome.SaveResult -TempQueryDoId $null
+        # StatementOutcome carries every statement's result; QueryResult is still the first of them,
+        # for the consumers that predate issue #151.
+        Complete-ExecuteQueryResult -QueryResult $Outcome.QueryResult -SaveResult $Outcome.SaveResult -TempQueryDoId $null -StatementOutcome $Outcome.StatementOutcome
     }
     catch {
         Reset-ExecuteQueryUiState
@@ -508,7 +510,11 @@ function Complete-ExecuteQueryResult {
         $QueryResult,
         $SaveResult,
         $TempQueryDoId,
-        [switch]$Failed
+        [switch]$Failed,
+        # The pipeline's per-statement outcomes (issue #151), in editor order. Omitted by the failure
+        # paths and by everything that predates the issue; a single response is then bound as a
+        # one-statement run, so those callers behave exactly as they did before.
+        $StatementOutcome
     )
 
     try {
@@ -525,32 +531,75 @@ function Complete-ExecuteQueryResult {
         # a phantom row and the Show output / Save output buttons were enabled for a result that does
         # not exist. Null became far more reachable once a request could fail or be abandoned in a
         # worker, so it is now treated as what it is - no rows.
-        if ($null -eq $Script:RunTimeData.QueryResult -or ($Script:RunTimeData.QueryResult.d.Rows | Measure-Object).Count -le 0) {
+        # Issue #151: one result grid per statement, bound from the pipeline's per-statement outcomes.
+        #
+        # A caller that has only a single response - every failure path, and everything that predates
+        # the issue - is turned into a one-statement run here rather than handled by a second branch.
+        # One binding path means a single execute cannot drift from a multi-statement one, which is
+        # what "a single result must look exactly as it does today" ultimately depends on.
+        # The nulls are filtered, not merely wrapped: @($null) has a Count of ONE in PowerShell, so a
+        # caller that passed no outcomes at all would otherwise produce a single null "statement",
+        # which Set-TabQueryResult skips - binding nothing and reporting zero rows for a run that
+        # returned plenty. Every failure path and every pre-#151 caller takes exactly that route, so
+        # this guard is the difference between a single execute working and silently claiming it
+        # returned no rows.
+        $Private:Statement = @($StatementOutcome | Where-Object { $null -ne $_ })
+        if ($Private:Statement.Count -eq 0 -and $null -ne $Script:RunTimeData.QueryResult) {
+            $Private:Statement = @(@{
+                    Ordinal     = 1
+                    Text        = $null
+                    QueryResult = $Script:RunTimeData.QueryResult
+                    ErrorRecord = $null
+                    FailedStep  = $null
+                })
+        }
+
+        # Set-TabQueryResult returns the rows across every bound result, which is what the status bar
+        # reports for the run. Counting them here from a single response would be wrong the moment
+        # there is more than one statement.
+        $Private:TotalRows = Set-TabQueryResult -TabSession (Get-ActiveTabSession) -StatementOutcome $Private:Statement
+        $Private:ReturnedRows = $Private:TotalRows -gt 0
+
+        if (-not $Private:ReturnedRows) {
             if (-not $Failed) {
                 "Query did not return any results!" | Write-LogOutput -LogType WARNING -TabScoped
             }
             $Script:RunTimeData.LastRowsRead = 0
             $Script:MainForm.Elements.TextBlockStatusBarRows | Set-TextBlockText -Text "0 rows"
-            $Script:MainForm.Elements.DataGridQueryResult.ItemsSource = $null
-            $Private:ReturnedRows = $false
         }
         else {
-            $Private:ReturnedRows = $true
-            $Script:MainForm.Elements.DataGridQueryResult.AutoGenerateColumns = $true
-            try {
-                $Script:MainForm.Elements.DataGridQueryResult.ItemsSource = @($Script:RunTimeData.QueryResult.d.Rows)
-            }
-            catch {
-                #Work-around issue that Omada can return invalid JSON keys.
-                $Script:MainForm.Elements.DataGridQueryResult.ItemsSource = @(($Script:RunTimeData.QueryResult | ConvertTo-Json -Depth 10 | Invoke-SanitizeJsonKeys | ConvertFrom-Json -Depth 10).d.Rows)
-            }
             "Result: {0}" -f (Get-LogResultShape -InputObject $Script:RunTimeData.QueryResult.d.rows) | Write-LogOutput -LogType VERBOSE2
             $Script:MainForm.Elements.ButtonShowOutput.IsEnabled = $true
             $Script:MainForm.Elements.ButtonSaveOutputFile.IsEnabled = $true
-            "{0} record(s) retrieved!" -f $Script:RunTimeData.QueryResult.d.Records | Write-LogOutput
+            "{0} record(s) retrieved!" -f $Private:TotalRows | Write-LogOutput
 
-            $Script:RunTimeData.LastRowsRead = [Int]$Script:RunTimeData.QueryResult.d.Records
-            $Script:MainForm.Elements.TextBlockStatusBarRows | Set-TextBlockText -Text ("{0:n0} rows" -f [Int]$Script:RunTimeData.QueryResult.d.Records)
+            $Script:RunTimeData.LastRowsRead = [Int]$Private:TotalRows
+            $Script:MainForm.Elements.TextBlockStatusBarRows | Set-TextBlockText -Text ("{0:n0} rows" -f [Int]$Private:TotalRows)
+
+            # The sizing pass cannot run yet. Assigning ItemsSource does not generate the item
+            # containers, so there is no grid to measure and nothing to give a height to on this pass.
+            # Deferred to the dispatcher at Background priority, which runs after layout has realised
+            # them. GetNewClosure, because the tab has to be the one this completion belongs to rather
+            # than whichever tab is active by the time the dispatcher gets round to it.
+            # The Dispatcher is checked rather than assumed. Sizing is best-effort - a pane that could
+            # not be sized still shows its results - so it must never be the reason a completion
+            # throws and loses the status bar, the dropdown and the output-tab selection that follow
+            # it. That is not hypothetical: it is what happened the first time this was written
+            # unguarded.
+            $Private:ResultsControl = $Script:MainForm.Elements.ItemsControlQueryResults
+            if ($null -ne $Private:ResultsControl -and $null -ne $Private:ResultsControl.Dispatcher) {
+                $SizingTabSession = Get-ActiveTabSession
+                [void]$Private:ResultsControl.Dispatcher.BeginInvoke(
+                    [System.Windows.Threading.DispatcherPriority]::Background,
+                    [action]({
+                            # Both need the containers to exist, so both wait for the same pass.
+                            # Handlers first: the grids are new objects on every execute, and until
+                            # they are wired the user can see rows they cannot copy, select by column,
+                            # or open a working context menu over.
+                            Register-QueryResultGridHandler -TabSession $SizingTabSession
+                            Update-QueryResultStackLayout -TabSession $SizingTabSession
+                        }.GetNewClosure()))
+            }
             $SaveResult.Id, $SaveResult.DisplayName | Set-ConfigProperty -Property "CurrentSqlQuery"
             if ($SaveResult.DisplayName -ne $Script:RunTimeData.CurrentSqlQuery.DisplayName) {
                 "New display name, Current: {0}, New: {1}" -f $Script:RunTimeData.CurrentSqlQuery.DisplayName, $SaveResult.DisplayName | Write-LogOutput -LogType DEBUG

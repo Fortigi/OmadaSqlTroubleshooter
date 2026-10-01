@@ -41,6 +41,13 @@ BeforeAll {
     # IS the behaviour these suites assert, and a stub would assert nothing.
     . (Join-Path $PrivatePath -ChildPath "Write-TabMessage.ps1")
     . (Join-Path $PrivatePath -ChildPath "Set-TabStatusMessage.ps1")
+    # The per-statement result stack (issue #151). Dot-sourced rather than stubbed, and that choice is
+    # load-bearing here: Complete-ExecuteQueryResult now binds the pane through Set-TabQueryResult, and
+    # a missing collaborator throws inside the function's own catch - which silently skips the status
+    # bar, the dropdown, the output-tab selection and the teardown that follow it. A stub would hide
+    # exactly the cascade these suites exist to catch.
+    . (Join-Path $PrivatePath -ChildPath "Set-TabQueryResult.ps1")
+    . (Join-Path $PrivatePath -ChildPath "Update-QueryResultStackLayout.ps1")
     . (Join-Path $PrivatePath -ChildPath "Invoke-ExecuteQuery.ps1")
 
     $Script:Tracer = [System.Diagnostics.Trace]
@@ -146,6 +153,12 @@ BeforeAll {
             TextBoxQueryMessages      = [pscustomobject]@{ Text = "" }
             TabControlQueryOutput     = [pscustomobject]@{ SelectedIndex = 0 }
             TextBlockStatusBarMessage = [pscustomobject]@{ Name = "TextBlockStatusBarMessage"; Text = "" }
+            # The Results pane's stack of per-statement grids (issue #151). ItemsSource is the whole
+            # contract these suites care about; no Dispatcher, deliberately - the sizing pass is
+            # deferred through one and must be skipped rather than attempted when there is none, which
+            # is a property worth exercising here rather than faking away.
+            ItemsControlQueryResults  = [pscustomobject]@{ ItemsSource = "previous" }
+            ScrollViewerQueryResults  = [pscustomobject]@{ ViewportHeight = 400 }
         }
     }
 
@@ -182,11 +195,16 @@ BeforeAll {
         # No request outstanding, so the button state resolves to "Execute".
         $Script:PendingWebViewCompletions = [System.Collections.Generic.List[object]]::new()
         $Script:TestTabSession = [pscustomobject]@{
-            Id            = "tab-A"
-            DisplayName   = "Tab A"
-            TabItem       = "item-A"
-            Elements      = (New-TabElementStub)
-            QueryMessages = [System.Collections.Generic.List[string]]::new()
+            Id                      = "tab-A"
+            DisplayName             = "Tab A"
+            TabItem                 = "item-A"
+            Elements                = (New-TabElementStub)
+            QueryMessages           = [System.Collections.Generic.List[string]]::new()
+            # Declared here rather than left to be added on first use: assigning a property a
+            # [PSCustomObject] does not already have throws, and that exception would be swallowed by
+            # Complete-ExecuteQueryResult's own catch - skipping everything after the binding.
+            QueryResults            = $null
+            FocusedQueryResultIndex = 0
         }
         $Script:Tabs = @($Script:TestTabSession)
         # DisplayName as well as FullName: the status bar names the query in all three outcomes
@@ -210,6 +228,11 @@ BeforeAll {
                 ButtonShowOutput            = [PSCustomObject]@{ IsEnabled = $false }
                 ButtonSaveOutputFile        = [PSCustomObject]@{ IsEnabled = $false }
                 DataGridQueryResult         = [PSCustomObject]@{ ItemsSource = "previous"; AutoGenerateColumns = $false }
+                # Issue #151 reads the stack off $Script:MainForm.Elements as well as off the tab
+                # session: Set-ActiveTabContext repoints the former onto the latter, and the
+                # completion runs against whichever is current.
+                ItemsControlQueryResults    = [PSCustomObject]@{ ItemsSource = "previous" }
+                ScrollViewerQueryResults    = [PSCustomObject]@{ ViewportHeight = 400 }
                 TextBlockStatusBarRows      = [PSCustomObject]@{ Name = "TextBlockStatusBarRows"; Text = "-" }
                 TextBlockStatusBarQueryTime = [PSCustomObject]@{ Name = "TextBlockStatusBarQueryTime"; Text = "-" }
                 ComboBoxSelectQuery         = [PSCustomObject]@{ Items = [System.Collections.ArrayList]::new(); SelectedItem = $null }
@@ -334,7 +357,7 @@ Describe "Reset-ExecuteQueryUiState" {
         # A failed or abandoned execute must not blank a perfectly good previous result.
         Reset-ExecuteQueryUiState
 
-        $Script:MainForm.Elements.DataGridQueryResult.ItemsSource | Should -Be "previous"
+        $Script:TestTabSession.Elements.ItemsControlQueryResults.ItemsSource | Should -Be "previous"
     }
 
     It "does not throw when there is no stopwatch" {
@@ -350,7 +373,12 @@ Describe "Complete-ExecuteQueryResult" {
     It "binds the rows and reports the record count" {
         Complete-ExecuteQueryResult -QueryResult (New-ResultResponse -RowCount 2) -SaveResult ([pscustomobject]@{ Id = 100; DisplayName = "TestQuery" }) -TempQueryDoId $null
 
-        @($Script:MainForm.Elements.DataGridQueryResult.ItemsSource).Count | Should -Be 2
+        # One statement, so one result in the stack, carrying the two rows (issue #151). Asserted on
+        # the TAB SESSION's elements because that is what the binding goes through: in the application
+        # Set-ActiveTabContext repoints $Script:MainForm.Elements onto the active tab's, so they are
+        # one object, but this fixture builds them separately.
+        @($Script:TestTabSession.Elements.ItemsControlQueryResults.ItemsSource).Count | Should -Be 1
+        @(@($Script:TestTabSession.Elements.ItemsControlQueryResults.ItemsSource)[0].Rows).Count | Should -Be 2
         $Script:MainForm.Elements.TextBlockStatusBarRows.Text | Should -Be "2 rows"
         $Script:MainForm.Elements.ButtonShowOutput.IsEnabled | Should -BeTrue
         $Script:MainForm.Elements.ButtonSaveOutputFile.IsEnabled | Should -BeTrue
@@ -371,7 +399,9 @@ Describe "Complete-ExecuteQueryResult" {
         # request could fail or be abandoned in a worker.
         Complete-ExecuteQueryResult -QueryResult $null -SaveResult ([pscustomobject]@{ Id = 100; DisplayName = "TestQuery" }) -TempQueryDoId $null
 
-        $Script:MainForm.Elements.DataGridQueryResult.ItemsSource | Should -BeNullOrEmpty
+        # Nothing bound, rather than an empty collection: an ItemsControl bound to an empty list still
+        # renders its panel, and the E2E lane reads a null ItemsSource as "no result".
+        $Script:TestTabSession.Elements.ItemsControlQueryResults.ItemsSource | Should -BeNullOrEmpty
         $Script:MainForm.Elements.TextBlockStatusBarRows.Text | Should -Be "0 rows"
         $Script:MainForm.Elements.ButtonShowOutput.IsEnabled | Should -BeFalse
         $Script:MainForm.Elements.ButtonSaveOutputFile.IsEnabled | Should -BeFalse
@@ -380,7 +410,9 @@ Describe "Complete-ExecuteQueryResult" {
     It "clears the grid and says '0 rows' for an empty result" {
         Complete-ExecuteQueryResult -QueryResult (New-ResultResponse -RowCount 0) -SaveResult ([pscustomobject]@{ Id = 100; DisplayName = "TestQuery" }) -TempQueryDoId $null
 
-        $Script:MainForm.Elements.DataGridQueryResult.ItemsSource | Should -BeNullOrEmpty
+        # Nothing bound, rather than an empty collection: an ItemsControl bound to an empty list still
+        # renders its panel, and the E2E lane reads a null ItemsSource as "no result".
+        $Script:TestTabSession.Elements.ItemsControlQueryResults.ItemsSource | Should -BeNullOrEmpty
         $Script:MainForm.Elements.TextBlockStatusBarRows.Text | Should -Be "0 rows"
     }
 
@@ -653,14 +685,24 @@ Describe "Complete-ExecuteQueryPipeline falls back to the UI thread" {
 
         $script:InlinePipelineRuns.Count | Should -Be 1
         # And the user actually gets their result, rather than a warning about an empty one.
-        @($Script:MainForm.Elements.DataGridQueryResult.ItemsSource).Count | Should -Be 2
+        # One statement, so one result in the stack, carrying the two rows (issue #151). Asserted on
+        # the TAB SESSION's elements because that is what the binding goes through: in the application
+        # Set-ActiveTabContext repoints $Script:MainForm.Elements onto the active tab's, so they are
+        # one object, but this fixture builds them separately.
+        @($Script:TestTabSession.Elements.ItemsControlQueryResults.ItemsSource).Count | Should -Be 1
+        @(@($Script:TestTabSession.Elements.ItemsControlQueryResults.ItemsSource)[0].Rows).Count | Should -Be 2
     }
 
     It "re-runs the query on the UI thread when the worker returned only an error" {
         Complete-ExecuteQueryPipeline -Outcome (New-TestErrorRecord) -PipelineContext $script:RetryContext
 
         $script:InlinePipelineRuns.Count | Should -Be 1
-        @($Script:MainForm.Elements.DataGridQueryResult.ItemsSource).Count | Should -Be 2
+        # One statement, so one result in the stack, carrying the two rows (issue #151). Asserted on
+        # the TAB SESSION's elements because that is what the binding goes through: in the application
+        # Set-ActiveTabContext repoints $Script:MainForm.Elements onto the active tab's, so they are
+        # one object, but this fixture builds them separately.
+        @($Script:TestTabSession.Elements.ItemsControlQueryResults.ItemsSource).Count | Should -Be 1
+        @(@($Script:TestTabSession.Elements.ItemsControlQueryResults.ItemsSource)[0].Rows).Count | Should -Be 2
     }
 
     It "re-runs the query when the pipeline failed without reaching the tenant" {
@@ -671,7 +713,12 @@ Describe "Complete-ExecuteQueryPipeline falls back to the UI thread" {
         Complete-ExecuteQueryPipeline -Outcome $Failed -PipelineContext $script:RetryContext
 
         $script:InlinePipelineRuns.Count | Should -Be 1
-        @($Script:MainForm.Elements.DataGridQueryResult.ItemsSource).Count | Should -Be 2
+        # One statement, so one result in the stack, carrying the two rows (issue #151). Asserted on
+        # the TAB SESSION's elements because that is what the binding goes through: in the application
+        # Set-ActiveTabContext repoints $Script:MainForm.Elements onto the active tab's, so they are
+        # one object, but this fixture builds them separately.
+        @($Script:TestTabSession.Elements.ItemsControlQueryResults.ItemsSource).Count | Should -Be 1
+        @(@($Script:TestTabSession.Elements.ItemsControlQueryResults.ItemsSource)[0].Rows).Count | Should -Be 2
     }
 
     It "does NOT re-run when a request had already reached the tenant" {

@@ -40,13 +40,15 @@ E2ESuite -Name "ArrayCopy" -Body {
 
         # AutoGenerateColumns only produces columns during a layout pass, so force one before any
         # case reads Columns or SortMemberPath.
-        $Grid = (Get-E2EElements).DataGridQueryResult
+        # The focused result's grid (issue #151): the pane holds one per statement, and these cases
+        # read Columns and SortMemberPath off the result the copy commands will act on.
+        $Grid = Get-FocusedQueryResultGrid
         $Grid.UpdateLayout()
         Invoke-E2EFlushDispatcher | Out-Null
     }
 
     function script:Get-ArrayCopyGrid {
-        return (Get-E2EElements).DataGridQueryResult
+        return Get-FocusedQueryResultGrid
     }
 
     function script:Get-ArrayCopyColumn {
@@ -189,7 +191,7 @@ E2ESuite -Name "ArrayCopy" -Body {
         $script:E2EEditorText = "SELECT * FROM tblObject WHERE Id IN {0}" -f $Sql
         Invoke-E2EExecuteAndWait
 
-        E2EAssertEqual 2 (@((Get-E2EElements).DataGridQueryResult.ItemsSource).Count) "executing the pasted IN list should return the fixture rows"
+        E2EAssertEqual 2 (Get-E2EResultRowCount) "executing the pasted IN list should return the fixture rows"
         E2EAssertTrue ($script:E2EEditorText -like "*IN (*900,*") "the executed query should carry the unquoted integer list"
     }
 

@@ -33,8 +33,12 @@ BeforeAll {
     }
 
     function Get-ResultGridNode {
+        # The per-result grid inside the Results pane's ItemsControl template. Looked up by position
+        # rather than by name BECAUSE it has no name: issue #151 retired x:Name="DataGridQueryResult"
+        # when the single grid became one grid per statement, and a name inside a DataTemplate would
+        # not reach FindName anyway.
         $Script:TabXaml.DocumentElement.SelectSingleNode(
-            "//d:DataGrid[@*[local-name()='Name']='DataGridQueryResult']", $Script:Namespaces)
+            "//d:ItemsControl[@*[local-name()='Name']='ItemsControlQueryResults']/d:ItemsControl.ItemTemplate/d:DataTemplate//d:DataGrid", $Script:Namespaces)
     }
 }
 

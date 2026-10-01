@@ -293,6 +293,21 @@
                                                                                 </MenuItem.Icon>
                                                                         </MenuItem>
                                                                 </ContextMenu>
+                <!-- The header above each per-statement result grid (issue #151). It carries an
+                     explicit Style for exactly the reason the Messages pane does (issues #116, #118):
+                     the implicit <Style TargetType="TextBlock"> at the top of this dictionary pins
+                     Width to 100 and Height to 25 for the form's field labels, an implicit style
+                     reaches every TextBlock in this control, and a Width that resolves to a number
+                     beats HorizontalAlignment="Stretch". A TextBlock with an explicit Style is never
+                     given the implicit one, so this sets no Width and no Height on purpose. -->
+                <Style x:Key="QueryResultHeaderStyle" TargetType="TextBlock">
+                        <Setter Property="HorizontalAlignment" Value="Stretch" />
+                        <Setter Property="VerticalAlignment" Value="Center" />
+                        <Setter Property="Padding" Value="4,2" />
+                        <Setter Property="FontWeight" Value="SemiBold" />
+                        <Setter Property="TextTrimming" Value="CharacterEllipsis" />
+                        <Setter Property="Background" Value="#F1F5F9" />
+                </Style>
         </UserControl.Resources>
 
         <!-- The navy frame around the content lives in MainForm.xaml's TabControl template now, so
@@ -663,16 +678,54 @@
                                                 </Grid>
                                                 <TabControl x:Name="TabControlQueryOutput" Grid.Row="1" HorizontalAlignment="Stretch" VerticalAlignment="Stretch">
                                                         <TabItem Header="Results">
-                                                <DataGrid x:Name="DataGridQueryResult" ContextMenu="{StaticResource DataGridQueryResultContextMenu}" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Auto" FontFamily="Consolas" IsReadOnly="True" HorizontalAlignment="Stretch" VerticalAlignment="Stretch" Background="{DynamicResource {x:Static SystemColors.WindowBrushKey}}" AlternationCount="{Binding MyObservableCollection.Count}" MinHeight="200" ScrollViewer.CanContentScroll="True" ScrollViewer.VerticalScrollBarVisibility="Auto" ScrollViewer.HorizontalScrollBarVisibility="Auto" CanUserResizeColumns="True" CanUserReorderColumns="True" CanUserSortColumns="False" Focusable="True" IsTabStop="True" SelectionMode="Extended" SelectionUnit="CellOrRowHeader" ClipboardCopyMode="IncludeHeader">
-                                                        <DataGrid.Resources>
-                                                                <Style TargetType="TextBlock">
-                                                                        <Setter Property="VerticalAlignment" Value="Center"/>
-                                                                </Style>
-                                                        </DataGrid.Resources>
-                                                        <!-- The context menu moved to UserControl.Resources as a shared instance (issue
-                                                             #151); see the comment on it there for why it cannot live in a per-result
-                                                             template. Attached through the ContextMenu attribute above. -->
-                                                </DataGrid>
+                                                <!-- One result grid per statement, stacked (issue #151). Execute used to run the
+                                                     editor as a single query bound to a single DataGrid, so two SELECTs could not be
+                                                     compared without running each and losing the previous result.
+
+                                                     The outer ScrollViewer is what makes the five-row floor work: each grid's height
+                                                     is set in code to Max(equal share, header + five rows), so once there are enough
+                                                     results the stack is taller than the viewport and this scrolls. Auto, not
+                                                     Visible, so a single result shows no scrollbar at all.
+
+                                                     ItemsSource is assigned in code rather than bound to a view model, matching how
+                                                     this application drives the rest of its UI, and because the per-result state
+                                                     lives on the tab session - see the QueryMessages precedent in
+                                                     Write-TabMessage.ps1.
+
+                                                     The per-result DataGrid is deliberately NOT named: names declared inside a
+                                                     DataTemplate do not reach FindName, so a name here would resolve to nothing and
+                                                     read as if it should. Consumers reach the focused result through the tab
+                                                     session instead. -->
+                                                <ScrollViewer x:Name="ScrollViewerQueryResults" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" HorizontalAlignment="Stretch" VerticalAlignment="Stretch" Background="{DynamicResource {x:Static SystemColors.WindowBrushKey}}">
+                                                        <ItemsControl x:Name="ItemsControlQueryResults" HorizontalAlignment="Stretch" VerticalAlignment="Stretch">
+                                                                <ItemsControl.ItemsPanel>
+                                                                        <ItemsPanelTemplate>
+                                                                                <StackPanel Orientation="Vertical" />
+                                                                        </ItemsPanelTemplate>
+                                                                </ItemsControl.ItemsPanel>
+                                                                <ItemsControl.ItemTemplate>
+                                                                        <DataTemplate>
+                                                                                <Grid Margin="0,0,0,6">
+                                                                                        <Grid.RowDefinitions>
+                                                                                                <!-- Both Auto: the item's desired height is the header plus whatever
+                                                                                                     height the sizing pass gave the grid, which is what the outer
+                                                                                                     ScrollViewer measures against its viewport. -->
+                                                                                                <RowDefinition Height="Auto" />
+                                                                                                <RowDefinition Height="Auto" />
+                                                                                        </Grid.RowDefinitions>
+                                                                                        <TextBlock Grid.Row="0" Style="{StaticResource QueryResultHeaderStyle}" Text="{Binding Header}" />
+                                                                                        <DataGrid Grid.Row="1" ItemsSource="{Binding Rows}" ContextMenu="{StaticResource DataGridQueryResultContextMenu}" AutoGenerateColumns="True" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Auto" FontFamily="Consolas" IsReadOnly="True" HorizontalAlignment="Stretch" VerticalAlignment="Stretch" Background="{DynamicResource {x:Static SystemColors.WindowBrushKey}}" ScrollViewer.CanContentScroll="True" ScrollViewer.VerticalScrollBarVisibility="Auto" ScrollViewer.HorizontalScrollBarVisibility="Auto" CanUserResizeColumns="True" CanUserReorderColumns="True" CanUserSortColumns="False" Focusable="True" IsTabStop="True" SelectionMode="Extended" SelectionUnit="CellOrRowHeader" ClipboardCopyMode="IncludeHeader">
+                                                                                                <DataGrid.Resources>
+                                                                                                        <Style TargetType="TextBlock">
+                                                                                                                <Setter Property="VerticalAlignment" Value="Center"/>
+                                                                                                        </Style>
+                                                                                                </DataGrid.Resources>
+                                                                                        </DataGrid>
+                                                                                </Grid>
+                                                                        </DataTemplate>
+                                                                </ItemsControl.ItemTemplate>
+                                                        </ItemsControl>
+                                                </ScrollViewer>
                                                         </TabItem>
                                                         <TabItem Header="Messages">
                                                                 <!-- A read-only TextBox rather than a TextBlock: issue #93 requires the error
