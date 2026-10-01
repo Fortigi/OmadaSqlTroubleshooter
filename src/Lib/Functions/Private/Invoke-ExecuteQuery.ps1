@@ -89,20 +89,30 @@ function Invoke-ExecuteQuery {
                     $Private:DatabaseTarget = Resolve-SqlDatabaseTarget -SqlText $Private:TextToValidate
 
                     if ($Private:DatabaseTarget.Status -eq "Rejected") {
-                        $Private:DatabaseTarget.Message | Write-LogOutput -LogType ERROR -SkipDialog
+                        # Write-ContainedErrorLog, not Write-LogOutput -LogType ERROR: this is a
+                        # completion block, where logging an ERROR is terminating. It would throw
+                        # past Reset-ExecuteQueryUiState - leaving the Execute button stuck as
+                        # Cancel - and the block's own catch would then report the throw as a second
+                        # error on top of this one. The UI is restored first either way.
                         Reset-ExecuteQueryUiState
+                        $Private:DatabaseTarget.Message | Write-ContainedErrorLog -TabScoped
                         return
                     }
 
                     # USE is sticky, an inline prefix is not (#152 open question 2). Applying it here
                     # - before the pipeline context is built - means the rest of this execution and
-                    # every later one see the new connection, through the same Set-DataConnection
-                    # the rest of the application uses.
+                    # every later one see the new connection.
+                    #
+                    # Set-ConfigProperty then Set-DataConnection, the same pair Set-EditorValue and
+                    # Complete-TabMaterialization use: Set-DataConnection finds the dropdown entry by
+                    # the FullName the config now holds, so the config has to be written first.
+                    # Assigning SelectedItem raises Add_SelectionChanged, which is what updates the
+                    # status bar and reloads the schema - the existing path #152 section 2 asks for,
+                    # so there is deliberately no Get-SqlSchemaObject call here to duplicate it.
                     if (![string]::IsNullOrWhiteSpace($Private:DatabaseTarget.UseDatabase)) {
                         "USE [{0}]: switching the data connection." -f $Private:DatabaseTarget.UseDatabase | Write-LogOutput -LogType DEBUG
                         $Private:DatabaseTarget.TargetFullName | Set-ConfigProperty -Property "CurrentDataConnection"
                         Set-DataConnection
-                        Get-SqlSchemaObject
                     }
 
                     if ($Private:DatabaseTarget.Status -eq "SwitchOnly") {
