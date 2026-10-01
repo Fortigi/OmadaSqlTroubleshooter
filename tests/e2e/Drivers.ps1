@@ -43,12 +43,16 @@ function script:Get-E2EResultRowCount {
         $TabSession
     )
 
-    $Private:Bound = @((Get-E2EResultElements -TabSession $TabSession).ItemsControlQueryResults.ItemsSource)
+    # Nulls filtered, not merely wrapped. @($null) has a Count of ONE in PowerShell, so an unbound
+    # pane came back as "one result" and this then indexed into that phantom and returned
+    # @($null.Rows).Count - also one. That is why the E2E suite reported "expected 2, got 1" for a
+    # populated pane and "expected 0, got 1" for an empty one.
+    $Private:Bound = @((Get-E2EResultElements -TabSession $TabSession).ItemsControlQueryResults.ItemsSource | Where-Object { $null -ne $_ })
     if ($Private:Bound.Count -le $Index) {
         return 0
     }
 
-    return @($Private:Bound[$Index].Rows).Count
+    return @($Private:Bound[$Index].Rows | Where-Object { $null -ne $_ }).Count
 }
 
 function script:Get-E2EResultCount {
@@ -60,7 +64,9 @@ function script:Get-E2EResultCount {
         $TabSession
     )
 
-    return @((Get-E2EResultElements -TabSession $TabSession).ItemsControlQueryResults.ItemsSource).Count
+    # Nulls filtered for the same reason as the row count above: @($null).Count is one, so an empty
+    # pane would report a result that is not there.
+    return @((Get-E2EResultElements -TabSession $TabSession).ItemsControlQueryResults.ItemsSource | Where-Object { $null -ne $_ }).Count
 }
 
 function script:Clear-E2EResults {

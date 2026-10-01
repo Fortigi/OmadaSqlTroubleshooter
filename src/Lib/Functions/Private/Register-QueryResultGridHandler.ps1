@@ -109,16 +109,24 @@ function Register-QueryResultGridHandler {
                     }
                 }.GetNewClosure())
 
-            # $EventSender is deliberately absent from these three handlers. They act on the focused
-            # result or on $EventArguments alone, and src/lib/functions is linted with
-            # PSReviewUnusedParameter ENABLED - unlike src/lib/events, where the original versions of
-            # these handlers declared it unused and the rule is excluded. Declaring it here would fail
-            # the build's Analyze task.
+            # These three handlers read $args[1] instead of declaring parameters, and the reason is a
+            # binding trap rather than a style preference.
+            #
+            # WPF invokes a handler with TWO arguments, (sender, eventArgs). With a single declared
+            # parameter PowerShell binds the FIRST of them - the sender - to it, and the real event
+            # args land in $args[1]. So `param($EventArguments)` silently handed each handler the
+            # DataGrid: $EventArguments.Key never matched any key, and $EventArguments.Handled = $true
+            # set a property on the grid instead of marking the event handled. That broke all four
+            # copy shortcuts, the column header template and the row numbering, with nothing to show
+            # it had happened.
+            #
+            # Declaring both parameters binds correctly but trips PSReviewUnusedParameter, which
+            # src/lib/functions enables (src/lib/events, where these handlers used to live, excludes
+            # it - which is why the originals could declare an unused $EventSender). Reading $args
+            # satisfies both the binding and the rule.
             $Private:Grid.Add_PreviewKeyDown({
-                    param(
-                        $EventArguments
-                    )
                     try {
+                        $EventArguments = $args[1]
                         Set-FocusedQueryResult -Index $GridIndex
 
                         $Private:ControlPressed = [System.Windows.Input.Keyboard]::Modifiers -band [System.Windows.Input.ModifierKeys]::Control
@@ -193,10 +201,9 @@ function Register-QueryResultGridHandler {
             )
 
             $Private:Grid.Add_AutoGeneratingColumn({
-                    param(
-                        $EventArguments
-                    )
                     try {
+                        # $args[1], not a declared parameter - see the note above the key handler.
+                        $EventArguments = $args[1]
                         $Private:HeaderTemplate = [System.Windows.Markup.XamlReader]::Parse(
                             '<DataTemplate xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"><TextBlock Text="{Binding}" TextTrimming="CharacterEllipsis"/></DataTemplate>'
                         )
@@ -208,10 +215,9 @@ function Register-QueryResultGridHandler {
                 })
 
             $Private:Grid.Add_LoadingRow({
-                    param(
-                        $EventArguments
-                    )
                     try {
+                        # $args[1], not a declared parameter - see the note above the key handler.
+                        $EventArguments = $args[1]
                         $EventArguments.Row.Header = ($EventArguments.Row.GetIndex() + 1).ToString()
                     }
                     catch {
