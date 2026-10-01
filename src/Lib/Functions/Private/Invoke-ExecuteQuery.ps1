@@ -92,6 +92,24 @@ function Invoke-ExecuteQuery {
                     # The context is gathered HERE, on the UI thread, as plain values. The worker gets
                     # no $Script: state and no WPF, and returns a description of what happened for the
                     # completion to apply.
+                    # Issue #151: the text that is about to run becomes one query per statement, and
+                    # each one gets its own result grid. Split HERE, on the UI thread, so the worker
+                    # receives plain values and stays runspace-safe - it cannot reach ScriptDom or
+                    # this module's functions.
+                    #
+                    # The text split is $Private:TextToValidate, which is already "the selection when
+                    # there is one, the whole editor otherwise" - the same text the validation gate
+                    # above checked. Splitting the SELECTION rather than mapping editor offsets onto
+                    # the model is what makes "select one statement and execute" come out as exactly
+                    # one query, identical to before this issue, with no offset arithmetic to get
+                    # wrong. Selecting three of five statements runs three.
+                    #
+                    # Get-SqlScriptStatement returns a single entry carrying the original text when it
+                    # cannot split safely - no parser, parse errors, or nothing to run - so this never
+                    # reduces what gets executed.
+                    $Private:Statement = Get-SqlScriptStatement -SqlText $Private:TextToValidate
+                    "Executing {0} statement(s)." -f @($Private:Statement).Count | Write-LogOutput -LogType DEBUG
+
                     $Private:PipelineContext = @{
                         BaseUrl            = $Script:AppConfig.BaseUrl
                         QueryDoId          = $Script:AppConfig.CurrentSqlQuery.DoId
@@ -101,6 +119,7 @@ function Invoke-ExecuteQuery {
                         CurrentDisplayName = $Script:RunTimeData.CurrentSqlQuery.DisplayName
                         DataConnectionDoId = $Script:AppConfig.CurrentDataConnection.DoId
                         SelectionText      = $Private:SelectionText
+                        Statements         = $Private:Statement
                         TempName           = "TMP_$($Script:RunTimeConfig.InstanceGuid)"
                         SkipSave           = $false
                     }
