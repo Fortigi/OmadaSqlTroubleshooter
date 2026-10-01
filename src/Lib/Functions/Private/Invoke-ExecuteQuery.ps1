@@ -443,7 +443,15 @@ function Complete-ExecuteQueryPipeline {
             }
 
             "The query pipeline failed at step '{0}': {1}" -f $Outcome.FailedStep, $Outcome.ErrorRecord.Exception.Message | Write-ContainedErrorLog -ErrorObject $Outcome.ErrorRecord -TabScoped
-            Complete-ExecuteQueryResult -QueryResult $Outcome.ErrorRecord -SaveResult $Outcome.SaveResult -TempQueryDoId $null -Failed
+            # -StatementOutcome on the FAILURE path too, and that asymmetry was a real bug: the
+            # pipeline mirrors only the FIRST statement into $Outcome.ErrorRecord, so a run where
+            # statement 1 fails and 2..N succeed lands here (Resolve-ExecuteFallbackAction returns
+            # "Report" once any step reached the tenant). Without the outcomes,
+            # Complete-ExecuteQueryResult synthesised a single statement from the ErrorRecord - which
+            # has no .d.Rows - bound zero grids and reported 0 rows, discarding every result that DID
+            # come back. That defeats "continue past a failing statement" in precisely its commonest
+            # case.
+            Complete-ExecuteQueryResult -QueryResult $Outcome.ErrorRecord -SaveResult $Outcome.SaveResult -TempQueryDoId $null -Failed -StatementOutcome $Outcome.StatementOutcome
             return
         }
 
@@ -588,17 +596,42 @@ function Complete-ExecuteQueryResult {
             # unguarded.
             $Private:ResultsControl = $Script:MainForm.Elements.ItemsControlQueryResults
             if ($null -ne $Private:ResultsControl -and $null -ne $Private:ResultsControl.Dispatcher) {
-                $SizingTabSession = Get-ActiveTabSession
+                # A BARE scriptblock, deliberately - NOT one wrapped in .GetNewClosure().
+                #
+                # GetNewClosure builds a closure over a COPY of the enclosing scope, and that copy
+                # does not carry the module's command table. So the callback dispatched fine and then
+                # threw "The term 'Register-QueryResultGridHandler' is not recognized" on the
+                # dispatcher, where the only trace was an unhandled-exception log entry. The sizing
+                # pass and all six per-grid handlers therefore never ran in the application at all -
+                # while sixteen STA tests passed, because they call those functions directly and so
+                # proved the functions work without ever proving they were invoked.
+                #
+                # This is the idiom the rest of the codebase already uses for exactly this
+                # (Set-ActiveTabEditorFocus.ps1): a plain [System.Action] that resolves the tab
+                # inside the callback, which keeps it bound to the module session state.
                 [void]$Private:ResultsControl.Dispatcher.BeginInvoke(
                     [System.Windows.Threading.DispatcherPriority]::Background,
-                    [action]({
+                    [System.Action] {
+                        try {
+                            # Re-resolved here rather than captured: by the time the dispatcher runs
+                            # this, the completion has finished and Set-ActiveTabContext has already
+                            # made the owning tab active, so this is the tab the work belongs to.
+                            $Private:SizingTab = Get-ActiveTabSession
+
                             # Both need the containers to exist, so both wait for the same pass.
                             # Handlers first: the grids are new objects on every execute, and until
                             # they are wired the user can see rows they cannot copy, select by column,
                             # or open a working context menu over.
-                            Register-QueryResultGridHandler -TabSession $SizingTabSession
-                            Update-QueryResultStackLayout -TabSession $SizingTabSession
-                        }.GetNewClosure()))
+                            Register-QueryResultGridHandler -TabSession $Private:SizingTab
+                            Update-QueryResultStackLayout -TabSession $Private:SizingTab
+                        }
+                        catch {
+                            # Best-effort: a pane that could not be sized still shows its results.
+                            # Logged rather than swallowed, because the last time this threw silently
+                            # it cost the feature its entire layout and handler behaviour.
+                            $_.Exception.Message | Write-LogOutput -LogType DEBUG
+                        }
+                    })
             }
             $SaveResult.Id, $SaveResult.DisplayName | Set-ConfigProperty -Property "CurrentSqlQuery"
             if ($SaveResult.DisplayName -ne $Script:RunTimeData.CurrentSqlQuery.DisplayName) {

@@ -48,7 +48,16 @@ E2ESuite -Name "ArrayCopy" -Body {
     }
 
     function script:Get-ArrayCopyGrid {
-        return Get-FocusedQueryResultGrid
+        # Fails loudly rather than returning $null. When the pane bound nothing, every case in this
+        # suite died with "You cannot call a method on a null-valued expression" from whatever it did
+        # with the grid next - ten identical messages that said nothing about the cause. A named
+        # failure here points at the pane instead.
+        $Private:Grid = Get-FocusedQueryResultGrid
+        if ($null -eq $Private:Grid) {
+            throw "No focused result grid: the Results pane bound no result, so there is nothing for the copy cases to read."
+        }
+
+        return $Private:Grid
     }
 
     function script:Get-ArrayCopyColumn {

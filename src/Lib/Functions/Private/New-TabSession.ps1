@@ -96,8 +96,22 @@ function New-TabSession {
             # TextBox is a rendering of it. Per tab, so two tabs failing at the same time cannot mix
             # their output whatever Set-ActiveTabContext is pointing at. See Write-TabMessage.
             QueryMessages    = [System.Collections.Generic.List[string]]::new()
-            CurrentUrl       = $null
-            AppConfig        = $(if ($null -ne $RestoreFrom) { $RestoreFrom } else { $DefaultTabConfig })
+            # What this tab's Results pane is showing: one entry per statement that returned rows
+            # (issue #151), and which of them the copy/save/export commands act on. Same arrangement
+            # as QueryMessages above - the list is the source of truth and the ItemsControl is a
+            # rendering of it, per tab, so two tabs finishing a query at the same moment cannot mix
+            # their results. See Set-TabQueryResult.
+            #
+            # DECLARED HERE, not created on first assignment, and that is not a style choice:
+            # assigning a property a [PSCustomObject] does not already have THROWS. Set-TabQueryResult
+            # writes QueryResults and then FocusedQueryResultIndex, so without these two the second
+            # assignment threw, its own catch swallowed the error, the ItemsControl was never bound
+            # and the status bar read "0 rows" for a run that had returned nine. Every headless test
+            # passed because the fixtures declared them; only the real constructor did not.
+            QueryResults            = [System.Collections.Generic.List[object]]::new()
+            FocusedQueryResultIndex = 0
+            CurrentUrl              = $null
+            AppConfig               = $(if ($null -ne $RestoreFrom) { $RestoreFrom } else { $DefaultTabConfig })
             RunTimeData      = [PSCustomObject]@{
                 RestMethodParam                = @{
                     Uri                   = $null
