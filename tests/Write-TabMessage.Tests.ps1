@@ -8,6 +8,11 @@
 
 BeforeAll {
     $PrivatePath = Join-Path $PSScriptRoot -ChildPath "..\src\Lib\Functions\Private"
+    # Write-TabExecuteSummary renders each statement's own elapsed time through Format-ElapsedTime
+    # (issue #151), so it is a real dependency of this file now. Dot-sourced rather than stubbed: how
+    # a duration is rendered is part of what the per-statement summary says, and a stub would assert
+    # nothing about it.
+    . (Join-Path $PrivatePath -ChildPath "Format-ElapsedTime.ps1")
     . (Join-Path $PrivatePath -ChildPath "Write-TabMessage.ps1")
 
     $Script:Tracer = [System.Diagnostics.Trace]

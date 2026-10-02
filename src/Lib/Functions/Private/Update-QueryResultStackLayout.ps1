@@ -264,6 +264,14 @@ function Update-QueryResultStackLayout {
         $Private:Height = Get-QueryResultGridHeight -ViewportHeight $Private:Available -ResultCount $Private:Grid.Count -FloorHeight $Private:Floor
 
         foreach ($Private:Each in $Private:Grid) {
+            # A height the USER dragged is left alone (issue #151 feedback). Register-QueryResultGridHandler
+            # marks a grid as user-sized when its splitter finishes a drag, and the mark is cleared
+            # when Set-TabQueryResult rebinds - so a drag survives pane resizes and the automatic
+            # equal-share sizing resumes on the next execute, which is the agreed behaviour.
+            if ($Private:Each.Tag -is [hashtable] -and $Private:Each.Tag.UserSized) {
+                continue
+            }
+
             $Private:Each.Height = $Private:Height
         }
 

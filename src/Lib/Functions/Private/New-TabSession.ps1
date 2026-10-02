@@ -142,6 +142,16 @@ function New-TabSession {
                 # Reset-ExecuteQueryUiState so the Messages pane can summarise every execute -
                 # including the failures that never produce a result to count. See Write-TabMessage.
                 LastRowsRead                   = 0
+                # The pipeline's per-statement outcomes from the last execute (issue #151), left here
+                # by Complete-ExecuteQueryResult so Reset-ExecuteQueryUiState can write the
+                # per-statement breakdown in the Messages pane - that teardown is the single funnel
+                # every execute passes through but cannot see the outcomes itself.
+                #
+                # DECLARED HERE, like LastRowsRead above and for the same hard reason: assigning a
+                # property a [PSCustomObject] does not already have THROWS, and the completion's own
+                # catch would swallow it - which is exactly how the result pane silently bound nothing
+                # earlier in this feature.
+                LastStatementOutcome           = $null
                 QueryListCache                 = @{
                     QueryList   = $null
                     LastRefresh = Get-Date

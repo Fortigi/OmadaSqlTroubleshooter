@@ -112,6 +112,23 @@ Describe "The Results pane's stacked layout, measured in an STA host" -Tag 'Sta'
             $Script:Measured.TwoResults.TagsMatchPosition | Should -BeTrue
         }
 
+        It 'numbers the rows of every realised grid' {
+            # Issue #151 feedback: the row numbers were missing entirely. The cause was ordering, not
+            # the handler - LoadingRow fires during the layout pass that realises the item containers,
+            # and these handlers can only attach AFTER that pass, because finding the grids depends on
+            # it. Measured before the fix: 6 realised rows, 0 headers set.
+            #
+            # So the numbers are applied directly to the rows that already exist, and the LoadingRow
+            # handler stays for rows WPF realises later as the user scrolls.
+            $Script:Measured.TwoResults.RowsInspected | Should -BeGreaterThan 0
+            $Script:Measured.TwoResults.RowHeadersSet | Should -Be $Script:Measured.TwoResults.RowsInspected
+        }
+
+        It 'numbers the rows across many stacked results, not just the first' {
+            $Script:Measured.ManyResults.RowsInspected | Should -BeGreaterThan 0
+            $Script:Measured.ManyResults.RowHeadersSet | Should -Be $Script:Measured.ManyResults.RowsInspected
+        }
+
         It 'follows focus to the grid the user is working in' {
             # The behaviour the whole focused-result design rests on: Copy, Save Results As, Show
             # output and the context menu all act on this index. Proven by focusing a real grid and

@@ -707,9 +707,10 @@
                                                                         <DataTemplate>
                                                                                 <Grid Margin="0,0,0,6">
                                                                                         <Grid.RowDefinitions>
-                                                                                                <!-- Both Auto: the item's desired height is the header plus whatever
-                                                                                                     height the sizing pass gave the grid, which is what the outer
-                                                                                                     ScrollViewer measures against its viewport. -->
+                                                                                                <!-- All Auto: the item's desired height is the header plus whatever
+                                                                                                     height the sizing pass gave the grid, plus the splitter, which is
+                                                                                                     what the outer ScrollViewer measures against its viewport. -->
+                                                                                                <RowDefinition Height="Auto" />
                                                                                                 <RowDefinition Height="Auto" />
                                                                                                 <RowDefinition Height="Auto" />
                                                                                         </Grid.RowDefinitions>
@@ -721,6 +722,13 @@
                                                                                                         </Style>
                                                                                                 </DataGrid.Resources>
                                                                                         </DataGrid>
+                                                                                        <!-- Drag to resize this result (issue #151 feedback). ResizeBehavior is
+                                                                                             CurrentAndNext in a Grid whose rows are Auto, so the splitter cannot
+                                                                                             size them itself - Register-QueryResultGridHandler watches
+                                                                                             DragCompleted and writes the new height onto the DataGrid instead,
+                                                                                             which is also what lets the sizing pass know the user has sized this
+                                                                                             one and leave it alone until the next execute. -->
+                                                                                        <GridSplitter Grid.Row="2" Height="5" HorizontalAlignment="Stretch" VerticalAlignment="Bottom" ResizeDirection="Rows" ResizeBehavior="CurrentAndNext" ShowsPreview="True" Background="#E5E7EB" Cursor="SizeNS" />
                                                                                 </Grid>
                                                                         </DataTemplate>
                                                                 </ItemsControl.ItemTemplate>

@@ -218,6 +218,12 @@ BeforeAll {
             StopWatch       = [System.Diagnostics.Stopwatch]::StartNew()
             CurrentSqlQuery = [PSCustomObject]@{ DisplayName = "TestQuery" }
             LastRowsRead    = 0
+            # Declared, not left to first assignment (issue #151). Complete-ExecuteQueryResult writes
+            # the per-statement outcomes here for the teardown's Messages summary, and assigning a
+            # property a [PSCustomObject] does not already have THROWS - swallowed by the function's
+            # own catch, which skips the status bar, the dropdown and the tab selection after it. That
+            # is exactly what 25 cases in this file were reporting.
+            LastStatementOutcome = $null
         }
         $Script:MainForm = @{
             Elements = @{

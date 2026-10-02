@@ -95,6 +95,14 @@ try {
     }
     $Report.SelectedQuery = [string]$Elements.ComboBoxSelectQuery.SelectedItem.Content
 
+    # A MULTI-STATEMENT run, which is the whole point of issue #151 and the only way the Messages
+    # breakdown and the export filename's statement token can be seen in the running application. The
+    # mock's stored query is a single statement, so the editor text is replaced with two.
+    #
+    # Pushed through RunTimeData rather than the Monaco editor: the editor read is asynchronous and
+    # the execute path takes QueryText from here, which is what the splitter and the pipeline see.
+    $Script:RunTimeData.QueryText = "SELECT TOP 3 Id FROM dbo.tblDataObject;" + [Environment]::NewLine + "SELECT TOP 4 Id FROM dbo.tblDataObject;"
+
     $Elements.ButtonExecuteQuery.RaiseEvent([System.Windows.RoutedEventArgs]::new([System.Windows.Controls.Primitives.ButtonBase]::ClickEvent))
     Wait-DriveIdle -Milliseconds 12000
 
@@ -118,6 +126,56 @@ try {
     $Report.RunTimeQueryRecords = [string]$Script:RunTimeData.QueryResult.d.Records
     $Report.LastRowsRead = [string]$Script:RunTimeData.LastRowsRead
     $Report.StatusBarRows = [string]$Elements.TextBlockStatusBarRows.Text
+
+    # --- 5. The feedback items, checked in the RUNNING application --------------------------------
+    # Unit tests and the STA probe cover these in isolation; this is the only place that sees them
+    # happen in the real app, which is what found the two silent binding bugs in the first place.
+
+    # Row numbers: every realised row's Header should carry its 1-based index.
+    $Private:FocusedGrid = Get-FocusedQueryResultGrid
+    $Private:RowsSeen = 0
+    $Private:RowsNumbered = 0
+    if ($null -ne $Private:FocusedGrid) {
+        $Private:FocusedGrid.UpdateLayout()
+        for ($Private:R = 0; $Private:R -lt [math]::Min(5, $Private:FocusedGrid.Items.Count); $Private:R++) {
+            $Private:RowContainer = $Private:FocusedGrid.ItemContainerGenerator.ContainerFromIndex($Private:R)
+            if ($null -eq $Private:RowContainer) { continue }
+            $Private:RowsSeen++
+            if (![string]::IsNullOrWhiteSpace([string]$Private:RowContainer.Header)) { $Private:RowsNumbered++ }
+        }
+    }
+    $Report.RowsSeen = $Private:RowsSeen
+    $Report.RowsNumbered = $Private:RowsNumbered
+
+    # The Messages pane, verbatim - so the per-statement breakdown can be read rather than inferred.
+    $Report.MessagesPaneLines = @($Tab.QueryMessages)
+
+    # Is the resize handle actually in the realised tree, and did registration mark the grid?
+    $Private:SplitterFound = $false
+    $Private:TagShape = "none"
+    if ($null -ne $Private:FocusedGrid) {
+        if ($Private:FocusedGrid.Tag -is [hashtable]) {
+            $Private:TagShape = "hashtable UserSized={0}" -f $Private:FocusedGrid.Tag.UserSized
+        }
+        elseif ($null -ne $Private:FocusedGrid.Tag) {
+            $Private:TagShape = $Private:FocusedGrid.Tag.GetType().Name
+        }
+
+        $Private:Container = $Elements.ItemsControlQueryResults.ItemContainerGenerator.ContainerFromIndex(0)
+        $Private:Queue = [System.Collections.Generic.Queue[object]]::new()
+        if ($null -ne $Private:Container) { $Private:Queue.Enqueue($Private:Container) }
+        while ($Private:Queue.Count -gt 0 -and -not $Private:SplitterFound) {
+            $Private:Node = $Private:Queue.Dequeue()
+            $Private:Count = [System.Windows.Media.VisualTreeHelper]::GetChildrenCount($Private:Node)
+            for ($Private:I = 0; $Private:I -lt $Private:Count; $Private:I++) {
+                $Private:Child = [System.Windows.Media.VisualTreeHelper]::GetChild($Private:Node, $Private:I)
+                if ($Private:Child -is [System.Windows.Controls.GridSplitter]) { $Private:SplitterFound = $true; break }
+                $Private:Queue.Enqueue($Private:Child)
+            }
+        }
+    }
+    $Report.SplitterInTree = $Private:SplitterFound
+    $Report.FocusedGridTag = $Private:TagShape
 
     # The app's own account of the run - the execute path logs statement counts and row counts.
     $Report.RelevantLog = @($script:DriveLogMessages |

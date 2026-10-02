@@ -235,6 +235,12 @@ function Invoke-OmadaExecutePipeline {
             $Private:StatementFailedStep = $null
             $Private:StatementResult = $null
 
+            # Timed per statement, so the Messages pane can report each one's own elapsed time
+            # alongside the run total. Measured HERE rather than on the UI thread because this is
+            # where the statement's round trips actually happen - the upsert and the execute - and a
+            # timer started in the completion would only ever measure the whole run.
+            $Private:StatementStopWatch = [System.Diagnostics.Stopwatch]::StartNew()
+
             if ($Private:NeedTempObject) {
                 # This statement's own SQL goes onto the temporary object. SelectionText is the key
                 # New-OmadaQueryRequest reads for C_QUERY, so the per-statement text travels in it
@@ -283,12 +289,18 @@ function Invoke-OmadaExecutePipeline {
                 }
             }
 
+            $Private:StatementStopWatch.Stop()
+
             $Outcome.StatementOutcome.Add(@{
                     Ordinal     = $Private:Current.Ordinal
                     Text        = $Private:Current.Text
                     QueryResult = $Private:StatementResult
                     ErrorRecord = $Private:StatementError
                     FailedStep  = $Private:StatementFailedStep
+                    # A TimeSpan, not a formatted string: this runs in a worker runspace and
+                    # Format-ElapsedTime is a UI-thread function. The completion formats it, which
+                    # keeps one place deciding how a duration is rendered.
+                    Elapsed     = $Private:StatementStopWatch.Elapsed
                 })
 
             # The first statement's outcome is also the run's outcome, for every consumer that

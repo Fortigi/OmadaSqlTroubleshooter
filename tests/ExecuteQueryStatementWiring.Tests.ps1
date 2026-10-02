@@ -128,6 +128,13 @@ BeforeAll {
             StopWatch        = [System.Diagnostics.Stopwatch]::StartNew()
             CurrentSqlQuery  = [PSCustomObject]@{ DisplayName = "TestQuery" }
             LastRowsRead     = 0
+            # Declared pre-emptively (issue #151). Nothing in this suite reaches
+            # Complete-ExecuteQueryResult today - the async wrapper is stubbed and the cases return at
+            # the dispatch - but that function writes the per-statement outcomes here, and assigning a
+            # property a [PSCustomObject] does not already have THROWS into the caller's own catch.
+            # That silently cost 25 cases in Invoke-ExecuteQuery.Tests.ps1, so the shape is matched
+            # here rather than waiting for the first case that drives the completion to find it.
+            LastStatementOutcome = $null
         }
 
         $Script:MainForm = @{

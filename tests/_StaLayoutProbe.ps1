@@ -188,13 +188,31 @@ try {
             if ($null -ne $Inner) { $TallGridScrolls = $Inner.ExtentHeight -gt ($Inner.ViewportHeight + 1) }
         }
 
+        # Did the row-number handler actually take effect? LoadingRow sets each DataGridRow's Header
+        # to its 1-based index. The handlers are attached AFTER the layout pass that realised the
+        # containers - and that same pass is what loaded the rows - so the question is whether
+        # LoadingRow had already fired for every row before the handler existed. A null header on a
+        # realised row is that failure, observed rather than reasoned about.
+        $RowHeadersSet = 0
+        $RowsInspected = 0
+        foreach ($InspectGrid in $Grids) {
+            $InspectGrid.UpdateLayout()
+            for ($r = 0; $r -lt [math]::Min(3, $InspectGrid.Items.Count); $r++) {
+                $RowContainerToCheck = $InspectGrid.ItemContainerGenerator.ContainerFromIndex($r)
+                if ($null -eq $RowContainerToCheck) { continue }
+                $RowsInspected++
+                if (![string]::IsNullOrWhiteSpace([string]$RowContainerToCheck.Header)) { $RowHeadersSet++ }
+            }
+        }
+
         # Every grid wired exactly once. Tag is the registration marker, and it carries the grid's
         # index - so a Tag that is null means the handlers never attached, and a wrong one means the
         # closure captured the loop variable instead of its own iteration.
-        $RegisteredCount = @($Grids | Where-Object { $null -ne $_.Tag }).Count
+        # Tag is a hashtable carrying the grid's index and its user-sized flag, not a bare int.
+        $RegisteredCount = @($Grids | Where-Object { $_.Tag -is [hashtable] }).Count
         $TagsMatchPosition = $true
         for ($t = 0; $t -lt $Grids.Count; $t++) {
-            if ([int]$Grids[$t].Tag -ne $t) { $TagsMatchPosition = $false }
+            if (-not ($Grids[$t].Tag -is [hashtable]) -or [int]$Grids[$t].Tag.Index -ne $t) { $TagsMatchPosition = $false }
         }
 
         # The closure test proper: focus the LAST grid and see whether the session's focused index
@@ -240,6 +258,11 @@ try {
             TallGridCanScrollInternally = $TallGridScrolls
             RegisteredCount            = $RegisteredCount
             TagsMatchPosition          = $TagsMatchPosition
+            # Row numbering: LoadingRow sets each row's Header to its 1-based index. Measured because
+            # the handlers attach AFTER the layout pass that realised the containers - and that same
+            # pass loaded the rows - so the open question is whether LoadingRow had already fired.
+            RowsInspected              = $RowsInspected
+            RowHeadersSet              = $RowHeadersSet
             FocusFollowsGrid           = $FocusFollowsGrid
             FocusedIndexAfter          = $FocusedIndexAfter
             FocusCallReturned          = $FocusCallReturned

@@ -61,14 +61,25 @@ function Register-QueryResultGridHandler {
                 continue
             }
 
-            # Already wired - see IDEMPOTENT above. Tag is unused by this application's grids, and the
-            # value is the ordinal rather than $true so the marker also says WHICH result the grid is,
-            # which the focus handlers below close over.
-            if ($null -ne $Private:Grid.Tag) {
+            # Already wired - see IDEMPOTENT above. Tag is unused by this application's grids, so it
+            # carries this feature's per-grid state: which result the grid is, and whether the user
+            # has dragged its height.
+            #
+            # A HASHTABLE, not the bare index it started as. The sizing pass has to ask "did the user
+            # size this one?" and an int cannot answer that - with Tag holding a plain index the
+            # user-sized check could never fire and a dragged height would be overwritten on the next
+            # pane resize.
+            if ($Private:Grid.Tag -is [hashtable]) {
                 continue
             }
 
-            $Private:Grid.Tag = $Private:Index
+            $Private:Grid.Tag = @{
+                Index = $Private:Index
+                # Set by the splitter's DragCompleted handler below, and cleared when
+                # Set-TabQueryResult rebinds - so a drag survives pane resizes and the automatic
+                # equal-share sizing resumes on the next execute.
+                UserSized = $false
+            }
 
             # GetNewClosure on every handler: the index has to be the one from THIS iteration. Without
             # it all of them would capture the loop variable and report the last grid, so clicking any
@@ -213,6 +224,82 @@ function Register-QueryResultGridHandler {
                         $_.Exception.Message | Write-LogOutput -LogType ERROR -ErrorObject $_
                     }
                 })
+
+            # Row numbers on the rows that ALREADY exist. LoadingRow cannot do it on its own here:
+            # these handlers attach from the deferred dispatcher callback, which can only find the
+            # grids once a layout pass has realised their containers - and that same pass is what
+            # loaded the rows. Measured in the STA probe: 6 realised rows, 0 headers set, because
+            # LoadingRow had fired for every one of them before the handler existed.
+            #
+            # So the numbers are applied directly here, and the LoadingRow handler below stays for
+            # the rows WPF realises later as the user scrolls a virtualised grid.
+            for ($Private:RowIndex = 0; $Private:RowIndex -lt $Private:Grid.Items.Count; $Private:RowIndex++) {
+                $Private:RealisedRow = $Private:Grid.ItemContainerGenerator.ContainerFromIndex($Private:RowIndex)
+                if ($null -ne $Private:RealisedRow) {
+                    $Private:RealisedRow.Header = ($Private:RowIndex + 1).ToString()
+                }
+            }
+
+            # The result's resize handle (issue #151 feedback). The splitter is a SIBLING of the grid
+            # in the item template, not a child of it, so it is found from the item container.
+            #
+            # The drag is applied to the grid's explicit Height rather than left to the splitter. The
+            # template's rows are Auto - which is what lets the item size itself to header + grid +
+            # splitter - and a GridSplitter cannot resize an Auto row. So DragCompleted reports the
+            # total vertical change and that is added to the height the sizing pass had given it.
+            $Private:SplitterQueue = [System.Collections.Generic.Queue[object]]::new()
+            $Private:SplitterQueue.Enqueue($Private:Container)
+            $Private:Splitter = $null
+            while ($Private:SplitterQueue.Count -gt 0 -and $null -eq $Private:Splitter) {
+                $Private:Node = $Private:SplitterQueue.Dequeue()
+                $Private:ChildCount = [System.Windows.Media.VisualTreeHelper]::GetChildrenCount($Private:Node)
+                for ($Private:ChildIndex = 0; $Private:ChildIndex -lt $Private:ChildCount; $Private:ChildIndex++) {
+                    $Private:Child = [System.Windows.Media.VisualTreeHelper]::GetChild($Private:Node, $Private:ChildIndex)
+                    if ($Private:Child -is [System.Windows.Controls.GridSplitter]) {
+                        $Private:Splitter = $Private:Child
+                        break
+                    }
+
+                    $Private:SplitterQueue.Enqueue($Private:Child)
+                }
+            }
+
+            if ($null -ne $Private:Splitter) {
+                # The grid this splitter resizes, captured for the handler. A plain local, not
+                # $Private:-scoped: a $Private: variable is not visible to the scope GetNewClosure
+                # captures, which is what silently broke the focus handlers earlier in this feature.
+                $SplitterGrid = $Private:Grid
+
+                $Private:Splitter.Add_DragCompleted({
+                        try {
+                            $Private:DragArgs = $args[1]
+                            $Private:Current = [double]$SplitterGrid.ActualHeight
+                            $Private:Wanted = $Private:Current + [double]$Private:DragArgs.VerticalChange
+
+                            # Never smaller than one row plus the header: a drag that collapses a
+                            # result to nothing leaves the user with a grid they cannot grab again.
+                            $Private:Minimum = Get-QueryResultGridFloor -DataGrid $SplitterGrid -RowCount 1
+                            if ($Private:Wanted -lt $Private:Minimum) {
+                                $Private:Wanted = $Private:Minimum
+                            }
+
+                            $SplitterGrid.Height = $Private:Wanted
+
+                            # Marked so Update-QueryResultStackLayout stops sizing this grid. The mark
+                            # lives on the grid, and rebinding the results regenerates the grids - so
+                            # the automatic equal-share sizing resumes on the next execute, which is
+                            # the agreed behaviour, with no explicit clearing needed.
+                            if ($SplitterGrid.Tag -is [hashtable]) {
+                                $SplitterGrid.Tag.UserSized = $true
+                            }
+
+                            "Result grid resized by the user to {0:n1}" -f $Private:Wanted | Write-LogOutput -LogType VERBOSE
+                        }
+                        catch {
+                            $_.Exception.Message | Write-LogOutput -LogType DEBUG
+                        }
+                    }.GetNewClosure())
+            }
 
             $Private:Grid.Add_LoadingRow({
                     try {

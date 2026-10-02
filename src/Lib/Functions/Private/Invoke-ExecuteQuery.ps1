@@ -251,7 +251,12 @@ function Reset-ExecuteQueryUiState {
                 # every path funnels through, including the failures that never reach a result. It
                 # also runs with the owning tab made active: the poll timer steps into it before
                 # invoking a completion, so the summary lands on the tab that ran the query.
-                Write-TabExecuteSummary -RowsRead $Script:RunTimeData.LastRowsRead -Elapsed $Private:Elapsed
+                # LastStatementOutcome, alongside LastRowsRead, and for the same reason: this teardown
+                # is the single funnel every execute passes through - including the failures that
+                # never reach a result - but it has no access to the pipeline's outcomes. The
+                # completion that DOES have them leaves them here, so the per-statement breakdown
+                # (issue #151) is written from the one place that already writes the run totals.
+                Write-TabExecuteSummary -RowsRead $Script:RunTimeData.LastRowsRead -Elapsed $Private:Elapsed -StatementOutcome $Script:RunTimeData.LastStatementOutcome
             }
         }
     }
@@ -567,6 +572,11 @@ function Complete-ExecuteQueryResult {
         # there is more than one statement.
         $Private:TotalRows = Set-TabQueryResult -TabSession (Get-ActiveTabSession) -StatementOutcome $Private:Statement
         $Private:ReturnedRows = $Private:TotalRows -gt 0
+
+        # Handed to Reset-ExecuteQueryUiState, which writes the Messages summary. That teardown is the
+        # single funnel every path uses and cannot see the outcomes itself, so they travel on
+        # RunTimeData beside LastRowsRead - which the same summary call already reads.
+        $Script:RunTimeData.LastStatementOutcome = $Private:Statement
 
         if (-not $Private:ReturnedRows) {
             if (-not $Failed) {
