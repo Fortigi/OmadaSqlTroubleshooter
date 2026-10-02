@@ -23,7 +23,9 @@ function Get-DataGridSelectedQueryResult {
     [CmdLetBinding()]
     param ()
 
-    $DataGrid = $Script:MainForm.Elements.DataGridQueryResult
+    # The focused result's grid, not "the" grid: the Results pane holds one per statement since issue
+    # #151, so Save Selected As and View Selected have to act on the one the user is working in.
+    $DataGrid = Get-FocusedQueryResultGrid
 
     $SelectedColumnSet = [System.Collections.Generic.HashSet[object]]::new()
     $SelectedColumns = [System.Collections.Generic.List[object]]::new()

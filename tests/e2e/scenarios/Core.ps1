@@ -36,7 +36,7 @@ E2ESuite -Name "Execute" -Body {
 
         $Elements = Get-E2EElements
         E2EAssertEqual 2 ([int]$Script:RunTimeData.QueryResult.d.Records) "Records count should match the fixture"
-        E2EAssertEqual 2 (@($Elements.DataGridQueryResult.ItemsSource).Count) "DataGrid should show the fixture rows"
+        E2EAssertEqual 2 (Get-E2EResultRowCount) "The first result should show the fixture rows"
         E2EAssertTrue ((Get-E2ECallCount -MethodLike "POST" -DataType "SqlDataProducer") -eq 1) "Exactly one SqlDataProducer execute should have fired"
     }
 
@@ -51,7 +51,7 @@ E2ESuite -Name "Execute" -Body {
 
         $Elements = Get-E2EElements
         E2EAssertEqual 0 ([int]$Script:RunTimeData.QueryResult.d.Records) "Records should be 0 for an empty result"
-        E2EAssertTrue ($null -eq $Elements.DataGridQueryResult.ItemsSource) "ItemsSource should be null for an empty result"
+        E2EAssertEqual 0 (Get-E2EResultCount) "No result should be bound for an empty result"
     }
 }
 
