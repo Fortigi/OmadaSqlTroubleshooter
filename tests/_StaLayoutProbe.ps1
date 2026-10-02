@@ -205,6 +205,18 @@ try {
             }
         }
 
+        # The column header template, the other one-shot generation-time event. AutoGeneratingColumn
+        # has already fired for every column by the time the handlers attach, so the template has to
+        # be applied to the existing columns - measured here rather than assumed.
+        $ColumnsSeen = 0
+        $ColumnsTemplated = 0
+        foreach ($TemplateGrid in $Grids) {
+            foreach ($GridColumn in @($TemplateGrid.Columns)) {
+                $ColumnsSeen++
+                if ($null -ne $GridColumn.HeaderTemplate) { $ColumnsTemplated++ }
+            }
+        }
+
         # Every grid wired exactly once. Tag is the registration marker, and it carries the grid's
         # index - so a Tag that is null means the handlers never attached, and a wrong one means the
         # closure captured the loop variable instead of its own iteration.
@@ -263,6 +275,8 @@ try {
             # pass loaded the rows - so the open question is whether LoadingRow had already fired.
             RowsInspected              = $RowsInspected
             RowHeadersSet              = $RowHeadersSet
+            ColumnsSeen                = $ColumnsSeen
+            ColumnsTemplated           = $ColumnsTemplated
             FocusFollowsGrid           = $FocusFollowsGrid
             FocusedIndexAfter          = $FocusedIndexAfter
             FocusCallReturned          = $FocusCallReturned

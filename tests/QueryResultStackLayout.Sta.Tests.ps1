@@ -129,6 +129,20 @@ Describe "The Results pane's stacked layout, measured in an STA host" -Tag 'Sta'
             $Script:Measured.ManyResults.RowHeadersSet | Should -Be $Script:Measured.ManyResults.RowsInspected
         }
 
+        It 'applies the ellipsis header template to every generated column' {
+            # The second one-shot generation-time event, and a regression a reviewer caught after the
+            # row-number half was fixed. AutoGeneratingColumn has already fired for every column by
+            # the time these handlers attach, so the template is applied to the columns that exist -
+            # otherwise the per-result grids lose the header trimming the single grid had.
+            $Script:Measured.TwoResults.ColumnsSeen | Should -BeGreaterThan 0
+            $Script:Measured.TwoResults.ColumnsTemplated | Should -Be $Script:Measured.TwoResults.ColumnsSeen
+        }
+
+        It 'templates the columns of every stacked result, not just the first' {
+            $Script:Measured.ManyResults.ColumnsSeen | Should -BeGreaterThan 0
+            $Script:Measured.ManyResults.ColumnsTemplated | Should -Be $Script:Measured.ManyResults.ColumnsSeen
+        }
+
         It 'follows focus to the grid the user is working in' {
             # The behaviour the whole focused-result design rests on: Copy, Save Results As, Show
             # output and the context menu all act on this index. Proven by focusing a real grid and

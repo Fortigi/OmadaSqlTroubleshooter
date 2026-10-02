@@ -225,6 +225,20 @@ function Register-QueryResultGridHandler {
                     }
                 })
 
+            # The ellipsis header template on the columns that ALREADY exist, for the same reason as
+            # the row numbers below: AutoGeneratingColumn is a one-shot generation-time event, and by
+            # the time these handlers attach the grid has already generated every column for the
+            # result on screen. Without this the per-result grids lose the header trimming the single
+            # grid had - a regression a reviewer caught after the row-number half was fixed.
+            $Private:ColumnHeaderTemplate = [System.Windows.Markup.XamlReader]::Parse(
+                '<DataTemplate xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"><TextBlock Text="{Binding}" TextTrimming="CharacterEllipsis"/></DataTemplate>'
+            )
+            foreach ($Private:ExistingColumn in @($Private:Grid.Columns)) {
+                if ($null -eq $Private:ExistingColumn.HeaderTemplate) {
+                    $Private:ExistingColumn.HeaderTemplate = $Private:ColumnHeaderTemplate
+                }
+            }
+
             # Row numbers on the rows that ALREADY exist. LoadingRow cannot do it on its own here:
             # these handlers attach from the deferred dispatcher callback, which can only find the
             # grids once a layout pass has realised their containers - and that same pass is what
