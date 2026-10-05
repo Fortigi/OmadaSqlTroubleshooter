@@ -63,14 +63,14 @@ function New-TabSession {
         }
 
         $NewTab = [PSCustomObject]@{
-            Id               = $TabId
-            DisplayName      = $DisplayName
-            OpenOrder        = $OpenOrder
+            Id                      = $TabId
+            DisplayName             = $DisplayName
+            OpenOrder               = $OpenOrder
             # Set true after the first Update-TabHeaderTitle paint so a rename is only logged for
             # genuine post-creation name changes, not the initial default-to-derived assignment.
-            HeaderInitialized = $false
-            PendingEditorText = $null
-            PendingDisplayName = $null
+            HeaderInitialized       = $false
+            PendingEditorText       = $null
+            PendingDisplayName      = $null
             # A restored/auto-connected tab's first Set-EditorValue push (from
             # Initialize-WebViewForTab's NavigationCompleted handler) can run while this tab is
             # backgrounded - a later tab in the same restore loop, or the persisted active tab, is
@@ -79,23 +79,23 @@ function New-TabSession {
             # happens while this tab is genuinely the selected one (see Initialize-WebViewForTab.ps1
             # and MainForm.Elements.TabControlSessions.ps1), so the tab-switch handler knows to force
             # exactly one fresh push the first time the user actually looks at this tab.
-            NeedsEditorSync  = $true
+            NeedsEditorSync         = $true
             # Lazy-load state: a -Deferred (restored) tab is created without its WebView2 or
             # connection; Complete-TabMaterialization builds those the first time the tab is viewed.
             # PendingAutoConnect carries the restore-time "reconnect all?" answer until then.
-            IsMaterialized     = $false
-            PendingAutoConnect = $false
-            IsDirty          = $false
-            Form             = $Form
-            Elements         = $Form.Elements
-            TabItem          = $null
-            ConnectionStatus = $false
-            PendingTask      = $null
+            IsMaterialized          = $false
+            PendingAutoConnect      = $false
+            IsDirty                 = $false
+            Form                    = $Form
+            Elements                = $Form.Elements
+            TabItem                 = $null
+            ConnectionStatus        = $false
+            PendingTask             = $null
             # What this tab's Messages pane is showing: the rows read and completion time of the
             # current execute, plus any error detail. The list is the source of truth and the pane's
             # TextBox is a rendering of it. Per tab, so two tabs failing at the same time cannot mix
             # their output whatever Set-ActiveTabContext is pointing at. See Write-TabMessage.
-            QueryMessages    = [System.Collections.Generic.List[string]]::new()
+            QueryMessages           = [System.Collections.Generic.List[string]]::new()
             # What this tab's Results pane is showing: one entry per statement that returned rows
             # (issue #151), and which of them the copy/save/export commands act on. Same arrangement
             # as QueryMessages above - the list is the source of truth and the ItemsControl is a
@@ -112,7 +112,7 @@ function New-TabSession {
             FocusedQueryResultIndex = 0
             CurrentUrl              = $null
             AppConfig               = $(if ($null -ne $RestoreFrom) { $RestoreFrom } else { $DefaultTabConfig })
-            RunTimeData      = [PSCustomObject]@{
+            RunTimeData             = [PSCustomObject]@{
                 RestMethodParam                = @{
                     Uri                   = $null
                     Method                = "GET"
@@ -162,10 +162,10 @@ function New-TabSession {
                     SqlQueryCreatedBy = "c-2"
                     SqlQueryChangedBy = "c-4"
                 }
-                SkipRetryRequest                = $false
-                SelectionText                   = $null
+                SkipRetryRequest               = $false
+                SelectionText                  = $null
             }
-            WebView          = @{
+            WebView                 = @{
                 Object                  = $null
                 Environment             = $null
                 EdgeWebview2RuntimePath = $null
