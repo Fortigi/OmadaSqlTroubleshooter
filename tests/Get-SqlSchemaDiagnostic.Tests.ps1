@@ -63,15 +63,33 @@ BeforeAll {
             Parses and resolves in one step, which is what every test here wants. Returns the
             diagnostics as an array so .Count is meaningful for none, one and many alike.
         #>
-        param([string]$SqlText)
+        param(
+            [string]$SqlText,
+            # Issue #158. Omitted means an empty map, which is the state every pre-#158 caller is in
+            # and the state in which this pass must behave exactly as it always has.
+            $DatabaseSchemaModel = @{}
+        )
 
         $Parsed = Get-SqlScriptFragment -SqlText $SqlText
         if ($Parsed.Status -ne "Ok") {
             return $null
         }
 
-        return @(Get-SqlSchemaDiagnostic -Fragment $Parsed.Fragment -SchemaModel $script:SchemaModel)
+        return @(Get-SqlSchemaDiagnostic -Fragment $Parsed.Fragment -SchemaModel $script:SchemaModel -DatabaseSchemaModel $DatabaseSchemaModel)
     }
+
+    # A SECOND database, as it looks once the schema window or the editor has loaded it. Its tables
+    # are deliberately different from the active connection's, so a test cannot pass by accidentally
+    # resolving against the wrong model.
+    $script:OtherSchemaModel = Get-SqlSchemaModel -SchemaResponse ([PSCustomObject]@{
+            d = [PSCustomObject]@{
+                "dbo.Invoice" = @("Id int", "Total decimal(18,2)")
+                "rep.Summary" = @("Id int", "Period nvarchar(10)")
+            }
+        })
+
+    # Keyed by lower(data connection name), as Get-CachedSqlSchemaModelByDatabase returns it.
+    $script:CachedDatabase = @{ "other" = $script:OtherSchemaModel }
 }
 
 Describe 'Get-SqlSchemaModel' -Tag 'Unit' {
@@ -331,5 +349,139 @@ JOIN @Rows v ON v.w = n.Id
             $Diagnostic.Count | Should -Be 0
             $Stopwatch.Elapsed.TotalMilliseconds | Should -BeLessThan 400
         }
+    }
+}
+
+Describe 'Get-SqlSchemaDiagnostic across databases (issue #158)' -Tag 'Unit' {
+    # Until #158 this pass skipped every three-part name, because the only schema it had was the
+    # active connection's. That produced no false warnings - and no true ones either, and because ONE
+    # unresolvable source makes the pass skip every column check in its scope, a cross-database join
+    # also silenced the column diagnostics of the local tables beside it. The more a tenant used the
+    # feature of #152, the less validation it got.
+    #
+    # The contract of the change is that it can only ever ADD checks. The "not cached" Context below
+    # is what proves that: with no cached database, every assertion matches the behaviour on main.
+
+    Context 'when the named database is cached' {
+        It 'reports a table that does not exist in that database' {
+            $Diagnostic = Get-SchemaDiagnosticFor "SELECT Id FROM [Other].[dbo].[Invoce]" $script:CachedDatabase
+
+            $Diagnostic.Count | Should -Be 1
+            $Diagnostic[0].Message | Should -BeLike "*Invoce*"
+        }
+
+        It 'names the database it consulted, not "this data connection"' {
+            # The user needs to know which schema was asked, or the warning is unactionable.
+            $Diagnostic = Get-SchemaDiagnosticFor "SELECT Id FROM [Other].[dbo].[Invoce]" $script:CachedDatabase
+
+            $Diagnostic[0].Message | Should -BeLike "*cached schema for 'Other'*"
+        }
+
+        It 'leaves a table that does exist in that database alone' {
+            Get-SchemaDiagnosticFor "SELECT Id FROM [Other].[dbo].[Invoice]" $script:CachedDatabase |
+                Should -BeNullOrEmpty
+        }
+
+        It 'resolves the database name case-insensitively' {
+            Get-SchemaDiagnosticFor "SELECT Id FROM [OTHER].[dbo].[Invoice]" $script:CachedDatabase |
+                Should -BeNullOrEmpty
+        }
+
+        It 'resolves without brackets too' {
+            Get-SchemaDiagnosticFor "SELECT Id FROM Other.rep.Summary" $script:CachedDatabase |
+                Should -BeNullOrEmpty
+        }
+
+        It 'does not resolve a cross-database table against the ACTIVE database' {
+            # dbo.Person exists on the active connection and NOT in Other. Resolving three-part names
+            # against the wrong model would silently accept it - and would mean the pass disagreeing
+            # with what the query actually executes against.
+            $Diagnostic = Get-SchemaDiagnosticFor "SELECT Id FROM [Other].[dbo].[Person]" $script:CachedDatabase
+
+            $Diagnostic.Count | Should -Be 1
+            $Diagnostic[0].Message | Should -BeLike "*Person*"
+        }
+
+        It 'reports a column that does not exist on a cross-database table' {
+            $Diagnostic = Get-SchemaDiagnosticFor "SELECT Totl FROM [Other].[dbo].[Invoice]" $script:CachedDatabase
+
+            $Diagnostic.Count | Should -Be 1
+            $Diagnostic[0].Message | Should -BeLike "*Totl*"
+        }
+
+        It 'reports a LOCAL column typo in a query that also joins another database' {
+            # The consequence that decided this work. The cross-database source used to be opaque,
+            # which made the pass skip every column check in the scope - including the ones about the
+            # local table the user actually mistyped.
+            $Query = "SELECT p.DisplayNme FROM dbo.Person p JOIN [Other].[dbo].[Invoice] i ON i.Id = p.Id"
+            $Diagnostic = Get-SchemaDiagnosticFor $Query $script:CachedDatabase
+
+            @($Diagnostic | Where-Object { $_.Message -like "*DisplayNme*" }).Count | Should -Be 1
+        }
+
+        It 'leaves a correct cross-database join entirely alone' {
+            $Query = "SELECT p.DisplayName, i.Total FROM dbo.Person p JOIN [Other].[dbo].[Invoice] i ON i.Id = p.Id"
+
+            Get-SchemaDiagnosticFor $Query $script:CachedDatabase | Should -BeNullOrEmpty
+        }
+
+        It 'still says nothing about a four-part linked-server name' {
+            # Nothing cached describes a linked server, so its absence proves nothing - unchanged.
+            Get-SchemaDiagnosticFor "SELECT Id FROM [Srv].[Other].[dbo].[Nope]" $script:CachedDatabase |
+                Should -BeNullOrEmpty
+        }
+
+        It 'says nothing about a database that is not the cached one' {
+            Get-SchemaDiagnosticFor "SELECT Id FROM [Elsewhere].[dbo].[Nope]" $script:CachedDatabase |
+                Should -BeNullOrEmpty
+        }
+    }
+
+    Context 'when the named database is NOT cached (the behaviour on main)' {
+        It 'says nothing about a cross-database table that does not exist' {
+            Get-SchemaDiagnosticFor "SELECT Id FROM [Other].[dbo].[Invoce]" |
+                Should -BeNullOrEmpty
+        }
+
+        It 'says nothing about a cross-database column' {
+            Get-SchemaDiagnosticFor "SELECT Totl FROM [Other].[dbo].[Invoice]" |
+                Should -BeNullOrEmpty
+        }
+
+        It 'keeps treating the cross-database source as opaque, silencing its scope' {
+            # Explicitly pinned as the UNCHANGED behaviour, so the difference the cached case makes is
+            # visible in the test file rather than only in the commit message.
+            $Query = "SELECT p.DisplayNme FROM dbo.Person p JOIN [Other].[dbo].[Invoice] i ON i.Id = p.Id"
+
+            Get-SchemaDiagnosticFor $Query | Should -BeNullOrEmpty
+        }
+
+        It 'leaves a single-database query exactly as it was' {
+            Get-SchemaDiagnosticFor "SELECT DisplayName FROM dbo.Person" | Should -BeNullOrEmpty
+            @(Get-SchemaDiagnosticFor "SELECT DisplayNme FROM dbo.Person").Count | Should -Be 1
+        }
+    }
+}
+
+Describe 'Get-SqlCrossDatabaseSchemaModel' -Tag 'Unit' {
+    It 'returns the model for a cached database' {
+        Get-SqlCrossDatabaseSchemaModel -DatabaseName "Other" -DatabaseSchemaModel $script:CachedDatabase |
+            Should -Not -BeNullOrEmpty
+    }
+
+    It 'matches the name case-insensitively' {
+        Get-SqlCrossDatabaseSchemaModel -DatabaseName "OTHER" -DatabaseSchemaModel $script:CachedDatabase |
+            Should -Not -BeNullOrEmpty
+    }
+
+    It 'returns null for a database that is not cached' {
+        Get-SqlCrossDatabaseSchemaModel -DatabaseName "Elsewhere" -DatabaseSchemaModel $script:CachedDatabase |
+            Should -BeNullOrEmpty
+    }
+
+    It 'returns null for an empty name or a missing map' {
+        Get-SqlCrossDatabaseSchemaModel -DatabaseName "" -DatabaseSchemaModel $script:CachedDatabase | Should -BeNullOrEmpty
+        Get-SqlCrossDatabaseSchemaModel -DatabaseName "Other" -DatabaseSchemaModel $null | Should -BeNullOrEmpty
+        Get-SqlCrossDatabaseSchemaModel -DatabaseName "Other" -DatabaseSchemaModel @{} | Should -BeNullOrEmpty
     }
 }

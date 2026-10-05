@@ -44,6 +44,15 @@ function Get-SqlSchemaDiagnostic {
         The value written to each diagnostic's Source field, which is what makes a schema warning
         distinguishable from a syntax error on the one shared diagnostics channel.
 
+    .PARAMETER DatabaseSchemaModel
+        lower(data connection name) -> indexed model, for the databases whose schema is CACHED
+        (issue #158). Omitted or empty restores the behaviour this pass had before: every three-part
+        name is skipped and every cross-database source is opaque.
+
+        Passed in rather than looked up, deliberately. The caller reads the cache; this function
+        cannot, so it cannot fetch - which is how issue #61's "the pass makes NO request" stays true
+        by construction rather than by discipline.
+
     .OUTPUTS
         Marker-shaped [PSCustomObject]s with Line, Column, EndLine, EndColumn, Severity, Message,
         Source and Number. Number is 0: these diagnostics have no SQL Server error number.
@@ -57,7 +66,10 @@ function Get-SqlSchemaDiagnostic {
         [AllowNull()]
         $SchemaModel,
         [Parameter(Mandatory = $false)]
-        [string]$Source = "SQL schema"
+        [string]$Source = "SQL schema",
+        [Parameter(Mandatory = $false)]
+        [AllowNull()]
+        $DatabaseSchemaModel = @{}
     )
 
     # No tracer preamble: the fragment is the user's query and the model is the tenant's schema
@@ -98,10 +110,25 @@ function Get-SqlSchemaDiagnostic {
         # ---------------------------------------------------------------------------- table checking
         foreach ($TableReference in @(Get-SqlFragmentDescendant -Fragment $Fragment -TypeName "NamedTableReference")) {
             $Identifier = @($TableReference.SchemaObject.Identifiers)
-            if ($Identifier.Count -eq 0 -or $Identifier.Count -ge 3) {
-                # Three or more parts is a cross-database or linked-server name. This schema says
-                # nothing about it, so neither does this pass.
+            if ($Identifier.Count -eq 0 -or $Identifier.Count -ge 4) {
+                # Four parts is a linked-server name. Nothing cached here says anything about it.
                 continue
+            }
+
+            # A three-part name resolves against the named DATABASE's cached schema, when there is
+            # one (issue #158). Without it this pass skipped every cross-database name - which
+            # produced no false warnings, but also meant that the more a tenant used the feature of
+            # issue #152, the less schema validation it got.
+            $TableSchemaModel = $SchemaModel
+            $DatabaseLabel = $null
+            if ($Identifier.Count -eq 3) {
+                $DatabaseLabel = [string]$Identifier[0].Value
+                $TableSchemaModel = Get-SqlCrossDatabaseSchemaModel -DatabaseName $DatabaseLabel -DatabaseSchemaModel $DatabaseSchemaModel
+                if ($null -eq $TableSchemaModel) {
+                    # That database's schema is not cached, so its absence proves nothing - exactly
+                    # as before. The pass never fetches to find out (issue #61 criteria 2 and 5).
+                    continue
+                }
             }
 
             $BaseName = [string]$Identifier[-1].Value
@@ -113,7 +140,9 @@ function Get-SqlSchemaDiagnostic {
                 continue
             }
 
-            $Resolved = Resolve-SqlSchemaTable -SchemaModel $SchemaModel -Identifier $Identifier
+            # Resolve-SqlSchemaTable reads the LAST two identifiers as schema and table, so a
+            # three-part name needs no special handling here beyond being given the right model.
+            $Resolved = Resolve-SqlSchemaTable -SchemaModel $TableSchemaModel -Identifier $Identifier
             if ($null -ne $Resolved) {
                 continue
             }
@@ -123,8 +152,12 @@ function Get-SqlSchemaDiagnostic {
                 continue
             }
 
+            # Which schema was consulted, so the user is not left wondering whether the warning is
+            # about the connection they are on or the database they named.
+            $Scope = if ($null -ne $DatabaseLabel) { "'{0}'" -f $DatabaseLabel } else { "this data connection" }
+
             $Diagnostic.Add((New-SqlSchemaDiagnosticItem -Marker $Marker -Source $Source -Message (
-                    "'{0}' is not found in the cached schema for this data connection. Check the name, or refresh the schema if the database has changed since you connected." -f (($Identifier | ForEach-Object { $_.Value }) -join ".")
+                    "'{0}' is not found in the cached schema for {1}. Check the name, or refresh the schema if the database has changed since you connected." -f (($Identifier | ForEach-Object { $_.Value }) -join "."), $Scope
                 )))
         }
 
@@ -142,7 +175,7 @@ function Get-SqlSchemaDiagnostic {
         # type arrived in .NET 5 and this module declares PowerShell 7.0 (.NET Core 3.1).
         $ScopeSource = [System.Collections.Generic.Dictionary[object, object]]::new()
         foreach ($Specification in $QuerySpecification) {
-            $ScopeSource[$Specification] = @(Get-SqlQueryScopeSource -QuerySpecification $Specification -SchemaModel $SchemaModel -ScriptDefined $ScriptDefined)
+            $ScopeSource[$Specification] = @(Get-SqlQueryScopeSource -QuerySpecification $Specification -SchemaModel $SchemaModel -ScriptDefined $ScriptDefined -DatabaseSchemaModel $DatabaseSchemaModel)
         }
 
         $Contained = [System.Collections.Generic.Dictionary[object, object]]::new()
@@ -338,6 +371,56 @@ function Get-SqlSchemaObjectBaseName {
     return [string]$Identifier[-1].Value
 }
 
+function Get-SqlCrossDatabaseSchemaModel {
+    <#
+    .SYNOPSIS
+        Returns the cached, indexed schema of a database named in a three-part name, or $null when
+        there is none.
+
+    .DESCRIPTION
+        The one place issue #158's validation half decides whether it can say anything about a
+        cross-database name. $null means "not cached", and every caller must then behave exactly as
+        the pass did before: skip the name, and treat the source as opaque.
+
+        It takes the map as a PARAMETER rather than reading the cache itself, which is what keeps
+        this pass unable to fetch even by accident. Issue #61's acceptance criteria 2 and 5 say the
+        pass makes no request; a function that cannot see the cache cannot make one.
+
+    .PARAMETER DatabaseName
+        The first identifier of the name, as written.
+
+    .PARAMETER DatabaseSchemaModel
+        lower(data connection name) -> indexed model, from Get-CachedSqlSchemaModelByDatabase.
+
+    .OUTPUTS
+        The model, or $null.
+    #>
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory = $false, Position = 0)]
+        [AllowNull()]
+        [AllowEmptyString()]
+        [string]$DatabaseName,
+
+        [Parameter(Mandatory = $false, Position = 1)]
+        [AllowNull()]
+        $DatabaseSchemaModel
+    )
+
+    if ([string]::IsNullOrWhiteSpace($DatabaseName) -or $null -eq $DatabaseSchemaModel) {
+        return $null
+    }
+
+    # Lower-cased lookup, because T-SQL compares identifiers case-insensitively and the query may
+    # spell the connection's name in any casing.
+    $Key = $DatabaseName.ToLowerInvariant()
+    if (-not $DatabaseSchemaModel.ContainsKey($Key)) {
+        return $null
+    }
+
+    return $DatabaseSchemaModel[$Key]
+}
+
 function Resolve-SqlSchemaTable {
     <#
     .SYNOPSIS
@@ -487,6 +570,11 @@ function Get-SqlQueryScopeSource {
     .PARAMETER ScriptDefined
         Names the script defines itself, which never resolve against the database.
 
+    .PARAMETER DatabaseSchemaModel
+        lower(data connection name) -> indexed model, for the databases whose schema is cached
+        (issue #158). A cross-database source whose database IS cached stops being opaque, which is
+        what lets the rest of its scope keep its column diagnostics.
+
     .OUTPUTS
         [PSCustomObject] per source, with Name (alias, else table name), Entry (the schema model's
         table entry, or $null) and Opaque (whether its columns are unknown).
@@ -498,7 +586,10 @@ function Get-SqlQueryScopeSource {
         [Parameter(Mandatory = $true)]
         $SchemaModel,
         [Parameter(Mandatory = $true)]
-        $ScriptDefined
+        $ScriptDefined,
+        [Parameter(Mandatory = $false)]
+        [AllowNull()]
+        $DatabaseSchemaModel = @{}
     )
 
     $Source = [System.Collections.Generic.List[PSCustomObject]]::new()
@@ -523,13 +614,23 @@ function Get-SqlQueryScopeSource {
             $IsScriptDefined = $Identifier.Count -eq 1 -and $ScriptDefined.ContainsKey($BaseName)
             $IsTemporary = $BaseName.StartsWith("#") -or $BaseName.StartsWith("@")
 
-            if ($IsScriptDefined -or $IsTemporary -or $Identifier.Count -ge 3) {
+            # A three-part name is resolved against the named database's cached schema when there is
+            # one (issue #158). This is the half that matters most: ONE opaque source makes the pass
+            # skip every column check in the whole scope, so a cross-database join used to silence
+            # the column diagnostics of the LOCAL tables beside it too.
+            $SourceSchemaModel = $SchemaModel
+            if ($Identifier.Count -eq 3) {
+                $SourceSchemaModel = Get-SqlCrossDatabaseSchemaModel -DatabaseName ([string]$Identifier[0].Value) -DatabaseSchemaModel $DatabaseSchemaModel
+            }
+
+            if ($IsScriptDefined -or $IsTemporary -or $Identifier.Count -ge 4 -or $null -eq $SourceSchemaModel) {
+                # Not cached, four-part, script-defined or temporary: opaque, exactly as before.
                 $Source.Add([PSCustomObject]@{ Name = $Name; Entry = $null; Opaque = $true })
                 continue
             }
 
             $IsAmbiguous = $false
-            $Entry = Resolve-SqlSchemaTable -SchemaModel $SchemaModel -Identifier $Identifier -Ambiguous ([ref]$IsAmbiguous)
+            $Entry = Resolve-SqlSchemaTable -SchemaModel $SourceSchemaModel -Identifier $Identifier -Ambiguous ([ref]$IsAmbiguous)
 
             if ($null -eq $Entry) {
                 # The table itself is already reported by the table pass. Marking the source opaque
