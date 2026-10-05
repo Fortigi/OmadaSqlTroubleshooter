@@ -132,6 +132,43 @@ E2ESuite -Name "DatabaseSelection" -Body {
         E2EAssertEqual 0 (Get-E2ECallCount -UriLike "*GetPagingData*" -DataType "SqlDataProducer") "a bare USE must not post a query"
     }
 
+    E2ECase -Name "a statement above a USE runs against the connection that was selected before it" -Body {
+        Reset-E2EScenario
+        Reset-E2EConnection
+        Set-E2EConnectionFields
+        Invoke-E2EConnectAndWait
+        Select-E2EQuery | Out-Null
+
+        if ($null -eq (Get-SqlParserType)) { return }
+
+        $ComboBoxDataConnection = $Script:MainForm.Elements.ComboBoxSelectDataConnection
+        $Oises = $ComboBoxDataConnection.Items | Where-Object { $_.Content -like "OISES*" } | Select-Object -First 1
+        $ComboBoxDataConnection.SelectedItem = $Oises
+        Wait-E2ENoPendingRequests
+
+        # The statement order is what matters: the first belongs to OISES (42), because that is what
+        # was selected when it was written, and only the one after the USE belongs to OtherDB (43).
+        # Getting this wrong routes the first statement to the USE's database - silently the wrong
+        # one, which is the behaviour this whole feature exists to remove.
+        $script:E2EEditorText = "SELECT * FROM [dbo].[Users];`r`nUSE [OtherDB];`r`nSELECT * FROM [dbo].[Users];"
+        $script:E2ESelectedText = $null
+        Clear-E2EResults
+        $script:E2ECalls.Clear()
+
+        Invoke-E2EExecuteAndWait
+
+        $TempWrite = @($script:E2ECalls | Where-Object {
+                $_.Body -is [System.Collections.IDictionary] -and $_.Body.Contains("NAME") -and
+                ([string]$_.Body["NAME"]).StartsWith("TMP_")
+            })
+        E2EAssertEqual 2 $TempWrite.Count "both statements should execute through the temporary query object, one write each"
+        E2EAssertEqual "42" ([string]$TempWrite[0].Body["C_SQLTROUBLESHOOTING_DATACONNECTION"].Id) "the statement above the USE should run against OISES (42), the connection selected before it"
+        E2EAssertEqual "43" ([string]$TempWrite[1].Body["C_SQLTROUBLESHOOTING_DATACONNECTION"].Id) "the statement below the USE should run against OtherDB (43)"
+
+        # The USE still sticks for later executions.
+        E2EAssertEqual "43" ([string]$Script:AppConfig.CurrentDataConnection.DoId) "the USE should leave OtherDB selected afterwards"
+    }
+
     E2ECase -Name "an unknown database is refused before anything is posted" -Body {
         Reset-E2EScenario
         Reset-E2EConnection

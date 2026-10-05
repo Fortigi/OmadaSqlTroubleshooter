@@ -1311,6 +1311,64 @@ Describe "Invoke-ExecuteQuery resolves the database before executing (issue #152
             @($script:DispatchedContext.Statements).Count | Should -Be 1
         }
 
+        It "keeps a statement ABOVE the USE on the connection that was selected before it" {
+            # The bug this guards against is the one #152 exists to remove, reintroduced by the
+            # feature itself. The gate leaves a pre-USE statement with a null DataConnectionDoId
+            # meaning "whatever the dropdown has", but Set-DataConnection moves the dropdown to the
+            # USE target and the context's DataConnectionDoId - the fallback a null resolves to - is
+            # read afterwards. So the statement above the USE silently ran against the USE's
+            # database. Every statement of a USE run must now carry an explicit connection.
+            function Resolve-SqlStatementTarget {
+                param($Statement, $OptionList)
+                return [pscustomobject]@{
+                    Status      = "Ok"
+                    Statement   = @(
+                        # Above the USE: "whatever was selected", i.e. OISES (42).
+                        [pscustomobject]@{ Ordinal = 1; Text = "SELECT * FROM [dbo].[A]"; DatabaseName = $null; DataConnectionDoId = $null }
+                        # Below it: the USE target.
+                        [pscustomobject]@{ Ordinal = 3; Text = "SELECT * FROM [dbo].[B]"; DatabaseName = "ODW"; DataConnectionDoId = "99" }
+                    )
+                    UseFullName = "ODW - 99"
+                    UseDatabase = "ODW"
+                    Message     = $null
+                }
+            }
+
+            Invoke-ExecuteQuery
+            & $script:CapturedCompletion
+
+            @($script:DispatchedContext.Statements).Count | Should -Be 2
+            $script:DispatchedContext.Statements[0].DataConnectionDoId | Should -Be "42"
+            $script:DispatchedContext.Statements[1].DataConnectionDoId | Should -Be "99"
+            # And the dropdown did move, so the switch is still sticky for later executions.
+            $script:ConnectionSwitches | Should -Be 1
+        }
+
+        It "leaves an unprefixed statement's connection unset when no USE fires" {
+            # The other half of the pinning rule: filling these in unconditionally would make the
+            # pipeline create a temporary object for an ordinary query, which criterion 14 forbids.
+            function Resolve-SqlStatementTarget {
+                param($Statement, $OptionList)
+                return [pscustomobject]@{
+                    Status      = "Ok"
+                    Statement   = @(
+                        [pscustomobject]@{ Ordinal = 1; Text = "SELECT * FROM [dbo].[A]"; DatabaseName = $null; DataConnectionDoId = $null }
+                        [pscustomobject]@{ Ordinal = 2; Text = "SELECT * FROM [dbo].[B]"; DatabaseName = "ODW"; DataConnectionDoId = "99" }
+                    )
+                    UseFullName = $null
+                    UseDatabase = $null
+                    Message     = $null
+                }
+            }
+
+            Invoke-ExecuteQuery
+            & $script:CapturedCompletion
+
+            $script:DispatchedContext.Statements[0].DataConnectionDoId | Should -BeNullOrEmpty
+            $script:DispatchedContext.Statements[1].DataConnectionDoId | Should -Be "99"
+            $script:ConnectionSwitches | Should -Be 0
+        }
+
         It "switches and executes nothing when the script is nothing but USE" {
             function Resolve-SqlStatementTarget {
                 param($Statement, $OptionList)
