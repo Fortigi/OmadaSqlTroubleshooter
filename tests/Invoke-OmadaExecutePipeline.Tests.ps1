@@ -192,32 +192,68 @@ Describe "Invoke-OmadaExecutePipeline - execute selection" {
         $Execute.Body["dataTypeArgs"]["targetId"] | Should -Be 777
     }
 
-    It "points only the temporary object at the resolved connection, leaving the save on the user's" {
-        # Issue #152: a database-qualified query resolves to a connection that is not the one the
-        # dropdown has selected. TempDataConnectionDoId exists so that ONLY the temporary object
-        # follows it - the save must keep writing DataConnectionDoId, or executing a prefixed query
-        # would silently move the user's saved query onto another connection.
-        $Context = New-PipelineContext -QueryText "SELECT 2" -SelectionText "SELECT * FROM [dbo].[Person]"
-        $Context.TempDataConnectionDoId = "99"
+    It "points each statement's temporary object at that statement's own connection" {
+        # Issue #152 on top of #151: a statement that named its own database resolves to a connection
+        # that is not the dropdown's, and each statement may differ. The per-statement upsert is the
+        # only place that follows it.
+        $Context = New-PipelineContext -QueryText "SELECT 2"
+        $Context.Statements = @(
+            [pscustomobject]@{ Ordinal = 1; Text = "SELECT 1"; DataConnectionDoId = "99" }
+            [pscustomobject]@{ Ordinal = 2; Text = "SELECT 2"; DataConnectionDoId = "77" }
+            [pscustomobject]@{ Ordinal = 3; Text = "SELECT 3"; DataConnectionDoId = $null }
+        )
 
         Invoke-OmadaExecutePipeline -Context $Context | Out-Null
 
-        $Temp = $script:Calls | Where-Object { $_.Key -in @("temp-put", "temp-post") } | Select-Object -First 1
-        $Temp | Should -Not -BeNullOrEmpty
-        $Temp.Body["C_SQLTROUBLESHOOTING_DATACONNECTION"]["Id"] | Should -Be "99"
+        $Temp = @($script:Calls | Where-Object { $_.Key -in @("temp-put", "temp-post") })
+        @($Temp).Count | Should -Be 3
+        $Temp[0].Body["C_SQLTROUBLESHOOTING_DATACONNECTION"]["Id"] | Should -Be "99"
+        $Temp[1].Body["C_SQLTROUBLESHOOTING_DATACONNECTION"]["Id"] | Should -Be "77"
+        # No database of its own: falls back to the selected connection, as every statement did
+        # before #152.
+        $Temp[2].Body["C_SQLTROUBLESHOOTING_DATACONNECTION"]["Id"] | Should -Be "42"
+    }
+
+    It "leaves the user's own query object on the connection they chose" {
+        # The save must keep writing Context.DataConnectionDoId, or executing a prefixed query would
+        # silently move the saved query onto another connection (#152 criterion 7).
+        $Context = New-PipelineContext -QueryText "SELECT 2"
+        $Context.Statements = @([pscustomobject]@{ Ordinal = 1; Text = "SELECT 1"; DataConnectionDoId = "99" })
+
+        Invoke-OmadaExecutePipeline -Context $Context | Out-Null
 
         $Save = $script:Calls | Where-Object { $_.Key -eq "save" } | Select-Object -First 1
         $Save | Should -Not -BeNullOrEmpty
         $Save.Body["C_SQLTROUBLESHOOTING_DATACONNECTION"]["Id"] | Should -Be "42"
     }
 
-    It "leaves the temporary object on the selected connection when no database was resolved" {
-        # The absence of TempDataConnectionDoId must change nothing: this is what keeps an ordinary
-        # execute-selection run byte-for-byte what it was before #152.
-        Invoke-OmadaExecutePipeline -Context (New-PipelineContext -SelectionText "SELECT TOP 1 *") | Out-Null
+    It "creates the temporary object for ONE prefixed statement with no selection" {
+        # The case the old NeedTempObject test missed: Count is 1 and SelectionText is empty, so
+        # without the DataConnectionDoId condition this would execute the SAVED query - which is
+        # attached to the dropdown's connection - and the statement would silently run against the
+        # wrong database, which is the whole point of #152.
+        $Context = New-PipelineContext
+        $Context.Statements = @([pscustomobject]@{ Ordinal = 1; Text = "SELECT 1"; DataConnectionDoId = "99" })
 
-        $Temp = $script:Calls | Where-Object { $_.Key -in @("temp-put", "temp-post") } | Select-Object -First 1
-        $Temp.Body["C_SQLTROUBLESHOOTING_DATACONNECTION"]["Id"] | Should -Be "42"
+        Invoke-OmadaExecutePipeline -Context $Context | Out-Null
+
+        # temp-post, not temp-put: the probe finds nothing in this state, so the object is created
+        # rather than updated. Asserting either keeps the test about "a temporary object was used"
+        # instead of about which verb that happened to take.
+        @($script:Calls | Where-Object { $_.Key -in @("temp-put", "temp-post") }).Count | Should -Be 1
+        $Execute = $script:Calls | Where-Object { $_.Key -eq "execute" } | Select-Object -First 1
+        $Execute.Body["dataTypeArgs"]["targetId"] | Should -Be 777
+    }
+
+    It "creates no temporary object for ONE unprefixed statement with no selection" {
+        # The other half of the same rule: nothing about #152 may add a round trip to a query that
+        # names no database (criterion 14).
+        $Context = New-PipelineContext
+        $Context.Statements = @([pscustomobject]@{ Ordinal = 1; Text = "SELECT 1"; DataConnectionDoId = $null })
+
+        Invoke-OmadaExecutePipeline -Context $Context | Out-Null
+
+        Get-CallSequence | Should -Be @("get", "execute")
     }
 
     It "undeletes and reuses a soft-deleted temporary object rather than creating another" {
@@ -340,6 +376,204 @@ Describe "Invoke-OmadaExecutePipeline - failures" {
 
         $Outcome.FailedStep | Should -Be "TempQueryUpsert"
         Get-CallSequence | Should -Not -Contain "execute"
+    }
+}
+
+Describe "Invoke-OmadaExecutePipeline - one query per statement (#151)" {
+    BeforeEach { Reset-PipelineTestState }
+
+    function script:New-TestStatement {
+        # The shape Get-SqlScriptStatement hands the pipeline: an ordinal and the statement's own
+        # source text.
+        param([string[]]$Text)
+
+        $Private:Ordinal = 0
+        return @($Text | ForEach-Object {
+                $Private:Ordinal++
+                [PSCustomObject]@{ Ordinal = $Private:Ordinal; Text = $_ }
+            })
+    }
+
+    function script:Get-TempQueryText {
+        # The SQL each upsert put on the temporary object, in the order the upserts happened. This is
+        # what proves each statement ran as ITSELF rather than all of them running the same text.
+        return @($script:Calls |
+                Where-Object { $_.Key -eq "temp-post" -or $_.Key -eq "temp-put" } |
+                ForEach-Object { $_.Body["C_QUERY"] })
+    }
+
+    It "executes every statement, in editor order, on the one temporary object" {
+        # The acceptance criterion: a script with two SELECTs executed with nothing selected produces
+        # two executes. One probe and one delete bracket the whole run; the upsert is what repeats,
+        # because only the temporary object's CONTENT changes per statement.
+        $Context = New-PipelineContext
+        $Context.Statements = New-TestStatement -Text @("SELECT 1", "SELECT 2")
+
+        $Outcome = Invoke-OmadaExecutePipeline -Context $Context
+
+        Get-CallSequence | Should -Be @("get", "probe", "temp-post", "execute", "temp-put", "execute", "delete")
+        @($Outcome.StatementOutcome).Count | Should -Be 2
+        @($Outcome.StatementOutcome | ForEach-Object { $_.Ordinal }) | Should -Be @(1, 2)
+    }
+
+    It "sends each statement's own SQL to the temporary object" {
+        $Context = New-PipelineContext
+        $Context.Statements = New-TestStatement -Text @("SELECT 1", "SELECT 2", "SELECT 3")
+
+        Invoke-OmadaExecutePipeline -Context $Context | Out-Null
+
+        Get-TempQueryText | Should -Be @("SELECT 1", "SELECT 2", "SELECT 3")
+    }
+
+    It "fetches and saves once for the whole run rather than once per statement" {
+        # Each statement is its own query, but they all belong to one execute of one saved query.
+        # Saving per statement would write the editor's text to the tenant N times.
+        $Context = New-PipelineContext -QueryText "SELECT 2"
+        $Context.Statements = New-TestStatement -Text @("SELECT 1", "SELECT 2")
+
+        Invoke-OmadaExecutePipeline -Context $Context | Out-Null
+
+        @($script:Calls | Where-Object { $_.Key -eq "get" }).Count | Should -Be 1
+        @($script:Calls | Where-Object { $_.Key -eq "save" }).Count | Should -Be 1
+    }
+
+    It "probes for the temporary object once, however many statements run" {
+        $Context = New-PipelineContext
+        $Context.Statements = New-TestStatement -Text @("SELECT 1", "SELECT 2", "SELECT 3", "SELECT 4")
+
+        Invoke-OmadaExecutePipeline -Context $Context | Out-Null
+
+        @($script:Calls | Where-Object { $_.Key -eq "probe" }).Count | Should -Be 1
+        @($script:Calls | Where-Object { $_.Key -eq "execute" }).Count | Should -Be 4
+    }
+
+    It "deletes the temporary object once, after the last statement" {
+        # Deleting per statement would destroy the object the next statement is about to upsert onto.
+        $Context = New-PipelineContext
+        $Context.Statements = New-TestStatement -Text @("SELECT 1", "SELECT 2")
+
+        Invoke-OmadaExecutePipeline -Context $Context | Out-Null
+
+        @($script:Calls | Where-Object { $_.Key -eq "delete" }).Count | Should -Be 1
+        (Get-CallSequence)[-1] | Should -Be "delete"
+    }
+
+    It "creates no temporary object at all for a single statement with no selection" {
+        # The guarantee that a single execute stays identical to what it was before this issue: it
+        # runs the saved query directly, exactly as it always did.
+        $Context = New-PipelineContext
+        $Context.Statements = New-TestStatement -Text @("SELECT 1")
+
+        $Outcome = Invoke-OmadaExecutePipeline -Context $Context
+
+        Get-CallSequence | Should -Be @("get", "execute")
+        $Outcome.TempQueryDoId | Should -BeNullOrEmpty
+
+        $Execute = $script:Calls | Where-Object { $_.Key -eq "execute" } | Select-Object -First 1
+        $Execute.Body["dataTypeArgs"]["targetId"] | Should -Be 100
+    }
+
+    It "still uses the temporary object for a single statement when there is a selection" {
+        # Selecting one statement and executing is one result, through the temporary object, as before.
+        $Context = New-PipelineContext -SelectionText "SELECT TOP 1 *"
+        $Context.Statements = New-TestStatement -Text @("SELECT TOP 1 *")
+
+        $Outcome = Invoke-OmadaExecutePipeline -Context $Context
+
+        Get-CallSequence | Should -Be @("get", "probe", "temp-post", "execute", "delete")
+        $Outcome.TempQueryDoId | Should -Be 777
+    }
+
+    It "runs the statements it was given rather than the selection as a whole" {
+        # Selecting two of three statements runs those two, each as its own query - not the selected
+        # text in one go.
+        $Context = New-PipelineContext -SelectionText "SELECT 1;`r`nSELECT 2;"
+        $Context.Statements = New-TestStatement -Text @("SELECT 1", "SELECT 2")
+
+        Invoke-OmadaExecutePipeline -Context $Context | Out-Null
+
+        @($script:Calls | Where-Object { $_.Key -eq "execute" }).Count | Should -Be 2
+        Get-TempQueryText | Should -Be @("SELECT 1", "SELECT 2")
+    }
+
+    It "reports the first statement's outcome as the run's outcome" {
+        # Everything that consumed this outcome before #151 reads QueryResult/ErrorRecord/FailedStep,
+        # and a single-statement execute must keep reporting exactly what it used to. A later
+        # statement must not overwrite them.
+        $Context = New-PipelineContext
+        $Context.Statements = New-TestStatement -Text @("SELECT 1", "SELECT 2")
+
+        $Outcome = Invoke-OmadaExecutePipeline -Context $Context
+
+        $Outcome.QueryResult.d.Records | Should -Be 2
+        $Outcome.ErrorRecord | Should -BeNullOrEmpty
+        $Outcome.FailedStep | Should -BeNullOrEmpty
+    }
+
+    It "continues past a failing statement and records the failure against that statement" {
+        # SSMS behaviour, and the decision this issue was delivered with: one statement failing does
+        # not abandon the ones after it. $script:Failures keys by logical request, which would fail
+        # every execute, so only the SECOND execute is failed here - which is the whole point.
+        $Context = New-PipelineContext
+        $Context.Statements = New-TestStatement -Text @("SELECT 1", "SELECT 2", "SELECT 3")
+
+        $Private:Original = ${function:Invoke-OmadaRequestCore}
+        try {
+            $script:ExecuteCount = 0
+            function Invoke-OmadaRequestCore {
+                param([hashtable]$Parameters)
+                $Key = Get-CallKey -Method $Parameters.Method -Uri $Parameters.Uri -Body $Parameters.Body
+                $script:Calls.Add([pscustomobject]@{ Key = $Key; Method = $Parameters.Method; Uri = $Parameters.Uri; Body = $Parameters.Body })
+
+                if ($Key -eq "execute") {
+                    $script:ExecuteCount++
+                    if ($script:ExecuteCount -eq 2) {
+                        return @{ Result = $null; ErrorRecord = [System.Management.Automation.ErrorRecord]::new(
+                                [System.Exception]::new("statement 2 failed"), "PipelineTestFailure",
+                                [System.Management.Automation.ErrorCategory]::ConnectionError, $null) }
+                    }
+                }
+
+                if ($script:Responses.ContainsKey($Key)) { return @{ Result = $script:Responses[$Key]; ErrorRecord = $null } }
+                return @{ Result = $null; ErrorRecord = $null }
+            }
+
+            $Outcome = Invoke-OmadaExecutePipeline -Context $Context
+
+            # All three were attempted, and the third ran AFTER the failure rather than being skipped.
+            $script:ExecuteCount | Should -Be 3
+            @($Outcome.StatementOutcome).Count | Should -Be 3
+
+            $Outcome.StatementOutcome[0].ErrorRecord | Should -BeNullOrEmpty
+            $Outcome.StatementOutcome[1].ErrorRecord.Exception.Message | Should -Be "statement 2 failed"
+            $Outcome.StatementOutcome[1].FailedStep | Should -Be "ExecuteQuery"
+            $Outcome.StatementOutcome[2].ErrorRecord | Should -BeNullOrEmpty
+
+            # And the temporary object is still cleaned up after a run that contained a failure.
+            Get-CallSequence | Should -Contain "delete"
+        }
+        finally {
+            # Restored, so a redefined transport cannot leak into the Describe blocks after this one.
+            Set-Item -Path "function:Invoke-OmadaRequestCore" -Value $Private:Original
+        }
+    }
+
+    It "keeps a statement's own text on its outcome, for the Results header and the Messages summary" {
+        $Context = New-PipelineContext
+        $Context.Statements = New-TestStatement -Text @("SELECT 1", "SELECT 2")
+
+        $Outcome = Invoke-OmadaExecutePipeline -Context $Context
+
+        @($Outcome.StatementOutcome | ForEach-Object { $_.Text }) | Should -Be @("SELECT 1", "SELECT 2")
+    }
+
+    It "executes exactly once when the caller passes no statements at all" {
+        # Backward compatibility, and it is what every test above this block relies on: the inline
+        # fallback path does not split anything, and must keep getting one execute of one query.
+        $Outcome = Invoke-OmadaExecutePipeline -Context (New-PipelineContext)
+
+        Get-CallSequence | Should -Be @("get", "execute")
+        @($Outcome.StatementOutcome).Count | Should -Be 1
     }
 }
 

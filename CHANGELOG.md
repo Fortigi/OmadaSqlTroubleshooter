@@ -18,9 +18,11 @@ semantic version.
   loaded schema and sticks for later executions. The name is resolved client-side against the data
   connection list, so nothing changes about what Omada receives: the prefix and the `USE` are
   stripped from the text that is posted, and the query stored on the data object stays the original
-  text. An unknown database, a query addressing two databases, and a four-part linked-server name
-  are all rejected before any request is made. Works identically for selection execution, and costs
-  a query with no prefix nothing.
+  text. The database is resolved **per statement**, on top of #151, so one script may span databases
+  — each statement runs against its own connection with its own result grid, and a `USE` applies
+  from its own statement onward. An unknown database, a single statement addressing two databases,
+  and a four-part linked-server name are all rejected before any request is made. Works identically
+  for selection execution, and costs a query with no prefix nothing.
 
 ## [Baseline] - 2026-09-16
 

@@ -23,11 +23,14 @@ function Get-SqlDatabaseReference {
         - a four-part linked-server name is simply a SchemaObjectName that also has a
           ServerIdentifier (#152 criterion 10).
 
-        WHY THE WHOLE SCRIPT MUST NAME AT MOST ONE DATABASE. Criterion 8 asks for a *statement* that
-        references two databases to be rejected. The posted text is executed as ONE query against ONE
-        connection, so two statements each naming a different database is exactly as unrunnable as
-        one statement doing it - and so is a USE that disagrees with a prefix elsewhere in the same
-        text. All three are rejected as CrossDatabase, and the message names the databases involved.
+        WHY ONE STATEMENT MAY NAME ONLY ONE DATABASE. Omada executes a query against a single data
+        connection, so a statement joining two databases cannot run and is rejected as CrossDatabase
+        with both names in the message (#152 criterion 8).
+
+        This function is called PER STATEMENT, so that rule is per statement. A *script* whose
+        statements name different databases is fine: since issue #151 each statement is its own
+        query against its own connection, so three statements naming three databases is three
+        queries, not a contradiction. Resolve-SqlStatementTarget is what walks them.
 
         A script that does not parse cleanly still yields whatever ScriptDom recovered, exactly as
         Get-SqlScriptFragment describes. Callers get Status Unavailable only when ScriptDom is not

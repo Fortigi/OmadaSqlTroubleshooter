@@ -41,6 +41,13 @@ BeforeAll {
     # IS the behaviour these suites assert, and a stub would assert nothing.
     . (Join-Path $PrivatePath -ChildPath "Write-TabMessage.ps1")
     . (Join-Path $PrivatePath -ChildPath "Set-TabStatusMessage.ps1")
+    # The per-statement result stack (issue #151). Dot-sourced rather than stubbed, and that choice is
+    # load-bearing here: Complete-ExecuteQueryResult now binds the pane through Set-TabQueryResult, and
+    # a missing collaborator throws inside the function's own catch - which silently skips the status
+    # bar, the dropdown, the output-tab selection and the teardown that follow it. A stub would hide
+    # exactly the cascade these suites exist to catch.
+    . (Join-Path $PrivatePath -ChildPath "Set-TabQueryResult.ps1")
+    . (Join-Path $PrivatePath -ChildPath "Update-QueryResultStackLayout.ps1")
     . (Join-Path $PrivatePath -ChildPath "Invoke-ExecuteQuery.ps1")
 
     $Script:Tracer = [System.Diagnostics.Trace]
@@ -146,6 +153,12 @@ BeforeAll {
             TextBoxQueryMessages      = [pscustomobject]@{ Text = "" }
             TabControlQueryOutput     = [pscustomobject]@{ SelectedIndex = 0 }
             TextBlockStatusBarMessage = [pscustomobject]@{ Name = "TextBlockStatusBarMessage"; Text = "" }
+            # The Results pane's stack of per-statement grids (issue #151). ItemsSource is the whole
+            # contract these suites care about; no Dispatcher, deliberately - the sizing pass is
+            # deferred through one and must be skipped rather than attempted when there is none, which
+            # is a property worth exercising here rather than faking away.
+            ItemsControlQueryResults  = [pscustomobject]@{ ItemsSource = "previous" }
+            ScrollViewerQueryResults  = [pscustomobject]@{ ViewportHeight = 400 }
         }
     }
 
@@ -182,11 +195,16 @@ BeforeAll {
         # No request outstanding, so the button state resolves to "Execute".
         $Script:PendingWebViewCompletions = [System.Collections.Generic.List[object]]::new()
         $Script:TestTabSession = [pscustomobject]@{
-            Id            = "tab-A"
-            DisplayName   = "Tab A"
-            TabItem       = "item-A"
-            Elements      = (New-TabElementStub)
-            QueryMessages = [System.Collections.Generic.List[string]]::new()
+            Id                      = "tab-A"
+            DisplayName             = "Tab A"
+            TabItem                 = "item-A"
+            Elements                = (New-TabElementStub)
+            QueryMessages           = [System.Collections.Generic.List[string]]::new()
+            # Declared here rather than left to be added on first use: assigning a property a
+            # [PSCustomObject] does not already have throws, and that exception would be swallowed by
+            # Complete-ExecuteQueryResult's own catch - skipping everything after the binding.
+            QueryResults            = $null
+            FocusedQueryResultIndex = 0
         }
         $Script:Tabs = @($Script:TestTabSession)
         # DisplayName as well as FullName: the status bar names the query in all three outcomes
@@ -200,6 +218,12 @@ BeforeAll {
             StopWatch       = [System.Diagnostics.Stopwatch]::StartNew()
             CurrentSqlQuery = [PSCustomObject]@{ DisplayName = "TestQuery" }
             LastRowsRead    = 0
+            # Declared, not left to first assignment (issue #151). Complete-ExecuteQueryResult writes
+            # the per-statement outcomes here for the teardown's Messages summary, and assigning a
+            # property a [PSCustomObject] does not already have THROWS - swallowed by the function's
+            # own catch, which skips the status bar, the dropdown and the tab selection after it. That
+            # is exactly what 25 cases in this file were reporting.
+            LastStatementOutcome = $null
         }
         $Script:MainForm = @{
             Elements = @{
@@ -210,6 +234,11 @@ BeforeAll {
                 ButtonShowOutput            = [PSCustomObject]@{ IsEnabled = $false }
                 ButtonSaveOutputFile        = [PSCustomObject]@{ IsEnabled = $false }
                 DataGridQueryResult         = [PSCustomObject]@{ ItemsSource = "previous"; AutoGenerateColumns = $false }
+                # Issue #151 reads the stack off $Script:MainForm.Elements as well as off the tab
+                # session: Set-ActiveTabContext repoints the former onto the latter, and the
+                # completion runs against whichever is current.
+                ItemsControlQueryResults    = [PSCustomObject]@{ ItemsSource = "previous" }
+                ScrollViewerQueryResults    = [PSCustomObject]@{ ViewportHeight = 400 }
                 TextBlockStatusBarRows      = [PSCustomObject]@{ Name = "TextBlockStatusBarRows"; Text = "-" }
                 TextBlockStatusBarQueryTime = [PSCustomObject]@{ Name = "TextBlockStatusBarQueryTime"; Text = "-" }
                 ComboBoxSelectQuery         = [PSCustomObject]@{ Items = [System.Collections.ArrayList]::new(); SelectedItem = $null }
@@ -334,7 +363,7 @@ Describe "Reset-ExecuteQueryUiState" {
         # A failed or abandoned execute must not blank a perfectly good previous result.
         Reset-ExecuteQueryUiState
 
-        $Script:MainForm.Elements.DataGridQueryResult.ItemsSource | Should -Be "previous"
+        $Script:TestTabSession.Elements.ItemsControlQueryResults.ItemsSource | Should -Be "previous"
     }
 
     It "does not throw when there is no stopwatch" {
@@ -350,7 +379,12 @@ Describe "Complete-ExecuteQueryResult" {
     It "binds the rows and reports the record count" {
         Complete-ExecuteQueryResult -QueryResult (New-ResultResponse -RowCount 2) -SaveResult ([pscustomobject]@{ Id = 100; DisplayName = "TestQuery" }) -TempQueryDoId $null
 
-        @($Script:MainForm.Elements.DataGridQueryResult.ItemsSource).Count | Should -Be 2
+        # One statement, so one result in the stack, carrying the two rows (issue #151). Asserted on
+        # the TAB SESSION's elements because that is what the binding goes through: in the application
+        # Set-ActiveTabContext repoints $Script:MainForm.Elements onto the active tab's, so they are
+        # one object, but this fixture builds them separately.
+        @($Script:TestTabSession.Elements.ItemsControlQueryResults.ItemsSource).Count | Should -Be 1
+        @(@($Script:TestTabSession.Elements.ItemsControlQueryResults.ItemsSource)[0].Rows).Count | Should -Be 2
         $Script:MainForm.Elements.TextBlockStatusBarRows.Text | Should -Be "2 rows"
         $Script:MainForm.Elements.ButtonShowOutput.IsEnabled | Should -BeTrue
         $Script:MainForm.Elements.ButtonSaveOutputFile.IsEnabled | Should -BeTrue
@@ -371,7 +405,9 @@ Describe "Complete-ExecuteQueryResult" {
         # request could fail or be abandoned in a worker.
         Complete-ExecuteQueryResult -QueryResult $null -SaveResult ([pscustomobject]@{ Id = 100; DisplayName = "TestQuery" }) -TempQueryDoId $null
 
-        $Script:MainForm.Elements.DataGridQueryResult.ItemsSource | Should -BeNullOrEmpty
+        # Nothing bound, rather than an empty collection: an ItemsControl bound to an empty list still
+        # renders its panel, and the E2E lane reads a null ItemsSource as "no result".
+        $Script:TestTabSession.Elements.ItemsControlQueryResults.ItemsSource | Should -BeNullOrEmpty
         $Script:MainForm.Elements.TextBlockStatusBarRows.Text | Should -Be "0 rows"
         $Script:MainForm.Elements.ButtonShowOutput.IsEnabled | Should -BeFalse
         $Script:MainForm.Elements.ButtonSaveOutputFile.IsEnabled | Should -BeFalse
@@ -380,7 +416,9 @@ Describe "Complete-ExecuteQueryResult" {
     It "clears the grid and says '0 rows' for an empty result" {
         Complete-ExecuteQueryResult -QueryResult (New-ResultResponse -RowCount 0) -SaveResult ([pscustomobject]@{ Id = 100; DisplayName = "TestQuery" }) -TempQueryDoId $null
 
-        $Script:MainForm.Elements.DataGridQueryResult.ItemsSource | Should -BeNullOrEmpty
+        # Nothing bound, rather than an empty collection: an ItemsControl bound to an empty list still
+        # renders its panel, and the E2E lane reads a null ItemsSource as "no result".
+        $Script:TestTabSession.Elements.ItemsControlQueryResults.ItemsSource | Should -BeNullOrEmpty
         $Script:MainForm.Elements.TextBlockStatusBarRows.Text | Should -Be "0 rows"
     }
 
@@ -481,6 +519,39 @@ Describe "Complete-ExecuteQueryResult" {
         $Script:TestTabSession.Elements.TabControlQueryOutput.SelectedIndex | Should -Be 1
     }
 
+    It "selects Messages when a LATER statement failed even though rows arrived" {
+        # Issue #151 feedback: the bug in continue-on-error. $Outcome.ErrorRecord carries only the
+        # FIRST statement's error, so a run where statement 1 returned rows and statement 2 failed
+        # reached here with -Failed unset - and the success path left Results selected. The failure
+        # existed only as a line in the Messages breakdown, which the user had no reason to open.
+        #
+        # Rows are present on purpose: a run can both succeed and fail now, and it is that
+        # combination, not an outright failure, that was being reported as success.
+        # The successful statement carries a real QueryResult, and that is load-bearing rather than
+        # decoration: Set-TabQueryResult is dot-sourced for real here and derives the run's row total
+        # from the OUTCOMES, not from the -QueryResult argument. An outcome without one contributes no
+        # rows, the run reads as zero rows, and this test then passes because of the empty-result rule
+        # instead of the one it is about - which is exactly how it passed before this fixture was
+        # corrected.
+        Complete-ExecuteQueryResult -QueryResult (New-ResultResponse -RowCount 2) -SaveResult ([pscustomobject]@{ Id = 100; DisplayName = "TestQuery" }) -TempQueryDoId $null -StatementOutcome @(
+            @{ Ordinal = 1; RowsRead = 2; ErrorRecord = $null; QueryResult = (New-ResultResponse -RowCount 2) }
+            @{ Ordinal = 2; RowsRead = 0; ErrorRecord = "boom"; QueryResult = $null }
+        )
+
+        $Script:TestTabSession.Elements.TabControlQueryOutput.SelectedIndex | Should -Be 1
+    }
+
+    It "still leaves Results selected when every statement succeeded" {
+        # The other half of the pair. A multi-statement run that worked must not be dragged to
+        # Messages - otherwise the fix above would cost every successful run its data view.
+        Complete-ExecuteQueryResult -QueryResult (New-ResultResponse -RowCount 2) -SaveResult ([pscustomobject]@{ Id = 100; DisplayName = "TestQuery" }) -TempQueryDoId $null -StatementOutcome @(
+            @{ Ordinal = 1; RowsRead = 2; ErrorRecord = $null; QueryResult = (New-ResultResponse -RowCount 2) }
+            @{ Ordinal = 2; RowsRead = 3; ErrorRecord = $null; QueryResult = (New-ResultResponse -RowCount 3) }
+        )
+
+        $Script:TestTabSession.Elements.TabControlQueryOutput.SelectedIndex | Should -Be 0
+    }
+
     It "does not re-select Results for a query that returned rows onto an already-selected Results tab" {
         # The acceptance criterion that the tab only switches when it is not already correct.
         # Assigning SelectedIndex the value it already holds still raises SelectionChanged in WPF,
@@ -552,6 +623,60 @@ Describe "Complete-ExecuteQueryResult" {
         # the background (issue #40), a failure that does not say which query failed is the one that
         # most needs to.
         Complete-ExecuteQueryResult -QueryResult $null -SaveResult ([pscustomobject]@{ Id = 100; DisplayName = "TestQuery" }) -TempQueryDoId $null -Failed
+
+        $Script:TestTabSession.Elements.TextBlockStatusBarMessage.Text |
+            Should -Be "Query 'TestQuery' failed - see Messages"
+    }
+
+    # --- The fourth outcome: a run that partly failed (issue #151) ---------------------------------
+    # Continue-on-error made "succeeded" and "failed" stop being exhaustive. A run can return rows AND
+    # have failed a statement, and that run was being reported as a plain success.
+
+    It "says how many statements failed when some of them did" {
+        # The count is the useful part. "Failed" alone, over a pane holding two perfectly good result
+        # grids, tells the user neither how much of their script ran nor how much to re-run.
+        Complete-ExecuteQueryResult -QueryResult (New-ResultResponse -RowCount 2) -SaveResult ([pscustomobject]@{ Id = 100; DisplayName = "TestQuery" }) -TempQueryDoId $null -StatementOutcome @(
+            @{ Ordinal = 1; RowsRead = 2; ErrorRecord = $null; QueryResult = (New-ResultResponse -RowCount 2) }
+            @{ Ordinal = 2; RowsRead = 0; ErrorRecord = "boom"; QueryResult = $null }
+            @{ Ordinal = 3; RowsRead = 1; ErrorRecord = $null; QueryResult = (New-ResultResponse -RowCount 1) }
+        )
+
+        $Script:TestTabSession.Elements.TextBlockStatusBarMessage.Text |
+            Should -Be "Query 'TestQuery' failed on 1 of 3 statement(s) - see Messages"
+    }
+
+    It "does not report a partly failed run as executed successfully" {
+        # Stated as its own test because this is the regression, and the one a reader of the status
+        # bar cannot detect for themselves: rows were bound, so every visible signal said success.
+        Complete-ExecuteQueryResult -QueryResult (New-ResultResponse -RowCount 2) -SaveResult ([pscustomobject]@{ Id = 100; DisplayName = "TestQuery" }) -TempQueryDoId $null -StatementOutcome @(
+            @{ Ordinal = 1; RowsRead = 2; ErrorRecord = $null; QueryResult = (New-ResultResponse -RowCount 2) }
+            @{ Ordinal = 2; RowsRead = 0; ErrorRecord = "boom"; QueryResult = $null }
+        )
+
+        $Script:TestTabSession.Elements.TextBlockStatusBarMessage.Text |
+            Should -Not -BeLike "*executed successfully*"
+    }
+
+    It "keeps saying executed successfully when every statement ran" {
+        # The boundary. A multi-statement run with no failures reads exactly as a single successful
+        # query does, so the new branch costs nothing to the ordinary case.
+        Complete-ExecuteQueryResult -QueryResult (New-ResultResponse -RowCount 2) -SaveResult ([pscustomobject]@{ Id = 100; DisplayName = "TestQuery" }) -TempQueryDoId $null -StatementOutcome @(
+            @{ Ordinal = 1; RowsRead = 2; ErrorRecord = $null; QueryResult = (New-ResultResponse -RowCount 2) }
+            @{ Ordinal = 2; RowsRead = 3; ErrorRecord = $null; QueryResult = (New-ResultResponse -RowCount 3) }
+        )
+
+        $Script:TestTabSession.Elements.TextBlockStatusBarMessage.Text |
+            Should -Be "Query 'TestQuery' executed successfully - see Messages"
+    }
+
+    It "reports an outright failure as failed rather than as a count of statements" {
+        # Precedence between the two failure branches. An execute that failed before any statement
+        # ran has outcomes that all carry an error, and "failed on 2 of 2 statement(s)" would be a
+        # strange way to say the whole thing never started.
+        Complete-ExecuteQueryResult -QueryResult $null -SaveResult ([pscustomobject]@{ Id = 100; DisplayName = "TestQuery" }) -TempQueryDoId $null -Failed -StatementOutcome @(
+            @{ Ordinal = 1; RowsRead = 0; ErrorRecord = "boom" }
+            @{ Ordinal = 2; RowsRead = 0; ErrorRecord = "boom" }
+        )
 
         $Script:TestTabSession.Elements.TextBlockStatusBarMessage.Text |
             Should -Be "Query 'TestQuery' failed - see Messages"
@@ -653,14 +778,24 @@ Describe "Complete-ExecuteQueryPipeline falls back to the UI thread" {
 
         $script:InlinePipelineRuns.Count | Should -Be 1
         # And the user actually gets their result, rather than a warning about an empty one.
-        @($Script:MainForm.Elements.DataGridQueryResult.ItemsSource).Count | Should -Be 2
+        # One statement, so one result in the stack, carrying the two rows (issue #151). Asserted on
+        # the TAB SESSION's elements because that is what the binding goes through: in the application
+        # Set-ActiveTabContext repoints $Script:MainForm.Elements onto the active tab's, so they are
+        # one object, but this fixture builds them separately.
+        @($Script:TestTabSession.Elements.ItemsControlQueryResults.ItemsSource).Count | Should -Be 1
+        @(@($Script:TestTabSession.Elements.ItemsControlQueryResults.ItemsSource)[0].Rows).Count | Should -Be 2
     }
 
     It "re-runs the query on the UI thread when the worker returned only an error" {
         Complete-ExecuteQueryPipeline -Outcome (New-TestErrorRecord) -PipelineContext $script:RetryContext
 
         $script:InlinePipelineRuns.Count | Should -Be 1
-        @($Script:MainForm.Elements.DataGridQueryResult.ItemsSource).Count | Should -Be 2
+        # One statement, so one result in the stack, carrying the two rows (issue #151). Asserted on
+        # the TAB SESSION's elements because that is what the binding goes through: in the application
+        # Set-ActiveTabContext repoints $Script:MainForm.Elements onto the active tab's, so they are
+        # one object, but this fixture builds them separately.
+        @($Script:TestTabSession.Elements.ItemsControlQueryResults.ItemsSource).Count | Should -Be 1
+        @(@($Script:TestTabSession.Elements.ItemsControlQueryResults.ItemsSource)[0].Rows).Count | Should -Be 2
     }
 
     It "re-runs the query when the pipeline failed without reaching the tenant" {
@@ -671,7 +806,12 @@ Describe "Complete-ExecuteQueryPipeline falls back to the UI thread" {
         Complete-ExecuteQueryPipeline -Outcome $Failed -PipelineContext $script:RetryContext
 
         $script:InlinePipelineRuns.Count | Should -Be 1
-        @($Script:MainForm.Elements.DataGridQueryResult.ItemsSource).Count | Should -Be 2
+        # One statement, so one result in the stack, carrying the two rows (issue #151). Asserted on
+        # the TAB SESSION's elements because that is what the binding goes through: in the application
+        # Set-ActiveTabContext repoints $Script:MainForm.Elements onto the active tab's, so they are
+        # one object, but this fixture builds them separately.
+        @($Script:TestTabSession.Elements.ItemsControlQueryResults.ItemsSource).Count | Should -Be 1
+        @(@($Script:TestTabSession.Elements.ItemsControlQueryResults.ItemsSource)[0].Rows).Count | Should -Be 2
     }
 
     It "does NOT re-run when a request had already reached the tenant" {
@@ -994,9 +1134,9 @@ Describe "A chain that already ran on the UI thread does not try to fall back to
 }
 
 Describe "Invoke-ExecuteQuery resolves the database before executing (issue #152)" {
-    # The four resolver functions are unit-tested on their own; what is guarded here is the WIRING in
-    # the completion block, which is where each status turns into control flow. Criterion 5's UI
-    # effect in particular has no other test: it is the Set-ConfigProperty + Set-DataConnection pair
+    # The resolver functions are unit-tested on their own; what is guarded here is the WIRING in the
+    # completion block, which is where each status turns into control flow. Criterion 5's UI effect
+    # in particular has no other unit test: it is the Set-ConfigProperty + Set-DataConnection pair
     # below, and nothing else in the suite drives it.
 
     BeforeEach {
@@ -1032,6 +1172,13 @@ Describe "Invoke-ExecuteQuery resolves the database before executing (issue #152
             return [pscustomobject]@{ Id = 100; DisplayName = "TestQuery" }
         }
 
+        # The splitter is stubbed, not real: these cases are about what the wiring does with the
+        # gate's answer, and a real split would make them depend on ScriptDom being installed.
+        function Get-SqlScriptStatement {
+            param($SqlText, $ParserVersion)
+            return @([pscustomobject]@{ Ordinal = 1; Text = $SqlText; StartOffset = 0; Length = ([string]$SqlText).Length })
+        }
+
         # Capture what WOULD be dispatched, and return a pending item so Invoke-ExecuteQuery takes
         # its normal early return instead of falling through to the inline pipeline.
         $script:DispatchedContext = $null
@@ -1063,39 +1210,61 @@ Describe "Invoke-ExecuteQuery resolves the database before executing (issue #152
         }
     }
 
-    Context "a query that names no database" {
-        It "dispatches unchanged, with no temporary object and no connection switch" {
-            function Resolve-SqlDatabaseTarget {
-                param($SqlText, $OptionList)
-                return [pscustomobject]@{ Status = "None"; TargetDoId = $null; TargetName = $null; TargetFullName = $null; RewrittenText = $null; UseDatabase = $null; Message = $null }
+    Context "a script that addresses no database" {
+        It "dispatches the splitter's statements unchanged, with no connection switch" {
+            function Resolve-SqlStatementTarget {
+                param($Statement, $OptionList)
+                return [pscustomobject]@{ Status = "None"; Statement = @($Statement); UseFullName = $null; UseDatabase = $null; Message = $null }
             }
 
             Invoke-ExecuteQuery
             & $script:CapturedCompletion
 
             $script:DispatchedContext | Should -Not -BeNullOrEmpty
-            # No SelectionText means no temporary object, which is criterion 14's "no extra request".
-            $script:DispatchedContext.SelectionText | Should -BeNullOrEmpty
-            $script:DispatchedContext.ContainsKey("TempDataConnectionDoId") | Should -BeFalse
+            @($script:DispatchedContext.Statements).Count | Should -Be 1
+            # Untouched: no DataConnectionDoId annotation, so the pipeline uses the selected
+            # connection and adds no round trip (criterion 14).
+            $script:DispatchedContext.Statements[0].DataConnectionDoId | Should -BeNullOrEmpty
             $script:DispatchedContext.DataConnectionDoId | Should -Be "42"
             $script:ConnectionSwitches | Should -Be 0
         }
     }
 
-    Context "a resolved database" {
+    Context "resolved databases" {
         BeforeEach {
-            function Resolve-SqlDatabaseTarget {
-                param($SqlText, $OptionList)
-                return [pscustomobject]@{ Status = "Ok"; TargetDoId = "99"; TargetName = "ODW"; TargetFullName = "ODW - 99"; RewrittenText = "SELECT * FROM [dbo].[Person]"; UseDatabase = $null; Message = $null }
+            function Resolve-SqlStatementTarget {
+                param($Statement, $OptionList)
+                return [pscustomobject]@{
+                    Status      = "Ok"
+                    Statement   = @(
+                        [pscustomobject]@{ Ordinal = 1; Text = "SELECT * FROM [dbo].[A]"; DatabaseName = "ODW"; DataConnectionDoId = "99" }
+                        [pscustomobject]@{ Ordinal = 2; Text = "SELECT * FROM [dbo].[B]"; DatabaseName = "OISES"; DataConnectionDoId = "77" }
+                    )
+                    UseFullName = $null
+                    UseDatabase = $null
+                    Message     = $null
+                }
             }
         }
 
-        It "sends the rewritten text to the temporary object at the resolved connection" {
+        It "dispatches the annotated statements, each with its own connection" {
             Invoke-ExecuteQuery
             & $script:CapturedCompletion
 
-            $script:DispatchedContext.SelectionText | Should -Be "SELECT * FROM [dbo].[Person]"
-            $script:DispatchedContext.TempDataConnectionDoId | Should -Be "99"
+            @($script:DispatchedContext.Statements).Count | Should -Be 2
+            $script:DispatchedContext.Statements[0].DataConnectionDoId | Should -Be "99"
+            $script:DispatchedContext.Statements[1].DataConnectionDoId | Should -Be "77"
+        }
+
+        It "dispatches the REWRITTEN statement text, never the prefixed original" {
+            # The defect this guards against is specific: if the gate's annotated list were dropped
+            # and the splitter's output dispatched instead, the prefixed text would reach Omada and
+            # be a SQL error there (criterion 6).
+            Invoke-ExecuteQuery
+            & $script:CapturedCompletion
+
+            @($script:DispatchedContext.Statements | Where-Object { $_.Text -match "ODW|OISES" }).Count | Should -Be 0
+            $script:DispatchedContext.Statements[0].Text | Should -Be "SELECT * FROM [dbo].[A]"
         }
 
         It "keeps the ORIGINAL text and the user's own connection on the saved query (criterion 7)" {
@@ -1115,11 +1284,17 @@ Describe "Invoke-ExecuteQuery resolves the database before executing (issue #152
         }
     }
 
-    Context "USE" {
-        It "switches the connection and still executes the rest (criterion 5)" {
-            function Resolve-SqlDatabaseTarget {
-                param($SqlText, $OptionList)
-                return [pscustomobject]@{ Status = "Ok"; TargetDoId = "99"; TargetName = "ODW"; TargetFullName = "ODW - 99"; RewrittenText = "SELECT * FROM [dbo].[Person]"; UseDatabase = "ODW"; Message = $null }
+    Context "USE (criterion 5)" {
+        It "switches the connection and still executes the remaining statements" {
+            function Resolve-SqlStatementTarget {
+                param($Statement, $OptionList)
+                return [pscustomobject]@{
+                    Status      = "Ok"
+                    Statement   = @([pscustomobject]@{ Ordinal = 2; Text = "SELECT * FROM [dbo].[Person]"; DatabaseName = "ODW"; DataConnectionDoId = "99" })
+                    UseFullName = "ODW - 99"
+                    UseDatabase = "ODW"
+                    Message     = $null
+                }
             }
 
             Invoke-ExecuteQuery
@@ -1133,13 +1308,19 @@ Describe "Invoke-ExecuteQuery resolves the database before executing (issue #152
             # Set-DataConnection raises Add_SelectionChanged, which reloads the schema - so this path
             # must NOT call Get-SqlSchemaObject itself and reload it a second time.
             $script:SchemaReloads | Should -Be 0
-            $script:DispatchedContext | Should -Not -BeNullOrEmpty
+            @($script:DispatchedContext.Statements).Count | Should -Be 1
         }
 
-        It "switches and executes nothing when USE stands alone" {
-            function Resolve-SqlDatabaseTarget {
-                param($SqlText, $OptionList)
-                return [pscustomobject]@{ Status = "SwitchOnly"; TargetDoId = "99"; TargetName = "ODW"; TargetFullName = "ODW - 99"; RewrittenText = ""; UseDatabase = "ODW"; Message = "Data connection changed. Nothing to execute." }
+        It "switches and executes nothing when the script is nothing but USE" {
+            function Resolve-SqlStatementTarget {
+                param($Statement, $OptionList)
+                return [pscustomobject]@{
+                    Status      = "Ok"
+                    Statement   = @()
+                    UseFullName = "ODW - 99"
+                    UseDatabase = "ODW"
+                    Message     = "Data connection changed to 'ODW'. Nothing to execute."
+                }
             }
 
             Invoke-ExecuteQuery
@@ -1151,11 +1332,17 @@ Describe "Invoke-ExecuteQuery resolves the database before executing (issue #152
         }
     }
 
-    Context "a rejected query" {
+    Context "a rejected script" {
         BeforeEach {
-            function Resolve-SqlDatabaseTarget {
-                param($SqlText, $OptionList)
-                return [pscustomobject]@{ Status = "Rejected"; TargetDoId = $null; TargetName = $null; TargetFullName = $null; RewrittenText = $null; UseDatabase = $null; Message = "The database does not match any data connection. Available: OISES." }
+            function Resolve-SqlStatementTarget {
+                param($Statement, $OptionList)
+                return [pscustomobject]@{
+                    Status      = "Rejected"
+                    Statement   = @()
+                    UseFullName = $null
+                    UseDatabase = $null
+                    Message     = "Statement 2: the database 'Nope' does not match any data connection. Available: OISES."
+                }
             }
         }
 
@@ -1167,6 +1354,15 @@ Describe "Invoke-ExecuteQuery resolves the database before executing (issue #152
             @($script:InlinePipelineRuns).Count | Should -Be 0
         }
 
+        It "does not switch the connection on the way out" {
+            # A rejected run must leave the dropdown exactly as it was, even when the script
+            # contained a USE earlier than the statement that failed to resolve.
+            Invoke-ExecuteQuery
+            & $script:CapturedCompletion
+
+            $script:ConnectionSwitches | Should -Be 0
+        }
+
         It "reports the reason once, contained, and restores the UI" {
             # Write-ContainedErrorLog, not Write-LogOutput -LogType ERROR: the latter is terminating
             # here, so it would throw past the UI reset and the catch would report it a second time.
@@ -1174,10 +1370,10 @@ Describe "Invoke-ExecuteQuery resolves the database before executing (issue #152
             { & $script:CapturedCompletion } | Should -Not -Throw
 
             @($script:ContainedErrors).Count | Should -Be 1
+            $script:ContainedErrors[0] | Should -Match "Statement 2"
             $script:ContainedErrors[0] | Should -Match "does not match any data connection"
             $Script:MainForm.Elements.ButtonExecuteQuery.IsEnabled | Should -BeTrue
             $Script:RunTimeData.StopWatch.IsRunning | Should -BeFalse
         }
     }
 }
-

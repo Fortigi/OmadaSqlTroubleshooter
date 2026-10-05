@@ -99,18 +99,30 @@ Describe 'Get-SqlDatabaseReference' {
             $Result.Message | Should -Match "A, B"
         }
 
-        It 'rejects two statements naming different databases' {
-            (Get-SqlDatabaseReference -SqlText "SELECT * FROM [A].[dbo].[X]`r`nSELECT * FROM [B].[dbo].[Y]").Rejection | Should -Be "CrossDatabase"
-        }
-
-        It 'rejects a USE that disagrees with a prefix in the same text' {
-            (Get-SqlDatabaseReference -SqlText "USE [A]`r`nSELECT * FROM [B].[dbo].[Y]").Rejection | Should -Be "CrossDatabase"
-        }
-
         It 'rejects a four-part linked server name (criterion 10)' {
             $Result = Get-SqlDatabaseReference -SqlText "SELECT * FROM [Srv].[Db].[dbo].[Person]"
             $Result.Rejection | Should -Be "FourPartName"
             $Result.Message | Should -Match "linked server"
+        }
+    }
+
+    Context 'the contract is per text, and the caller passes one statement' {
+        # The rule is "the text I am given names at most one database". Since issue #151 the caller
+        # passes ONE statement, so that rule IS criterion 8 - a statement joining two databases
+        # cannot run against a single connection. A SCRIPT spanning databases is legal and is
+        # Resolve-SqlStatementTarget's job, which is why there is no script-level case here.
+        It 'rejects multi-statement text, because it cannot be routed as one query' {
+            # This is what the Get-SqlScriptStatement fallback produces when it cannot split safely
+            # - no parser, or parse errors - and refusing is the safe answer: without a split there
+            # is no way to send each statement to its own connection.
+            (Get-SqlDatabaseReference -SqlText "SELECT * FROM [A].[dbo].[X]`r`nSELECT * FROM [B].[dbo].[Y]").Rejection |
+                Should -Be "CrossDatabase"
+        }
+
+        It 'accepts multi-statement text that names only one database' {
+            $Result = Get-SqlDatabaseReference -SqlText "SELECT * FROM [A].[dbo].[X]`r`nSELECT * FROM [A].[dbo].[Y]"
+            $Result.Rejection | Should -BeNullOrEmpty
+            $Result.Database | Should -Be @("A")
         }
     }
 

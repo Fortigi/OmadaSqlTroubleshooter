@@ -154,6 +154,160 @@
                                 </Setter.Value>
                         </Setter>
                 </Style>
+                <!-- The Results grid's context menu, as a SHARED resource rather than a child of one
+                     DataGrid (issue #151). The Results pane now holds one grid per statement, and the
+                     menu cannot move into the per-result DataTemplate: Initialize-UiComponents binds
+                     its seven items POSITIONALLY off ContextMenu.Items, and names declared inside a
+                     template do not reach FindName at all. One instance, attached to every result
+                     grid, keeps that binding working exactly as it did.
+
+                     A ContextMenu is a popup rather than a visual child, so sharing one instance
+                     across several elements is legal; PlacementTarget is what identifies the grid the
+                     user actually right-clicked.
+
+                     ITEM ORDER IS LOAD-BEARING. Initialize-UiComponents takes Copy, Copy with
+                     Headers, Copy As, Select All, Save Results As, Save Selected As and View Selected
+                     as items 0-6, and the two Copy As children as 0-1. Reordering this markup
+                     silently repoints Copy at a different command. -->
+                                                                <ContextMenu x:Key="DataGridQueryResultContextMenu" FontFamily="Segoe UI" FontSize="13" Foreground="#1F1F1F">
+                                                                        <ContextMenu.Template>
+                                                                                <ControlTemplate TargetType="ContextMenu">
+                                                                                        <Border Background="White" BorderBrush="#D9D9D9" BorderThickness="1" CornerRadius="4" Margin="6" SnapsToDevicePixels="True">
+                                                                                                <Border.Effect>
+                                                                                                        <DropShadowEffect BlurRadius="12" ShadowDepth="2" Opacity="0.18" Color="Black"/>
+                                                                                                </Border.Effect>
+                                                                                                <ItemsPresenter Margin="0,4"/>
+                                                                                        </Border>
+                                                                                </ControlTemplate>
+                                                                        </ContextMenu.Template>
+                                                                        <ContextMenu.Resources>
+                                                                                <ControlTemplate x:Key="DataGridQueryResultFlatMenuItem" TargetType="MenuItem">
+                                                                                        <Border x:Name="Border" Background="Transparent" Padding="12,8">
+                                                                                                <Grid>
+                                                                                                        <Grid.ColumnDefinitions>
+                                                                                                                <ColumnDefinition Width="18"/>
+                                                                                                                <ColumnDefinition Width="12"/>
+                                                                                                                <ColumnDefinition Width="*"/>
+                                                                                                                <ColumnDefinition Width="16"/>
+                                                                                                                <ColumnDefinition Width="Auto"/>
+                                                                                                        </Grid.ColumnDefinitions>
+                                                                                                        <ContentPresenter Grid.Column="0" ContentSource="Icon" VerticalAlignment="Center" HorizontalAlignment="Center"/>
+                                                                                                        <ContentPresenter Grid.Column="2" ContentSource="Header" RecognizesAccessKey="True" VerticalAlignment="Center"/>
+                                                                                                        <TextBlock Grid.Column="4" Text="{TemplateBinding InputGestureText}" VerticalAlignment="Center" Foreground="{TemplateBinding Foreground}" Opacity="0.75"/>
+                                                                                                </Grid>
+                                                                                        </Border>
+                                                                                        <ControlTemplate.Triggers>
+                                                                                                <Trigger Property="IsHighlighted" Value="True">
+                                                                                                        <Setter TargetName="Border" Property="Background" Value="#F1F5F9"/>
+                                                                                                </Trigger>
+                                                                                                <Trigger Property="IsEnabled" Value="False">
+                                                                                                        <Setter Property="Opacity" Value="0.5"/>
+                                                                                                </Trigger>
+                                                                                        </ControlTemplate.Triggers>
+                                                                                </ControlTemplate>
+                                                                                <ControlTemplate x:Key="DataGridQueryResultFlatMenuItemWithSubmenu" TargetType="MenuItem">
+                                                                                        <Border x:Name="Border" Background="Transparent" Padding="12,8">
+                                                                                                <Grid>
+                                                                                                        <Grid.ColumnDefinitions>
+                                                                                                                <ColumnDefinition Width="18"/>
+                                                                                                                <ColumnDefinition Width="12"/>
+                                                                                                                <ColumnDefinition Width="*"/>
+                                                                                                                <ColumnDefinition Width="16"/>
+                                                                                                                <ColumnDefinition Width="Auto"/>
+                                                                                                                <ColumnDefinition Width="16"/>
+                                                                                                        </Grid.ColumnDefinitions>
+                                                                                                        <ContentPresenter Grid.Column="0" ContentSource="Icon" VerticalAlignment="Center" HorizontalAlignment="Center"/>
+                                                                                                        <ContentPresenter Grid.Column="2" ContentSource="Header" RecognizesAccessKey="True" VerticalAlignment="Center"/>
+                                                                                                        <TextBlock Grid.Column="4" Text="{TemplateBinding InputGestureText}" VerticalAlignment="Center" Foreground="{TemplateBinding Foreground}" Opacity="0.75"/>
+                                                                                                        <TextBlock Grid.Column="5" Text="&#xE76C;" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets" FontSize="10" VerticalAlignment="Center" HorizontalAlignment="Center" Foreground="{TemplateBinding Foreground}"/>
+                                                                                                        <Popup x:Name="SubmenuPopup" Placement="Right" HorizontalOffset="-4" VerticalOffset="-8" IsOpen="{TemplateBinding IsSubmenuOpen}" AllowsTransparency="True" Focusable="False" PopupAnimation="Fade">
+                                                                                                                <Border x:Name="SubmenuBorder" Background="White" BorderBrush="#E5E7EB" BorderThickness="1" CornerRadius="6" Padding="4">
+                                                                                                                        <Border.Effect>
+                                                                                                                                <DropShadowEffect Color="#000000" Opacity="0.15" BlurRadius="12" ShadowDepth="2"/>
+                                                                                                                        </Border.Effect>
+                                                                                                                        <ItemsPresenter KeyboardNavigation.DirectionalNavigation="Cycle" Grid.IsSharedSizeScope="True"/>
+                                                                                                                </Border>
+                                                                                                        </Popup>
+                                                                                                </Grid>
+                                                                                        </Border>
+                                                                                        <ControlTemplate.Triggers>
+                                                                                                <Trigger Property="IsHighlighted" Value="True">
+                                                                                                        <Setter TargetName="Border" Property="Background" Value="#F1F5F9"/>
+                                                                                                </Trigger>
+                                                                                                <Trigger Property="IsEnabled" Value="False">
+                                                                                                        <Setter Property="Opacity" Value="0.5"/>
+                                                                                                </Trigger>
+                                                                                        </ControlTemplate.Triggers>
+                                                                                </ControlTemplate>
+                                                                                <Style TargetType="Separator">
+                                                                                        <Setter Property="Template">
+                                                                                                <Setter.Value>
+                                                                                                        <ControlTemplate TargetType="Separator">
+                                                                                                                <Border Height="1" Margin="12,4" Background="#E5E7EB"/>
+                                                                                                        </ControlTemplate>
+                                                                                                </Setter.Value>
+                                                                                        </Setter>
+                                                                                </Style>
+                                                                        </ContextMenu.Resources>
+                                                                        <MenuItem x:Name="DataGridQueryResultMenuItemCopy" Header="Copy" InputGestureText="Ctrl+C" Template="{StaticResource DataGridQueryResultFlatMenuItem}">
+                                                                                <MenuItem.Icon>
+                                                                                        <TextBlock FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets" FontSize="14" Text="&#xE8C8;" Foreground="#4B5563"/>
+                                                                                </MenuItem.Icon>
+                                                                        </MenuItem>
+                                                                        <MenuItem x:Name="DataGridQueryResultMenuItemCopyWithHeaders" Header="Copy with Headers" InputGestureText="Ctrl+Shift+C" Template="{StaticResource DataGridQueryResultFlatMenuItem}">
+                                                                                <MenuItem.Icon>
+                                                                                        <TextBlock FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets" FontSize="14" Text="&#xE8C8;" Foreground="#4B5563"/>
+                                                                                </MenuItem.Icon>
+                                                                        </MenuItem>
+                                                                        <MenuItem x:Name="DataGridQueryResultMenuItemCopyAs" Header="Copy As..." Template="{StaticResource DataGridQueryResultFlatMenuItemWithSubmenu}">
+                                                                                <MenuItem x:Name="DataGridQueryResultMenuItemCopyAsSqlArray" Header="Sql Array" InputGestureText="Ctrl+Shift+S" Template="{StaticResource DataGridQueryResultFlatMenuItem}">
+                                                                                        <MenuItem.Icon>
+                                                                                                <TextBlock FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets" FontSize="14" Text="&#xEA37;" Foreground="#4B5563"/>
+                                                                                        </MenuItem.Icon>
+                                                                                </MenuItem>
+                                                                                <MenuItem x:Name="DataGridQueryResultMenuItemCopyAsPowerShellArray" Header="PowerShell Array" InputGestureText="Ctrl+Shift+P" Template="{StaticResource DataGridQueryResultFlatMenuItem}">
+                                                                                        <MenuItem.Icon>
+                                                                                                <TextBlock FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets" FontSize="14" Text="&#xE756;" Foreground="#4B5563"/>
+                                                                                        </MenuItem.Icon>
+                                                                                </MenuItem>
+                                                                        </MenuItem>
+                                                                        <MenuItem x:Name="DataGridQueryResultMenuItemSelectAll" Header="Select All" InputGestureText="Ctrl+A" Template="{StaticResource DataGridQueryResultFlatMenuItem}">
+                                                                                <MenuItem.Icon>
+                                                                                        <TextBlock FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets" FontSize="14" Text="&#xE8B3;" Foreground="#4B5563"/>
+                                                                                </MenuItem.Icon>
+                                                                        </MenuItem>
+                                                                        <Separator/>
+                                                                        <MenuItem x:Name="DataGridQueryResultMenuItemSaveAs" Header="Save Results As..." Template="{StaticResource DataGridQueryResultFlatMenuItem}">
+                                                                                <MenuItem.Icon>
+                                                                                        <TextBlock FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets" FontSize="14" Text="&#xE74E;" Foreground="#4B5563"/>
+                                                                                </MenuItem.Icon>
+                                                                        </MenuItem>
+                                                                        <MenuItem x:Name="DataGridQueryResultMenuItemSaveSelectedAs" Header="Save Selected As..." Template="{StaticResource DataGridQueryResultFlatMenuItem}">
+                                                                                <MenuItem.Icon>
+                                                                                        <TextBlock FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets" FontSize="14" Text="&#xE74E;" Foreground="#4B5563"/>
+                                                                                </MenuItem.Icon>
+                                                                        </MenuItem>
+                                                                        <MenuItem x:Name="DataGridQueryResultMenuItemViewSelected" Header="View Selected" Template="{StaticResource DataGridQueryResultFlatMenuItem}">
+                                                                                <MenuItem.Icon>
+                                                                                        <TextBlock FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets" FontSize="14" Text="&#xE890;" Foreground="#4B5563"/>
+                                                                                </MenuItem.Icon>
+                                                                        </MenuItem>
+                                                                </ContextMenu>
+                <!-- The header above each per-statement result grid (issue #151). It carries an
+                     explicit Style for exactly the reason the Messages pane does (issues #116, #118):
+                     the implicit <Style TargetType="TextBlock"> at the top of this dictionary pins
+                     Width to 100 and Height to 25 for the form's field labels, an implicit style
+                     reaches every TextBlock in this control, and a Width that resolves to a number
+                     beats HorizontalAlignment="Stretch". A TextBlock with an explicit Style is never
+                     given the implicit one, so this sets no Width and no Height on purpose. -->
+                <Style x:Key="QueryResultHeaderStyle" TargetType="TextBlock">
+                        <Setter Property="HorizontalAlignment" Value="Stretch" />
+                        <Setter Property="VerticalAlignment" Value="Center" />
+                        <Setter Property="Padding" Value="4,2" />
+                        <Setter Property="FontWeight" Value="SemiBold" />
+                        <Setter Property="TextTrimming" Value="CharacterEllipsis" />
+                        <Setter Property="Background" Value="#F1F5F9" />
+                </Style>
         </UserControl.Resources>
 
         <!-- The navy frame around the content lives in MainForm.xaml's TabControl template now, so
@@ -524,139 +678,62 @@
                                                 </Grid>
                                                 <TabControl x:Name="TabControlQueryOutput" Grid.Row="1" HorizontalAlignment="Stretch" VerticalAlignment="Stretch">
                                                         <TabItem Header="Results">
-                                                <DataGrid x:Name="DataGridQueryResult" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Auto" FontFamily="Consolas" IsReadOnly="True" HorizontalAlignment="Stretch" VerticalAlignment="Stretch" Background="{DynamicResource {x:Static SystemColors.WindowBrushKey}}" AlternationCount="{Binding MyObservableCollection.Count}" MinHeight="200" ScrollViewer.CanContentScroll="True" ScrollViewer.VerticalScrollBarVisibility="Auto" ScrollViewer.HorizontalScrollBarVisibility="Auto" CanUserResizeColumns="True" CanUserReorderColumns="True" CanUserSortColumns="False" Focusable="True" IsTabStop="True" SelectionMode="Extended" SelectionUnit="CellOrRowHeader" ClipboardCopyMode="IncludeHeader">
-                                                        <DataGrid.Resources>
-                                                                <Style TargetType="TextBlock">
-                                                                        <Setter Property="VerticalAlignment" Value="Center"/>
-                                                                </Style>
-                                                        </DataGrid.Resources>
-                                                        <DataGrid.ContextMenu>
-                                                                <ContextMenu x:Name="DataGridQueryResultContextMenu" FontFamily="Segoe UI" FontSize="13" Foreground="#1F1F1F">
-                                                                        <ContextMenu.Template>
-                                                                                <ControlTemplate TargetType="ContextMenu">
-                                                                                        <Border Background="White" BorderBrush="#D9D9D9" BorderThickness="1" CornerRadius="4" Margin="6" SnapsToDevicePixels="True">
-                                                                                                <Border.Effect>
-                                                                                                        <DropShadowEffect BlurRadius="12" ShadowDepth="2" Opacity="0.18" Color="Black"/>
-                                                                                                </Border.Effect>
-                                                                                                <ItemsPresenter Margin="0,4"/>
-                                                                                        </Border>
-                                                                                </ControlTemplate>
-                                                                        </ContextMenu.Template>
-                                                                        <ContextMenu.Resources>
-                                                                                <ControlTemplate x:Key="DataGridQueryResultFlatMenuItem" TargetType="MenuItem">
-                                                                                        <Border x:Name="Border" Background="Transparent" Padding="12,8">
-                                                                                                <Grid>
-                                                                                                        <Grid.ColumnDefinitions>
-                                                                                                                <ColumnDefinition Width="18"/>
-                                                                                                                <ColumnDefinition Width="12"/>
-                                                                                                                <ColumnDefinition Width="*"/>
-                                                                                                                <ColumnDefinition Width="16"/>
-                                                                                                                <ColumnDefinition Width="Auto"/>
-                                                                                                        </Grid.ColumnDefinitions>
-                                                                                                        <ContentPresenter Grid.Column="0" ContentSource="Icon" VerticalAlignment="Center" HorizontalAlignment="Center"/>
-                                                                                                        <ContentPresenter Grid.Column="2" ContentSource="Header" RecognizesAccessKey="True" VerticalAlignment="Center"/>
-                                                                                                        <TextBlock Grid.Column="4" Text="{TemplateBinding InputGestureText}" VerticalAlignment="Center" Foreground="{TemplateBinding Foreground}" Opacity="0.75"/>
-                                                                                                </Grid>
-                                                                                        </Border>
-                                                                                        <ControlTemplate.Triggers>
-                                                                                                <Trigger Property="IsHighlighted" Value="True">
-                                                                                                        <Setter TargetName="Border" Property="Background" Value="#F1F5F9"/>
-                                                                                                </Trigger>
-                                                                                                <Trigger Property="IsEnabled" Value="False">
-                                                                                                        <Setter Property="Opacity" Value="0.5"/>
-                                                                                                </Trigger>
-                                                                                        </ControlTemplate.Triggers>
-                                                                                </ControlTemplate>
-                                                                                <ControlTemplate x:Key="DataGridQueryResultFlatMenuItemWithSubmenu" TargetType="MenuItem">
-                                                                                        <Border x:Name="Border" Background="Transparent" Padding="12,8">
-                                                                                                <Grid>
-                                                                                                        <Grid.ColumnDefinitions>
-                                                                                                                <ColumnDefinition Width="18"/>
-                                                                                                                <ColumnDefinition Width="12"/>
-                                                                                                                <ColumnDefinition Width="*"/>
-                                                                                                                <ColumnDefinition Width="16"/>
-                                                                                                                <ColumnDefinition Width="Auto"/>
-                                                                                                                <ColumnDefinition Width="16"/>
-                                                                                                        </Grid.ColumnDefinitions>
-                                                                                                        <ContentPresenter Grid.Column="0" ContentSource="Icon" VerticalAlignment="Center" HorizontalAlignment="Center"/>
-                                                                                                        <ContentPresenter Grid.Column="2" ContentSource="Header" RecognizesAccessKey="True" VerticalAlignment="Center"/>
-                                                                                                        <TextBlock Grid.Column="4" Text="{TemplateBinding InputGestureText}" VerticalAlignment="Center" Foreground="{TemplateBinding Foreground}" Opacity="0.75"/>
-                                                                                                        <TextBlock Grid.Column="5" Text="&#xE76C;" FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets" FontSize="10" VerticalAlignment="Center" HorizontalAlignment="Center" Foreground="{TemplateBinding Foreground}"/>
-                                                                                                        <Popup x:Name="SubmenuPopup" Placement="Right" HorizontalOffset="-4" VerticalOffset="-8" IsOpen="{TemplateBinding IsSubmenuOpen}" AllowsTransparency="True" Focusable="False" PopupAnimation="Fade">
-                                                                                                                <Border x:Name="SubmenuBorder" Background="White" BorderBrush="#E5E7EB" BorderThickness="1" CornerRadius="6" Padding="4">
-                                                                                                                        <Border.Effect>
-                                                                                                                                <DropShadowEffect Color="#000000" Opacity="0.15" BlurRadius="12" ShadowDepth="2"/>
-                                                                                                                        </Border.Effect>
-                                                                                                                        <ItemsPresenter KeyboardNavigation.DirectionalNavigation="Cycle" Grid.IsSharedSizeScope="True"/>
-                                                                                                                </Border>
-                                                                                                        </Popup>
-                                                                                                </Grid>
-                                                                                        </Border>
-                                                                                        <ControlTemplate.Triggers>
-                                                                                                <Trigger Property="IsHighlighted" Value="True">
-                                                                                                        <Setter TargetName="Border" Property="Background" Value="#F1F5F9"/>
-                                                                                                </Trigger>
-                                                                                                <Trigger Property="IsEnabled" Value="False">
-                                                                                                        <Setter Property="Opacity" Value="0.5"/>
-                                                                                                </Trigger>
-                                                                                        </ControlTemplate.Triggers>
-                                                                                </ControlTemplate>
-                                                                                <Style TargetType="Separator">
-                                                                                        <Setter Property="Template">
-                                                                                                <Setter.Value>
-                                                                                                        <ControlTemplate TargetType="Separator">
-                                                                                                                <Border Height="1" Margin="12,4" Background="#E5E7EB"/>
-                                                                                                        </ControlTemplate>
-                                                                                                </Setter.Value>
-                                                                                        </Setter>
-                                                                                </Style>
-                                                                        </ContextMenu.Resources>
-                                                                        <MenuItem x:Name="DataGridQueryResultMenuItemCopy" Header="Copy" InputGestureText="Ctrl+C" Template="{StaticResource DataGridQueryResultFlatMenuItem}">
-                                                                                <MenuItem.Icon>
-                                                                                        <TextBlock FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets" FontSize="14" Text="&#xE8C8;" Foreground="#4B5563"/>
-                                                                                </MenuItem.Icon>
-                                                                        </MenuItem>
-                                                                        <MenuItem x:Name="DataGridQueryResultMenuItemCopyWithHeaders" Header="Copy with Headers" InputGestureText="Ctrl+Shift+C" Template="{StaticResource DataGridQueryResultFlatMenuItem}">
-                                                                                <MenuItem.Icon>
-                                                                                        <TextBlock FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets" FontSize="14" Text="&#xE8C8;" Foreground="#4B5563"/>
-                                                                                </MenuItem.Icon>
-                                                                        </MenuItem>
-                                                                        <MenuItem x:Name="DataGridQueryResultMenuItemCopyAs" Header="Copy As..." Template="{StaticResource DataGridQueryResultFlatMenuItemWithSubmenu}">
-                                                                                <MenuItem x:Name="DataGridQueryResultMenuItemCopyAsSqlArray" Header="Sql Array" InputGestureText="Ctrl+Shift+S" Template="{StaticResource DataGridQueryResultFlatMenuItem}">
-                                                                                        <MenuItem.Icon>
-                                                                                                <TextBlock FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets" FontSize="14" Text="&#xEA37;" Foreground="#4B5563"/>
-                                                                                        </MenuItem.Icon>
-                                                                                </MenuItem>
-                                                                                <MenuItem x:Name="DataGridQueryResultMenuItemCopyAsPowerShellArray" Header="PowerShell Array" InputGestureText="Ctrl+Shift+P" Template="{StaticResource DataGridQueryResultFlatMenuItem}">
-                                                                                        <MenuItem.Icon>
-                                                                                                <TextBlock FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets" FontSize="14" Text="&#xE756;" Foreground="#4B5563"/>
-                                                                                        </MenuItem.Icon>
-                                                                                </MenuItem>
-                                                                        </MenuItem>
-                                                                        <MenuItem x:Name="DataGridQueryResultMenuItemSelectAll" Header="Select All" InputGestureText="Ctrl+A" Template="{StaticResource DataGridQueryResultFlatMenuItem}">
-                                                                                <MenuItem.Icon>
-                                                                                        <TextBlock FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets" FontSize="14" Text="&#xE8B3;" Foreground="#4B5563"/>
-                                                                                </MenuItem.Icon>
-                                                                        </MenuItem>
-                                                                        <Separator/>
-                                                                        <MenuItem x:Name="DataGridQueryResultMenuItemSaveAs" Header="Save Results As..." Template="{StaticResource DataGridQueryResultFlatMenuItem}">
-                                                                                <MenuItem.Icon>
-                                                                                        <TextBlock FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets" FontSize="14" Text="&#xE74E;" Foreground="#4B5563"/>
-                                                                                </MenuItem.Icon>
-                                                                        </MenuItem>
-                                                                        <MenuItem x:Name="DataGridQueryResultMenuItemSaveSelectedAs" Header="Save Selected As..." Template="{StaticResource DataGridQueryResultFlatMenuItem}">
-                                                                                <MenuItem.Icon>
-                                                                                        <TextBlock FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets" FontSize="14" Text="&#xE74E;" Foreground="#4B5563"/>
-                                                                                </MenuItem.Icon>
-                                                                        </MenuItem>
-                                                                        <MenuItem x:Name="DataGridQueryResultMenuItemViewSelected" Header="View Selected" Template="{StaticResource DataGridQueryResultFlatMenuItem}">
-                                                                                <MenuItem.Icon>
-                                                                                        <TextBlock FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets" FontSize="14" Text="&#xE890;" Foreground="#4B5563"/>
-                                                                                </MenuItem.Icon>
-                                                                        </MenuItem>
-                                                                </ContextMenu>
-                                                        </DataGrid.ContextMenu>
-                                                </DataGrid>
+                                                <!-- One result grid per statement, stacked (issue #151). Execute used to run the
+                                                     editor as a single query bound to a single DataGrid, so two SELECTs could not be
+                                                     compared without running each and losing the previous result.
+
+                                                     The outer ScrollViewer is what makes the five-row floor work: each grid's height
+                                                     is set in code to Max(equal share, header + five rows), so once there are enough
+                                                     results the stack is taller than the viewport and this scrolls. Auto, not
+                                                     Visible, so a single result shows no scrollbar at all.
+
+                                                     ItemsSource is assigned in code rather than bound to a view model, matching how
+                                                     this application drives the rest of its UI, and because the per-result state
+                                                     lives on the tab session - see the QueryMessages precedent in
+                                                     Write-TabMessage.ps1.
+
+                                                     The per-result DataGrid is deliberately NOT named: names declared inside a
+                                                     DataTemplate do not reach FindName, so a name here would resolve to nothing and
+                                                     read as if it should. Consumers reach the focused result through the tab
+                                                     session instead. -->
+                                                <ScrollViewer x:Name="ScrollViewerQueryResults" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" HorizontalAlignment="Stretch" VerticalAlignment="Stretch" Background="{DynamicResource {x:Static SystemColors.WindowBrushKey}}">
+                                                        <ItemsControl x:Name="ItemsControlQueryResults" HorizontalAlignment="Stretch" VerticalAlignment="Stretch">
+                                                                <ItemsControl.ItemsPanel>
+                                                                        <ItemsPanelTemplate>
+                                                                                <StackPanel Orientation="Vertical" />
+                                                                        </ItemsPanelTemplate>
+                                                                </ItemsControl.ItemsPanel>
+                                                                <ItemsControl.ItemTemplate>
+                                                                        <DataTemplate>
+                                                                                <Grid Margin="0,0,0,6">
+                                                                                        <Grid.RowDefinitions>
+                                                                                                <!-- All Auto: the item's desired height is the header plus whatever
+                                                                                                     height the sizing pass gave the grid, plus the splitter, which is
+                                                                                                     what the outer ScrollViewer measures against its viewport. -->
+                                                                                                <RowDefinition Height="Auto" />
+                                                                                                <RowDefinition Height="Auto" />
+                                                                                                <RowDefinition Height="Auto" />
+                                                                                        </Grid.RowDefinitions>
+                                                                                        <TextBlock Grid.Row="0" Style="{StaticResource QueryResultHeaderStyle}" Text="{Binding Header}" />
+                                                                                        <DataGrid Grid.Row="1" ItemsSource="{Binding Rows}" ContextMenu="{StaticResource DataGridQueryResultContextMenu}" AutoGenerateColumns="True" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Auto" FontFamily="Consolas" IsReadOnly="True" HorizontalAlignment="Stretch" VerticalAlignment="Stretch" Background="{DynamicResource {x:Static SystemColors.WindowBrushKey}}" ScrollViewer.CanContentScroll="True" ScrollViewer.VerticalScrollBarVisibility="Auto" ScrollViewer.HorizontalScrollBarVisibility="Auto" CanUserResizeColumns="True" CanUserReorderColumns="True" CanUserSortColumns="False" Focusable="True" IsTabStop="True" SelectionMode="Extended" SelectionUnit="CellOrRowHeader" ClipboardCopyMode="IncludeHeader">
+                                                                                                <DataGrid.Resources>
+                                                                                                        <Style TargetType="TextBlock">
+                                                                                                                <Setter Property="VerticalAlignment" Value="Center"/>
+                                                                                                        </Style>
+                                                                                                </DataGrid.Resources>
+                                                                                        </DataGrid>
+                                                                                        <!-- Drag to resize this result (issue #151 feedback). ResizeBehavior is
+                                                                                             CurrentAndNext in a Grid whose rows are Auto, so the splitter cannot
+                                                                                             size them itself - Register-QueryResultGridHandler watches
+                                                                                             DragCompleted and writes the new height onto the DataGrid instead,
+                                                                                             which is also what lets the sizing pass know the user has sized this
+                                                                                             one and leave it alone until the next execute. -->
+                                                                                        <GridSplitter Grid.Row="2" Height="5" HorizontalAlignment="Stretch" VerticalAlignment="Bottom" ResizeDirection="Rows" ResizeBehavior="CurrentAndNext" ShowsPreview="False" Background="#E5E7EB" Cursor="SizeNS" />
+                                                                                </Grid>
+                                                                        </DataTemplate>
+                                                                </ItemsControl.ItemTemplate>
+                                                        </ItemsControl>
+                                                </ScrollViewer>
                                                         </TabItem>
                                                         <TabItem Header="Messages">
                                                                 <!-- A read-only TextBox rather than a TextBlock: issue #93 requires the error
