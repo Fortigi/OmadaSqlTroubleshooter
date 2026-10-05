@@ -519,6 +519,39 @@ Describe "Complete-ExecuteQueryResult" {
         $Script:TestTabSession.Elements.TabControlQueryOutput.SelectedIndex | Should -Be 1
     }
 
+    It "selects Messages when a LATER statement failed even though rows arrived" {
+        # Issue #151 feedback: the bug in continue-on-error. $Outcome.ErrorRecord carries only the
+        # FIRST statement's error, so a run where statement 1 returned rows and statement 2 failed
+        # reached here with -Failed unset - and the success path left Results selected. The failure
+        # existed only as a line in the Messages breakdown, which the user had no reason to open.
+        #
+        # Rows are present on purpose: a run can both succeed and fail now, and it is that
+        # combination, not an outright failure, that was being reported as success.
+        # The successful statement carries a real QueryResult, and that is load-bearing rather than
+        # decoration: Set-TabQueryResult is dot-sourced for real here and derives the run's row total
+        # from the OUTCOMES, not from the -QueryResult argument. An outcome without one contributes no
+        # rows, the run reads as zero rows, and this test then passes because of the empty-result rule
+        # instead of the one it is about - which is exactly how it passed before this fixture was
+        # corrected.
+        Complete-ExecuteQueryResult -QueryResult (New-ResultResponse -RowCount 2) -SaveResult ([pscustomobject]@{ Id = 100; DisplayName = "TestQuery" }) -TempQueryDoId $null -StatementOutcome @(
+            @{ Ordinal = 1; RowsRead = 2; ErrorRecord = $null; QueryResult = (New-ResultResponse -RowCount 2) }
+            @{ Ordinal = 2; RowsRead = 0; ErrorRecord = "boom"; QueryResult = $null }
+        )
+
+        $Script:TestTabSession.Elements.TabControlQueryOutput.SelectedIndex | Should -Be 1
+    }
+
+    It "still leaves Results selected when every statement succeeded" {
+        # The other half of the pair. A multi-statement run that worked must not be dragged to
+        # Messages - otherwise the fix above would cost every successful run its data view.
+        Complete-ExecuteQueryResult -QueryResult (New-ResultResponse -RowCount 2) -SaveResult ([pscustomobject]@{ Id = 100; DisplayName = "TestQuery" }) -TempQueryDoId $null -StatementOutcome @(
+            @{ Ordinal = 1; RowsRead = 2; ErrorRecord = $null; QueryResult = (New-ResultResponse -RowCount 2) }
+            @{ Ordinal = 2; RowsRead = 3; ErrorRecord = $null; QueryResult = (New-ResultResponse -RowCount 3) }
+        )
+
+        $Script:TestTabSession.Elements.TabControlQueryOutput.SelectedIndex | Should -Be 0
+    }
+
     It "does not re-select Results for a query that returned rows onto an already-selected Results tab" {
         # The acceptance criterion that the tab only switches when it is not already correct.
         # Assigning SelectedIndex the value it already holds still raises SelectionChanged in WPF,
@@ -590,6 +623,60 @@ Describe "Complete-ExecuteQueryResult" {
         # the background (issue #40), a failure that does not say which query failed is the one that
         # most needs to.
         Complete-ExecuteQueryResult -QueryResult $null -SaveResult ([pscustomobject]@{ Id = 100; DisplayName = "TestQuery" }) -TempQueryDoId $null -Failed
+
+        $Script:TestTabSession.Elements.TextBlockStatusBarMessage.Text |
+            Should -Be "Query 'TestQuery' failed - see Messages"
+    }
+
+    # --- The fourth outcome: a run that partly failed (issue #151) ---------------------------------
+    # Continue-on-error made "succeeded" and "failed" stop being exhaustive. A run can return rows AND
+    # have failed a statement, and that run was being reported as a plain success.
+
+    It "says how many statements failed when some of them did" {
+        # The count is the useful part. "Failed" alone, over a pane holding two perfectly good result
+        # grids, tells the user neither how much of their script ran nor how much to re-run.
+        Complete-ExecuteQueryResult -QueryResult (New-ResultResponse -RowCount 2) -SaveResult ([pscustomobject]@{ Id = 100; DisplayName = "TestQuery" }) -TempQueryDoId $null -StatementOutcome @(
+            @{ Ordinal = 1; RowsRead = 2; ErrorRecord = $null; QueryResult = (New-ResultResponse -RowCount 2) }
+            @{ Ordinal = 2; RowsRead = 0; ErrorRecord = "boom"; QueryResult = $null }
+            @{ Ordinal = 3; RowsRead = 1; ErrorRecord = $null; QueryResult = (New-ResultResponse -RowCount 1) }
+        )
+
+        $Script:TestTabSession.Elements.TextBlockStatusBarMessage.Text |
+            Should -Be "Query 'TestQuery' failed on 1 of 3 statement(s) - see Messages"
+    }
+
+    It "does not report a partly failed run as executed successfully" {
+        # Stated as its own test because this is the regression, and the one a reader of the status
+        # bar cannot detect for themselves: rows were bound, so every visible signal said success.
+        Complete-ExecuteQueryResult -QueryResult (New-ResultResponse -RowCount 2) -SaveResult ([pscustomobject]@{ Id = 100; DisplayName = "TestQuery" }) -TempQueryDoId $null -StatementOutcome @(
+            @{ Ordinal = 1; RowsRead = 2; ErrorRecord = $null; QueryResult = (New-ResultResponse -RowCount 2) }
+            @{ Ordinal = 2; RowsRead = 0; ErrorRecord = "boom"; QueryResult = $null }
+        )
+
+        $Script:TestTabSession.Elements.TextBlockStatusBarMessage.Text |
+            Should -Not -BeLike "*executed successfully*"
+    }
+
+    It "keeps saying executed successfully when every statement ran" {
+        # The boundary. A multi-statement run with no failures reads exactly as a single successful
+        # query does, so the new branch costs nothing to the ordinary case.
+        Complete-ExecuteQueryResult -QueryResult (New-ResultResponse -RowCount 2) -SaveResult ([pscustomobject]@{ Id = 100; DisplayName = "TestQuery" }) -TempQueryDoId $null -StatementOutcome @(
+            @{ Ordinal = 1; RowsRead = 2; ErrorRecord = $null; QueryResult = (New-ResultResponse -RowCount 2) }
+            @{ Ordinal = 2; RowsRead = 3; ErrorRecord = $null; QueryResult = (New-ResultResponse -RowCount 3) }
+        )
+
+        $Script:TestTabSession.Elements.TextBlockStatusBarMessage.Text |
+            Should -Be "Query 'TestQuery' executed successfully - see Messages"
+    }
+
+    It "reports an outright failure as failed rather than as a count of statements" {
+        # Precedence between the two failure branches. An execute that failed before any statement
+        # ran has outcomes that all carry an error, and "failed on 2 of 2 statement(s)" would be a
+        # strange way to say the whole thing never started.
+        Complete-ExecuteQueryResult -QueryResult $null -SaveResult ([pscustomobject]@{ Id = 100; DisplayName = "TestQuery" }) -TempQueryDoId $null -Failed -StatementOutcome @(
+            @{ Ordinal = 1; RowsRead = 0; ErrorRecord = "boom" }
+            @{ Ordinal = 2; RowsRead = 0; ErrorRecord = "boom" }
+        )
 
         $Script:TestTabSession.Elements.TextBlockStatusBarMessage.Text |
             Should -Be "Query 'TestQuery' failed - see Messages"

@@ -250,15 +250,73 @@ try {
             $FocusFollowsGrid = ($FocusedIndexAfter -eq ($Grids.Count - 1))
         }
 
+        # Snapshotted BEFORE the drag probe below, which deliberately changes a grid's height. Reading
+        # these inside the return statement instead would report post-drag numbers for every sizing
+        # criterion - and the drag also moves the extent, which can bring the outer scrollbar in or
+        # out, so AC 5, 6 and 8 would all be measured against a pane the sizing pass never produced.
+        $GridHeightsAfterSizing = @($Grids | ForEach-Object { [math]::Round([double]$_.ActualHeight, 2) })
+        $ViewportAfterSizing = [math]::Round([double]$ScrollViewer.ViewportHeight, 2)
+        $ExtentAfterSizing = [math]::Round([double]$ScrollViewer.ExtentHeight, 2)
+        $ScrollBarVisibleAfterSizing = ($ScrollViewer.ComputedVerticalScrollBarVisibility -eq [System.Windows.Visibility]::Visible)
+
+        # The LIVE resize, raised as a real DragDelta on the real splitter (issue #151 feedback: the
+        # grid did not move until the handle was released). ShowsPreview drew an adorner and applied
+        # nothing until DragCompleted, so the contents were invisible for the whole drag.
+        #
+        # Measured rather than reasoned about, because "a handler is attached" and "the grid resizes"
+        # are different claims - and the only splitter coverage that existed was the diagnostic
+        # script noting that a GridSplitter appears somewhere in the tree.
+        #
+        # GridSplitter derives from Thumb, so DragDelta is Thumb.DragDeltaEvent raised on the splitter
+        # itself, which is exactly what the production handler subscribes to. The splitter's own
+        # internal handler ignores the event because no real drag is in progress, which is what makes
+        # this a test of our handler alone.
+        $ResizeProbe = @{
+            SplitterFound    = $false
+            HeightBefore     = 0.0
+            HeightAfterDrag  = 0.0
+            HeightAfterClamp = 0.0
+            Floor            = 0.0
+            UserSizedSet     = $false
+        }
+
+        if ($Grids.Count -gt 0 -and $Containers.Count -gt 0) {
+            $DragGrid = $Grids[0]
+            $Splitter = Get-VisualDescendant -Parent $Containers[0] -Type ([System.Windows.Controls.GridSplitter])
+
+            if ($null -ne $Splitter) {
+                $ResizeProbe.SplitterFound = $true
+                $ResizeProbe.HeightBefore = [double]$DragGrid.ActualHeight
+                $ResizeProbe.Floor = [double](Get-QueryResultGridFloor -DataGrid $DragGrid -RowCount 1)
+
+                $Drag = New-Object System.Windows.Controls.Primitives.DragDeltaEventArgs(0, 40)
+                $Drag.RoutedEvent = [System.Windows.Controls.Primitives.Thumb]::DragDeltaEvent
+                $Splitter.RaiseEvent($Drag)
+                $Window.UpdateLayout()
+
+                $ResizeProbe.HeightAfterDrag = [double]$DragGrid.ActualHeight
+                $ResizeProbe.UserSizedSet = (($DragGrid.Tag -is [hashtable]) -and [bool]$DragGrid.Tag.UserSized)
+
+                # A drag far past the top edge, to see the floor hold. A grid allowed to collapse to
+                # nothing takes its own splitter off screen with it, leaving nothing to grab.
+                $Collapse = New-Object System.Windows.Controls.Primitives.DragDeltaEventArgs(0, -5000)
+                $Collapse.RoutedEvent = [System.Windows.Controls.Primitives.Thumb]::DragDeltaEvent
+                $Splitter.RaiseEvent($Collapse)
+                $Window.UpdateLayout()
+
+                $ResizeProbe.HeightAfterClamp = [double]$DragGrid.ActualHeight
+            }
+        }
+
         return @{
             Count                      = $Grids.Count
-            GridHeights                = @($Grids | ForEach-Object { [math]::Round([double]$_.ActualHeight, 2) })
+            GridHeights                = $GridHeightsAfterSizing
             MeasuredRowHeight          = [math]::Round($RowHeight, 2)
             MeasuredHeaderHeight       = [math]::Round($HeaderHeight, 2)
             Floor                      = [math]::Round($HeaderHeight + 5 * $RowHeight, 2)
-            ViewportHeight             = [math]::Round([double]$ScrollViewer.ViewportHeight, 2)
-            ExtentHeight               = [math]::Round([double]$ScrollViewer.ExtentHeight, 2)
-            OuterScrollBarVisible      = ($ScrollViewer.ComputedVerticalScrollBarVisibility -eq [System.Windows.Visibility]::Visible)
+            ViewportHeight             = $ViewportAfterSizing
+            ExtentHeight               = $ExtentAfterSizing
+            OuterScrollBarVisible      = $ScrollBarVisibleAfterSizing
             # Both derived from the PRE-sizing viewport and allowance, because those are the inputs
             # Update-QueryResultStackLayout actually read. Recomputing them from the post-sizing
             # viewport compares the outcome against a number the pass never saw - sizing changes the
@@ -281,6 +339,16 @@ try {
             FocusedIndexAfter          = $FocusedIndexAfter
             FocusCallReturned          = $FocusCallReturned
             KeyboardFocusWithin        = $KeyboardFocusWithin
+            # The live resize. Reported as measurements, not verdicts - the parent decides what these
+            # numbers have to be.
+            ResizeProbe                = @{
+                SplitterFound    = $ResizeProbe.SplitterFound
+                HeightBefore     = [math]::Round($ResizeProbe.HeightBefore, 2)
+                HeightAfterDrag  = [math]::Round($ResizeProbe.HeightAfterDrag, 2)
+                HeightAfterClamp = [math]::Round($ResizeProbe.HeightAfterClamp, 2)
+                Floor            = [math]::Round($ResizeProbe.Floor, 2)
+                UserSizedSet     = $ResizeProbe.UserSizedSet
+            }
         }
     }
 

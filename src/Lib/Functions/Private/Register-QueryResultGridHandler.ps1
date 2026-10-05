@@ -284,11 +284,19 @@ function Register-QueryResultGridHandler {
                 # captures, which is what silently broke the focus handlers earlier in this feature.
                 $SplitterGrid = $Private:Grid
 
-                $Private:Splitter.Add_DragCompleted({
+                # LIVE, on DragDelta - so the grid's rows move with the handle instead of appearing
+                # only when it is released. The markup pairs with this: ShowsPreview is False, because
+                # a preview adorner is precisely the "drag a grey bar, see nothing until you let go"
+                # behaviour this replaces.
+                #
+                # DragDelta's VerticalChange is the change since the LAST DragDelta, not since the
+                # start of the drag, so it is applied incrementally to the current height. That is
+                # also why DragCompleted below no longer applies anything: doing both would move the
+                # grid twice as far as the handle.
+                $Private:Splitter.Add_DragDelta({
                         try {
                             $Private:DragArgs = $args[1]
-                            $Private:Current = [double]$SplitterGrid.ActualHeight
-                            $Private:Wanted = $Private:Current + [double]$Private:DragArgs.VerticalChange
+                            $Private:Wanted = [double]$SplitterGrid.ActualHeight + [double]$Private:DragArgs.VerticalChange
 
                             # Never smaller than one row plus the header: a drag that collapses a
                             # result to nothing leaves the user with a grid they cannot grab again.
@@ -299,15 +307,26 @@ function Register-QueryResultGridHandler {
 
                             $SplitterGrid.Height = $Private:Wanted
 
-                            # Marked so Update-QueryResultStackLayout stops sizing this grid. The mark
-                            # lives on the grid, and rebinding the results regenerates the grids - so
-                            # the automatic equal-share sizing resumes on the next execute, which is
-                            # the agreed behaviour, with no explicit clearing needed.
+                            # Marked on the first delta, not at the end: the sizing pass must already
+                            # be leaving this grid alone while the drag is in progress, or a pane
+                            # resize mid-drag would fight the handle.
+                            if ($SplitterGrid.Tag -is [hashtable]) {
+                                $SplitterGrid.Tag.UserSized = $true
+                            }
+                        }
+                        catch {
+                            $_.Exception.Message | Write-LogOutput -LogType DEBUG
+                        }
+                    }.GetNewClosure())
+
+                # The height is already applied by then - this only records what the user settled on.
+                $Private:Splitter.Add_DragCompleted({
+                        try {
                             if ($SplitterGrid.Tag -is [hashtable]) {
                                 $SplitterGrid.Tag.UserSized = $true
                             }
 
-                            "Result grid resized by the user to {0:n1}" -f $Private:Wanted | Write-LogOutput -LogType VERBOSE
+                            "Result grid resized by the user to {0:n1}" -f [double]$SplitterGrid.ActualHeight | Write-LogOutput -LogType VERBOSE
                         }
                         catch {
                             $_.Exception.Message | Write-LogOutput -LogType DEBUG

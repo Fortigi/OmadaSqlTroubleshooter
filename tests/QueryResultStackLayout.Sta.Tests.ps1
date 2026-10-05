@@ -246,4 +246,44 @@ Describe "The Results pane's stacked layout, measured in an STA host" -Tag 'Sta'
             $Private:Many.ExtentHeight | Should -BeGreaterThan $Private:Many.ViewportHeight
         }
     }
+
+    Context 'The grid resizes while the handle is being dragged' {
+        # Issue #151 feedback, second round: the grids were resizable, but nothing moved until the
+        # handle was released - so the user was dragging a grey bar with no idea what they were
+        # choosing. ShowsPreview drew a preview adorner and applied the change only on DragCompleted.
+        #
+        # These assert on a real DragDelta raised on the real GridSplitter. Nothing else in the suite
+        # could see this: the previous splitter coverage was the diagnostic script observing that a
+        # GridSplitter exists somewhere in the visual tree, which stayed true the whole time the
+        # behaviour was broken.
+
+        It 'finds the splitter under the result it belongs to' {
+            # Guards the three tests below, which are vacuous if no splitter was found to drag.
+            $Script:Measured.TwoResults.ResizeProbe.SplitterFound | Should -BeTrue
+        }
+
+        It 'grows the grid as the handle moves, not when it is released' {
+            # The fix itself. DragDelta carries the change since the LAST delta, so it is applied
+            # incrementally - and DragCompleted no longer applies anything, or a 40px drag would move
+            # the grid 80px.
+            $Private:Resize = $Script:Measured.TwoResults.ResizeProbe
+            $Private:Resize.HeightAfterDrag | Should -BeGreaterThan $Private:Resize.HeightBefore
+            [math]::Abs($Private:Resize.HeightAfterDrag - ($Private:Resize.HeightBefore + 40)) | Should -BeLessThan 2
+        }
+
+        It 'stops at the measured floor rather than letting the grid collapse' {
+            # A drag far past the top edge. Without the clamp the grid - and the splitter sitting at
+            # the bottom of it - shrink to nothing, and there is no handle left to drag back.
+            $Private:Resize = $Script:Measured.TwoResults.ResizeProbe
+            $Private:Resize.Floor | Should -BeGreaterThan 10
+            [math]::Abs($Private:Resize.HeightAfterClamp - $Private:Resize.Floor) | Should -BeLessThan 2
+        }
+
+        It 'marks the grid as user-sized so the next pane resize leaves it alone' {
+            # The agreed behaviour: a dragged height sticks until the next execute. The mark is set on
+            # the first delta rather than at the end of the drag, so the sizing pass is already
+            # leaving the grid alone while the handle is still moving.
+            $Script:Measured.TwoResults.ResizeProbe.UserSizedSet | Should -BeTrue
+        }
+    }
 }

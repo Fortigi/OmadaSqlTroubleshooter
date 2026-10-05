@@ -124,6 +124,42 @@ Describe "The menu's item order is load-bearing" {
     }
 }
 
+Describe "Each result carries its own resize handle" {
+    # Issue #151 feedback. The per-result GridSplitter is asserted here because its ATTRIBUTES are
+    # load-bearing in a way that reads as cosmetic:
+    #
+    #   ShowsPreview="False" is what makes the resize live. With it True, WPF draws a preview adorner
+    #   and applies nothing until the handle is released - which is precisely the "drag a grey bar and
+    #   see nothing happen" the DragDelta handler in Register-QueryResultGridHandler replaced. Setting
+    #   it back to True would revert that behaviour while every other test still passed.
+    #
+    # The behaviour itself - the grid growing as the handle moves, and the floor holding - is measured
+    # in QueryResultStackLayout.Sta.Tests.ps1, which raises a real DragDelta. This guards the markup
+    # the handler is paired with.
+
+    BeforeAll {
+        $Script:SplitterNode = $Script:TabXaml.DocumentElement.SelectSingleNode(
+            "//d:ItemsControl[@*[local-name()='Name']='ItemsControlQueryResults']/d:ItemsControl.ItemTemplate/d:DataTemplate//d:GridSplitter", $Script:Namespaces)
+    }
+
+    It "declares a splitter inside the per-result template" {
+        # Per result, not one for the pane: each grid is resized against the one below it.
+        $Script:SplitterNode | Should -Not -BeNullOrEmpty
+    }
+
+    It "shows no preview adorner, so the contents move with the handle" {
+        # The user-visible requirement, stated as an assertion on the one attribute that decides it.
+        $Script:SplitterNode.ShowsPreview | Should -Be "False"
+    }
+
+    It "resizes rows against the result below it" {
+        # A GridSplitter cannot resize an Auto row, and ResizeBehavior is what pairs the dragged
+        # result with its neighbour rather than with the whole pane.
+        $Script:SplitterNode.ResizeDirection | Should -Be "Rows"
+        $Script:SplitterNode.ResizeBehavior | Should -Be "CurrentAndNext"
+    }
+}
+
 Describe "The menu kept the templates it depends on" {
     # The two keyed ControlTemplates live inside the menu's own ContextMenu.Resources, which is why the
     # move was self-contained: they travelled with it. If they were left behind, every MenuItem's

@@ -578,6 +578,15 @@ function Complete-ExecuteQueryResult {
         # RunTimeData beside LastRowsRead - which the same summary call already reads.
         $Script:RunTimeData.LastStatementOutcome = $Private:Statement
 
+        # How many statements failed, which is a FOURTH outcome this function has to report.
+        #
+        # Continue-on-error means a run can both return rows and contain a failure, and nothing said
+        # so: $Outcome.ErrorRecord carries only the FIRST statement's error, so a run where statement
+        # 1 succeeded and statement 3 failed arrived here with -Failed unset and rows bound. The bar
+        # read "executed successfully", Results stayed selected, and the only trace of the failure was
+        # a line in the Messages breakdown the user had no reason to look at.
+        $Private:FailedStatementCount = @($Private:Statement | Where-Object { $null -ne $_.ErrorRecord }).Count
+
         if (-not $Private:ReturnedRows) {
             if (-not $Failed) {
                 "Query did not return any results!" | Write-LogOutput -LogType WARNING -TabScoped
@@ -687,7 +696,10 @@ function Complete-ExecuteQueryResult {
         # returned rows onto an already-selected Results tab does not visibly re-select anything. It
         # is scoped to the tab the execute belongs to, which the completion has already made active,
         # so a background completion on one tab cannot move another tab's selection.
-        if ($Failed -or -not $Private:ReturnedRows) {
+        # A run that contains ANY failed statement lands on Messages too, even when other statements
+        # returned rows. The rows are still there to go back to; the failure is the thing the user
+        # cannot be left to discover for themselves.
+        if ($Failed -or -not $Private:ReturnedRows -or $Private:FailedStatementCount -gt 0) {
             Set-TabOutputSelection -TabSession (Get-ActiveTabSession) -Pane Messages
         }
         else {
@@ -727,8 +739,18 @@ function Complete-ExecuteQueryResult {
         # Named in all three, failures included. Naming only the successes was backwards: with
         # several tabs open and queries running in the background (issue #40), a failure that does
         # not say WHICH query failed is the one that most needs to.
+        # FOUR outcomes now. The partial failure sits above the success branch deliberately: a run
+        # that returned rows AND failed a statement would otherwise fall through to "executed
+        # successfully", which is the bug this fixes - strictly true of some statements and
+        # misleading about the run.
+        #
+        # It names the count rather than just saying "failed", because with several statements the
+        # first thing the user needs to know is how much of their run actually ran.
         if ($Failed) {
             Set-TabStatusMessage -Message ("{0} failed - see Messages" -f $Private:StatusSubject)
+        }
+        elseif ($Private:FailedStatementCount -gt 0) {
+            Set-TabStatusMessage -Message ("{0} failed on {1} of {2} statement(s) - see Messages" -f $Private:StatusSubject, $Private:FailedStatementCount, @($Private:Statement).Count)
         }
         elseif (-not $Private:ReturnedRows) {
             Set-TabStatusMessage -Message ("{0} returned no rows - see Messages" -f $Private:StatusSubject)
