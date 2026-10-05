@@ -48,7 +48,12 @@ function Initialize-FormObject {
         }
 
         $Elements = @()
-        $ElementNames = @( "AccessText", "Button", "CheckBox", "ComboBox", "ComboBoxItem", "DataGrid", "Image", "Label", "PasswordBox", "RadioButton", "RichTextBox", "TabControl", "TextBlock", "TextBox", "TreeViewSqlSchema", "WebView2")
+        # ItemsControl and ScrollViewer are here for the Results pane's stack of per-statement grids
+        # (issue #151). Discovery is a closed list of type names rather than a tree walk, so a named
+        # element of a type that is not listed never reaches $Elements at all - it comes back $null,
+        # and every consumer of it fails in a way that looks like a binding problem rather than a
+        # missing lookup.
+        $ElementNames = @( "AccessText", "Button", "CheckBox", "ComboBox", "ComboBoxItem", "DataGrid", "Image", "ItemsControl", "Label", "PasswordBox", "RadioButton", "RichTextBox", "ScrollViewer", "TabControl", "TextBlock", "TextBox", "TreeViewSqlSchema", "WebView2")
         foreach ($ElementName in $ElementNames) {
             "Find element type: {0}" -f $ElementName | Write-LogOutput -LogType DEBUG
             # WebView2 is declared under the Wpf clr-namespace prefix (Microsoft.Web.WebView2.Wpf),

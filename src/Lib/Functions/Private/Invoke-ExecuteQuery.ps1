@@ -92,6 +92,24 @@ function Invoke-ExecuteQuery {
                     # The context is gathered HERE, on the UI thread, as plain values. The worker gets
                     # no $Script: state and no WPF, and returns a description of what happened for the
                     # completion to apply.
+                    # Issue #151: the text that is about to run becomes one query per statement, and
+                    # each one gets its own result grid. Split HERE, on the UI thread, so the worker
+                    # receives plain values and stays runspace-safe - it cannot reach ScriptDom or
+                    # this module's functions.
+                    #
+                    # The text split is $Private:TextToValidate, which is already "the selection when
+                    # there is one, the whole editor otherwise" - the same text the validation gate
+                    # above checked. Splitting the SELECTION rather than mapping editor offsets onto
+                    # the model is what makes "select one statement and execute" come out as exactly
+                    # one query, identical to before this issue, with no offset arithmetic to get
+                    # wrong. Selecting three of five statements runs three.
+                    #
+                    # Get-SqlScriptStatement returns a single entry carrying the original text when it
+                    # cannot split safely - no parser, parse errors, or nothing to run - so this never
+                    # reduces what gets executed.
+                    $Private:Statement = Get-SqlScriptStatement -SqlText $Private:TextToValidate
+                    "Executing {0} statement(s)." -f @($Private:Statement).Count | Write-LogOutput -LogType DEBUG
+
                     $Private:PipelineContext = @{
                         BaseUrl            = $Script:AppConfig.BaseUrl
                         QueryDoId          = $Script:AppConfig.CurrentSqlQuery.DoId
@@ -101,6 +119,7 @@ function Invoke-ExecuteQuery {
                         CurrentDisplayName = $Script:RunTimeData.CurrentSqlQuery.DisplayName
                         DataConnectionDoId = $Script:AppConfig.CurrentDataConnection.DoId
                         SelectionText      = $Private:SelectionText
+                        Statements         = $Private:Statement
                         TempName           = "TMP_$($Script:RunTimeConfig.InstanceGuid)"
                         SkipSave           = $false
                     }
@@ -232,7 +251,12 @@ function Reset-ExecuteQueryUiState {
                 # every path funnels through, including the failures that never reach a result. It
                 # also runs with the owning tab made active: the poll timer steps into it before
                 # invoking a completion, so the summary lands on the tab that ran the query.
-                Write-TabExecuteSummary -RowsRead $Script:RunTimeData.LastRowsRead -Elapsed $Private:Elapsed
+                # LastStatementOutcome, alongside LastRowsRead, and for the same reason: this teardown
+                # is the single funnel every execute passes through - including the failures that
+                # never reach a result - but it has no access to the pipeline's outcomes. The
+                # completion that DOES have them leaves them here, so the per-statement breakdown
+                # (issue #151) is written from the one place that already writes the run totals.
+                Write-TabExecuteSummary -RowsRead $Script:RunTimeData.LastRowsRead -Elapsed $Private:Elapsed -StatementOutcome $Script:RunTimeData.LastStatementOutcome
             }
         }
     }
@@ -424,7 +448,15 @@ function Complete-ExecuteQueryPipeline {
             }
 
             "The query pipeline failed at step '{0}': {1}" -f $Outcome.FailedStep, $Outcome.ErrorRecord.Exception.Message | Write-ContainedErrorLog -ErrorObject $Outcome.ErrorRecord -TabScoped
-            Complete-ExecuteQueryResult -QueryResult $Outcome.ErrorRecord -SaveResult $Outcome.SaveResult -TempQueryDoId $null -Failed
+            # -StatementOutcome on the FAILURE path too, and that asymmetry was a real bug: the
+            # pipeline mirrors only the FIRST statement into $Outcome.ErrorRecord, so a run where
+            # statement 1 fails and 2..N succeed lands here (Resolve-ExecuteFallbackAction returns
+            # "Report" once any step reached the tenant). Without the outcomes,
+            # Complete-ExecuteQueryResult synthesised a single statement from the ErrorRecord - which
+            # has no .d.Rows - bound zero grids and reported 0 rows, discarding every result that DID
+            # come back. That defeats "continue past a failing statement" in precisely its commonest
+            # case.
+            Complete-ExecuteQueryResult -QueryResult $Outcome.ErrorRecord -SaveResult $Outcome.SaveResult -TempQueryDoId $null -Failed -StatementOutcome $Outcome.StatementOutcome
             return
         }
 
@@ -440,7 +472,9 @@ function Complete-ExecuteQueryPipeline {
 
         # TempQueryDoId is passed as $null on purpose: the pipeline already deleted the temporary
         # object in its own finally, whatever the outcome. Passing it would delete it twice.
-        Complete-ExecuteQueryResult -QueryResult $Outcome.QueryResult -SaveResult $Outcome.SaveResult -TempQueryDoId $null
+        # StatementOutcome carries every statement's result; QueryResult is still the first of them,
+        # for the consumers that predate issue #151.
+        Complete-ExecuteQueryResult -QueryResult $Outcome.QueryResult -SaveResult $Outcome.SaveResult -TempQueryDoId $null -StatementOutcome $Outcome.StatementOutcome
     }
     catch {
         Reset-ExecuteQueryUiState
@@ -489,7 +523,11 @@ function Complete-ExecuteQueryResult {
         $QueryResult,
         $SaveResult,
         $TempQueryDoId,
-        [switch]$Failed
+        [switch]$Failed,
+        # The pipeline's per-statement outcomes (issue #151), in editor order. Omitted by the failure
+        # paths and by everything that predates the issue; a single response is then bound as a
+        # one-statement run, so those callers behave exactly as they did before.
+        $StatementOutcome
     )
 
     try {
@@ -506,32 +544,114 @@ function Complete-ExecuteQueryResult {
         # a phantom row and the Show output / Save output buttons were enabled for a result that does
         # not exist. Null became far more reachable once a request could fail or be abandoned in a
         # worker, so it is now treated as what it is - no rows.
-        if ($null -eq $Script:RunTimeData.QueryResult -or ($Script:RunTimeData.QueryResult.d.Rows | Measure-Object).Count -le 0) {
+        # Issue #151: one result grid per statement, bound from the pipeline's per-statement outcomes.
+        #
+        # A caller that has only a single response - every failure path, and everything that predates
+        # the issue - is turned into a one-statement run here rather than handled by a second branch.
+        # One binding path means a single execute cannot drift from a multi-statement one, which is
+        # what "a single result must look exactly as it does today" ultimately depends on.
+        # The nulls are filtered, not merely wrapped: @($null) has a Count of ONE in PowerShell, so a
+        # caller that passed no outcomes at all would otherwise produce a single null "statement",
+        # which Set-TabQueryResult skips - binding nothing and reporting zero rows for a run that
+        # returned plenty. Every failure path and every pre-#151 caller takes exactly that route, so
+        # this guard is the difference between a single execute working and silently claiming it
+        # returned no rows.
+        $Private:Statement = @($StatementOutcome | Where-Object { $null -ne $_ })
+        if ($Private:Statement.Count -eq 0 -and $null -ne $Script:RunTimeData.QueryResult) {
+            $Private:Statement = @(@{
+                    Ordinal     = 1
+                    Text        = $null
+                    QueryResult = $Script:RunTimeData.QueryResult
+                    ErrorRecord = $null
+                    FailedStep  = $null
+                })
+        }
+
+        # Set-TabQueryResult returns the rows across every bound result, which is what the status bar
+        # reports for the run. Counting them here from a single response would be wrong the moment
+        # there is more than one statement.
+        $Private:TotalRows = Set-TabQueryResult -TabSession (Get-ActiveTabSession) -StatementOutcome $Private:Statement
+        $Private:ReturnedRows = $Private:TotalRows -gt 0
+
+        # Handed to Reset-ExecuteQueryUiState, which writes the Messages summary. That teardown is the
+        # single funnel every path uses and cannot see the outcomes itself, so they travel on
+        # RunTimeData beside LastRowsRead - which the same summary call already reads.
+        $Script:RunTimeData.LastStatementOutcome = $Private:Statement
+
+        # How many statements failed, which is a FOURTH outcome this function has to report.
+        #
+        # Continue-on-error means a run can both return rows and contain a failure, and nothing said
+        # so: $Outcome.ErrorRecord carries only the FIRST statement's error, so a run where statement
+        # 1 succeeded and statement 3 failed arrived here with -Failed unset and rows bound. The bar
+        # read "executed successfully", Results stayed selected, and the only trace of the failure was
+        # a line in the Messages breakdown the user had no reason to look at.
+        $Private:FailedStatementCount = @($Private:Statement | Where-Object { $null -ne $_.ErrorRecord }).Count
+
+        if (-not $Private:ReturnedRows) {
             if (-not $Failed) {
                 "Query did not return any results!" | Write-LogOutput -LogType WARNING -TabScoped
             }
             $Script:RunTimeData.LastRowsRead = 0
             $Script:MainForm.Elements.TextBlockStatusBarRows | Set-TextBlockText -Text "0 rows"
-            $Script:MainForm.Elements.DataGridQueryResult.ItemsSource = $null
-            $Private:ReturnedRows = $false
         }
         else {
-            $Private:ReturnedRows = $true
-            $Script:MainForm.Elements.DataGridQueryResult.AutoGenerateColumns = $true
-            try {
-                $Script:MainForm.Elements.DataGridQueryResult.ItemsSource = @($Script:RunTimeData.QueryResult.d.Rows)
-            }
-            catch {
-                #Work-around issue that Omada can return invalid JSON keys.
-                $Script:MainForm.Elements.DataGridQueryResult.ItemsSource = @(($Script:RunTimeData.QueryResult | ConvertTo-Json -Depth 10 | Invoke-SanitizeJsonKeys | ConvertFrom-Json -Depth 10).d.Rows)
-            }
             "Result: {0}" -f (Get-LogResultShape -InputObject $Script:RunTimeData.QueryResult.d.rows) | Write-LogOutput -LogType VERBOSE2
             $Script:MainForm.Elements.ButtonShowOutput.IsEnabled = $true
             $Script:MainForm.Elements.ButtonSaveOutputFile.IsEnabled = $true
-            "{0} record(s) retrieved!" -f $Script:RunTimeData.QueryResult.d.Records | Write-LogOutput
+            "{0} record(s) retrieved!" -f $Private:TotalRows | Write-LogOutput
 
-            $Script:RunTimeData.LastRowsRead = [Int]$Script:RunTimeData.QueryResult.d.Records
-            $Script:MainForm.Elements.TextBlockStatusBarRows | Set-TextBlockText -Text ("{0:n0} rows" -f [Int]$Script:RunTimeData.QueryResult.d.Records)
+            $Script:RunTimeData.LastRowsRead = [Int]$Private:TotalRows
+            $Script:MainForm.Elements.TextBlockStatusBarRows | Set-TextBlockText -Text ("{0:n0} rows" -f [Int]$Private:TotalRows)
+
+            # The sizing pass cannot run yet. Assigning ItemsSource does not generate the item
+            # containers, so there is no grid to measure and nothing to give a height to on this pass.
+            # Deferred to the dispatcher at Background priority, which runs after layout has realised
+            # them. GetNewClosure, because the tab has to be the one this completion belongs to rather
+            # than whichever tab is active by the time the dispatcher gets round to it.
+            # The Dispatcher is checked rather than assumed. Sizing is best-effort - a pane that could
+            # not be sized still shows its results - so it must never be the reason a completion
+            # throws and loses the status bar, the dropdown and the output-tab selection that follow
+            # it. That is not hypothetical: it is what happened the first time this was written
+            # unguarded.
+            $Private:ResultsControl = $Script:MainForm.Elements.ItemsControlQueryResults
+            if ($null -ne $Private:ResultsControl -and $null -ne $Private:ResultsControl.Dispatcher) {
+                # A BARE scriptblock, deliberately - NOT one wrapped in .GetNewClosure().
+                #
+                # GetNewClosure builds a closure over a COPY of the enclosing scope, and that copy
+                # does not carry the module's command table. So the callback dispatched fine and then
+                # threw "The term 'Register-QueryResultGridHandler' is not recognized" on the
+                # dispatcher, where the only trace was an unhandled-exception log entry. The sizing
+                # pass and all six per-grid handlers therefore never ran in the application at all -
+                # while sixteen STA tests passed, because they call those functions directly and so
+                # proved the functions work without ever proving they were invoked.
+                #
+                # This is the idiom the rest of the codebase already uses for exactly this
+                # (Set-ActiveTabEditorFocus.ps1): a plain [System.Action] that resolves the tab
+                # inside the callback, which keeps it bound to the module session state.
+                [void]$Private:ResultsControl.Dispatcher.BeginInvoke(
+                    [System.Windows.Threading.DispatcherPriority]::Background,
+                    [System.Action] {
+                        try {
+                            # Re-resolved here rather than captured: by the time the dispatcher runs
+                            # this, the completion has finished and Set-ActiveTabContext has already
+                            # made the owning tab active, so this is the tab the work belongs to.
+                            $Private:SizingTab = Get-ActiveTabSession
+
+                            # Both need the containers to exist, so both wait for the same pass.
+                            # Handlers first: the grids are new objects on every execute, and until
+                            # they are wired the user can see rows they cannot copy, select by column,
+                            # or open a working context menu over.
+                            Register-QueryResultGridHandler -TabSession $Private:SizingTab
+                            Update-QueryResultStackLayout -TabSession $Private:SizingTab
+                        }
+                        catch {
+                            # Best-effort: a pane that could not be sized still shows its results.
+                            # Logged rather than swallowed, because the last time this threw silently
+                            # it cost the feature its entire layout and handler behaviour.
+                            $_.Exception.Message | Write-LogOutput -LogType DEBUG
+                        }
+                    })
+            }
             $SaveResult.Id, $SaveResult.DisplayName | Set-ConfigProperty -Property "CurrentSqlQuery"
             if ($SaveResult.DisplayName -ne $Script:RunTimeData.CurrentSqlQuery.DisplayName) {
                 "New display name, Current: {0}, New: {1}" -f $Script:RunTimeData.CurrentSqlQuery.DisplayName, $SaveResult.DisplayName | Write-LogOutput -LogType DEBUG
@@ -576,7 +696,10 @@ function Complete-ExecuteQueryResult {
         # returned rows onto an already-selected Results tab does not visibly re-select anything. It
         # is scoped to the tab the execute belongs to, which the completion has already made active,
         # so a background completion on one tab cannot move another tab's selection.
-        if ($Failed -or -not $Private:ReturnedRows) {
+        # A run that contains ANY failed statement lands on Messages too, even when other statements
+        # returned rows. The rows are still there to go back to; the failure is the thing the user
+        # cannot be left to discover for themselves.
+        if ($Failed -or -not $Private:ReturnedRows -or $Private:FailedStatementCount -gt 0) {
             Set-TabOutputSelection -TabSession (Get-ActiveTabSession) -Pane Messages
         }
         else {
@@ -616,8 +739,18 @@ function Complete-ExecuteQueryResult {
         # Named in all three, failures included. Naming only the successes was backwards: with
         # several tabs open and queries running in the background (issue #40), a failure that does
         # not say WHICH query failed is the one that most needs to.
+        # FOUR outcomes now. The partial failure sits above the success branch deliberately: a run
+        # that returned rows AND failed a statement would otherwise fall through to "executed
+        # successfully", which is the bug this fixes - strictly true of some statements and
+        # misleading about the run.
+        #
+        # It names the count rather than just saying "failed", because with several statements the
+        # first thing the user needs to know is how much of their run actually ran.
         if ($Failed) {
             Set-TabStatusMessage -Message ("{0} failed - see Messages" -f $Private:StatusSubject)
+        }
+        elseif ($Private:FailedStatementCount -gt 0) {
+            Set-TabStatusMessage -Message ("{0} failed on {1} of {2} statement(s) - see Messages" -f $Private:StatusSubject, $Private:FailedStatementCount, @($Private:Statement).Count)
         }
         elseif (-not $Private:ReturnedRows) {
             Set-TabStatusMessage -Message ("{0} returned no rows - see Messages" -f $Private:StatusSubject)

@@ -61,7 +61,9 @@ function Get-DataGridSelectionSchema {
     # explicitly passed $null means "no grid" and must not silently resolve to a different one. The
     # two are indistinguishable from the parameter's value alone.
     if (-not $PSBoundParameters.ContainsKey("DataGrid")) {
-        $DataGrid = $Script:MainForm.Elements.DataGridQueryResult
+        # The focused result's grid (issue #151), so the column types come from the result the user is
+        # copying out of rather than from whichever happens to be first.
+        $DataGrid = Get-FocusedQueryResultGrid
     }
 
     if ($null -eq $DataGrid -or $null -eq $DataGrid.SelectedCells -or $DataGrid.SelectedCells.Count -le 0) {

@@ -315,6 +315,204 @@ Describe "Invoke-OmadaExecutePipeline - failures" {
     }
 }
 
+Describe "Invoke-OmadaExecutePipeline - one query per statement (#151)" {
+    BeforeEach { Reset-PipelineTestState }
+
+    function script:New-TestStatement {
+        # The shape Get-SqlScriptStatement hands the pipeline: an ordinal and the statement's own
+        # source text.
+        param([string[]]$Text)
+
+        $Private:Ordinal = 0
+        return @($Text | ForEach-Object {
+                $Private:Ordinal++
+                [PSCustomObject]@{ Ordinal = $Private:Ordinal; Text = $_ }
+            })
+    }
+
+    function script:Get-TempQueryText {
+        # The SQL each upsert put on the temporary object, in the order the upserts happened. This is
+        # what proves each statement ran as ITSELF rather than all of them running the same text.
+        return @($script:Calls |
+                Where-Object { $_.Key -eq "temp-post" -or $_.Key -eq "temp-put" } |
+                ForEach-Object { $_.Body["C_QUERY"] })
+    }
+
+    It "executes every statement, in editor order, on the one temporary object" {
+        # The acceptance criterion: a script with two SELECTs executed with nothing selected produces
+        # two executes. One probe and one delete bracket the whole run; the upsert is what repeats,
+        # because only the temporary object's CONTENT changes per statement.
+        $Context = New-PipelineContext
+        $Context.Statements = New-TestStatement -Text @("SELECT 1", "SELECT 2")
+
+        $Outcome = Invoke-OmadaExecutePipeline -Context $Context
+
+        Get-CallSequence | Should -Be @("get", "probe", "temp-post", "execute", "temp-put", "execute", "delete")
+        @($Outcome.StatementOutcome).Count | Should -Be 2
+        @($Outcome.StatementOutcome | ForEach-Object { $_.Ordinal }) | Should -Be @(1, 2)
+    }
+
+    It "sends each statement's own SQL to the temporary object" {
+        $Context = New-PipelineContext
+        $Context.Statements = New-TestStatement -Text @("SELECT 1", "SELECT 2", "SELECT 3")
+
+        Invoke-OmadaExecutePipeline -Context $Context | Out-Null
+
+        Get-TempQueryText | Should -Be @("SELECT 1", "SELECT 2", "SELECT 3")
+    }
+
+    It "fetches and saves once for the whole run rather than once per statement" {
+        # Each statement is its own query, but they all belong to one execute of one saved query.
+        # Saving per statement would write the editor's text to the tenant N times.
+        $Context = New-PipelineContext -QueryText "SELECT 2"
+        $Context.Statements = New-TestStatement -Text @("SELECT 1", "SELECT 2")
+
+        Invoke-OmadaExecutePipeline -Context $Context | Out-Null
+
+        @($script:Calls | Where-Object { $_.Key -eq "get" }).Count | Should -Be 1
+        @($script:Calls | Where-Object { $_.Key -eq "save" }).Count | Should -Be 1
+    }
+
+    It "probes for the temporary object once, however many statements run" {
+        $Context = New-PipelineContext
+        $Context.Statements = New-TestStatement -Text @("SELECT 1", "SELECT 2", "SELECT 3", "SELECT 4")
+
+        Invoke-OmadaExecutePipeline -Context $Context | Out-Null
+
+        @($script:Calls | Where-Object { $_.Key -eq "probe" }).Count | Should -Be 1
+        @($script:Calls | Where-Object { $_.Key -eq "execute" }).Count | Should -Be 4
+    }
+
+    It "deletes the temporary object once, after the last statement" {
+        # Deleting per statement would destroy the object the next statement is about to upsert onto.
+        $Context = New-PipelineContext
+        $Context.Statements = New-TestStatement -Text @("SELECT 1", "SELECT 2")
+
+        Invoke-OmadaExecutePipeline -Context $Context | Out-Null
+
+        @($script:Calls | Where-Object { $_.Key -eq "delete" }).Count | Should -Be 1
+        (Get-CallSequence)[-1] | Should -Be "delete"
+    }
+
+    It "creates no temporary object at all for a single statement with no selection" {
+        # The guarantee that a single execute stays identical to what it was before this issue: it
+        # runs the saved query directly, exactly as it always did.
+        $Context = New-PipelineContext
+        $Context.Statements = New-TestStatement -Text @("SELECT 1")
+
+        $Outcome = Invoke-OmadaExecutePipeline -Context $Context
+
+        Get-CallSequence | Should -Be @("get", "execute")
+        $Outcome.TempQueryDoId | Should -BeNullOrEmpty
+
+        $Execute = $script:Calls | Where-Object { $_.Key -eq "execute" } | Select-Object -First 1
+        $Execute.Body["dataTypeArgs"]["targetId"] | Should -Be 100
+    }
+
+    It "still uses the temporary object for a single statement when there is a selection" {
+        # Selecting one statement and executing is one result, through the temporary object, as before.
+        $Context = New-PipelineContext -SelectionText "SELECT TOP 1 *"
+        $Context.Statements = New-TestStatement -Text @("SELECT TOP 1 *")
+
+        $Outcome = Invoke-OmadaExecutePipeline -Context $Context
+
+        Get-CallSequence | Should -Be @("get", "probe", "temp-post", "execute", "delete")
+        $Outcome.TempQueryDoId | Should -Be 777
+    }
+
+    It "runs the statements it was given rather than the selection as a whole" {
+        # Selecting two of three statements runs those two, each as its own query - not the selected
+        # text in one go.
+        $Context = New-PipelineContext -SelectionText "SELECT 1;`r`nSELECT 2;"
+        $Context.Statements = New-TestStatement -Text @("SELECT 1", "SELECT 2")
+
+        Invoke-OmadaExecutePipeline -Context $Context | Out-Null
+
+        @($script:Calls | Where-Object { $_.Key -eq "execute" }).Count | Should -Be 2
+        Get-TempQueryText | Should -Be @("SELECT 1", "SELECT 2")
+    }
+
+    It "reports the first statement's outcome as the run's outcome" {
+        # Everything that consumed this outcome before #151 reads QueryResult/ErrorRecord/FailedStep,
+        # and a single-statement execute must keep reporting exactly what it used to. A later
+        # statement must not overwrite them.
+        $Context = New-PipelineContext
+        $Context.Statements = New-TestStatement -Text @("SELECT 1", "SELECT 2")
+
+        $Outcome = Invoke-OmadaExecutePipeline -Context $Context
+
+        $Outcome.QueryResult.d.Records | Should -Be 2
+        $Outcome.ErrorRecord | Should -BeNullOrEmpty
+        $Outcome.FailedStep | Should -BeNullOrEmpty
+    }
+
+    It "continues past a failing statement and records the failure against that statement" {
+        # SSMS behaviour, and the decision this issue was delivered with: one statement failing does
+        # not abandon the ones after it. $script:Failures keys by logical request, which would fail
+        # every execute, so only the SECOND execute is failed here - which is the whole point.
+        $Context = New-PipelineContext
+        $Context.Statements = New-TestStatement -Text @("SELECT 1", "SELECT 2", "SELECT 3")
+
+        $Private:Original = ${function:Invoke-OmadaRequestCore}
+        try {
+            $script:ExecuteCount = 0
+            function Invoke-OmadaRequestCore {
+                param([hashtable]$Parameters)
+                $Key = Get-CallKey -Method $Parameters.Method -Uri $Parameters.Uri -Body $Parameters.Body
+                $script:Calls.Add([pscustomobject]@{ Key = $Key; Method = $Parameters.Method; Uri = $Parameters.Uri; Body = $Parameters.Body })
+
+                if ($Key -eq "execute") {
+                    $script:ExecuteCount++
+                    if ($script:ExecuteCount -eq 2) {
+                        return @{ Result = $null; ErrorRecord = [System.Management.Automation.ErrorRecord]::new(
+                                [System.Exception]::new("statement 2 failed"), "PipelineTestFailure",
+                                [System.Management.Automation.ErrorCategory]::ConnectionError, $null) }
+                    }
+                }
+
+                if ($script:Responses.ContainsKey($Key)) { return @{ Result = $script:Responses[$Key]; ErrorRecord = $null } }
+                return @{ Result = $null; ErrorRecord = $null }
+            }
+
+            $Outcome = Invoke-OmadaExecutePipeline -Context $Context
+
+            # All three were attempted, and the third ran AFTER the failure rather than being skipped.
+            $script:ExecuteCount | Should -Be 3
+            @($Outcome.StatementOutcome).Count | Should -Be 3
+
+            $Outcome.StatementOutcome[0].ErrorRecord | Should -BeNullOrEmpty
+            $Outcome.StatementOutcome[1].ErrorRecord.Exception.Message | Should -Be "statement 2 failed"
+            $Outcome.StatementOutcome[1].FailedStep | Should -Be "ExecuteQuery"
+            $Outcome.StatementOutcome[2].ErrorRecord | Should -BeNullOrEmpty
+
+            # And the temporary object is still cleaned up after a run that contained a failure.
+            Get-CallSequence | Should -Contain "delete"
+        }
+        finally {
+            # Restored, so a redefined transport cannot leak into the Describe blocks after this one.
+            Set-Item -Path "function:Invoke-OmadaRequestCore" -Value $Private:Original
+        }
+    }
+
+    It "keeps a statement's own text on its outcome, for the Results header and the Messages summary" {
+        $Context = New-PipelineContext
+        $Context.Statements = New-TestStatement -Text @("SELECT 1", "SELECT 2")
+
+        $Outcome = Invoke-OmadaExecutePipeline -Context $Context
+
+        @($Outcome.StatementOutcome | ForEach-Object { $_.Text }) | Should -Be @("SELECT 1", "SELECT 2")
+    }
+
+    It "executes exactly once when the caller passes no statements at all" {
+        # Backward compatibility, and it is what every test above this block relies on: the inline
+        # fallback path does not split anything, and must keep getting one execute of one query.
+        $Outcome = Invoke-OmadaExecutePipeline -Context (New-PipelineContext)
+
+        Get-CallSequence | Should -Be @("get", "execute")
+        @($Outcome.StatementOutcome).Count | Should -Be 1
+    }
+}
+
 Describe "Invoke-OmadaExecutePipeline is runspace-safe" {
     It "runs in a bare runspace with none of this module's state or functions" {
         # The property the whole design rests on. A $Script: read or a Write-LogOutput added here

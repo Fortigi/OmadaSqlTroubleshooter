@@ -7,6 +7,81 @@ function script:Get-E2EElements {
     return $Script:MainForm.Elements
 }
 
+# The Results pane holds one grid per statement since issue #151, so "the rows on screen" is no longer
+# a property of one element. These two keep the stack's shape in ONE place: the scenarios asked the
+# old DataGridQueryResult for its ItemsSource in nineteen spots, and spreading
+# ItemsControlQueryResults.ItemsSource[0].Rows across five files would make the next change to the
+# pane a nineteen-site edit again.
+function script:Get-E2EResultElements {
+    <#
+        The elements to read the stack from: a named tab's, or the active tab's.
+
+        -TabSession is not a convenience. The async scenarios assert that a result lands on the tab
+        that ISSUED it and not on the tab that happens to be active, so they have to reach a specific
+        tab's pane - $Script:MainForm.Elements is whichever tab Set-ActiveTabContext last pointed at,
+        which is exactly the thing under test.
+    #>
+    param(
+        $TabSession
+    )
+
+    if ($null -ne $TabSession) {
+        return $TabSession.Elements
+    }
+
+    return $Script:MainForm.Elements
+}
+
+function script:Get-E2EResultRowCount {
+    <#
+        Rows in the result at $Index - the first by default, which is what every pre-#151 scenario
+        meant by "the grid". Returns 0 when nothing is bound, so a scenario asserting an empty result
+        reads naturally.
+    #>
+    param(
+        [int]$Index = 0,
+        $TabSession
+    )
+
+    # Nulls filtered, not merely wrapped. @($null) has a Count of ONE in PowerShell, so an unbound
+    # pane came back as "one result" and this then indexed into that phantom and returned
+    # @($null.Rows).Count - also one. That is why the E2E suite reported "expected 2, got 1" for a
+    # populated pane and "expected 0, got 1" for an empty one.
+    $Private:Bound = @((Get-E2EResultElements -TabSession $TabSession).ItemsControlQueryResults.ItemsSource | Where-Object { $null -ne $_ })
+    if ($Private:Bound.Count -le $Index) {
+        return 0
+    }
+
+    return @($Private:Bound[$Index].Rows | Where-Object { $null -ne $_ }).Count
+}
+
+function script:Get-E2EResultCount {
+    <#
+        How many results are stacked in the pane - one per statement that returned rows. Zero means
+        the pane is empty, which is what an empty or failed execute leaves behind.
+    #>
+    param(
+        $TabSession
+    )
+
+    # Nulls filtered for the same reason as the row count above: @($null).Count is one, so an empty
+    # pane would report a result that is not there.
+    return @((Get-E2EResultElements -TabSession $TabSession).ItemsControlQueryResults.ItemsSource | Where-Object { $null -ne $_ }).Count
+}
+
+function script:Clear-E2EResults {
+    <#
+        Empties the pane between scenarios, or for one named tab. Clears the list on the tab session as
+        well as the control bound to it, because clearing only the control would leave the session
+        believing in results that are no longer on screen.
+    #>
+    param(
+        $TabSession
+    )
+
+    Clear-TabQueryResult -TabSession $TabSession
+}
+
 function script:Invoke-E2EClick {
     param(
         [string]$ElementName
@@ -160,7 +235,7 @@ function script:Reset-E2EConnection {
     if ($Script:ConnectionStatus) {
         Invoke-E2EConnect   # ButtonConnect toggles to Disconnect when already connected
     }
-    $Script:MainForm.Elements.DataGridQueryResult.ItemsSource = $null
+    Clear-E2EResults
     # Return the process-global connect gate to its fresh-startup value so a scenario that relies on
     # it (e.g. RestoreReconnect exercising the ReconnectStatus=2 fix) is not masked by a prior
     # scenario having left it at 2.
@@ -235,7 +310,7 @@ function script:Wait-E2EUntil {
     A scriptblock returning something truthy once the wait is over.
 
     .EXAMPLE
-    Wait-E2EUntil { $null -ne $Script:MainForm.Elements.DataGridQueryResult.ItemsSource } -Message "grid populated"
+    Wait-E2EUntil { (Get-E2EResultCount) -gt 0 } -Message "grid populated"
     #>
     param(
         [Parameter(Mandatory)][scriptblock]$Condition,
