@@ -220,6 +220,144 @@
                 rebuildSchema(schema || {});
             };
 
+            // ---- Cross-database models (issue #158) --------------------------------
+            //
+            // ADDITIVE, on purpose. setSchema above and every two-part completion path it feeds stay
+            // exactly as they were: they describe the data connection the tab is connected to, which
+            // is what the overwhelming majority of queries use. What follows is a SEPARATE store for
+            // databases named explicitly in the query ("[Other].[dbo].[tblX]", issue #152), reached
+            // only through a dot chain whose head resolves to a data connection name. Folding these
+            // into schemaModel would have put another database's tables in the default completion
+            // list of a query that never mentions it.
+            //
+            // Keyed by lower(name) because T-SQL identifiers are case-insensitive; the canonical
+            // casing is kept for display and for what gets inserted.
+            let databaseNameIndex = {};   // lower(name) -> canonical name
+            let activeDatabaseName = '';  // the connected data connection, served from schemaModel
+            const databaseModels = {};    // lower(name) -> { schemas: [], tablesBySchema: {} }
+
+            // One request per database per editor, not per keystroke. A miss posts to PowerShell and
+            // returns nothing for THIS keystroke; the model arrives asynchronously and the next
+            // keystroke completes. Without this, holding a key down while "[Other]." is on screen
+            // would queue a request per character.
+            const requestedDatabases = new Set();
+
+            // The names come from the data connection dropdown, so the editor can tell a database
+            // reference from a schema reference without asking PowerShell on every dot.
+            window.setDatabaseNames = function (names, activeName) {
+                databaseNameIndex = {};
+                (names || []).forEach(function (name) {
+                    if (name) {
+                        databaseNameIndex[String(name).toLowerCase()] = String(name);
+                    }
+                });
+                activeDatabaseName = activeName ? String(activeName) : '';
+            };
+
+            // Same payload shape as setSchema - one database per call rather than every schema in a
+            // single oversized ExecuteScriptAsync string.
+            window.setSchemaForDatabase = function (databaseName, schema) {
+                if (!databaseName) {
+                    return;
+                }
+
+                const key = String(databaseName).toLowerCase();
+                const model = { schemas: [], tablesBySchema: {} };
+                const source = schema || {};
+
+                for (const schemaName in source) {
+                    model.schemas.push(schemaName);
+                    model.tablesBySchema[schemaName.toLowerCase()] = Object.keys(source[schemaName] || {});
+                }
+
+                databaseModels[key] = model;
+                databaseNameIndex[key] = String(databaseName);
+                // Arrived: let a later miss ask again (the schema can be refreshed).
+                requestedDatabases.delete(key);
+            };
+
+            // Map a typed database name (any casing, brackets already stripped) onto its canonical
+            // name, or null when it is not a data connection.
+            function resolveDatabaseName(name) {
+                if (!name) {
+                    return null;
+                }
+                return databaseNameIndex[String(name).toLowerCase()] || null;
+            }
+
+            // The model for a named database, or null when it is not loaded yet.
+            //
+            // The ACTIVE connection is served from schemaModel rather than from databaseModels:
+            // PowerShell pushes that one through setSchema, so it would otherwise never appear here
+            // and "[ThisDatabase]." would be the one database that could not complete.
+            function databaseModelFor(canonicalName) {
+                if (activeDatabaseName && canonicalName.toLowerCase() === activeDatabaseName.toLowerCase()) {
+                    const model = { schemas: [], tablesBySchema: {} };
+                    for (const schemaName in schemaModel) {
+                        model.schemas.push(schemaName);
+                        model.tablesBySchema[schemaName.toLowerCase()] = Object.keys(schemaModel[schemaName] || {});
+                    }
+                    return model;
+                }
+                return databaseModels[canonicalName.toLowerCase()] || null;
+            }
+
+            // Ask PowerShell for a database's schema. It answers from the per-pool cache when it can
+            // (issue #158 criterion 5), so this is not necessarily a round trip to the tenant.
+            function requestDatabaseSchema(canonicalName) {
+                const key = canonicalName.toLowerCase();
+                if (requestedDatabases.has(key)) {
+                    return;
+                }
+                requestedDatabases.add(key);
+
+                if (window.chrome && window.chrome.webview) {
+                    window.chrome.webview.postMessage({
+                        type: 'requestSchema',
+                        database: canonicalName
+                    });
+                }
+            }
+
+            // "[Name]" -> "Name". Bracketed identifiers are how issue #152 tells the user to write a
+            // database, and the parsing below has to see through them.
+            function stripBrackets(value) {
+                const text = String(value === undefined || value === null ? '' : value).trim();
+                if (text.length >= 2 && text.charAt(0) === '[' && text.charAt(text.length - 1) === ']') {
+                    return text.slice(1, -1);
+                }
+                return text;
+            }
+
+            // Split a dotted chain while respecting brackets, so a data connection called
+            // "My.Reporting" survives as one part instead of becoming two.
+            function splitIdentifierChain(chain) {
+                const parts = [];
+                let current = '';
+                let inBracket = false;
+
+                for (const character of String(chain)) {
+                    if (character === '[') {
+                        inBracket = true;
+                        current += character;
+                    }
+                    else if (character === ']') {
+                        inBracket = false;
+                        current += character;
+                    }
+                    else if (character === '.' && !inBracket) {
+                        parts.push(current);
+                        current = '';
+                    }
+                    else {
+                        current += character;
+                    }
+                }
+
+                parts.push(current);
+                return parts;
+            }
+
             // ---- Diagnostics channel ------------------------------------------------
             //
             // ONE channel for every validation pass, mirroring the setSchema/setEditorValue seam:
@@ -318,12 +456,27 @@
                 const aliasMap = {};      // aliasLower -> { schema, table }
                 const tablesInScope = []; // [ { schema, table } ]
                 const seen = new Set();
-                const re = /\b(?:FROM|JOIN)\s+(?:(\w+)\.)?(\w+)(?:\s+(?:AS\s+)?(\w+))?/gi;
+                // Each part is a bare word or a bracketed identifier, and there are now up to three
+                // of them: [database].[schema].[table] (issue #152). Bracket support is the fix that
+                // matters most here - "FROM [dbo].[Person] p" previously matched nothing at all, so
+                // the alias never resolved and "p." offered no columns.
+                const part = '(?:\\[[^\\]]+\\]|\\w+)';
+                const re = new RegExp(`\\b(?:FROM|JOIN)\\s+(?:(${part})\\s*\\.\\s*)?(?:(${part})\\s*\\.\\s*)?(${part})(?:\\s+(?:AS\\s+)?(\\w+))?`, 'gi');
                 let m;
                 while ((m = re.exec(stmt)) !== null) {
-                    const explicitSchema = m[1];
-                    const table = m[2];
-                    let alias = m[3];
+                    // With two optional prefix groups, a two-part name fills the FIRST one, so a
+                    // present m[2] is what distinguishes "db.schema.table" from "schema.table".
+                    if (m[2]) {
+                        // A cross-database source. Its columns live in another database's model and
+                        // are deliberately not resolved here (issue #158 scopes completion to
+                        // "[Db]." and "[Db].[Schema]."), so it contributes no alias - exactly as it
+                        // contributed none before, rather than resolving to a same-named local table.
+                        continue;
+                    }
+
+                    const explicitSchema = m[1] ? stripBrackets(m[1]) : m[1];
+                    const table = stripBrackets(m[3]);
+                    let alias = m[4];
 
                     // Skip anything that does not resolve to a real table (a typo, a CTE/temp table,
                     // a half-typed "FROM schema.", or a bare name owned by several schemas). Guessing
@@ -374,14 +527,24 @@
                 const refs = parseTableRefs(fullStmt);
 
                 // --- Dot chains are unambiguous: handle them before clause detection. ---
-                const chainMatch = stmtBefore.match(/([\w.]*)$/);
+                // Brackets are part of the chain now: "[Other].[dbo]." is a dot chain, and the old
+                // [\w.] class stopped dead at the first "]".
+                const chainMatch = stmtBefore.match(/([\w.\[\]]*)$/);
                 const chain = chainMatch ? chainMatch[1] : '';
-                if (chain.indexOf('.') !== -1) {
-                    const parts = chain.split('.');
-                    if (parts.length === 2) {
-                        // "x." - x is a schema, an alias, or a bare table. Check schema first: a
-                        // dangling "FROM schema." otherwise gets mis-parsed as a table reference.
-                        const head = parts[0];
+                const chainParts = splitIdentifierChain(chain);
+                if (chainParts.length > 1) {
+                    // Everything before the last element is already typed; the last element is the
+                    // word being completed, which Monaco replaces through the suggestion's range.
+                    const prefix = chainParts.slice(0, -1).map(stripBrackets);
+
+                    if (prefix.length === 1) {
+                        // "x." - x is a schema, an alias, a bare table, or a database.
+                        //
+                        // ORDER MATTERS, and database comes LAST. A data connection that happens to
+                        // be called "dbo" must not stop "dbo." meaning the active database's dbo
+                        // schema, which is what it has always meant. The connection list may not
+                        // shadow the schema list.
+                        const head = prefix[0];
                         if (isSchema(head)) {
                             return { mode: 'DOT_TABLE', schema: resolveSchemaName(head), tablesInScope: refs.tablesInScope };
                         }
@@ -389,16 +552,31 @@
                         if (ref) {
                             return { mode: 'DOT_COLUMN', schema: ref.schema, table: ref.table, tablesInScope: refs.tablesInScope };
                         }
+                        const database = resolveDatabaseName(head);
+                        if (database) {
+                            return { mode: 'DB_SCHEMA', database: database, tablesInScope: refs.tablesInScope };
+                        }
                         return { mode: 'NONE', tablesInScope: refs.tablesInScope };
                     }
-                    if (parts.length >= 3) {
-                        // "schema.table." - take the two segments before the trailing dot.
-                        const ref = resolveTableRef(parts[parts.length - 3], parts[parts.length - 2]);
-                        if (!ref) {
-                            return { mode: 'NONE', tablesInScope: refs.tablesInScope };
-                        }
+
+                    // "schema.table." - take the two segments before the trailing dot. Tried first,
+                    // so a two-part local name keeps resolving exactly as it did.
+                    const ref = resolveTableRef(prefix[prefix.length - 2], prefix[prefix.length - 1]);
+                    if (ref) {
                         return { mode: 'DOT_COLUMN', schema: ref.schema, table: ref.table, tablesInScope: refs.tablesInScope };
                     }
+
+                    if (prefix.length === 2) {
+                        // "[Database].[Schema]." - that database's tables (issue #158 criterion 2).
+                        // Only at exactly two parts: a longer chain is a table or a linked server,
+                        // and cross-database COLUMN completion is not in this issue's scope.
+                        const database = resolveDatabaseName(prefix[0]);
+                        if (database) {
+                            return { mode: 'DB_TABLE', database: database, schema: prefix[1], tablesInScope: refs.tablesInScope };
+                        }
+                    }
+
+                    return { mode: 'NONE', tablesInScope: refs.tablesInScope };
                 }
 
                 // --- Clause detection: find the last clause keyword before the cursor. ---
@@ -467,6 +645,47 @@
                             sortText: `0_${c.name}`
                         }));
                         return { suggestions: withRange(cols) };
+                    }
+
+                    // "[Database]." -> that database's schemas (issue #158 criterion 2).
+                    //
+                    // A database whose schema has not arrived yet asks for it and offers nothing for
+                    // THIS keystroke. Returning an empty list rather than the default suggestions is
+                    // deliberate: a keyword list under "[Other]." is noise, and the schemas appear a
+                    // moment later without the user doing anything.
+                    if (ctx.mode === 'DB_SCHEMA') {
+                        const model = databaseModelFor(ctx.database);
+                        if (!model) {
+                            requestDatabaseSchema(ctx.database);
+                            return { suggestions: [] };
+                        }
+
+                        const schemas = model.schemas.map(name => ({
+                            label: name,
+                            kind: monaco.languages.CompletionItemKind.Struct,
+                            insertText: name,
+                            detail: `schema · ${ctx.database}`,
+                            sortText: `0_${name}`
+                        }));
+                        return { suggestions: withRange(schemas) };
+                    }
+
+                    // "[Database].[Schema]." -> that database's tables in that schema.
+                    if (ctx.mode === 'DB_TABLE') {
+                        const model = databaseModelFor(ctx.database);
+                        if (!model) {
+                            requestDatabaseSchema(ctx.database);
+                            return { suggestions: [] };
+                        }
+
+                        const tables = (model.tablesBySchema[String(ctx.schema).toLowerCase()] || []).map(name => ({
+                            label: name,
+                            kind: monaco.languages.CompletionItemKind.Class,
+                            insertText: name,
+                            detail: `table · ${ctx.database}`,
+                            sortText: `0_${name}`
+                        }));
+                        return { suggestions: withRange(tables) };
                     }
 
                     // "schema." -> that schema's tables. The schema is already typed here, so both the

@@ -30,7 +30,24 @@ BeforeAll {
     # chances for the pass to read a different tenant's schema than the editor shows completions for.
     . (Join-Path $PrivatePath -ChildPath "Get-SqlSchemaModel.ps1")
     . (Join-Path $PrivatePath -ChildPath "Get-ActiveSqlSchemaModel.ps1")
+    # Issue #158 split the response handling into pieces that a second database reuses: the editor
+    # model builder, the tree builder, and the database level of the tree. They are dot-sourced for
+    # the same reason as everything above - a missing one throws CommandNotFound inside
+    # Complete-SqlSchemaRetrieval's own catch, and "nothing was pushed to the editor" then passes for
+    # entirely the wrong reason.
+    . (Join-Path $PrivatePath -ChildPath "ConvertTo-JavaScriptLiteral.ps1")
+    . (Join-Path $PrivatePath -ChildPath "ConvertTo-SqlSchemaEditorModel.ps1")
+    . (Join-Path $PrivatePath -ChildPath "Add-SqlSchemaTreeNode.ps1")
+    . (Join-Path $PrivatePath -ChildPath "Resolve-DataConnectionReference.ps1")
+    . (Join-Path $PrivatePath -ChildPath "Update-SqlSchemaDatabaseTree.ps1")
     . (Join-Path $PrivatePath -ChildPath "Get-SqlSchema.ps1")
+
+    # The dropdown accessor lives in Resolve-SqlStatementTarget.ps1 and refreshes the list from the
+    # tenant when it is empty, which is not something this file wants to reach. Stubbed with the two
+    # connections the tests below use.
+    function Get-DataConnectionOptionText {
+        return , @("OISES - 1001572", "Reporting - 1001999")
+    }
 
     . (Join-Path $PSScriptRoot -ChildPath "mock\OmadaMockRouter.ps1")
     . (Join-Path $PSScriptRoot -ChildPath "mock\OmadaMockServer.ps1")
@@ -351,5 +368,105 @@ Describe "Get-SqlSchemaObject's Monaco push completion" {
 
         { & $Block ([pscustomobject]@{ Task = $null }) } | Should -Not -Throw
         @($script:LoggedMessages | Where-Object { $_.LogType -in @("ERROR", "WARNING") }).Count | Should -Be 0
+    }
+}
+
+Describe "Get-SqlSchemaObject for a database other than the active one (issue #158)" {
+    # The schema window now holds a node per data connection and the editor completes
+    # "[Other].[dbo].", so the same fetch has to serve a database the tab is NOT connected to. What
+    # makes that safe is that such a response may touch only its own editor model: the primary
+    # setSchema model, the window title and the validation re-trigger all describe the ACTIVE
+    # connection, and a second database landing must not speak for them.
+
+    It "pushes setSchemaForDatabase, naming the database" {
+        Initialize-SchemaTestState -Connected $true
+
+        Get-SqlSchemaObject -DataConnectionDoId "1001999" -DataConnectionName "Reporting"
+
+        $Push = $script:PushedEditorScripts | Where-Object { $_ -like "setSchemaForDatabase(*" } | Select-Object -Last 1
+        $Push | Should -Not -BeNullOrEmpty
+        $Push | Should -BeLike '*"Reporting"*'
+    }
+
+    It "does not push setSchema, which belongs to the connected database" {
+        # The discriminating assertion of this whole feature. Overwriting the primary model would
+        # make the completion list describe a database the user is not connected to, for every query
+        # in the tab - including the ones that never mention another database.
+        Initialize-SchemaTestState -Connected $true
+
+        Get-SqlSchemaObject -DataConnectionDoId "1001999" -DataConnectionName "Reporting"
+
+        @($script:PushedEditorScripts | Where-Object { $_ -like "setSchema(*" }).Count | Should -Be 0
+    }
+
+    It "does not re-trigger validation, which describes the active database" {
+        Initialize-SchemaTestState -Connected $true
+        $script:ValidationRequests = 0
+
+        Get-SqlSchemaObject -DataConnectionDoId "1001999" -DataConnectionName "Reporting"
+
+        $script:ValidationRequests | Should -Be 0
+    }
+
+    It "caches under its own key, leaving the active database's cache entry alone" {
+        Initialize-SchemaTestState -Connected $true
+
+        Get-SqlSchemaObject
+        Get-SqlSchemaObject -DataConnectionDoId "1001999" -DataConnectionName "Reporting"
+
+        $Script:SqlSchemaCache.ContainsKey("pool-under-test|1001572") | Should -BeTrue
+        $Script:SqlSchemaCache.ContainsKey("pool-under-test|1001999") | Should -BeTrue
+    }
+
+    It "serves a cached database with no request at all (criterion 5)" {
+        Initialize-SchemaTestState -Connected $true
+
+        Get-SqlSchemaObject -DataConnectionDoId "1001999" -DataConnectionName "Reporting"
+        Clear-OmadaMockRequestLog
+        $script:PushedEditorScripts.Clear()
+
+        Get-SqlSchemaObject -DataConnectionDoId "1001999" -DataConnectionName "Reporting"
+
+        (Get-OmadaMockRequestLog).Count | Should -Be 0
+        # Served, not merely skipped: the caller still needs the model, because the editor that
+        # asked has none for this database yet.
+        @($script:PushedEditorScripts | Where-Object { $_ -like "setSchemaForDatabase(*" }).Count | Should -Be 1
+    }
+
+    It "requests the database it was asked for, not the active one" {
+        Initialize-SchemaTestState -Connected $true
+
+        Get-SqlSchemaObject -DataConnectionDoId "1001999" -DataConnectionName "Reporting"
+
+        $Request = @(Get-OmadaMockRequestLog -UriLike "*GetSqlSchema*")
+        $Request.Count | Should -Be 1
+        # connectionId off the recorded body, not a substring of it: the log keeps the body as the
+        # hashtable that was sent, so a -BeLike against it only ever matches the type name.
+        [string]$Request[0].Body.connectionId | Should -Be "1001999"
+    }
+
+    It "still pushes setSchema and the database names for the active connection" {
+        # The other half of the switch: called the way every pre-#158 caller calls it, nothing about
+        # the active path changes - and the editor is told which names are databases so it can ask.
+        Initialize-SchemaTestState -Connected $true
+
+        Get-SqlSchemaObject
+
+        @($script:PushedEditorScripts | Where-Object { $_ -like "setSchema(*" }).Count | Should -Be 1
+        $Names = $script:PushedEditorScripts | Where-Object { $_ -like "setDatabaseNames(*" } | Select-Object -Last 1
+        $Names | Should -Not -BeNullOrEmpty
+        $Names | Should -BeLike "*Reporting*"
+        # The active connection's own name, so the editor answers "[OISES]." from setSchema instead
+        # of asking for a schema it will never be sent.
+        $Names | Should -BeLike '*"OISES"*'
+    }
+
+    It "treats an explicit DoId that happens to be the active one as the active database" {
+        Initialize-SchemaTestState -Connected $true
+
+        Get-SqlSchemaObject -DataConnectionDoId "1001572" -DataConnectionName "OISES"
+
+        @($script:PushedEditorScripts | Where-Object { $_ -like "setSchema(*" }).Count | Should -Be 1
+        @($script:PushedEditorScripts | Where-Object { $_ -like "setSchemaForDatabase(*" }).Count | Should -Be 0
     }
 }

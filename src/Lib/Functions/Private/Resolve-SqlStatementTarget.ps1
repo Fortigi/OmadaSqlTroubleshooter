@@ -252,9 +252,9 @@ function Get-UnresolvedDatabaseMessage {
         [string[]]$OptionList
     )
 
-    $Private:Available = @($OptionList | ForEach-Object {
-            if ($_ -match '^(?<Name>.*) - (?<DoId>\d+)$') { $Matches.Name }
-        }) | Where-Object { ![string]::IsNullOrWhiteSpace($_) }
+    # Not wrapped in @() around the call - see the note in Update-SqlSchemaDatabaseTree.
+    $Private:Reference = Get-DataConnectionReferenceList -OptionList $OptionList
+    $Private:Available = @($Private:Reference.Name) | Where-Object { ![string]::IsNullOrWhiteSpace($_) }
 
     if (@($Private:Available).Count -eq 0) {
         return "Statement {0}: the database '{1}' cannot be resolved because no data connections are available. Connect to the tenant and try again." -f $Ordinal, $Database

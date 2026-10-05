@@ -1,3 +1,47 @@
+function Get-SqlSchemaCacheKey {
+    <#
+    .SYNOPSIS
+        Returns the "<SessionKey>|<DataConnectionDoId>" key under which a given data connection's
+        schema is cached, or $null when there is no connection pool to key it against.
+
+    .DESCRIPTION
+        The format lived only in Get-ActiveSqlSchemaCacheKey until issue #158, which needs the key of
+        a data connection that is NOT the active one - the schema window now holds a node per
+        connection and fetches each one's schema on first expand. That is the same cache, under the
+        same per-pool contract, for a different DoId.
+
+        Still exactly one formatter. The reason Get-ActiveSqlSchemaCacheKey gives for that is
+        unchanged and now covers more callers: a second copy of this string would be another chance
+        for the validation pass, the completion list and the schema window to disagree about which
+        tenant's schema they are looking at.
+
+    .PARAMETER DataConnectionDoId
+        The data connection's DoId.
+
+    .OUTPUTS
+        [string] the cache key, or $null.
+    #>
+    [CmdLetBinding()]
+    param(
+        [Parameter(Mandatory = $false, Position = 0)]
+        [AllowNull()]
+        [AllowEmptyString()]
+        [string]$DataConnectionDoId
+    )
+
+    # No tracer preamble: called from the debounced validation path on every idle tick.
+
+    if ($null -eq $Script:RunTimeData -or $null -eq $Script:RunTimeData.RestMethodParam) {
+        return $null
+    }
+
+    if ([string]::IsNullOrWhiteSpace($DataConnectionDoId)) {
+        return $null
+    }
+
+    return "{0}|{1}" -f $Script:RunTimeData.RestMethodParam.SessionKey, $DataConnectionDoId
+}
+
 function Get-ActiveSqlSchemaCacheKey {
     <#
     .SYNOPSIS
@@ -19,16 +63,12 @@ function Get-ActiveSqlSchemaCacheKey {
 
     # No tracer preamble: called from the debounced validation path on every idle tick.
 
-    if ($null -eq $Script:RunTimeData -or $null -eq $Script:RunTimeData.RestMethodParam) {
-        return $null
-    }
-
     if ($null -eq $Script:AppConfig -or $null -eq $Script:AppConfig.CurrentDataConnection -or
         [string]::IsNullOrWhiteSpace($Script:AppConfig.CurrentDataConnection.DoId)) {
         return $null
     }
 
-    return "{0}|{1}" -f $Script:RunTimeData.RestMethodParam.SessionKey, $Script:AppConfig.CurrentDataConnection.DoId
+    return Get-SqlSchemaCacheKey -DataConnectionDoId $Script:AppConfig.CurrentDataConnection.DoId
 }
 
 function Get-ActiveSqlSchemaModel {

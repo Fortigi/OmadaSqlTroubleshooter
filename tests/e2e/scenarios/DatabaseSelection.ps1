@@ -196,4 +196,53 @@ E2ESuite -Name "DatabaseSelection" -Body {
         # And the UI is usable again rather than stuck mid-execute.
         E2EAssertEqual "_Execute" ([string](Get-E2EExecuteButtonText)) "the Execute button should be restored after a refusal"
     }
+
+    E2ECase -Name "naming another database fetches its schema once, then serves it from the cache" -Body {
+        # Issue #158 criteria 2 and 5, through the real request path. This is what the editor's
+        # requestSchema message does when the user types "[OtherDB]." - and the thing worth proving
+        # end to end is the COST, which no unit test can observe: exactly one authenticated round
+        # trip the first time, and none at all afterwards.
+        Reset-E2EScenario
+        Reset-E2EConnection
+        Set-E2EConnectionFields
+        Invoke-E2EConnectAndWait
+        Select-E2EQuery | Out-Null
+
+        $script:E2ECalls.Clear()
+
+        Request-SqlSchemaForDatabase -DatabaseName "OtherDB"
+        Wait-E2ENoPendingRequests
+
+        $SchemaCall = @($script:E2ECalls | Where-Object { [string]$_.Uri -like "*GetSqlSchema*" })
+        E2EAssertEqual 1 $SchemaCall.Count "naming another database should fetch its schema exactly once (criterion 2)"
+        E2EAssertEqual "43" ([string]$SchemaCall[0].Body["connectionId"]) "the fetch should ask for OtherDB (43), not the selected OISES (42)"
+
+        # The selected connection is untouched: asking for another database's schema is a read for
+        # the editor, not a switch.
+        E2EAssertEqual "42" ([string]$Script:AppConfig.CurrentDataConnection.DoId) "fetching another database's schema must leave the selected data connection alone"
+
+        # Second ask: the per-pool cache answers it, so nothing reaches the tenant.
+        $script:E2ECalls.Clear()
+        Request-SqlSchemaForDatabase -DatabaseName "OtherDB"
+        Wait-E2ENoPendingRequests
+
+        E2EAssertEqual 0 (Get-E2ECallCount -UriLike "*GetSqlSchema*") "a database already in the per-pool cache must cost no request (criterion 5)"
+    }
+
+    E2ECase -Name "a database that matches no data connection costs nothing" -Body {
+        Reset-E2EScenario
+        Reset-E2EConnection
+        Set-E2EConnectionFields
+        Invoke-E2EConnectAndWait
+        Select-E2EQuery | Out-Null
+
+        $script:E2ECalls.Clear()
+
+        # The user is mid-word. A half-typed database name must not reach the tenant, and must not
+        # interrupt them either.
+        Request-SqlSchemaForDatabase -DatabaseName "NoSuchDatabase"
+        Wait-E2ENoPendingRequests
+
+        E2EAssertEqual 0 (Get-E2ECallCount -UriLike "*GetSqlSchema*") "an unresolvable database name must not fetch anything"
+    }
 }

@@ -4,8 +4,39 @@
 $Script:SqlSchemaRequestDescription = "SQL schema"
 
 function Get-SqlSchemaObject {
+    <#
+    .SYNOPSIS
+    Retrieves a data connection's SQL schema, caches it per connection pool, and feeds it to the
+    schema window and the editor's IntelliSense.
+
+    .DESCRIPTION
+    Called with no parameters it does exactly what it has always done: fetch the ACTIVE tab's data
+    connection. Issue #158 added the two parameters so the same path can fetch any other data
+    connection, which is what the schema window's database nodes and the editor's cross-database
+    completion both need. Everything that makes the active fetch safe - the connection guard, the
+    per-pool cache, the in-flight check, the background dispatch and the UI-thread retry - therefore
+    applies unchanged to a non-active one, rather than being reimplemented beside it.
+
+    .PARAMETER DataConnectionDoId
+    The data connection to fetch. Omitted means the active tab's connection.
+
+    .PARAMETER DataConnectionName
+    That connection's display name, used for logging and for the setSchemaForDatabase push, which
+    addresses a database by name because that is what the user writes in the query. Omitted for the
+    active connection, whose name is taken from $Script:AppConfig.CurrentDataConnection.
+    #>
     [CmdLetBinding()]
-    param()
+    param(
+        [Parameter(Mandatory = $false, Position = 0)]
+        [AllowNull()]
+        [AllowEmptyString()]
+        [string]$DataConnectionDoId,
+
+        [Parameter(Mandatory = $false, Position = 1)]
+        [AllowNull()]
+        [AllowEmptyString()]
+        [string]$DataConnectionName
+    )
     try {
         $Script:Tracer::WriteLine(("{0}: Function: {1} - Caller: {2}({3}) - Command: {4} - Parameters: {5}" -f $($Script:RunTimeConfig.ApplicationName), $($MyInvocation.MyCommand.Name), $($MyInvocation.ScriptName).Split("\")[-1], $($MyInvocation.ScriptLineNumber), $MyInvocation.Statement, (ConvertTo-RedactedLogString -InputObject $PSBoundParameters -MaxDepth 1)))
 
@@ -34,25 +65,52 @@ function Get-SqlSchemaObject {
             return
         }
 
-        if (![string]::IsNullOrWhiteSpace($Script:AppConfig.CurrentDataConnection.DoId)) {
-            "Retrieve current SqlSchema for data connection DoId: {0}" -f $Script:AppConfig.CurrentDataConnection.DoId | Write-LogOutput -LogType DEBUG
+        # The active connection is the default target, so every pre-#158 caller behaves exactly as
+        # before. A caller that names a DoId gets that one instead - and $IsActiveDatabase decides
+        # what the completion is allowed to touch: only the active database owns the window title,
+        # the editor's primary setSchema model and the validation re-trigger.
+        $Private:TargetDoId = if ($PSBoundParameters.ContainsKey("DataConnectionDoId") -and ![string]::IsNullOrWhiteSpace($DataConnectionDoId)) {
+            $DataConnectionDoId
+        }
+        else {
+            [string]$Script:AppConfig.CurrentDataConnection.DoId
+        }
+
+        $Private:IsActiveDatabase = ($Private:TargetDoId -eq [string]$Script:AppConfig.CurrentDataConnection.DoId)
+
+        $Private:TargetName = if ($Private:IsActiveDatabase) {
+            [string]$Script:AppConfig.CurrentDataConnection.FullName
+        }
+        elseif (![string]::IsNullOrWhiteSpace($DataConnectionName)) {
+            $DataConnectionName
+        }
+        else {
+            $Private:TargetDoId
+        }
+
+        if (![string]::IsNullOrWhiteSpace($Private:TargetDoId)) {
+            "Retrieve current SqlSchema for data connection DoId: {0}" -f $Private:TargetDoId | Write-LogOutput -LogType DEBUG
             $Script:RunTimeData.RestMethodParam.Uri = "{0}/webservice/SyntaxHighlighting.asmx/GetSqlSchema" -f $Script:AppConfig.BaseUrl
             "SqlSchemaUrl: {0}" -f $Script:RunTimeData.RestMethodParam.Uri | Write-LogOutput -LogType DEBUG
 
-            "Retrieve schema {0}" -f $Script:AppConfig.CurrentDataConnection.FullName | Write-LogOutput
+            "Retrieve schema {0}" -f $Private:TargetName | Write-LogOutput
 
             # Share the schema across tabs that belong to the same connection pool (SessionKey) and
             # target the same data connection (DoId): same tenant + same database => identical
             # schema, so the first tab to fetch it populates a session-lifetime cache and every
             # other matching connected tab reuses it without another round-trip.
-            $SchemaCacheKey = Get-ActiveSqlSchemaCacheKey
+            $SchemaCacheKey = Get-SqlSchemaCacheKey -DataConnectionDoId $Private:TargetDoId
             if ($null -eq $Script:SqlSchemaCache) {
                 $Script:SqlSchemaCache = @{}
             }
 
             if ($Script:SqlSchemaCache.ContainsKey($SchemaCacheKey)) {
+                # Issue #158 criterion 5: a database already in the per-pool cache costs no request.
+                # It still runs the completion, because the CALLER has not been served yet - the tree
+                # node is empty and the editor has no model for this database until it does.
                 "Using cached SQL schema for '{0}'" -f $SchemaCacheKey | Write-LogOutput -LogType DEBUG
-                Complete-SqlSchemaRetrieval -SchemaResponse $Script:SqlSchemaCache[$SchemaCacheKey] -SchemaCacheKey $SchemaCacheKey
+                Complete-SqlSchemaRetrieval -SchemaResponse $Script:SqlSchemaCache[$SchemaCacheKey] -SchemaCacheKey $SchemaCacheKey `
+                    -DataConnectionDoId $Private:TargetDoId -DataConnectionName $Private:TargetName -IsActiveDatabase:$Private:IsActiveDatabase
                 return
             }
 
@@ -81,7 +139,7 @@ function Get-SqlSchemaObject {
             }
 
             $Script:RunTimeData.RestMethodParam.Body = @{
-                connectionId = $Script:AppConfig.CurrentDataConnection.DoId
+                connectionId = $Private:TargetDoId
             }
             $Script:RunTimeData.RestMethodParam.Method = "POST"
 
@@ -99,11 +157,17 @@ function Get-SqlSchemaObject {
             # request the tab makes next, so by the time this completion runs it may describe an
             # entirely different call. (That staleness is visible in the logs - the dispatch of an
             # execute records the schema request's URI, because nothing had overwritten it yet.)
+            # The target database travels on the context for the same reason the cache key does: by
+            # the time this completion runs the user may have switched tab or data connection, so
+            # "which database is this a response for" cannot be re-derived from the active tab.
             $Private:Pending = Invoke-OmadaPSWebRequestWrapperAsync -Description $Script:SqlSchemaRequestDescription -Context @{
-                SchemaCacheKey = $SchemaCacheKey
-                Uri            = $Script:RunTimeData.RestMethodParam.Uri
-                Method         = $Script:RunTimeData.RestMethodParam.Method
-                Body           = $Script:RunTimeData.RestMethodParam.Body
+                SchemaCacheKey      = $SchemaCacheKey
+                DataConnectionDoId  = $Private:TargetDoId
+                DataConnectionName  = $Private:TargetName
+                IsActiveDatabase    = $Private:IsActiveDatabase
+                Uri                 = $Script:RunTimeData.RestMethodParam.Uri
+                Method              = $Script:RunTimeData.RestMethodParam.Method
+                Body                = $Script:RunTimeData.RestMethodParam.Body
             } -OnResultScriptBlock {
                 param($Pending)
                 # A worker that could not run the request at all is not an answer. Retry once on the
@@ -129,10 +193,14 @@ function Get-SqlSchemaObject {
                     $Script:RunTimeData.RestMethodParam.Uri = $Pending.Context.Caller.Uri
                     $Script:RunTimeData.RestMethodParam.Method = $Pending.Context.Caller.Method
                     $Script:RunTimeData.RestMethodParam.Body = $Pending.Context.Caller.Body
-                    Complete-SqlSchemaRetrieval -SchemaResponse (Invoke-OmadaPSWebRequestWrapper) -SchemaCacheKey $Pending.Context.Caller.SchemaCacheKey
+                    Complete-SqlSchemaRetrieval -SchemaResponse (Invoke-OmadaPSWebRequestWrapper) -SchemaCacheKey $Pending.Context.Caller.SchemaCacheKey `
+                        -DataConnectionDoId $Pending.Context.Caller.DataConnectionDoId -DataConnectionName $Pending.Context.Caller.DataConnectionName `
+                        -IsActiveDatabase:([bool]$Pending.Context.Caller.IsActiveDatabase)
                     return
                 }
-                Complete-SqlSchemaRetrieval -SchemaResponse $Pending.Outcome -SchemaCacheKey $Pending.Context.Caller.SchemaCacheKey
+                Complete-SqlSchemaRetrieval -SchemaResponse $Pending.Outcome -SchemaCacheKey $Pending.Context.Caller.SchemaCacheKey `
+                    -DataConnectionDoId $Pending.Context.Caller.DataConnectionDoId -DataConnectionName $Pending.Context.Caller.DataConnectionName `
+                    -IsActiveDatabase:([bool]$Pending.Context.Caller.IsActiveDatabase)
             }
 
             if ($null -ne $Private:Pending) {
@@ -143,7 +211,8 @@ function Get-SqlSchemaObject {
 
             # Not eligible for a worker, or none available: exactly the pre-#40 behaviour.
             $ReturnValue = Invoke-OmadaPSWebRequestWrapper
-            Complete-SqlSchemaRetrieval -SchemaResponse $ReturnValue -SchemaCacheKey $SchemaCacheKey
+            Complete-SqlSchemaRetrieval -SchemaResponse $ReturnValue -SchemaCacheKey $SchemaCacheKey `
+                -DataConnectionDoId $Private:TargetDoId -DataConnectionName $Private:TargetName -IsActiveDatabase:$Private:IsActiveDatabase
         }
         else {
             "SqlSchema DoID is not set! Cannot retrieve Sql schema!" | Write-LogOutput -LogType WARNING -SkipDialog
@@ -173,15 +242,52 @@ function Complete-SqlSchemaRetrieval {
     .PARAMETER SchemaCacheKey
     The "<SessionKey>|<DataConnectionDoId>" key this response was fetched for. Passed in rather than
     re-derived, because the active tab may have changed since the request was issued.
+
+    .PARAMETER DataConnectionDoId
+    The data connection this response describes. Used to find its node on the schema tree.
+
+    .PARAMETER DataConnectionName
+    That connection's name, which is how setSchemaForDatabase addresses a database - the user writes
+    the name in the query, not the DoId.
+
+    .PARAMETER IsActiveDatabase
+    Whether this response is for the tab's CURRENT data connection. Only the active database owns the
+    window title, the editor's primary setSchema model and the validation re-trigger; a response for
+    any other database (issue #158) populates its own tree node and its own per-database editor model
+    and touches nothing else. Omitted means active, so every pre-#158 caller is unaffected.
     #>
     [CmdLetBinding()]
     param(
         $SchemaResponse,
 
         [Parameter(Mandatory = $true)]
-        [string]$SchemaCacheKey
+        [string]$SchemaCacheKey,
+
+        [Parameter(Mandatory = $false)]
+        [AllowNull()]
+        [AllowEmptyString()]
+        [string]$DataConnectionDoId,
+
+        [Parameter(Mandatory = $false)]
+        [AllowNull()]
+        [AllowEmptyString()]
+        [string]$DataConnectionName,
+
+        [Parameter(Mandatory = $false)]
+        [switch]$IsActiveDatabase
     )
     try {
+        # Unbound means active. The switch would otherwise default to $false and silently demote
+        # every caller that predates issue #158 to the non-active path.
+        $Private:Active = if ($PSBoundParameters.ContainsKey("IsActiveDatabase")) { [bool]$IsActiveDatabase } else { $true }
+
+        $Private:DisplayName = if (![string]::IsNullOrWhiteSpace($DataConnectionName)) {
+            $DataConnectionName
+        }
+        else {
+            [string]$Script:AppConfig.CurrentDataConnection.FullName
+        }
+
         $ReturnValue = $SchemaResponse
 
         if ($null -ne $ReturnValue -and $ReturnValue -isnot [System.Management.Automation.ErrorRecord] -and $null -ne $ReturnValue.d) {
@@ -200,7 +306,16 @@ function Complete-SqlSchemaRetrieval {
         }
 
         if ($null -eq $ReturnValue -or $ReturnValue -is [System.Management.Automation.ErrorRecord] -or $null -eq $ReturnValue.d) {
-            "No SQL schema returned for data connection '{0}'." -f $Script:AppConfig.CurrentDataConnection.FullName | Write-LogOutput -LogType WARNING -SkipDialog
+            "No SQL schema returned for data connection '{0}'." -f $Private:DisplayName | Write-LogOutput -LogType WARNING -SkipDialog
+
+            # Let the node be asked again. Without this a database whose first fetch failed would
+            # stay marked "requested" for the rest of the session, so collapsing and re-expanding it
+            # - the obvious thing to try - would do nothing at all.
+            $Private:FailedNode = Get-SqlSchemaDatabaseNode -DataConnectionDoId $DataConnectionDoId
+            if ($null -ne $Private:FailedNode -and $null -ne $Private:FailedNode.Tag -and -not $Private:FailedNode.Tag.Loaded) {
+                $Private:FailedNode.Tag.Requested = $false
+            }
+
             return $null
         }
 
@@ -210,75 +325,41 @@ function Complete-SqlSchemaRetrieval {
         # setSchema push below always runs.
         $UpdateSchemaWindow = ($null -ne $Script:SqlSchemaForm -and $null -ne $Script:SqlSchemaForm.Definition -and $null -ne $Script:TreeViewSqlSchema)
 
-        if ($UpdateSchemaWindow) {
-            $Script:SqlSchemaForm.Definition.Title = "Sql Schema - {0}" -f $Script:AppConfig.CurrentDataConnection.FullName
+        if ($UpdateSchemaWindow -and $Private:Active) {
+            $Script:SqlSchemaForm.Definition.Title = "Sql Schema - {0}" -f $Private:DisplayName
         }
 
         "Retrieved object {0}" -f $Script:RunTimeData.SqlQueryObject | Write-LogOutput -LogType VERBOSE
 
-        $SchemaObjects = @{}
         if ($UpdateSchemaWindow) {
-            $Script:TreeViewSqlSchema.Items.Clear()
-        }
+            # Reconcile the database level first. It is idempotent and keeps the children of any
+            # database that is already loaded, so this is safe to call on every response - including
+            # the very first one, where the window opened before the connection list was read.
+            Update-SqlSchemaDatabaseTree
 
-        $Schemas = (($ReturnValue.d | Get-Member -MemberType NoteProperty).Name) | ForEach-Object { $_.Split(".", 2)[0] } | Select-Object -Unique
-        foreach ($Schema in $Schemas) {
-            $Tables = $ReturnValue.d | Get-Member -MemberType NoteProperty | Where-Object { $_.Name -like ("{0}.*" -f $Schema) }
-
-            $TreeViewSchemaItem = $null
-            if ($UpdateSchemaWindow) {
-                $TreeViewSchemaItem = New-Object System.Windows.Controls.TreeViewItem
-                $TreeViewSchemaItem.Header = $Schema
-                $TreeViewSchemaItem.FontSize = 14
-                $TreeViewSchemaItem.IsExpanded = $true
-                $Script:TreeViewSqlSchema.Items.Add($TreeViewSchemaItem) | Out-Null
-            }
-
-            $TableObjects = @{}
-
-            foreach ($Table in $Tables) {
-
-                $TableFullName = $Table.Name
-                $TableName = $TableFullName.Split(".", 2)[1]
-
-                $TreeViewTableItem = $null
-                if ($UpdateSchemaWindow) {
-                    $TreeViewTableItem = New-Object System.Windows.Controls.TreeViewItem
-                    $TreeViewTableItem.Header = $TableName
-                    $TreeViewTableItem.FontSize = 14
-                    $TreeViewSchemaItem.Items.Add($TreeViewTableItem) | Out-Null
+            $Private:DatabaseNode = Get-SqlSchemaDatabaseNode -DataConnectionDoId $DataConnectionDoId
+            if ($null -ne $Private:DatabaseNode) {
+                $Private:TableCount = Add-SqlSchemaTreeNode -Parent $Private:DatabaseNode -SchemaResponse $ReturnValue
+                if ($null -ne $Private:DatabaseNode.Tag) {
+                    $Private:DatabaseNode.Tag.Loaded = $true
                 }
 
-                # Each raw entry is "ColumnName DataType"; keep both so the editor can show the
-                # type in its completion detail. Split on the first run of whitespace (the type
-                # itself may contain spaces, e.g. "nvarchar(50) NOT NULL", so keep the remainder
-                # intact) and wrap in @() so a single-column table still serialises as a JSON
-                # array rather than a lone object.
-                $TableObjects.Add($TableName, @($ReturnValue.d.$TableFullName | ForEach-Object {
-                            $Parts = $_.Trim() -split "\s+", 2
-                            [PSCustomObject][Ordered]@{ n = $Parts[0]; t = if ($Parts.Count -gt 1) { $Parts[1].Trim() } else { "" } }
-                        }))
-
-                if ($UpdateSchemaWindow) {
-                    foreach ($Column in $ReturnValue.d.$TableFullName) {
-                        $TreeViewColumnItem = New-Object System.Windows.Controls.TreeViewItem
-                        $TreeViewColumnItem.Header = $Column
-                        $TreeViewColumnItem.FontSize = 12
-                        $TreeViewTableItem.Items.Add($TreeViewColumnItem) | Out-Null
-                    }
-                }
+                "Schema tree for '{0}': {1} table(s)" -f $Private:DisplayName, $Private:TableCount | Write-LogOutput -LogType DEBUG
             }
-            $SchemaObjects.Add($Schema, $TableObjects)
-        }
+            else {
+                # No node for this DoId: the connection is not in the dropdown (it was removed, or
+                # the list has not been read yet). Nothing to populate, and nothing worth telling the
+                # user - the editor still gets its model below.
+                "No schema tree node for data connection DoId '{0}'; tree not updated." -f $DataConnectionDoId | Write-LogOutput -LogType DEBUG
+            }
 
-        if ($UpdateSchemaWindow) {
-            # The tree was rebuilt from scratch above, so every node is visible again. Re-apply
-            # whatever the user has typed in the filter box, otherwise switching tab or data
-            # connection silently drops an active filter.
+            # The subtree was rebuilt from scratch above, so every node under it is visible again.
+            # Re-apply whatever the user has typed in the filter box, otherwise switching tab or data
+            # connection - or expanding a second database - silently drops an active filter.
             Update-SqlSchemaTreeFilter
         }
 
-        $SchemaObjectsJson = $SchemaObjects | ConvertTo-Json -Depth 5
+        $SchemaObjectsJson = ConvertTo-SqlSchemaEditorModel -SchemaResponse $ReturnValue | ConvertTo-Json -Depth 5
 
         "Schema for Monaco editor: {0}" -f $SchemaObjectsJson | Write-LogOutput -LogType VERBOSE
         $OnCompletedScriptBlock = {
@@ -317,13 +398,52 @@ function Complete-SqlSchemaRetrieval {
         }
 
         "Push schema to Monaco editor." | Write-LogOutput -LogType DEBUG
-        Invoke-ExecuteScriptAsync -ScriptToExecute "setSchema($SchemaObjectsJson);" -OnCompletedScriptBlock $OnCompletedScriptBlock
+
+        if ($Private:Active) {
+            Invoke-ExecuteScriptAsync -ScriptToExecute "setSchema($SchemaObjectsJson);" -OnCompletedScriptBlock $OnCompletedScriptBlock
+
+            # The editor cannot recognise "[SomeDatabase]." as a database reference without knowing
+            # which names are databases, and it is the editor that decides when to ask for one. The
+            # list is pushed with the active schema because that is the moment it is known to be
+            # current - Update-DataConnectionList has run by then (issue #158).
+            # Not wrapped in @() - see the note in Update-SqlSchemaDatabaseTree.
+            $Private:Reference = Get-DataConnectionReferenceList -OptionList (Get-DataConnectionOptionText)
+            # Nulls filtered out: with no connections at all, .Name yields $null and the payload
+            # would be "[null]" rather than "[]".
+            $Private:DatabaseNameJson = @($Private:Reference.Name | Where-Object { ![string]::IsNullOrWhiteSpace($_) }) | ConvertTo-Json -Depth 2 -AsArray
+
+            # The active connection's own NAME, not its "{Name} - {DoId}" display text: the editor
+            # compares it against what the user typed between brackets. It is also what tells the
+            # editor to answer "[ThisDatabase]." from the setSchema model it already has, instead of
+            # asking for a schema it is never going to be sent through setSchemaForDatabase.
+            $Private:ActiveDoId = if (![string]::IsNullOrWhiteSpace($DataConnectionDoId)) { $DataConnectionDoId } else { [string]$Script:AppConfig.CurrentDataConnection.DoId }
+            $Private:ActiveName = @($Private:Reference | Where-Object { $_.DoId -eq $Private:ActiveDoId }).Name | Select-Object -First 1
+            $Private:ActiveNameLiteral = ConvertTo-JavaScriptLiteral -Value ([string]$Private:ActiveName)
+
+            Invoke-ExecuteScriptAsync -ScriptToExecute "setDatabaseNames($Private:DatabaseNameJson, $Private:ActiveNameLiteral);" -OnCompletedScriptBlock $OnCompletedScriptBlock
 
             # Re-validate after a schema push. A new connection can invalidate the diagnostics that
             # are currently on screen, and it is also the first moment a restored tab's editor
             # content has ever been looked at. Debounced like every other trigger, so switching
             # connection rapidly costs one parse, not one per switch.
             Request-SqlSyntaxValidation -TabSession (Get-ActiveTabSession)
+        }
+        else {
+            # A non-active database goes into its OWN editor model, never into setSchema: overwriting
+            # the primary model would make the completion list describe a database the user is not
+            # connected to (issue #158 keeps the two-part path exactly as it was).
+            #
+            # One database per call, rather than one payload carrying every schema. A tenant with a
+            # dozen connections would otherwise serialise all of them into a single
+            # ExecuteScriptAsync string on every push.
+            $Private:DatabaseLiteral = ConvertTo-JavaScriptLiteral -Value $Private:DisplayName
+            Invoke-ExecuteScriptAsync -ScriptToExecute "setSchemaForDatabase($Private:DatabaseLiteral, $SchemaObjectsJson);" -OnCompletedScriptBlock $OnCompletedScriptBlock
+
+            # Deliberately NO Request-SqlSyntaxValidation here. The diagnostics on screen describe the
+            # active database, and a second database's schema arriving does not change them. Issue
+            # #158's validation commit re-triggers once, from the message handler that asked for this
+            # schema, rather than once per database that happens to land.
+        }
     }
     catch {
         $_.Exception.Message | Write-ContainedErrorLog -ErrorObject $_

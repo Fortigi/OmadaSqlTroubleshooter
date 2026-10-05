@@ -12,6 +12,20 @@ semantic version.
 
 ### Added
 
+- Every database in the SQL schema window, and completion across databases (#158). The schema window
+  now lists one collapsible node per data connection and loads each one's schema **the first time you
+  expand it**, so opening the window still costs a single round trip no matter how many connections
+  the tenant has; the wildcard filter works across the new level, and a database that has not been
+  loaded matches on its own name only. In the editor, `[DatabaseA].` completes that database's
+  schemas and `[DatabaseA].[Schema].` its tables — fetched in the background the first time a
+  database is named, and served from the per-pool cache with no request after that. Bracketed
+  identifiers are now understood by the completion parser generally, so `FROM [dbo].[Person] p`
+  resolves its alias where it previously did not. The schema validation pass also checks
+  `[DatabaseA].[Schema].[Table]` names once that database's schema is cached, which additionally
+  restores the column diagnostics of local tables in a query that joins another database — those
+  were previously suppressed for the whole query. It still never makes a request of its own, so a
+  database that has not been loaded is left alone exactly as before.
+
 - Explicit database selection inside the SQL query (#152). `SELECT * FROM [Db].[Schema].[Table]`,
   `Db.Schema.Table` and `[Db]..[Table]` now run against the named database whatever the **Data
   connection** dropdown has selected, and `USE [Db]` switches the dropdown, the status bar and the
