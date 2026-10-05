@@ -198,3 +198,104 @@ Describe "Update-QueryList connection guard" {
         $Script:MainForm.Elements.ButtonRefreshQueries.IsEnabled | Should -BeTrue
     }
 }
+
+Describe "Update-QueryList 'my queries' filter (issue #108)" {
+    # The three-way filter had no coverage distinguishing its branches, which is exactly how a
+    # redundant chained comparison sat in the MyCreatedQueriesOnly branch unnoticed. One test per
+    # branch, and each expects a DIFFERENT set of queries - so a filter that returns everything,
+    # returns nothing, or reads the wrong column cannot pass any of them.
+    #
+    # The subject is the mock's query list (tests/mock/fixtures/odata.querylist.json): six queries,
+    # ids 10521..10591. The view fixture below names an author and a last-changer for four of them;
+    # the remaining two (10583, 10591) appear in no "my queries" view at all, so they must be
+    # filtered out whenever either checkbox is on.
+
+    BeforeAll {
+        # The shape Get-SqlTroubleShooterView returns. The property names come from
+        # DataobjdlgAspxAttributeMapping, which Initialize-QueryListTestState maps to
+        # CreatedBy / ChangedBy / DoId. DoId is an int because Update-QueryList tests it against the
+        # OData Id with -notin, and a string would never match.
+        function script:New-QueryViewFixture {
+            return @(
+                [PSCustomObject]@{ DoId = 10521; CreatedBy = "someone@example.com"; ChangedBy = "someone@example.com" }
+                [PSCustomObject]@{ DoId = 10544; CreatedBy = "someone@example.com"; ChangedBy = "colleague@example.com" }
+                [PSCustomObject]@{ DoId = 10560; CreatedBy = "colleague@example.com"; ChangedBy = "someone@example.com" }
+                [PSCustomObject]@{ DoId = 10577; CreatedBy = "colleague@example.com"; ChangedBy = "colleague@example.com" }
+            )
+        }
+
+        # The dropdown is what the user actually sees, and the only place the filter's effect is
+        # observable - $SqlQueryViewContents is a local. Items carry "{DisplayName} - {Id}".
+        function script:Get-DropdownQueryId {
+            return @($Script:MainForm.Elements.ComboBoxSelectQuery.Items | ForEach-Object { [int](($_.Content -split " - ")[-1]) })
+        }
+    }
+
+    BeforeEach {
+        Initialize-QueryListTestState -Connected $true
+        $Script:AppConfig.IdentityUserName = "someone@example.com"
+    }
+
+    It "shows only the queries I created when 'my created queries' alone is ticked" {
+        $Script:AppConfig.MyCreatedQueriesOnly = $true
+        function Get-SqlTroubleShooterView { New-QueryViewFixture }
+
+        Update-QueryList
+
+        # 10521 and 10544 are mine. A filter that had collapsed to "everything" would also carry
+        # 10560, 10577 and the two queries no view mentions.
+        Get-DropdownQueryId | Should -Be @(10521, 10544)
+    }
+
+    It "shows only the queries I last changed when 'my updated queries' alone is ticked" {
+        $Script:AppConfig.MyUpdatedQueriesOnly = $true
+        function Get-SqlTroubleShooterView { New-QueryViewFixture }
+
+        Update-QueryList
+
+        # Deliberately a different set from the created-only case: 10544 is mine by creation only,
+        # 10560 by change only. A branch reading the wrong column would swap them.
+        Get-DropdownQueryId | Should -Be @(10521, 10560)
+    }
+
+    It "shows the union when both checkboxes are ticked" {
+        $Script:AppConfig.MyCreatedQueriesOnly = $true
+        $Script:AppConfig.MyUpdatedQueriesOnly = $true
+        function Get-SqlTroubleShooterView { New-QueryViewFixture }
+
+        Update-QueryList
+
+        # Created-or-changed by me. 10577 is a colleague's throughout and stays out.
+        Get-DropdownQueryId | Should -Be @(10521, 10544, 10560)
+    }
+
+    It "shows every query when neither checkbox is ticked" {
+        function Get-SqlTroubleShooterView { New-QueryViewFixture }
+
+        Update-QueryList
+
+        # No filter: the view is never consulted and all six of the mock's queries are listed. This
+        # is the case the three above must be different from.
+        Get-DropdownQueryId | Should -Be @(10521, 10544, 10560, 10577, 10583, 10591)
+    }
+
+    It "compares the identity once in the created-only branch, never twice" {
+        # Issue #108. The branch read:
+        #     ... -eq $Script:AppConfig.IdentityUserName -eq $Script:AppConfig.IdentityUserName
+        # PowerShell coerces the RIGHT operand to the type of the LEFT, so that evaluates as
+        # ([bool](CreatedBy -eq identity)) -eq [bool]identity. The branch is guarded by
+        # IsNullOrWhiteSpace, so the identity is always a non-empty string, [bool] of it is $true,
+        # and the second comparison collapsed to a no-op - the filter did work. The hazard is what
+        # happens if that guard ever changes: with an empty identity, [bool]"" is $false and the
+        # expression becomes "every row whose author does NOT match", so the filter silently returns
+        # everything. A filter that quietly returns everything is worse than one that returns
+        # nothing, because nothing looks broken.
+        # Matched as a CHAIN - an identity comparison followed directly by another -eq - and not as
+        # "two identity comparisons on one line". The both-checkboxes branch above legitimately
+        # carries two, joined by -or, and flagging that would make this test fail on correct code.
+        $Source = Get-Content -Path (Join-Path $PrivatePath -ChildPath "Update-QueryList.ps1") -Raw
+        $Chained = [regex]::Matches($Source, ([regex]::Escape('-eq $Script:AppConfig.IdentityUserName') + '\s+-eq\b'))
+
+        $Chained.Count | Should -Be 0
+    }
+}
