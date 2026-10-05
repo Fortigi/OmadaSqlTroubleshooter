@@ -82,10 +82,8 @@ function Write-LogOutput {
         }
 
         $LogMessageDialog = @{
-            Show        = $false
-            Text        = $Message
-            DialogTitle = $null
-            DialogIcon  = $null
+            Show = $false
+            Text = $Message
         }
 
         # The Messages pane's own copy of the text, kept separate from $LogMessageDialog.Text
