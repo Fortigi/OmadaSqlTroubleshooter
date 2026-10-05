@@ -223,16 +223,22 @@ E2ESuite -Name "DatabaseSelection" -Body {
 
         $script:E2ECalls.Clear()
 
+        # Captured rather than hard-coded. The invariant worth asserting is that the call does not
+        # CHANGE the selection; which connection happens to be selected at this point depends on
+        # what the cases before this one did, and pinning it to a literal made the test fail for a
+        # reason that had nothing to do with the code under test.
+        $SelectedBefore = [string]$Script:AppConfig.CurrentDataConnection.DoId
+
         Request-SqlSchemaForDatabase -DatabaseName "OtherDB"
         Wait-E2ENoPendingRequests
 
         $SchemaCall = @($script:E2ECalls | Where-Object { [string]$_.Uri -like "*GetSqlSchema*" })
         E2EAssertEqual 1 $SchemaCall.Count "naming another database should fetch its schema exactly once (criterion 2)"
-        E2EAssertEqual "43" ([string]$SchemaCall[0].Body["connectionId"]) "the fetch should ask for OtherDB (43), not the selected OISES (42)"
+        E2EAssertEqual "43" ([string]$SchemaCall[0].Body["connectionId"]) "the fetch should ask for OtherDB (43), not the selected connection"
 
         # The selected connection is untouched: asking for another database's schema is a read for
         # the editor, not a switch.
-        E2EAssertEqual "42" ([string]$Script:AppConfig.CurrentDataConnection.DoId) "fetching another database's schema must leave the selected data connection alone"
+        E2EAssertEqual $SelectedBefore ([string]$Script:AppConfig.CurrentDataConnection.DoId) "fetching another database's schema must leave the selected data connection alone"
 
         # Second ask: the per-pool cache answers it, so nothing reaches the tenant.
         $script:E2ECalls.Clear()
@@ -250,6 +256,11 @@ E2ESuite -Name "DatabaseSelection" -Body {
         Select-E2EQuery | Out-Null
 
         $script:E2ECalls.Clear()
+
+        # Discriminating: there ARE connections to resolve against, so "no fetch" is a decision about
+        # this name rather than the trivial consequence of an empty dropdown.
+        $Available = @($Script:MainForm.Elements.ComboBoxSelectDataConnection.Items)
+        E2EAssertTrue ($Available.Count -gt 0) "the data connection list should be populated, or the assertion below proves nothing"
 
         # The user is mid-word. A half-typed database name must not reach the tenant, and must not
         # interrupt them either.
