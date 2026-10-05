@@ -37,6 +37,17 @@ BeforeAll {
     . (Join-Path $PrivatePath -ChildPath "Get-SqlParserType.ps1")
     . (Join-Path $PrivatePath -ChildPath "Get-SqlScriptFragment.ps1")
     . (Join-Path $PrivatePath -ChildPath "Get-SqlScriptStatement.ps1")
+
+    # Issue #152 put a gate between the split and the dispatch, so the real one is loaded here rather
+    # than stubbed: these cases assert what the pipeline is handed, and a stub would let the two
+    # drift. Every script below names no database, so the gate returns None without ever reaching the
+    # data connection dropdown - which is why no WPF stub is needed for it.
+    . (Join-Path $PrivatePath -ChildPath "Get-SqlFragmentDescendant.ps1")
+    . (Join-Path $PrivatePath -ChildPath "Get-SqlDatabaseReference.ps1")
+    . (Join-Path $PrivatePath -ChildPath "ConvertTo-UnqualifiedSqlQuery.ps1")
+    . (Join-Path $PrivatePath -ChildPath "Resolve-DataConnectionReference.ps1")
+    . (Join-Path $PrivatePath -ChildPath "Resolve-SqlStatementTarget.ps1")
+
     . (Join-Path $PrivatePath -ChildPath "Invoke-ExecuteQuery.ps1")
 
     $Script:Tracer = [System.Diagnostics.Trace]

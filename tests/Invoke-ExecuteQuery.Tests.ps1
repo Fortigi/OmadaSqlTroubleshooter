@@ -1132,3 +1132,306 @@ Describe "A chain that already ran on the UI thread does not try to fall back to
         $Script:MainForm.Elements.ButtonExecuteQuery.IsEnabled | Should -BeTrue
     }
 }
+
+Describe "Invoke-ExecuteQuery resolves the database before executing (issue #152)" {
+    # The resolver functions are unit-tested on their own; what is guarded here is the WIRING in the
+    # completion block, which is where each status turns into control flow. Criterion 5's UI effect
+    # in particular has no other unit test: it is the Set-ConfigProperty + Set-DataConnection pair
+    # below, and nothing else in the suite drives it.
+
+    BeforeEach {
+        Initialize-ExecuteQueryTestState
+
+        # The pipeline context is gathered from these two, which the shared stub does not carry
+        # because nothing before #152 read them on this path.
+        $Script:MainForm.Elements.TextBoxDisplayName = [pscustomobject]@{ Text = "TestQuery" }
+        $Script:AppConfig | Add-Member -NotePropertyName CurrentDataConnection -NotePropertyValue ([pscustomobject]@{ DoId = "42"; DisplayName = "OISES"; FullName = "OISES - 42" }) -Force
+
+        # The completion block stores the editor's text on RunTimeData before anything else. A
+        # PSCustomObject refuses an assignment to a property it does not already have, so without
+        # these the block throws there and never reaches the gate under test.
+        $Script:RunTimeData | Add-Member -NotePropertyName QueryText -NotePropertyValue $null -Force
+        $Script:RunTimeData | Add-Member -NotePropertyName CurrentQueryText -NotePropertyValue $null -Force
+
+        $script:CapturedCompletion = $null
+        function Invoke-ExecuteScriptWithResultAsync {
+            param($ScriptToExecute, $OnCompletedScriptBlock)
+            $script:CapturedCompletion = $OnCompletedScriptBlock
+        }
+
+        function Test-ConnectionRequirements { return $true }
+
+        # The validation gate of #61 is a separate feature with its own tests; switching all three
+        # passes off keeps these cases about the database gate alone.
+        function Get-SqlValidationSetting {
+            return [pscustomobject]@{ Enabled = $false; SchemaEnabled = $false; OmadaEnabled = $false }
+        }
+
+        function Save-Query {
+            param([switch]$NewQuery)
+            return [pscustomobject]@{ Id = 100; DisplayName = "TestQuery" }
+        }
+
+        # The splitter is stubbed, not real: these cases are about what the wiring does with the
+        # gate's answer, and a real split would make them depend on ScriptDom being installed.
+        function Get-SqlScriptStatement {
+            param($SqlText, $ParserVersion)
+            return @([pscustomobject]@{ Ordinal = 1; Text = $SqlText; StartOffset = 0; Length = ([string]$SqlText).Length })
+        }
+
+        # Capture what WOULD be dispatched, and return a pending item so Invoke-ExecuteQuery takes
+        # its normal early return instead of falling through to the inline pipeline.
+        $script:DispatchedContext = $null
+        function Invoke-OmadaPSWebRequestWrapperAsync {
+            param($Description, $PipelineContext, $Context, $OnResultScriptBlock)
+            $script:DispatchedContext = $PipelineContext
+            return [pscustomobject]@{ Description = $Description }
+        }
+
+        $script:ConnectionSwitches = 0
+        function Set-DataConnection { $script:ConnectionSwitches++ }
+
+        $script:SchemaReloads = 0
+        function Get-SqlSchemaObject { $script:SchemaReloads++ }
+
+        $script:ContainedErrors = [System.Collections.Generic.List[string]]::new()
+        function Write-ContainedErrorLog {
+            param(
+                [Parameter(ValueFromPipeline = $true)][string]$Message,
+                $ErrorObject,
+                [switch]$TabScoped
+            )
+            process { $script:ContainedErrors.Add($Message) }
+        }
+
+        $Script:Task = [pscustomobject]@{
+            Status = "RanToCompletion"
+            Result = (@{ fullText = "SELECT * FROM [ODW].[dbo].[Person]"; selectedText = $null; selectionStartLine = 1; selectionStartColumn = 1 } | ConvertTo-Json)
+        }
+    }
+
+    Context "a script that addresses no database" {
+        It "dispatches the splitter's statements unchanged, with no connection switch" {
+            function Resolve-SqlStatementTarget {
+                param($Statement, $OptionList)
+                return [pscustomobject]@{ Status = "None"; Statement = @($Statement); UseFullName = $null; UseDatabase = $null; Message = $null }
+            }
+
+            Invoke-ExecuteQuery
+            & $script:CapturedCompletion
+
+            $script:DispatchedContext | Should -Not -BeNullOrEmpty
+            @($script:DispatchedContext.Statements).Count | Should -Be 1
+            # Untouched: no DataConnectionDoId annotation, so the pipeline uses the selected
+            # connection and adds no round trip (criterion 14).
+            $script:DispatchedContext.Statements[0].DataConnectionDoId | Should -BeNullOrEmpty
+            $script:DispatchedContext.DataConnectionDoId | Should -Be "42"
+            $script:ConnectionSwitches | Should -Be 0
+        }
+    }
+
+    Context "resolved databases" {
+        BeforeEach {
+            function Resolve-SqlStatementTarget {
+                param($Statement, $OptionList)
+                return [pscustomobject]@{
+                    Status      = "Ok"
+                    Statement   = @(
+                        [pscustomobject]@{ Ordinal = 1; Text = "SELECT * FROM [dbo].[A]"; DatabaseName = "ODW"; DataConnectionDoId = "99" }
+                        [pscustomobject]@{ Ordinal = 2; Text = "SELECT * FROM [dbo].[B]"; DatabaseName = "OISES"; DataConnectionDoId = "77" }
+                    )
+                    UseFullName = $null
+                    UseDatabase = $null
+                    Message     = $null
+                }
+            }
+        }
+
+        It "dispatches the annotated statements, each with its own connection" {
+            Invoke-ExecuteQuery
+            & $script:CapturedCompletion
+
+            @($script:DispatchedContext.Statements).Count | Should -Be 2
+            $script:DispatchedContext.Statements[0].DataConnectionDoId | Should -Be "99"
+            $script:DispatchedContext.Statements[1].DataConnectionDoId | Should -Be "77"
+        }
+
+        It "dispatches the REWRITTEN statement text, never the prefixed original" {
+            # The defect this guards against is specific: if the gate's annotated list were dropped
+            # and the splitter's output dispatched instead, the prefixed text would reach Omada and
+            # be a SQL error there (criterion 6).
+            Invoke-ExecuteQuery
+            & $script:CapturedCompletion
+
+            @($script:DispatchedContext.Statements | Where-Object { $_.Text -match "ODW|OISES" }).Count | Should -Be 0
+            $script:DispatchedContext.Statements[0].Text | Should -Be "SELECT * FROM [dbo].[A]"
+        }
+
+        It "keeps the ORIGINAL text and the user's own connection on the saved query (criterion 7)" {
+            Invoke-ExecuteQuery
+            & $script:CapturedCompletion
+
+            $script:DispatchedContext.QueryText | Should -Be "SELECT * FROM [ODW].[dbo].[Person]"
+            $script:DispatchedContext.DataConnectionDoId | Should -Be "42"
+        }
+
+        It "does not touch the dropdown, because an inline prefix is not sticky" {
+            Invoke-ExecuteQuery
+            & $script:CapturedCompletion
+
+            $script:ConnectionSwitches | Should -Be 0
+            @($script:ConfigWrites | Where-Object { $_.Property -eq "CurrentDataConnection" }).Count | Should -Be 0
+        }
+    }
+
+    Context "USE (criterion 5)" {
+        It "switches the connection and still executes the remaining statements" {
+            function Resolve-SqlStatementTarget {
+                param($Statement, $OptionList)
+                return [pscustomobject]@{
+                    Status      = "Ok"
+                    Statement   = @([pscustomobject]@{ Ordinal = 2; Text = "SELECT * FROM [dbo].[Person]"; DatabaseName = "ODW"; DataConnectionDoId = "99" })
+                    UseFullName = "ODW - 99"
+                    UseDatabase = "ODW"
+                    Message     = $null
+                }
+            }
+
+            Invoke-ExecuteQuery
+            & $script:CapturedCompletion
+
+            # The config is written first so Set-DataConnection can find the entry by FullName.
+            $Private:Write = @($script:ConfigWrites | Where-Object { $_.Property -eq "CurrentDataConnection" })
+            $Private:Write.Count | Should -Be 1
+            $Private:Write[0].Value | Should -Be "ODW - 99"
+            $script:ConnectionSwitches | Should -Be 1
+            # Set-DataConnection raises Add_SelectionChanged, which reloads the schema - so this path
+            # must NOT call Get-SqlSchemaObject itself and reload it a second time.
+            $script:SchemaReloads | Should -Be 0
+            @($script:DispatchedContext.Statements).Count | Should -Be 1
+        }
+
+        It "keeps a statement ABOVE the USE on the connection that was selected before it" {
+            # The bug this guards against is the one #152 exists to remove, reintroduced by the
+            # feature itself. The gate leaves a pre-USE statement with a null DataConnectionDoId
+            # meaning "whatever the dropdown has", but Set-DataConnection moves the dropdown to the
+            # USE target and the context's DataConnectionDoId - the fallback a null resolves to - is
+            # read afterwards. So the statement above the USE silently ran against the USE's
+            # database. Every statement of a USE run must now carry an explicit connection.
+            function Resolve-SqlStatementTarget {
+                param($Statement, $OptionList)
+                return [pscustomobject]@{
+                    Status      = "Ok"
+                    Statement   = @(
+                        # Above the USE: "whatever was selected", i.e. OISES (42).
+                        [pscustomobject]@{ Ordinal = 1; Text = "SELECT * FROM [dbo].[A]"; DatabaseName = $null; DataConnectionDoId = $null }
+                        # Below it: the USE target.
+                        [pscustomobject]@{ Ordinal = 3; Text = "SELECT * FROM [dbo].[B]"; DatabaseName = "ODW"; DataConnectionDoId = "99" }
+                    )
+                    UseFullName = "ODW - 99"
+                    UseDatabase = "ODW"
+                    Message     = $null
+                }
+            }
+
+            Invoke-ExecuteQuery
+            & $script:CapturedCompletion
+
+            @($script:DispatchedContext.Statements).Count | Should -Be 2
+            $script:DispatchedContext.Statements[0].DataConnectionDoId | Should -Be "42"
+            $script:DispatchedContext.Statements[1].DataConnectionDoId | Should -Be "99"
+            # And the dropdown did move, so the switch is still sticky for later executions.
+            $script:ConnectionSwitches | Should -Be 1
+        }
+
+        It "leaves an unprefixed statement's connection unset when no USE fires" {
+            # The other half of the pinning rule: filling these in unconditionally would make the
+            # pipeline create a temporary object for an ordinary query, which criterion 14 forbids.
+            function Resolve-SqlStatementTarget {
+                param($Statement, $OptionList)
+                return [pscustomobject]@{
+                    Status      = "Ok"
+                    Statement   = @(
+                        [pscustomobject]@{ Ordinal = 1; Text = "SELECT * FROM [dbo].[A]"; DatabaseName = $null; DataConnectionDoId = $null }
+                        [pscustomobject]@{ Ordinal = 2; Text = "SELECT * FROM [dbo].[B]"; DatabaseName = "ODW"; DataConnectionDoId = "99" }
+                    )
+                    UseFullName = $null
+                    UseDatabase = $null
+                    Message     = $null
+                }
+            }
+
+            Invoke-ExecuteQuery
+            & $script:CapturedCompletion
+
+            $script:DispatchedContext.Statements[0].DataConnectionDoId | Should -BeNullOrEmpty
+            $script:DispatchedContext.Statements[1].DataConnectionDoId | Should -Be "99"
+            $script:ConnectionSwitches | Should -Be 0
+        }
+
+        It "switches and executes nothing when the script is nothing but USE" {
+            function Resolve-SqlStatementTarget {
+                param($Statement, $OptionList)
+                return [pscustomobject]@{
+                    Status      = "Ok"
+                    Statement   = @()
+                    UseFullName = "ODW - 99"
+                    UseDatabase = "ODW"
+                    Message     = "Data connection changed to 'ODW'. Nothing to execute."
+                }
+            }
+
+            Invoke-ExecuteQuery
+            & $script:CapturedCompletion
+
+            $script:ConnectionSwitches | Should -Be 1
+            $script:DispatchedContext | Should -BeNullOrEmpty
+            $Script:MainForm.Elements.ButtonExecuteQuery.IsEnabled | Should -BeTrue
+        }
+    }
+
+    Context "a rejected script" {
+        BeforeEach {
+            function Resolve-SqlStatementTarget {
+                param($Statement, $OptionList)
+                return [pscustomobject]@{
+                    Status      = "Rejected"
+                    Statement   = @()
+                    UseFullName = $null
+                    UseDatabase = $null
+                    Message     = "Statement 2: the database 'Nope' does not match any data connection. Available: OISES."
+                }
+            }
+        }
+
+        It "posts nothing at all (criteria 8, 9, 10)" {
+            Invoke-ExecuteQuery
+            & $script:CapturedCompletion
+
+            $script:DispatchedContext | Should -BeNullOrEmpty
+            @($script:InlinePipelineRuns).Count | Should -Be 0
+        }
+
+        It "does not switch the connection on the way out" {
+            # A rejected run must leave the dropdown exactly as it was, even when the script
+            # contained a USE earlier than the statement that failed to resolve.
+            Invoke-ExecuteQuery
+            & $script:CapturedCompletion
+
+            $script:ConnectionSwitches | Should -Be 0
+        }
+
+        It "reports the reason once, contained, and restores the UI" {
+            # Write-ContainedErrorLog, not Write-LogOutput -LogType ERROR: the latter is terminating
+            # here, so it would throw past the UI reset and the catch would report it a second time.
+            Invoke-ExecuteQuery
+            { & $script:CapturedCompletion } | Should -Not -Throw
+
+            @($script:ContainedErrors).Count | Should -Be 1
+            $script:ContainedErrors[0] | Should -Match "Statement 2"
+            $script:ContainedErrors[0] | Should -Match "does not match any data connection"
+            $Script:MainForm.Elements.ButtonExecuteQuery.IsEnabled | Should -BeTrue
+            $Script:RunTimeData.StopWatch.IsRunning | Should -BeFalse
+        }
+    }
+}

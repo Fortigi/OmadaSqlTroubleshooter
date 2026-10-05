@@ -192,6 +192,70 @@ Describe "Invoke-OmadaExecutePipeline - execute selection" {
         $Execute.Body["dataTypeArgs"]["targetId"] | Should -Be 777
     }
 
+    It "points each statement's temporary object at that statement's own connection" {
+        # Issue #152 on top of #151: a statement that named its own database resolves to a connection
+        # that is not the dropdown's, and each statement may differ. The per-statement upsert is the
+        # only place that follows it.
+        $Context = New-PipelineContext -QueryText "SELECT 2"
+        $Context.Statements = @(
+            [pscustomobject]@{ Ordinal = 1; Text = "SELECT 1"; DataConnectionDoId = "99" }
+            [pscustomobject]@{ Ordinal = 2; Text = "SELECT 2"; DataConnectionDoId = "77" }
+            [pscustomobject]@{ Ordinal = 3; Text = "SELECT 3"; DataConnectionDoId = $null }
+        )
+
+        Invoke-OmadaExecutePipeline -Context $Context | Out-Null
+
+        $Temp = @($script:Calls | Where-Object { $_.Key -in @("temp-put", "temp-post") })
+        @($Temp).Count | Should -Be 3
+        $Temp[0].Body["C_SQLTROUBLESHOOTING_DATACONNECTION"]["Id"] | Should -Be "99"
+        $Temp[1].Body["C_SQLTROUBLESHOOTING_DATACONNECTION"]["Id"] | Should -Be "77"
+        # No database of its own: falls back to the selected connection, as every statement did
+        # before #152.
+        $Temp[2].Body["C_SQLTROUBLESHOOTING_DATACONNECTION"]["Id"] | Should -Be "42"
+    }
+
+    It "leaves the user's own query object on the connection they chose" {
+        # The save must keep writing Context.DataConnectionDoId, or executing a prefixed query would
+        # silently move the saved query onto another connection (#152 criterion 7).
+        $Context = New-PipelineContext -QueryText "SELECT 2"
+        $Context.Statements = @([pscustomobject]@{ Ordinal = 1; Text = "SELECT 1"; DataConnectionDoId = "99" })
+
+        Invoke-OmadaExecutePipeline -Context $Context | Out-Null
+
+        $Save = $script:Calls | Where-Object { $_.Key -eq "save" } | Select-Object -First 1
+        $Save | Should -Not -BeNullOrEmpty
+        $Save.Body["C_SQLTROUBLESHOOTING_DATACONNECTION"]["Id"] | Should -Be "42"
+    }
+
+    It "creates the temporary object for ONE prefixed statement with no selection" {
+        # The case the old NeedTempObject test missed: Count is 1 and SelectionText is empty, so
+        # without the DataConnectionDoId condition this would execute the SAVED query - which is
+        # attached to the dropdown's connection - and the statement would silently run against the
+        # wrong database, which is the whole point of #152.
+        $Context = New-PipelineContext
+        $Context.Statements = @([pscustomobject]@{ Ordinal = 1; Text = "SELECT 1"; DataConnectionDoId = "99" })
+
+        Invoke-OmadaExecutePipeline -Context $Context | Out-Null
+
+        # temp-post, not temp-put: the probe finds nothing in this state, so the object is created
+        # rather than updated. Asserting either keeps the test about "a temporary object was used"
+        # instead of about which verb that happened to take.
+        @($script:Calls | Where-Object { $_.Key -in @("temp-put", "temp-post") }).Count | Should -Be 1
+        $Execute = $script:Calls | Where-Object { $_.Key -eq "execute" } | Select-Object -First 1
+        $Execute.Body["dataTypeArgs"]["targetId"] | Should -Be 777
+    }
+
+    It "creates no temporary object for ONE unprefixed statement with no selection" {
+        # The other half of the same rule: nothing about #152 may add a round trip to a query that
+        # names no database (criterion 14).
+        $Context = New-PipelineContext
+        $Context.Statements = @([pscustomobject]@{ Ordinal = 1; Text = "SELECT 1"; DataConnectionDoId = $null })
+
+        Invoke-OmadaExecutePipeline -Context $Context | Out-Null
+
+        Get-CallSequence | Should -Be @("get", "execute")
+    }
+
     It "undeletes and reuses a soft-deleted temporary object rather than creating another" {
         # Without this the shared TMP_<InstanceGuid> object would be recreated on every run and stale
         # ones would pile up on the tenant.

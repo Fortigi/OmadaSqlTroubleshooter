@@ -108,6 +108,87 @@ function Invoke-ExecuteQuery {
                     # cannot split safely - no parser, parse errors, or nothing to run - so this never
                     # reduces what gets executed.
                     $Private:Statement = Get-SqlScriptStatement -SqlText $Private:TextToValidate
+
+                    # Explicit database selection (issue #152), resolved PER STATEMENT now that each
+                    # statement is its own query (issue #151). Decides BEFORE anything is posted: an
+                    # unknown database, a statement naming two databases and a four-part name all
+                    # stop here, with no request made and no data object written. It runs on the
+                    # statements of $Private:TextToValidate, so selection execution goes through the
+                    # identical path (criterion 11).
+                    #
+                    # Unlike the validation gate above, this one does not ask. A statement naming a
+                    # database that cannot be resolved has no correct target to run against, so
+                    # "execute anyway" would mean "execute against something else", which is the
+                    # silent wrong-database behaviour the issue exists to end.
+                    $Private:DatabaseTarget = Resolve-SqlStatementTarget -Statement $Private:Statement
+
+                    if ($Private:DatabaseTarget.Status -eq "Rejected") {
+                        # Write-ContainedErrorLog, not Write-LogOutput -LogType ERROR: this is a
+                        # completion block, where logging an ERROR is terminating. It would throw
+                        # past Reset-ExecuteQueryUiState - leaving the Execute button stuck as
+                        # Cancel - and the block's own catch would then report the throw as a second
+                        # error on top of this one. The UI is restored first either way.
+                        Reset-ExecuteQueryUiState
+                        $Private:DatabaseTarget.Message | Write-ContainedErrorLog -TabScoped
+                        return
+                    }
+
+                    if ($Private:DatabaseTarget.Status -eq "Ok") {
+                        # The annotated list: prefixes and USE stripped from each statement's text,
+                        # and each carrying the connection it resolved to. QueryText below stays the
+                        # ORIGINAL editor text, so the query object the user owns never holds the
+                        # rewritten version (#152 criteria 6 and 7).
+                        $Private:Statement = @($Private:DatabaseTarget.Statement)
+
+                        # USE is sticky, an inline prefix is not (#152 open question 2). Applied
+                        # before the context is built, so this execution and every later one see it.
+                        #
+                        # Set-ConfigProperty then Set-DataConnection, the same pair Set-EditorValue
+                        # and Complete-TabMaterialization use: Set-DataConnection finds the dropdown
+                        # entry by the FullName the config now holds, so the config goes first.
+                        # Assigning SelectedItem raises Add_SelectionChanged, which updates the
+                        # status bar and reloads the schema - the existing path #152 section 2 asks
+                        # for - so there is deliberately no Get-SqlSchemaObject call to duplicate it.
+                        if (![string]::IsNullOrWhiteSpace($Private:DatabaseTarget.UseFullName)) {
+                            "USE [{0}]: switching the data connection." -f $Private:DatabaseTarget.UseDatabase | Write-LogOutput -LogType DEBUG
+
+                            # PIN THE STATEMENTS ABOVE THE USE TO THE CONNECTION THAT IS STILL
+                            # SELECTED, BEFORE SWITCHING AWAY FROM IT.
+                            #
+                            # Resolve-SqlStatementTarget leaves a statement that appears before the
+                            # USE with a null DataConnectionDoId, meaning "whatever the dropdown
+                            # has". But Set-DataConnection below moves the dropdown to the USE
+                            # target, and PipelineContext.DataConnectionDoId - the fallback a null
+                            # resolves to in the pipeline - is read AFTER that. So without this the
+                            # statements above a USE would silently run against the USE's database:
+                            # the wrong-database behaviour this whole issue exists to remove.
+                            #
+                            # Pinned rather than captured-and-passed-separately, so that after this
+                            # point every statement of a USE run carries an explicit connection and
+                            # nothing depends on the fallback at all. Only done when a USE actually
+                            # fires: filling these in unconditionally would make NeedTempObject true
+                            # for an ordinary unprefixed query and cost it a temporary object it
+                            # does not need (criterion 14).
+                            $Private:SelectedDoId = $Script:AppConfig.CurrentDataConnection.DoId
+                            foreach ($Private:Pinned in $Private:Statement) {
+                                if ([string]::IsNullOrWhiteSpace($Private:Pinned.DataConnectionDoId)) {
+                                    $Private:Pinned.DataConnectionDoId = $Private:SelectedDoId
+                                }
+                            }
+
+                            $Private:DatabaseTarget.UseFullName | Set-ConfigProperty -Property "CurrentDataConnection"
+                            Set-DataConnection
+                        }
+
+                        # Nothing but USE: the switch above is the whole effect, so say so and stop
+                        # rather than posting an empty query.
+                        if ($Private:Statement.Count -eq 0) {
+                            $Private:DatabaseTarget.Message | Write-LogOutput
+                            Reset-ExecuteQueryUiState
+                            return
+                        }
+                    }
+
                     "Executing {0} statement(s)." -f @($Private:Statement).Count | Write-LogOutput -LogType DEBUG
 
                     $Private:PipelineContext = @{
@@ -117,6 +198,16 @@ function Invoke-ExecuteQuery {
                         CurrentQueryText   = $Script:RunTimeData.CurrentQueryText
                         DisplayName        = $Script:MainForm.Elements.TextBoxDisplayName.Text
                         CurrentDisplayName = $Script:RunTimeData.CurrentSqlQuery.DisplayName
+                        # Read AFTER the sticky USE above, deliberately: this is what the save writes
+                        # onto the user's own query object, and a USE is the user changing the
+                        # selection - it moves the dropdown and persists - so the query they just
+                        # saved belongs to the connection the dropdown now shows. An inline prefix
+                        # does NOT reach here, which is the distinction that matters: it binds one
+                        # statement and must never move the saved query (#152 criterion 7).
+                        #
+                        # Every statement of a USE run carries its own explicit connection by now
+                        # (see the pinning above), so nothing executes against this value on that
+                        # path - it is the save's connection, not an execution fallback.
                         DataConnectionDoId = $Script:AppConfig.CurrentDataConnection.DoId
                         SelectionText      = $Private:SelectionText
                         Statements         = $Private:Statement

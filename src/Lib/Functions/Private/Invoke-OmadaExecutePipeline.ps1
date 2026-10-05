@@ -32,6 +32,12 @@ function Invoke-OmadaExecutePipeline {
                    per step; everything else - SessionKey, authentication, redaction - carries).
       SkipSave     $true to leave the query untouched (nothing to save).
 
+    A statement in Statements may additionally carry DataConnectionDoId: the connection THAT
+    statement named explicitly (issue #152). It applies only to the temporary object for that
+    statement, never to the save - the user's own query object stays attached to the connection they
+    chose in the dropdown. A statement without it runs against Context.DataConnectionDoId, exactly
+    as every statement did before #152.
+
     .OUTPUTS
     Hashtable:
       SaveResult     the response to the save, or $null when no save was needed
@@ -191,7 +197,15 @@ function Invoke-OmadaExecutePipeline {
         #
         # The single exception is the case that has to stay identical to today: ONE statement with no
         # selection executes the saved query directly, with no temporary object created at all.
-        $Private:NeedTempObject = $Private:Statement.Count -gt 1 -or ![string]::IsNullOrWhiteSpace($Context.SelectionText)
+        #
+        # A statement that named its own database (issue #152) needs it too, and that is the case
+        # the first two conditions miss: ONE prefixed statement with no selection would otherwise
+        # execute the SAVED query, which is attached to the connection the dropdown has selected -
+        # so the query would silently run against the wrong database, which is the whole point of
+        # the feature.
+        $Private:NeedTempObject = $Private:Statement.Count -gt 1 -or
+            ![string]::IsNullOrWhiteSpace($Context.SelectionText) -or
+        @($Private:Statement | Where-Object { ![string]::IsNullOrWhiteSpace($_.DataConnectionDoId) }).Count -gt 0
         $Private:ReuseDoId = $null
 
         # Probed and undeleted ONCE for the whole run, not per statement. There is one
@@ -247,6 +261,15 @@ function Invoke-OmadaExecutePipeline {
                 # rather than in a second key that would mean the same thing.
                 $Private:UpsertContext = $Context.Clone()
                 $Private:UpsertContext.SelectionText = $Private:Current.Text
+
+                # Issue #152: this statement named its own database, so the temporary object points
+                # at THAT connection for this statement only. Left alone the clone keeps
+                # Context.DataConnectionDoId, which is what every unprefixed statement wants. The
+                # save step above deliberately never consults this, so an explicit prefix cannot
+                # move the user's saved query onto another connection.
+                if (![string]::IsNullOrWhiteSpace($Private:Current.DataConnectionDoId)) {
+                    $Private:UpsertContext.DataConnectionDoId = $Private:Current.DataConnectionDoId
+                }
                 $Private:UpsertContext.TempQueryDoId = if ($null -ne $Outcome.TempQueryDoId) { $Outcome.TempQueryDoId } else { $Private:ReuseDoId }
                 $Private:Upsert = & $Invoke "TempQueryUpsert" (New-OmadaQueryRequest -Kind "TempQueryUpsert" -Context $Private:UpsertContext)
 
