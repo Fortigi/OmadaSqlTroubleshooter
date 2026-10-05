@@ -54,7 +54,26 @@ function Push-SqlDatabaseNameList {
 
         # Nulls filtered out: with no connections at all, .Name yields $null and the payload would be
         # "[null]" rather than "[]".
-        $Private:NameJson = @($Private:Reference.Name | Where-Object { ![string]::IsNullOrWhiteSpace($_) }) | ConvertTo-Json -Depth 2 -AsArray
+        $Private:Name = @($Private:Reference.Name | Where-Object { ![string]::IsNullOrWhiteSpace($_) })
+
+        # The empty case is written out rather than serialised, exactly as
+        # ConvertTo-EditorDiagnosticScript does for setDiagnostics and for the same reason: NOTHING
+        # reaches ConvertTo-Json through an empty pipeline, so it returns $null, and the call would
+        # interpolate to "setDatabaseNames(, "");" - a JavaScript syntax error that fails silently in
+        # the WebView rather than clearing the list.
+        #
+        # This is reachable: an active-connection schema response can arrive before the dropdown has
+        # been populated, which is the ordering gap described above.
+        #
+        # -InputObject is not the fix either - it would wrap the array and produce "[[]]".
+        $Private:NameJson = if ($Private:Name.Count -eq 0) {
+            "[]"
+        }
+        else {
+            # -Compress: this is a JavaScript argument, not a document anyone reads. Pretty-printing
+            # it only puts newlines into an ExecuteScriptAsync string.
+            $Private:Name | ConvertTo-Json -Depth 2 -AsArray -Compress
+        }
 
         $Private:ActiveDoId = if (![string]::IsNullOrWhiteSpace($ActiveDataConnectionDoId)) {
             $ActiveDataConnectionDoId
