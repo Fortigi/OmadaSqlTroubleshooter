@@ -45,11 +45,13 @@ OmadaSqlTroubleshooter is a PowerShell Module that contains an interactive deskt
   - Table aliases resolve to their columns (e.g. `FROM dbo.Person p` → `p.` completes Person's columns), and column suggestions show their data type
   - Keyword, built-in function and snippet suggestions (e.g. `SELECT … FROM`, `JOIN … ON`, `CASE WHEN`) for SQL syntax
   - The schema is retrieved automatically on connect and when you switch database — no need to open the schema view first
+  - **Across databases**: after `[DatabaseA].` the schemas of that data connection are suggested, and after `[DatabaseA].[Schema].` its tables. The first time you name a database its schema is fetched in the background, so suggestions appear a moment later; after that it is served from the cache with no request at all
+- Schema view — one collapsible node per data connection, with the one you are connected to expanded. Every other database loads its schema **the first time you expand it**, so opening the window costs exactly what it always did — one database — no matter how many connections the tenant has. The filter works across all four levels; a database you have not expanded yet matches on its own name only, because there is nothing else loaded to match against
 - Schema view — press **Shift + click** on a table or column to insert it into the editor, and **Refresh schema** to discard the cached schema and fetch it again
 - Filter queries while typing in the editor
 - Client-side validation while you type — errors are shown in the editor before a query is ever sent to Omada:
   - **T-SQL syntax**, parsed locally with the same parser SQL Server's own tooling uses, so the message is the one the server would have returned
-  - **Tables and columns**, resolved against the schema already fetched for IntelliSense — a warning, never a blocker, because the cached schema can be older than the database
+  - **Tables and columns**, resolved against the schema already fetched for IntelliSense — a warning, never a blocker, because the cached schema can be older than the database. A `[DatabaseA].[Schema].[Table]` name is checked too, but only once that database's schema has been loaded (by expanding it in the schema view, or by naming it in the editor); until then it is left alone, because the validation pass never makes a request of its own. Four-part linked-server names are never checked
   - **Omada compatibility**, for queries that are valid T-SQL and still cannot work here (see *What the SQL Troubleshooter can run* below)
   - Nothing leaves your machine for this: the query text is parsed and resolved locally, and nothing blocks execution — you are asked once and can always execute anyway
   - Each check can be switched off independently, and individual compatibility rules can be re-levelled or suppressed, in the application configuration

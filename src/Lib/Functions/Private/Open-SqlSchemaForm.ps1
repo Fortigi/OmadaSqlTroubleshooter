@@ -135,10 +135,16 @@ function Open-SqlSchemaForm {
                 "SqlSchemaForm Position: {0}x{1}, Dimensions: {2}x{3}" -f $Script:SqlSchemaForm.Definition.Left, $Script:SqlSchemaForm.Definition.Top, $Script:SqlSchemaForm.Definition.Width , $Script:SqlSchemaForm.Definition.Height | Write-LogOutput -LogType DEBUG
                 $Script:SqlSchemaForm.State = "Open"
                 $tv = $Script:TreeViewSqlSchema
+                # The warm-up below expands and immediately collapses one node so WPF measures the
+                # tree once before the user touches it. Since issue #158 the top level is a database,
+                # so it walks into the ACTIVE database's node - the only one that is populated at this
+                # point. Any other node holds a placeholder, and expanding a database node is what
+                # triggers its fetch, so this must not reach for Items[0] blindly.
+                $activeDatabase = Get-SqlSchemaDatabaseNode -DataConnectionDoId ([string]$Script:AppConfig.CurrentDataConnection.DoId)
                 $Script:SqlSchemaForm.Definition.Dispatcher.Invoke(
                     {
-                        if ($tv.Items.Count -gt 0) {
-                            $firstSchema = $tv.Items[0]
+                        if ($null -ne $activeDatabase -and $activeDatabase.Items.Count -gt 0) {
+                            $firstSchema = $activeDatabase.Items[0]
                             if ($null -ne $firstSchema -and $firstSchema.Items.Count -gt 0) {
                                 $firstTable = $firstSchema.Items[0]
                                 $firstTable.IsExpanded = $true

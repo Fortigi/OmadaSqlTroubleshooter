@@ -54,3 +54,49 @@ Describe 'Resolve-DataConnectionReference' {
         Resolve-DataConnectionReference -Name "ODW" -OptionList $null | Should -BeNullOrEmpty
     }
 }
+
+Describe 'Get-DataConnectionReferenceList' {
+    # The "{Name} - {DoId}" format had been taken apart by the same regex in three places by the time
+    # issue #158 needed a fourth, so there is now one parser and these are its rules.
+
+    It 'parses every entry, in the order the dropdown holds them' {
+        $Reference = Get-DataConnectionReferenceList -OptionList @("ODW - 10", "OISES - 20")
+
+        @($Reference.Name) | Should -Be @("ODW", "OISES")
+        @($Reference.DoId) | Should -Be @("10", "20")
+    }
+
+    It 'keeps the dropdown entry as FullName' {
+        (Get-DataConnectionReferenceList -OptionList @("ODW - 10"))[0].FullName | Should -Be "ODW - 10"
+    }
+
+    It 'splits from the RIGHT, so a name containing the separator survives' {
+        # "Reporting - archive" is a legitimate data connection name. Splitting from the left would
+        # make its name "Reporting" and its DoId "archive - 1001572".
+        $Reference = Get-DataConnectionReferenceList -OptionList @("Reporting - archive - 1001572")
+
+        $Reference[0].Name | Should -Be "Reporting - archive"
+        $Reference[0].DoId | Should -Be "1001572"
+    }
+
+    It 'skips entries that are not shaped "{Name} - {DoId}"' {
+        $Reference = Get-DataConnectionReferenceList -OptionList @("ODW - 10", "Broken", " ", "Broken - abc", $null)
+
+        @($Reference.Name) | Should -Be @("ODW")
+    }
+
+    It 'returns an enumerable of entries, not an array wrapped in an array' {
+        # The trap this pins: the function returns its array through the ", $array" idiom, so a
+        # caller that wraps the call in @() nests it one level and every .DoId becomes an array of
+        # DoIds. That cost real debugging time while building #158's tree.
+        $Reference = Get-DataConnectionReferenceList -OptionList @("ODW - 10", "OISES - 20")
+
+        $Reference.Count | Should -Be 2
+        $Reference[0] | Should -BeOfType [PSCustomObject]
+    }
+
+    It 'returns an empty array for an empty or null option list' {
+        (Get-DataConnectionReferenceList -OptionList @()).Count | Should -Be 0
+        (Get-DataConnectionReferenceList -OptionList $null).Count | Should -Be 0
+    }
+}

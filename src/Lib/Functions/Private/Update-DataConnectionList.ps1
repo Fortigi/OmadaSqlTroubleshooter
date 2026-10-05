@@ -207,6 +207,14 @@ function Complete-DataConnectionListUpdate {
             $Script:MainForm.Elements.ButtonShowSqlSchema.IsEnabled = $true
 
             "{0} data connections processed!" -f ($Script:MainForm.Elements.ComboBoxSelectDataConnection.Items | Measure-Object).Count | Write-LogOutput
+
+            # The list IS the database level of the schema tree and the list of names the editor
+            # recognises between brackets (issue #158), so both are brought up to date here rather
+            # than waiting for the next schema response. This is the moment the list is known to be
+            # current, and it closes the ordering gap: the schema can land before the connection
+            # list does, and neither of these may trigger a request of its own to catch up.
+            Update-SqlSchemaDatabaseTree
+            Push-SqlDatabaseNameList
         }
         finally {
             if (!$NotShowPopupWindow) {

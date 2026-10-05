@@ -54,7 +54,10 @@ function Get-SqlDiagnostic {
         $Setting,
         [Parameter(Mandatory = $false)]
         [AllowNull()]
-        $SchemaModel
+        $SchemaModel,
+        [Parameter(Mandatory = $false)]
+        [AllowNull()]
+        $DatabaseSchemaModel
     )
 
     # No tracer preamble: $SqlText is the user's query (issue #61 section 5).
@@ -96,7 +99,14 @@ function Get-SqlDiagnostic {
             $SchemaModel = Get-ActiveSqlSchemaModel
         }
 
-        foreach ($Item in @(Get-SqlSchemaDiagnostic -Fragment $Parsed.Fragment -SchemaModel $SchemaModel)) {
+        # The schemas of any OTHER databases that happen to be cached (issue #158). Read here rather
+        # than inside the pass, so the pass is structurally incapable of fetching one: it only ever
+        # sees what this hands it. Empty is the normal case and means "behave as before".
+        if (-not $PSBoundParameters.ContainsKey("DatabaseSchemaModel")) {
+            $DatabaseSchemaModel = Get-CachedSqlSchemaModelByDatabase
+        }
+
+        foreach ($Item in @(Get-SqlSchemaDiagnostic -Fragment $Parsed.Fragment -SchemaModel $SchemaModel -DatabaseSchemaModel $DatabaseSchemaModel)) {
             $Diagnostic.Add($Item)
         }
     }

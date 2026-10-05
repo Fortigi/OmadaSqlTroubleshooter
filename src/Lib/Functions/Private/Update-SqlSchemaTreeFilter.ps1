@@ -4,18 +4,29 @@ function Update-SqlSchemaTreeFilter {
     Applies the schema filter to the SQL schema TreeView by hiding non-matching nodes.
 
     .DESCRIPTION
-    The tree is built imperatively in Get-SqlSchemaObject (schema -> table -> column), so filtering
-    toggles TreeViewItem.Visibility instead of rebuilding the tree. That keeps the hierarchy, the
-    expansion state and the column children intact, and costs no extra round-trip to Omada.
+    The tree is built imperatively (database -> schema -> table -> column), so filtering toggles
+    TreeViewItem.Visibility instead of rebuilding the tree. That keeps the hierarchy, the expansion
+    state and the column children intact, and costs no extra round-trip to Omada.
 
     Visibility rules:
-    - A table is visible when its own name matches, or when its parent schema name matches.
-    - A schema is visible when its own name matches or when at least one of its tables matches.
-      A schema name hit therefore reveals the complete table list of that schema.
+    - A table is visible when its own name matches, or when its parent schema or database name
+      matches.
+    - A schema is visible when its own name matches, when its database name matches, or when at
+      least one of its tables matches. A schema name hit therefore reveals the complete table list
+      of that schema.
+    - A database is visible when its own name matches or when anything below it matches.
     - Columns are never filtered: expanding a visible table always shows all of its columns.
 
+    A DATABASE WHOSE SCHEMA IS NOT LOADED YET IS NEVER EXPANDED BY THE FILTER, and matches on its own
+    name only (issue #158). Expanding it is what triggers its fetch, so expanding every name-matching
+    database would turn typing in the filter box into a burst of authenticated round trips - exactly
+    what criterion 3 and the issue's "lazy loading is the design" are about. Such a database
+    contributes no schema or table hits either, which is correct rather than unfortunate: the client
+    has nothing to match them against. A database that IS loaded expands to its hits, because showing
+    them costs nothing once the schema is in hand.
+
     Called without -FilterValue the function re-applies whatever is currently typed in the filter
-    box, which is what Get-SqlSchemaObject needs after it rebuilt the tree for another connection.
+    box, which is what Complete-SqlSchemaRetrieval needs after it rebuilt a database's subtree.
     #>
     [CmdLetBinding()]
     param(
@@ -41,34 +52,61 @@ function Update-SqlSchemaTreeFilter {
         $Pattern = ConvertTo-WildcardFilterPattern -FilterValue $FilterValue
 
         $VisibleTableCount = 0
-        foreach ($SchemaItem in $Script:TreeViewSqlSchema.Items) {
-            # A null pattern means "no filter": every schema matches, so every table below it stays
-            # visible without evaluating a pattern at all.
-            $SchemaMatches = ($null -eq $Pattern) -or ($SchemaItem.Header -like $Pattern)
+        foreach ($DatabaseItem in $Script:TreeViewSqlSchema.Items) {
+            # A null pattern means "no filter": everything matches, so every node below stays visible
+            # without evaluating a pattern at all.
+            $DatabaseMatches = ($null -eq $Pattern) -or ($DatabaseItem.Header -like $Pattern)
 
-            $VisibleTablesInSchema = 0
-            foreach ($TableItem in $SchemaItem.Items) {
-                if ($SchemaMatches -or ($TableItem.Header -like $Pattern)) {
-                    $TableItem.Visibility = [System.Windows.Visibility]::Visible
-                    $VisibleTablesInSchema++
-                }
-                else {
-                    $TableItem.Visibility = [System.Windows.Visibility]::Collapsed
+            # A database that has not been fetched holds nothing but its "Loading..." placeholder.
+            # Walking it would compare the pattern against that placeholder, and expanding it would
+            # fetch - so it is matched on its own name and left closed.
+            $DatabaseIsLoaded = ($null -ne $DatabaseItem.Tag) -and [bool]$DatabaseItem.Tag.Loaded
+
+            $VisibleTablesInDatabase = 0
+            if ($DatabaseIsLoaded) {
+                foreach ($SchemaItem in $DatabaseItem.Items) {
+                    $SchemaMatches = $DatabaseMatches -or ($SchemaItem.Header -like $Pattern)
+
+                    $VisibleTablesInSchema = 0
+                    foreach ($TableItem in $SchemaItem.Items) {
+                        if ($SchemaMatches -or ($TableItem.Header -like $Pattern)) {
+                            $TableItem.Visibility = [System.Windows.Visibility]::Visible
+                            $VisibleTablesInSchema++
+                        }
+                        else {
+                            $TableItem.Visibility = [System.Windows.Visibility]::Collapsed
+                        }
+                    }
+
+                    if ($SchemaMatches -or $VisibleTablesInSchema -gt 0) {
+                        $SchemaItem.Visibility = [System.Windows.Visibility]::Visible
+                        if ($null -ne $Pattern) {
+                            # Expand while filtering so the hits are visible without an extra click.
+                            $SchemaItem.IsExpanded = $true
+                        }
+                    }
+                    else {
+                        $SchemaItem.Visibility = [System.Windows.Visibility]::Collapsed
+                    }
+
+                    $VisibleTablesInDatabase += $VisibleTablesInSchema
                 }
             }
 
-            if ($SchemaMatches -or $VisibleTablesInSchema -gt 0) {
-                $SchemaItem.Visibility = [System.Windows.Visibility]::Visible
-                if ($null -ne $Pattern) {
-                    # Expand while filtering so the hits are visible without an extra click.
-                    $SchemaItem.IsExpanded = $true
+            if ($DatabaseMatches -or $VisibleTablesInDatabase -gt 0) {
+                $DatabaseItem.Visibility = [System.Windows.Visibility]::Visible
+
+                # Only a LOADED database is expanded to show its hits. See the note in the
+                # description: expanding an unloaded one is a round trip per keystroke.
+                if ($null -ne $Pattern -and $DatabaseIsLoaded -and $VisibleTablesInDatabase -gt 0) {
+                    $DatabaseItem.IsExpanded = $true
                 }
             }
             else {
-                $SchemaItem.Visibility = [System.Windows.Visibility]::Collapsed
+                $DatabaseItem.Visibility = [System.Windows.Visibility]::Collapsed
             }
 
-            $VisibleTableCount += $VisibleTablesInSchema
+            $VisibleTableCount += $VisibleTablesInDatabase
         }
 
         "Sql schema filter '{0}' (pattern '{1}'): {2} table(s) visible" -f $FilterValue, $Pattern, $VisibleTableCount | Write-LogOutput -LogType DEBUG

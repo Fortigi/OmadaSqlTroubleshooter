@@ -212,15 +212,30 @@ function Get-DataConnectionOptionText {
         would be rejected as unresolvable purely because it ran before the list had loaded. This is
         the same pair Update-DataConnectionList itself falls back to when no worker is available.
 
+    .PARAMETER NoRefresh
+        Return whatever the dropdown holds right now and never refresh it, however empty it is.
+
+        For callers that must not make a request. The schema validation pass is the one that forced
+        this (issue #158): it reads the list to map a written database name onto a cached schema, and
+        it runs on a debounce on EVERY idle tick - so the synchronous refresh above would turn a
+        pass whose whole contract is "makes no request" (issue #61 criteria 2 and 5) into one
+        authenticated round trip per keystroke pause on a tab whose list had not loaded.
+
+        The execute path deliberately does NOT pass this: there, resolving the name is the point, and
+        a refusal caused by a list that had not loaded yet is a worse outcome than one extra request.
+
     .OUTPUTS
         [string[]] the dropdown entries, possibly empty.
     #>
     [CmdletBinding()]
-    param()
+    param(
+        [Parameter(Mandatory = $false)]
+        [switch]$NoRefresh
+    )
 
     $Private:Option = @($Script:MainForm.Elements.ComboBoxSelectDataConnection.Items | ForEach-Object { [string]$_.Content })
 
-    if (@($Private:Option | Where-Object { ![string]::IsNullOrWhiteSpace($_) }).Count -eq 0) {
+    if (-not $NoRefresh -and @($Private:Option | Where-Object { ![string]::IsNullOrWhiteSpace($_) }).Count -eq 0) {
         "The data connection list is empty; refreshing it synchronously before resolving the database." | Write-LogOutput -LogType DEBUG
         $Private:Inline = Get-DataConnectionPageInline
         Complete-DataConnectionListUpdate -DataObjectHtml $Private:Inline.Html -HasRows:$Private:Inline.HasRows -NotShowPopupWindow
@@ -252,9 +267,9 @@ function Get-UnresolvedDatabaseMessage {
         [string[]]$OptionList
     )
 
-    $Private:Available = @($OptionList | ForEach-Object {
-            if ($_ -match '^(?<Name>.*) - (?<DoId>\d+)$') { $Matches.Name }
-        }) | Where-Object { ![string]::IsNullOrWhiteSpace($_) }
+    # Not wrapped in @() around the call - see the note in Update-SqlSchemaDatabaseTree.
+    $Private:Reference = Get-DataConnectionReferenceList -OptionList $OptionList
+    $Private:Available = @($Private:Reference.Name) | Where-Object { ![string]::IsNullOrWhiteSpace($_) }
 
     if (@($Private:Available).Count -eq 0) {
         return "Statement {0}: the database '{1}' cannot be resolved because no data connections are available. Connect to the tenant and try again." -f $Ordinal, $Database

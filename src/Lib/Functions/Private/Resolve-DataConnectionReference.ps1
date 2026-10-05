@@ -1,3 +1,61 @@
+function Get-DataConnectionReferenceList {
+    <#
+    .SYNOPSIS
+        Parses the data connection dropdown entries into { Name; DoId; FullName } objects.
+
+    .DESCRIPTION
+        The "{Name} - {DoId}" format was being taken apart by the same regex in three places by the
+        time issue #158 needed a fourth: Resolve-DataConnectionReference to find one connection,
+        Get-UnresolvedDatabaseMessage to list the available names, and now the schema window to put a
+        node on the tree for every connection. All of them now call this.
+
+        The entry is split from the RIGHT, which is the whole reason this needs care. A data
+        connection may legitimately be called "Reporting - archive", and splitting from the left would
+        make its name "Reporting" and its DoId "archive - 1001572". The DoId is the trailing run of
+        digits, so anchoring the pattern at the end is what keeps such a name resolvable.
+
+        Order is preserved - it is the order Update-DataConnectionList sorted the dropdown into, and
+        the schema window shows its database nodes in the same order as the dropdown.
+
+    .PARAMETER OptionList
+        The dropdown entries. Null, empty, and entries that do not match the format are skipped
+        rather than being reported: an unparseable entry is not something the user can act on.
+
+    .OUTPUTS
+        [PSCustomObject[]] with Name (the connection's own casing), DoId and FullName (the entry as
+        it appears in the dropdown). Always an array, possibly empty.
+    #>
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory = $false, Position = 0)]
+        [AllowNull()]
+        [AllowEmptyCollection()]
+        [string[]]$OptionList
+    )
+
+    # No tracer preamble: the entries name the tenant's databases (issue #61 section 5).
+
+    $Result = [System.Collections.Generic.List[object]]::new()
+
+    foreach ($Option in @($OptionList)) {
+        if ([string]::IsNullOrWhiteSpace($Option)) {
+            continue
+        }
+
+        if ($Option -notmatch '^(?<Name>.*) - (?<DoId>\d+)$') {
+            continue
+        }
+
+        $Result.Add([PSCustomObject]@{
+                Name     = $Matches.Name
+                DoId     = $Matches.DoId
+                FullName = $Option
+            })
+    }
+
+    return , $Result.ToArray()
+}
+
 function Resolve-DataConnectionReference {
     <#
     .SYNOPSIS
@@ -51,25 +109,13 @@ function Resolve-DataConnectionReference {
         return $null
     }
 
-    foreach ($Option in $OptionList) {
-        if ([string]::IsNullOrWhiteSpace($Option)) {
-            continue
-        }
-
-        if ($Option -notmatch '^(?<Name>.*) - (?<DoId>\d+)$') {
-            continue
-        }
-
-        if ($Matches.Name -ne $Name) {
+    foreach ($Reference in (Get-DataConnectionReferenceList -OptionList $OptionList)) {
+        if ($Reference.Name -ne $Name) {
             # -ne on strings is case-insensitive in PowerShell, which is the comparison wanted here.
             continue
         }
 
-        return [PSCustomObject]@{
-            Name     = $Matches.Name
-            DoId     = $Matches.DoId
-            FullName = $Option
-        }
+        return $Reference
     }
 
     return $null

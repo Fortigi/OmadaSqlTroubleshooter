@@ -233,6 +233,17 @@ function Initialize-WebViewForTab {
                                                 $Script:MainForm.Elements.ButtonSaveQuery.RaiseEvent([System.Windows.RoutedEventArgs]::new([System.Windows.Controls.Primitives.ButtonBase]::ClickEvent))
                                             })
                                     }
+                                    elseif ($MessageObj -and $MessageObj.type -eq 'requestSchema') {
+                                        # Issue #158: the editor hit "[SomeDatabase]." and has no
+                                        # model for it. Set-ActiveTabContext first, like every other
+                                        # branch here - the schema is fetched and cached per
+                                        # connection pool, and the pool belongs to the tab that asked.
+                                        "SQL schema for another database requested from Monaco Editor" | Write-LogOutput -LogType DEBUG
+                                        $Script:MainForm.Definition.Dispatcher.Invoke([System.Action] {
+                                                Set-ActiveTabContext -TabSession $HandlerTab
+                                                Request-SqlSchemaForDatabase -DatabaseName $MessageObj.database
+                                            })
+                                    }
                                     elseif ($MessageObj -and $MessageObj.type -eq 'contentChanged') {
                                         $Script:MainForm.Definition.Dispatcher.Invoke([System.Action] {
                                                 $HandlerTab.IsDirty = $true
