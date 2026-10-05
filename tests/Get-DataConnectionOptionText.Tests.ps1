@@ -14,6 +14,11 @@ BeforeAll {
     $ParentPath = Split-Path -Path $PSScriptRoot -Parent
     $PrivatePath = Join-Path $ParentPath -ChildPath "src\Lib\Functions\Private"
 
+    # Get-UnresolvedDatabaseMessage, in the same file as the function under test, resolves the
+    # dropdown entries through the shared parser. Dot-sourced so this harness is complete on its own
+    # rather than relying on another test file having loaded it first - which is exactly how a
+    # missing dot-source passed locally and failed in CI earlier in this branch.
+    . (Join-Path $PrivatePath -ChildPath "Resolve-DataConnectionReference.ps1")
     . (Join-Path $PrivatePath -ChildPath "Resolve-SqlStatementTarget.ps1")
 
     function Write-LogOutput {

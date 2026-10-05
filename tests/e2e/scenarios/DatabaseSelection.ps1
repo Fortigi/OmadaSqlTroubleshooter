@@ -208,6 +208,19 @@ E2ESuite -Name "DatabaseSelection" -Body {
         Invoke-E2EConnectAndWait
         Select-E2EQuery | Out-Null
 
+        # Drop OtherDB's cache entry first. The schema cache lives for the whole session and an
+        # earlier case in this file selects OtherDB in the dropdown, which loads its schema - so
+        # without this, "fetches it exactly once" would depend on which cases ran before and would
+        # pass or fail for reasons that have nothing to do with the code.
+        $OtherDbCacheKey = Get-SqlSchemaCacheKey -DataConnectionDoId "43"
+        if ($null -ne $Script:SqlSchemaCache -and $null -ne $OtherDbCacheKey) {
+            $Script:SqlSchemaCache.Remove($OtherDbCacheKey)
+        }
+
+        if ($null -ne $Script:SqlSchemaModelCache -and $null -ne $OtherDbCacheKey) {
+            $Script:SqlSchemaModelCache.Remove($OtherDbCacheKey)
+        }
+
         $script:E2ECalls.Clear()
 
         Request-SqlSchemaForDatabase -DatabaseName "OtherDB"
