@@ -403,24 +403,8 @@ function Complete-SqlSchemaRetrieval {
             Invoke-ExecuteScriptAsync -ScriptToExecute "setSchema($SchemaObjectsJson);" -OnCompletedScriptBlock $OnCompletedScriptBlock
 
             # The editor cannot recognise "[SomeDatabase]." as a database reference without knowing
-            # which names are databases, and it is the editor that decides when to ask for one. The
-            # list is pushed with the active schema because that is the moment it is known to be
-            # current - Update-DataConnectionList has run by then (issue #158).
-            # Not wrapped in @() - see the note in Update-SqlSchemaDatabaseTree.
-            $Private:Reference = Get-DataConnectionReferenceList -OptionList (Get-DataConnectionOptionText)
-            # Nulls filtered out: with no connections at all, .Name yields $null and the payload
-            # would be "[null]" rather than "[]".
-            $Private:DatabaseNameJson = @($Private:Reference.Name | Where-Object { ![string]::IsNullOrWhiteSpace($_) }) | ConvertTo-Json -Depth 2 -AsArray
-
-            # The active connection's own NAME, not its "{Name} - {DoId}" display text: the editor
-            # compares it against what the user typed between brackets. It is also what tells the
-            # editor to answer "[ThisDatabase]." from the setSchema model it already has, instead of
-            # asking for a schema it is never going to be sent through setSchemaForDatabase.
-            $Private:ActiveDoId = if (![string]::IsNullOrWhiteSpace($DataConnectionDoId)) { $DataConnectionDoId } else { [string]$Script:AppConfig.CurrentDataConnection.DoId }
-            $Private:ActiveName = @($Private:Reference | Where-Object { $_.DoId -eq $Private:ActiveDoId }).Name | Select-Object -First 1
-            $Private:ActiveNameLiteral = ConvertTo-JavaScriptLiteral -Value ([string]$Private:ActiveName)
-
-            Invoke-ExecuteScriptAsync -ScriptToExecute "setDatabaseNames($Private:DatabaseNameJson, $Private:ActiveNameLiteral);" -OnCompletedScriptBlock $OnCompletedScriptBlock
+            # which names are databases, and it is the editor that decides when to ask for one.
+            Push-SqlDatabaseNameList -ActiveDataConnectionDoId $DataConnectionDoId -OnCompletedScriptBlock $OnCompletedScriptBlock
 
             # Re-validate after a schema push. A new connection can invalidate the diagnostics that
             # are currently on screen, and it is also the first moment a restored tab's editor

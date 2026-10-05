@@ -34,6 +34,7 @@ BeforeAll {
     # The dropdown, as Update-DataConnectionList leaves it. "Reporting - archive" is here on purpose:
     # it is the name that proves the entry is split from the RIGHT.
     function Get-DataConnectionOptionText {
+        param([switch]$NoRefresh)
         return , @("OISES - 1001572", "Reporting - 1001999", "Reporting - archive - 1002000")
     }
 
@@ -104,7 +105,7 @@ Describe "Request-SqlSchemaForDatabase" {
 
     It "does not throw when the dropdown cannot be read" {
         # A failure to offer completions must never surface to the user: it costs hints, not work.
-        function Get-DataConnectionOptionText { throw "no connection list" }
+        function Get-DataConnectionOptionText { param([switch]$NoRefresh) throw "no connection list" }
 
         { Request-SqlSchemaForDatabase -DatabaseName "Reporting" } | Should -Not -Throw
         $script:FetchCalls.Count | Should -Be 0

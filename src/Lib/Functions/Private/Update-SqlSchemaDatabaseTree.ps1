@@ -81,7 +81,11 @@ function Update-SqlSchemaDatabaseTree {
         # NOT wrapped in @(): the function returns its array through the ", $array" idiom so that an
         # empty or single-entry result survives the pipeline, and wrapping it again nests the array
         # one level deeper - which turns every .DoId below into an array of DoIds.
-        $Private:Reference = Get-DataConnectionReferenceList -OptionList (Get-DataConnectionOptionText)
+        #
+        # -NoRefresh because this runs on the UI thread from a request completion, and a synchronous
+        # tenant refresh hidden inside a tree rebuild would block the window. Nothing is lost by it:
+        # Complete-DataConnectionListUpdate calls this again as soon as the list does arrive.
+        $Private:Reference = Get-DataConnectionReferenceList -OptionList (Get-DataConnectionOptionText -NoRefresh)
         if ($Private:Reference.Count -eq 0) {
             "The data connection list is empty; leaving the schema tree as it is." | Write-LogOutput -LogType DEBUG
             return

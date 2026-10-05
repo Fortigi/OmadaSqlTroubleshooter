@@ -29,6 +29,12 @@ BeforeAll {
     . (Join-Path $PrivatePath -ChildPath "Get-OmadaCompatibilityRule.ps1")
     . (Join-Path $PrivatePath -ChildPath "Get-OmadaCompatibilityDiagnostic.ps1")
     . (Join-Path $PrivatePath -ChildPath "Get-ActiveSqlSchemaModel.ps1")
+    # The schemas of other databases that happen to be cached (issue #158). Get-SqlDiagnostic reads
+    # them next to the active model and hands them to the schema pass. Dot-sourced rather than
+    # stubbed so the "no request function exists at all" test below still measures the real thing:
+    # this function must come back empty-handed, not reach for a request.
+    . (Join-Path $PrivatePath -ChildPath "Get-CachedSqlSchemaModelByDatabase.ps1")
+    . (Join-Path $PrivatePath -ChildPath "Resolve-DataConnectionReference.ps1")
     . (Join-Path $PrivatePath -ChildPath "Get-SqlDiagnostic.ps1")
     . (Join-Path $PrivatePath -ChildPath "Get-SqlSyntaxWarningMessage.ps1")
 
@@ -164,10 +170,23 @@ Describe 'Get-SqlDiagnostic' -Tag 'Unit' {
             # than quietly succeeding.
             Get-Command -Name "Invoke-OmadaPSWebRequestWrapper" -ErrorAction SilentlyContinue | Should -BeNullOrEmpty
             Get-Command -Name "Get-SqlSchemaObject" -ErrorAction SilentlyContinue | Should -BeNullOrEmpty
+            # Issue #158 reads the data connection dropdown here, to map a written database name onto
+            # a cached schema. That accessor refreshes the list from the tenant when it is empty, so
+            # its absence is part of what makes this assertion discriminating: the cross-database
+            # lookup has to come back empty-handed rather than reach for anything.
+            Get-Command -Name "Get-DataConnectionOptionText" -ErrorAction SilentlyContinue | Should -BeNullOrEmpty
 
             $Result = Get-SqlDiagnostic -SqlText "SELECT p.DisplaName FROM dbo.Person p" -Setting (New-ValidationSetting -Omada $false) -SchemaModel $script:SchemaModel
 
             @($Result.Diagnostic).Count | Should -Be 1
+        }
+
+        It 'Should say nothing about a cross-database name when it cannot reach a schema for it' {
+            # The same absence, seen from the cross-database side: with no way to read the dropdown
+            # and nothing cached, a three-part name must be left alone exactly as it was before #158.
+            $Result = Get-SqlDiagnostic -SqlText "SELECT Id FROM [Other].[dbo].[Nope]" -Setting (New-ValidationSetting -Omada $false) -SchemaModel $script:SchemaModel
+
+            @($Result.Diagnostic).Count | Should -Be 0
         }
     }
 }

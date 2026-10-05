@@ -34,6 +34,7 @@ BeforeAll {
     }
 
     function Get-DataConnectionOptionText {
+        param([switch]$NoRefresh)
         return , @("OISES - 1001572", "Reporting - 1001999")
     }
 
@@ -175,7 +176,7 @@ Describe "Update-SqlSchemaDatabaseTree" {
 
     It "drops a node whose data connection is gone from the dropdown" {
         Update-SqlSchemaDatabaseTree
-        function Get-DataConnectionOptionText { return , @("OISES - 1001572") }
+        function Get-DataConnectionOptionText { param([switch]$NoRefresh) return , @("OISES - 1001572") }
 
         Update-SqlSchemaDatabaseTree
 
@@ -183,7 +184,7 @@ Describe "Update-SqlSchemaDatabaseTree" {
     }
 
     It "leaves the tree alone when the connection list is empty" {
-        function Get-DataConnectionOptionText { return , @() }
+        function Get-DataConnectionOptionText { param([switch]$NoRefresh) return , @() }
 
         Update-SqlSchemaDatabaseTree
 
@@ -200,7 +201,7 @@ Describe "Update-SqlSchemaDatabaseTree" {
 Describe "Invoke-SqlSchemaDatabaseNodeExpanded" {
     BeforeEach {
         Initialize-TreeTestState
-        function Get-DataConnectionOptionText { return , @("OISES - 1001572", "Reporting - 1001999") }
+        function Get-DataConnectionOptionText { param([switch]$NoRefresh) return , @("OISES - 1001572", "Reporting - 1001999") }
         Update-SqlSchemaDatabaseTree
         $script:FetchCalls.Clear()
     }

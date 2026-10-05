@@ -42,7 +42,10 @@ function Get-CachedSqlSchemaModelByDatabase {
             return $Result
         }
 
-        $Private:Reference = Get-DataConnectionReferenceList -OptionList (Get-DataConnectionOptionText)
+        # -NoRefresh is not optional here. Without it, a tab whose dropdown has not loaded yet would
+        # make a SYNCHRONOUS tenant request from the debounced validation path - once per idle tick.
+        # "The pass makes no request" is this function's whole reason for existing.
+        $Private:Reference = Get-DataConnectionReferenceList -OptionList (Get-DataConnectionOptionText -NoRefresh)
         if ($Private:Reference.Count -eq 0) {
             return $Result
         }

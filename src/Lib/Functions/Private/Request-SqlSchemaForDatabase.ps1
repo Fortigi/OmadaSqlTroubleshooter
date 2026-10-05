@@ -46,7 +46,11 @@ function Request-SqlSchemaForDatabase {
             return
         }
 
-        $Private:Connection = Resolve-DataConnectionReference -Name $DatabaseName -OptionList (Get-DataConnectionOptionText)
+        # -NoRefresh: this is reached from a keystroke in the editor. Refreshing the connection list
+        # from the tenant synchronously here would block the window while the user is typing. If the
+        # list has not loaded yet, cross-database completion simply does not work until it has -
+        # which is the right trade for something that only ever adds suggestions.
+        $Private:Connection = Resolve-DataConnectionReference -Name $DatabaseName -OptionList (Get-DataConnectionOptionText -NoRefresh)
         if ($null -eq $Private:Connection) {
             "The editor asked for the schema of a database that matches no data connection; ignoring." | Write-LogOutput -LogType DEBUG
             return

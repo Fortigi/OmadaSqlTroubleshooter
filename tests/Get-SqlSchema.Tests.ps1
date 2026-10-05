@@ -40,12 +40,14 @@ BeforeAll {
     . (Join-Path $PrivatePath -ChildPath "Add-SqlSchemaTreeNode.ps1")
     . (Join-Path $PrivatePath -ChildPath "Resolve-DataConnectionReference.ps1")
     . (Join-Path $PrivatePath -ChildPath "Update-SqlSchemaDatabaseTree.ps1")
+    . (Join-Path $PrivatePath -ChildPath "Push-SqlDatabaseNameList.ps1")
     . (Join-Path $PrivatePath -ChildPath "Get-SqlSchema.ps1")
 
     # The dropdown accessor lives in Resolve-SqlStatementTarget.ps1 and refreshes the list from the
     # tenant when it is empty, which is not something this file wants to reach. Stubbed with the two
     # connections the tests below use.
     function Get-DataConnectionOptionText {
+        param([switch]$NoRefresh)
         return , @("OISES - 1001572", "Reporting - 1001999")
     }
 

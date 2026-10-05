@@ -32,7 +32,15 @@ BeforeAll {
         process { }
     }
 
+    # Records whether the caller asked for the NON-refreshing read. The real function refreshes the
+    # list from the tenant synchronously when the dropdown is empty, so a caller that forgets
+    # -NoRefresh makes a request from the debounced validation path - once per idle tick. Stubbing
+    # this without checking the switch would let that regression pass silently.
+    $script:OptionTextCalls = [System.Collections.Generic.List[object]]::new()
+
     function Get-DataConnectionOptionText {
+        param([switch]$NoRefresh)
+        $script:OptionTextCalls.Add([pscustomobject]@{ NoRefresh = [bool]$NoRefresh })
         return , @("OISES - 1001572", "Reporting - 1001999", "Archive - 1002000")
     }
 
@@ -71,6 +79,7 @@ BeforeAll {
         $Script:SqlSchemaCache = @{}
         $Script:SqlSchemaModelCache = @{}
         $script:RequestCount = 0
+        $script:OptionTextCalls.Clear()
     }
 }
 
@@ -114,6 +123,19 @@ Describe "Get-CachedSqlSchemaModelByDatabase" {
         Get-CachedSqlSchemaModelByDatabase | Out-Null
 
         $script:RequestCount | Should -Be 0
+    }
+
+    It "reads the data connection list WITHOUT letting it refresh" {
+        # The other way this pass could make a request, and the less obvious one.
+        # Get-DataConnectionOptionText refreshes the list from the tenant synchronously when the
+        # dropdown is empty; from a debounce that is one authenticated round trip per idle tick. The
+        # switch is the only thing preventing it, so the switch is asserted rather than assumed.
+        $Script:SqlSchemaCache["pool-under-test|1001999"] = New-SchemaResponse -Table @{ "dbo.Invoice" = @("Id int") }
+
+        Get-CachedSqlSchemaModelByDatabase | Out-Null
+
+        $script:OptionTextCalls.Count | Should -BeGreaterThan 0
+        @($script:OptionTextCalls | Where-Object { -not $_.NoRefresh }).Count | Should -Be 0
     }
 
     It "ignores a cache entry that belongs to another connection pool" {
