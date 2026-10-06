@@ -96,9 +96,9 @@ function Write-LogOutput {
         $LogMessagePaneText = $Message
 
         # The same inclusion table this switch statement always applied, moved into
-        # Test-LogLevelThreshold. There are two levels that filter now - the log window's, here, and
-        # the session log file's own (issue #121), which may reasonably be more verbose - and two
-        # copies of the table would drift.
+        # Test-LogLevelThreshold. One level filters everything since issue #157 - this value, used
+        # here for the log window and the console and read again by Write-SessionLogFile for the file
+        # - and one shared implementation of the table is what keeps the three from disagreeing.
         $LogMessage.Show = Test-LogLevelThreshold -Level $Script:RunTimeConfig.Logging.LogLevelSetting -LogType $LogType
 
         switch ($LogType) {
