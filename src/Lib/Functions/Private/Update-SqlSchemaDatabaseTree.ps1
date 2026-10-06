@@ -41,8 +41,8 @@ function Get-SqlSchemaDatabaseNode {
 function Update-SqlSchemaDatabaseTree {
     <#
     .SYNOPSIS
-        Reconciles the schema tree's top level against the data connection dropdown: one collapsed
-        node per connection, loaded on first expand.
+        Reconciles the schema tree's top level against the data connection dropdown: one node per
+        connection.
 
     .DESCRIPTION
         Issue #158 criterion 1. The tree used to be schema -> table -> column for the selected
@@ -52,17 +52,28 @@ function Update-SqlSchemaDatabaseTree {
         RECONCILES rather than rebuilds, and that is the whole point: a node whose schema is already
         loaded keeps its children, so this can run on every schema response without throwing away
         what the user has expanded, and without re-fetching anything. Nodes for connections that have
-        disappeared from the dropdown are removed.
+        disappeared from the dropdown are removed - which is also how issue #165's connection filter
+        prunes the tree, without a second definition of which databases exist.
 
-        LAZY LOADING IS THE DESIGN, NOT AN OPTIMISATION (the issue says so, and criterion 3 measures
-        it). Loading every connection when the window opens would be N sequential authenticated round
-        trips, on the UI thread, against a tenant that may have a dozen connections - which is both
-        unacceptable on its own and squarely in the way of issue #90. So every node but the active one
-        starts collapsed with a placeholder child, and fetches on its first expand.
+        THIS FUNCTION STILL FETCHES NOTHING. It builds the level and marks the active connection as
+        already requested; every request belongs to somebody else. That is what keeps opening the
+        window free, and it is asserted by SqlSchemaDatabaseTree.Tests.ps1.
+
+        WHAT CHANGED IN #165 IS WHO FILLS THE NODES. This comment used to say, in capitals, that lazy
+        loading was the design rather than an optimisation - and gave the reason: before issue #40 a
+        fetch blocked the UI thread, so N connections meant N sequential freezes and loading them all
+        was simply not available. Since #40 the fetch goes to a worker and is cached per pool, so
+        Start-SqlSchemaPreload asks for every connection's schema as soon as the connection list is
+        known, and a node is normally populated before the user ever clicks it.
+
+        Invoke-SqlSchemaDatabaseNodeExpanded below is therefore no longer the usual path, but it is not
+        dead code: the preload is skipped entirely when background requests are unavailable - see the
+        eligibility gate there - and the on-expand fetch is what the window falls back to. The
+        placeholder child stays for the same reason, plus one more: a node whose response has not landed
+        yet still needs something to expand.
 
         The active connection's node is expanded and is populated by Complete-SqlSchemaRetrieval from
-        the response the window already fetches, so for anyone not using the feature the window looks
-        and costs exactly what it did before - one database, its schemas expanded.
+        the response the window already fetches.
 
     .OUTPUTS
         None.

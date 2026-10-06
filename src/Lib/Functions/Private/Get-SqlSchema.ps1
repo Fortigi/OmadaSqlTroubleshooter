@@ -88,6 +88,24 @@ function Get-SqlSchemaObject {
             $Private:TargetDoId
         }
 
+        # NOT a positive-integer check, and that was tried and reverted (issue #165) - the comment is
+        # here so it is not tried again.
+        #
+        # The problem it was reaching for is real: a DoId of 0 names no database, and the schema
+        # preload was asking the tenant for it, which an E2E refresh caught as a third fetch (ids
+        # 0,42,43) for a pool holding two databases. Tightening THIS gate to "parse as a positive
+        # integer" does stop that - and also stops a legitimate fetch.
+        #
+        # NoReconnectStartup :: "accepting the reconnect prompt still connects the tab and retrieves
+        # its schema" failed immediately, with the message its author wrote for exactly this mistake:
+        # "the guard must not block the connect path". A restored tab accepting reconnect does not have
+        # a positive-integer DoId at the moment this runs, so the stricter gate turned a wasted request
+        # into a MISSING one - strictly worse, and invisible except as a schema that never loaded.
+        #
+        # The junk DoId comes from the dropdown, so it is filtered where the dropdown is enumerated:
+        # Start-SqlSchemaPreload skips an entry whose DoId is not a positive integer, and
+        # Get-DataConnectionReferenceList skips a nameless entry before that. This gate stays as it
+        # was - a caller that genuinely has no DoId falls into the "DoID is not set" branch below.
         if (![string]::IsNullOrWhiteSpace($Private:TargetDoId)) {
             "Retrieve current SqlSchema for data connection DoId: {0}" -f $Private:TargetDoId | Write-LogOutput -LogType DEBUG
             $Script:RunTimeData.RestMethodParam.Uri = "{0}/webservice/SyntaxHighlighting.asmx/GetSqlSchema" -f $Script:AppConfig.BaseUrl

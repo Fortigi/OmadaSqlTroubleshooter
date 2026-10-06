@@ -46,6 +46,25 @@ function Get-DataConnectionReferenceList {
             continue
         }
 
+        # A NAMELESS entry is not a data connection, and skipping it here is a real fix rather than
+        # tidiness (issue #165). Set-DataConnection adds a ComboBoxItem whose Content is
+        # CurrentDataConnection.FullName, and on a tab whose connection was never populated that is
+        # $null - so a blank item lands in the dropdown. The pattern above uses `.*` for the name on
+        # purpose, because a connection may legitimately be called "Reporting - archive", and `.*`
+        # also matches nothing at all: the blank item parsed as Name="" with DoId=0.
+        #
+        # Inert until this issue. Nothing used to ENUMERATE this list to fetch anything, so a junk
+        # entry cost nothing; the schema preload and the pool-wide refresh turn it into a real
+        # authenticated request for database "0" - which an E2E refresh caught as a third GetSqlSchema
+        # call (ids 0,42,43) where two databases exist.
+        #
+        # Skipped in the parser rather than in the preload because this is the one definition every
+        # consumer reads through - the schema tree, Push-SqlDatabaseNameList and name resolution all
+        # go through it, and none of them wants a nameless database either.
+        if ([string]::IsNullOrWhiteSpace($Matches.Name)) {
+            continue
+        }
+
         $Result.Add([PSCustomObject]@{
                 Name     = $Matches.Name
                 DoId     = $Matches.DoId

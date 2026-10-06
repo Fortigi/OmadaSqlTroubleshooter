@@ -1,6 +1,11 @@
 #Requires -Version 7.0
-# Issue #158 criterion 1: the schema window lists every data connection as a collapsible node and
-# loads each one's schema on first expand.
+# Issue #158 criterion 1: the schema window lists every data connection as its own node.
+#
+# Issue #165 changed WHO fills those nodes, and this suite is unchanged by it - which is the point.
+# Update-SqlSchemaDatabaseTree still fetches nothing itself: Start-SqlSchemaPreload asks for every
+# connection's schema once the connection list is known, and Invoke-SqlSchemaDatabaseNodeExpanded is
+# now the fallback for when the preload is skipped (background requests unavailable). So "fetches
+# nothing" below remains a true statement about this function rather than about the window.
 #
 # The tree is built out of New-SqlSchemaTreeItem, which is stubbed here with a plain object. That is
 # what lets this file assert the thing the issue actually changed - WHICH LEVEL CARRIES WHAT, and

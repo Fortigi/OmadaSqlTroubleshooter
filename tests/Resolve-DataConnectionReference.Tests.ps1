@@ -85,6 +85,36 @@ Describe 'Get-DataConnectionReferenceList' {
         @($Reference.Name) | Should -Be @("ODW")
     }
 
+    It 'skips a nameless entry, which is not a data connection' {
+        # Issue #165, and a real defect rather than a tidy-up. Set-DataConnection adds a ComboBoxItem
+        # whose Content is CurrentDataConnection.FullName, and that is $null on a tab whose connection
+        # was never populated - so a blank item lands in the dropdown. The name pattern is `.*` on
+        # purpose (see the "Reporting - archive" case above), and `.*` matches nothing at all, so the
+        # blank item used to parse as Name="" with DoId=0.
+        #
+        # Inert until this issue: nothing ENUMERATED this list to fetch anything. The schema preload
+        # and the pool-wide refresh turned it into a real authenticated request for database "0",
+        # which an E2E refresh caught as a third GetSqlSchema call (ids 0,42,43) for two databases.
+        $Reference = Get-DataConnectionReferenceList -OptionList @("ODW - 10", " - 0", "OISES - 20")
+
+        @($Reference.Name) | Should -Be @("ODW", "OISES")
+        @($Reference.DoId) | Should -Not -Contain "0"
+    }
+
+    It 'skips an entry whose name is only whitespace' {
+        $Reference = Get-DataConnectionReferenceList -OptionList @("   - 42", "ODW - 10")
+
+        @($Reference.Name) | Should -Be @("ODW")
+    }
+
+    It 'still parses a name that contains the separator, after the nameless guard' {
+        # The guard must not cost the behaviour the `.*` pattern exists for.
+        $Reference = Get-DataConnectionReferenceList -OptionList @("Reporting - archive - 1001572")
+
+        @($Reference.Name) | Should -Be @("Reporting - archive")
+        @($Reference.DoId) | Should -Be @("1001572")
+    }
+
     It 'returns an enumerable of entries, not an array wrapped in an array' {
         # The trap this pins: the function returns its array through the ", $array" idiom, so a
         # caller that wraps the call in @() nests it one level and every .DoId becomes an array of
