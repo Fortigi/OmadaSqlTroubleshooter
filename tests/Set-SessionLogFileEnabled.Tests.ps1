@@ -109,13 +109,17 @@ Describe "Set-SessionLogFileEnabled" {
         $Script:RunTimeConfig = [PSCustomObject]@{
             ApplicationName = "Test"
             AppDataFolder   = $Script:AppDataFolder
+            # The level the file follows since issue #157, read by Write-SessionLogFile for every
+            # line. Without it Test-LogLevelThreshold includes nothing, and the content assertions in
+            # this suite would fail for a reason that has nothing to do with the checkbox.
+            Logging         = [PSCustomObject]@{ LogLevelSetting = "DEBUG" }
         }
         # Off, as a fresh installation has it: the checkbox is what turns it on.
         $Script:AppGlobalConfig = [PSCustomObject]@{
             EnableSessionLogFile    = $false
             SessionLogFileDirectory = $null
         }
-        $Script:SessionLogFile = New-SessionLogFileState -LogLevel "DEBUG"
+        $Script:SessionLogFile = New-SessionLogFileState
         $Script:LoggedMessage = [System.Collections.Generic.List[PSCustomObject]]::new()
         $Script:PersistedProperty = [System.Collections.Generic.List[PSCustomObject]]::new()
     }
@@ -299,7 +303,7 @@ Describe "Set-SessionLogFileEnabled" {
         It "writes a file when the box was left ticked" {
             Set-SessionLogFileEnabled -Enabled $true | Out-Null
             Stop-SessionLogFile
-            $Script:SessionLogFile = New-SessionLogFileState -LogLevel "DEBUG"
+            $Script:SessionLogFile = New-SessionLogFileState
 
             Start-SessionLogFile | Should -Not -BeNullOrEmpty
         }
@@ -307,7 +311,7 @@ Describe "Set-SessionLogFileEnabled" {
         It "writes none when the box was left unticked" {
             Set-SessionLogFileEnabled -Enabled $true | Out-Null
             Set-SessionLogFileEnabled -Enabled $false | Out-Null
-            $Script:SessionLogFile = New-SessionLogFileState -LogLevel "DEBUG"
+            $Script:SessionLogFile = New-SessionLogFileState
 
             Start-SessionLogFile | Should -BeNullOrEmpty
             $Script:SessionLogFile | Should -BeNullOrEmpty
