@@ -8,7 +8,8 @@
 # The claims worth reading first:
 #
 #   * a line written before the file has been opened is not lost;
-#   * the file has its OWN level, which may be more verbose than the log window's;
+#   * the file follows the APPLICATION's log level (issue #157), so it never differs from the log
+#     window - which replaces the file's own level of #121;
 #   * every line is on disk before the call returns, readable by another handle;
 #   * past the size limit the file is split into a numbered part and writing continues in a fresh
 #     OmadaSqlTroubleshooter.log, with the lines on either side of the boundary contiguous.
@@ -28,17 +29,15 @@ BeforeAll {
     function Open-TestSessionLogFile {
         param(
             [string]$Folder,
-            [string]$LogLevel = "DEBUG",
             [long]$MaxBytes = 5MB,
             [switch]$Numbered
         )
 
         $State = $Script:SessionLogFile
         if ($null -eq $State) {
-            $State = New-SessionLogFileState -LogLevel $LogLevel
+            $State = New-SessionLogFileState
         }
 
-        $State.LogLevel = $LogLevel
         $State.Directory = $Folder
         $State.MaxBytes = $MaxBytes
         $State.SessionKey = New-SessionLogFileSessionKey -StartTime $State.StartTime
@@ -119,6 +118,13 @@ Describe "Write-SessionLogFile" {
         $Script:Folder = Join-Path ([System.IO.Path]::GetTempPath()) -ChildPath ("OmadaSqlLogWrite_{0}" -f ([guid]::NewGuid().ToString("N")))
         [System.IO.Directory]::CreateDirectory($Script:Folder) | Out-Null
         $Script:SessionLogFile = $null
+        # The application's level, which the writer now reads for every line (issue #157). VERBOSE2
+        # is the loudest, so everything this suite writes is in scope unless a test says otherwise.
+        # Not optional ambience: Test-LogLevelThreshold includes NOTHING for an empty level, so
+        # without this every assertion below would pass or fail for the wrong reason.
+        $Script:RunTimeConfig = [PSCustomObject]@{
+            Logging = [PSCustomObject]@{ LogLevelSetting = "VERBOSE2" }
+        }
     }
 
     AfterEach {
@@ -129,7 +135,7 @@ Describe "Write-SessionLogFile" {
     Context "Before the file has been opened" {
 
         It "holds the line rather than losing it" {
-            $Script:SessionLogFile = New-SessionLogFileState -LogLevel "DEBUG"
+            $Script:SessionLogFile = New-SessionLogFileState
 
             Write-SessionLogFile -Line "a line from start-up" -LogType "DEBUG"
 
@@ -137,7 +143,7 @@ Describe "Write-SessionLogFile" {
         }
 
         It "writes the held lines to the file once it is opened" {
-            $Script:SessionLogFile = New-SessionLogFileState -LogLevel "DEBUG"
+            $Script:SessionLogFile = New-SessionLogFileState
             Write-SessionLogFile -Line "a line from start-up" -LogType "DEBUG"
 
             $Script:SessionLogFile = Open-TestSessionLogFile -Folder $Script:Folder
@@ -146,7 +152,7 @@ Describe "Write-SessionLogFile" {
         }
 
         It "stops holding lines once the buffer is full, so a file that never opens cannot grow without bound" {
-            $Script:SessionLogFile = New-SessionLogFileState -LogLevel "DEBUG"
+            $Script:SessionLogFile = New-SessionLogFileState
             $Limit = $Script:SessionLogFile.PendingLimit
 
             foreach ($Index in 1..($Limit + 50)) {
@@ -156,44 +162,153 @@ Describe "Write-SessionLogFile" {
             $Script:SessionLogFile.Pending.Count | Should -Be $Limit
         }
 
-        It "applies the resolved level to the held lines, not the provisional one" {
-            $Script:SessionLogFile = New-SessionLogFileState -LogLevel "DEBUG"
+        It "filters the held lines at flush, against the application level as it stands then" {
+            # Issue #157 criterion 3. The lines are held UNFILTERED - a line this early can precede
+            # the point where the level is resolved at all - and the decision is taken here, with the
+            # level the log window was filtering on by the time the file opened.
+            $Script:SessionLogFile = New-SessionLogFileState
             Write-SessionLogFile -Line "a held debug line" -LogType "DEBUG"
             Write-SessionLogFile -Line "a held error line" -LogType "ERROR"
 
-            $Script:SessionLogFile = Open-TestSessionLogFile -Folder $Script:Folder -LogLevel "ERROR"
+            $Script:RunTimeConfig.Logging.LogLevelSetting = "ERROR"
+            $Script:SessionLogFile = Open-TestSessionLogFile -Folder $Script:Folder
 
             $Content = Read-SessionLogFileWhileOpen -Path $Script:SessionLogFile.Path
             $Content | Should -Match "a held error line"
             $Content | Should -Not -Match "a held debug line"
         }
+
+        It "holds a line emitted before the level is resolved at all, rather than dropping it" {
+            # The window cannot have shown this line either - there was no level to show it at - but
+            # the file must not lose it, because a session that dies during start-up is exactly the
+            # session somebody wants the log of. It is kept and judged at flush.
+            $Script:RunTimeConfig.Logging.LogLevelSetting = $null
+            $Script:SessionLogFile = New-SessionLogFileState
+
+            Write-SessionLogFile -Line "a line from before the level existed" -LogType "ERROR"
+
+            $Script:SessionLogFile.Pending.Count | Should -Be 1
+
+            $Script:RunTimeConfig.Logging.LogLevelSetting = "ERROR"
+            $Script:SessionLogFile = Open-TestSessionLogFile -Folder $Script:Folder
+
+            Read-SessionLogFileWhileOpen -Path $Script:SessionLogFile.Path | Should -Match "a line from before the level existed"
+        }
     }
 
-    Context "The file's own level" {
+    Context "The application's level, which the file now follows (issue #157)" {
 
-        It "writes a line at or above the file's level" {
-            $Script:SessionLogFile = Open-TestSessionLogFile -Folder $Script:Folder -LogLevel "DEBUG"
+        It "writes a line at or above the application level" {
+            $Script:RunTimeConfig.Logging.LogLevelSetting = "DEBUG"
+            $Script:SessionLogFile = Open-TestSessionLogFile -Folder $Script:Folder
 
             Write-SessionLogFile -Line "a debug line" -LogType "DEBUG"
 
             Read-SessionLogFileWhileOpen -Path $Script:SessionLogFile.Path | Should -Match "a debug line"
         }
 
-        It "skips a line below the file's level" {
-            $Script:SessionLogFile = Open-TestSessionLogFile -Folder $Script:Folder -LogLevel "WARNING"
+        It "skips a line below the application level" {
+            $Script:RunTimeConfig.Logging.LogLevelSetting = "WARNING"
+            $Script:SessionLogFile = Open-TestSessionLogFile -Folder $Script:Folder
 
             Write-SessionLogFile -Line "a debug line" -LogType "DEBUG"
 
             Read-SessionLogFileWhileOpen -Path $Script:SessionLogFile.Path | Should -Not -Match "a debug line"
         }
 
-        It "is independent of the log window's level, which is the point of the setting" {
-            $Script:RunTimeConfig = [PSCustomObject]@{ Logging = [PSCustomObject]@{ LogLevelSetting = "WARNING" } }
-            $Script:SessionLogFile = Open-TestSessionLogFile -Folder $Script:Folder -LogLevel "VERBOSE"
+        It "does NOT write what the log window is too quiet to show - the inverse of the retired contract" {
+            # This test asserted the opposite until issue #157: the file had its own level and a
+            # VERBOSE line reached disk while the window sat at WARNING. The reported defect was the
+            # same mechanism in the other direction - a viewer set MORE verbose than the file, which
+            # silently dropped from the file what the viewer was showing. One level removes both.
+            $Script:RunTimeConfig.Logging.LogLevelSetting = "WARNING"
+            $Script:SessionLogFile = Open-TestSessionLogFile -Folder $Script:Folder
 
             Write-SessionLogFile -Line "a verbose line the window never showed" -LogType "VERBOSE"
 
-            Read-SessionLogFileWhileOpen -Path $Script:SessionLogFile.Path | Should -Match "a verbose line the window never showed"
+            Read-SessionLogFileWhileOpen -Path $Script:SessionLogFile.Path | Should -Not -Match "a verbose line the window never showed"
+        }
+
+        It "writes a VERBOSE line once the application level is raised to show it" {
+            # The reported defect, as a test: the viewer at VERBOSE and the file keeping up with it.
+            $Script:RunTimeConfig.Logging.LogLevelSetting = "VERBOSE"
+            $Script:SessionLogFile = Open-TestSessionLogFile -Folder $Script:Folder
+
+            Write-SessionLogFile -Line "a verbose line the window did show" -LogType "VERBOSE"
+
+            Read-SessionLogFileWhileOpen -Path $Script:SessionLogFile.Path | Should -Match "a verbose line the window did show"
+        }
+
+        It "follows a level changed during the session, from the next line on" {
+            # Issue #157 criterion 2. The level is read live for every line rather than copied when
+            # the file was opened, so the log window's dropdown takes effect without a restart.
+            $Script:RunTimeConfig.Logging.LogLevelSetting = "WARNING"
+            $Script:SessionLogFile = Open-TestSessionLogFile -Folder $Script:Folder
+
+            Write-SessionLogFile -Line "before the change" -LogType "DEBUG"
+            $Script:RunTimeConfig.Logging.LogLevelSetting = "DEBUG"
+            Write-SessionLogFile -Line "after the change" -LogType "DEBUG"
+
+            $Content = Read-SessionLogFileWhileOpen -Path $Script:SessionLogFile.Path
+            $Content | Should -Not -Match "before the change"
+            $Content | Should -Match "after the change"
+        }
+
+        It "writes <LogType> at level <Level>: <Expected>" -ForEach @(
+            # The matrix issue #157 criterion 1 asks for, every level against every type. The same
+            # inclusion table Test-LogLevelThreshold applies for the log window, asserted here on
+            # bytes in the file rather than on the table.
+            @{ Level = "WARNING";  LogType = "ERROR";    Expected = $true }
+            @{ Level = "WARNING";  LogType = "WARNING";  Expected = $true }
+            @{ Level = "WARNING";  LogType = "INFO";     Expected = $false }
+            @{ Level = "WARNING";  LogType = "DEBUG";    Expected = $false }
+            @{ Level = "WARNING";  LogType = "VERBOSE";  Expected = $false }
+            @{ Level = "WARNING";  LogType = "VERBOSE2"; Expected = $false }
+            @{ Level = "INFO";     LogType = "INFO";     Expected = $true }
+            @{ Level = "INFO";     LogType = "DEBUG";    Expected = $false }
+            @{ Level = "DEBUG";    LogType = "DEBUG";    Expected = $true }
+            @{ Level = "DEBUG";    LogType = "VERBOSE";  Expected = $false }
+            @{ Level = "VERBOSE";  LogType = "VERBOSE";  Expected = $true }
+            @{ Level = "VERBOSE";  LogType = "VERBOSE2"; Expected = $false }
+            @{ Level = "VERBOSE2"; LogType = "VERBOSE2"; Expected = $true }
+            @{ Level = "VERBOSE2"; LogType = "LOG";      Expected = $true }
+            @{ Level = "ERROR";    LogType = "FATAL";    Expected = $true }
+            @{ Level = "ERROR";    LogType = "WARNING";  Expected = $false }
+        ) {
+            $Script:RunTimeConfig.Logging.LogLevelSetting = $Level
+            $Script:SessionLogFile = Open-TestSessionLogFile -Folder $Script:Folder
+            $Line = "matrix {0} at {1}" -f $LogType, $Level
+
+            Write-SessionLogFile -Line $Line -LogType $LogType
+
+            $Content = Read-SessionLogFileWhileOpen -Path $Script:SessionLogFile.Path
+            if ($Expected) {
+                $Content | Should -Match ([regex]::Escape($Line))
+            }
+            else {
+                $Content | Should -Not -Match ([regex]::Escape($Line))
+            }
+        }
+
+        It "agrees with what the log window shows for <LogType> at level <Level>" -ForEach @(
+            # The criterion is stated as an equivalence, so it is asserted as one: the file's decision
+            # and Write-LogOutput's $LogMessage.Show are the same call against the same value, and this
+            # pins them together rather than trusting that they were written to match.
+            @{ Level = "WARNING";  LogType = "DEBUG" }
+            @{ Level = "VERBOSE";  LogType = "VERBOSE" }
+            @{ Level = "DEBUG";    LogType = "VERBOSE" }
+            @{ Level = "VERBOSE2"; LogType = "VERBOSE2" }
+        ) {
+            $Script:RunTimeConfig.Logging.LogLevelSetting = $Level
+            $Script:SessionLogFile = Open-TestSessionLogFile -Folder $Script:Folder
+            $Line = "agreement {0} at {1}" -f $LogType, $Level
+
+            Write-SessionLogFile -Line $Line -LogType $LogType
+
+            $WindowWouldShow = Test-LogLevelThreshold -Level $Level -LogType $LogType
+            $InTheFile = (Read-SessionLogFileWhileOpen -Path $Script:SessionLogFile.Path) -match [regex]::Escape($Line)
+
+            $InTheFile | Should -Be $WindowWouldShow
         }
     }
 
@@ -425,7 +540,7 @@ Describe "Write-SessionLogFile" {
     Context "Concurrency" {
 
         It "carries a lock object for the state the synchronized writer does not cover" {
-            $Script:SessionLogFile = New-SessionLogFileState -LogLevel "DEBUG"
+            $Script:SessionLogFile = New-SessionLogFileState
 
             $Script:SessionLogFile.SyncRoot | Should -Not -BeNullOrEmpty
         }

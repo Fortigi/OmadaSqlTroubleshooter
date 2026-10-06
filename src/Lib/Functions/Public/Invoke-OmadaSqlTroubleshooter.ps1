@@ -56,9 +56,9 @@ Requires PowerShell 7.0 or higher and the OmadaWeb.PS module.
 A session log file is off by default. Tick "Write log file" in the log window to write one, under %APPDATA%\OmadaSqlTroubleshooter\logs; it starts and stops immediately, without a restart, and the choice is remembered for the next start (it is the EnableSessionLogFile setting, which can also be set by hand). A file started mid-session holds only what is logged from that moment on - the lines before it are not in it, and Export Log File still saves everything the log window is showing.
 The running session writes OmadaSqlTroubleshooter.log. Past SessionLogFileMaxSizeMegabytes (5 by default) it is split off as OmadaSqlTroubleshooter_<start>_<part>.log and continues in a fresh OmadaSqlTroubleshooter.log; the next start renames the leftover file the same way. A second instance running at the same time writes numbered parts of its own.
 Each line is flushed as it is written, so the file is complete up to the moment the application stopped even when it crashed, and it is unaffected by the log window's Clear.
-It goes through the same redaction gate as the log window and has its own log level - DEBUG by default, so it is more detailed than the window usually is.
+It goes through the same redaction gate as the log window and follows the application's log level: a line is in the file exactly when the log window is showing it. Changing the level in the log window applies to the file from the next line on, without a restart.
 At most SessionLogFileRetentionCount sessions (10 by default, the running one included) are kept; older sessions are deleted whole on start-up. The log window shows the file's path, opens its folder, and switches the file on and off.
-SessionLogFileLogLevel and SessionLogFileDirectory change the level and the folder.
+SessionLogFileDirectory changes the folder. The file has no log level setting of its own; it follows the application's.
 
 #>
 
@@ -140,8 +140,8 @@ function Invoke-OmadaSqlTroubleshooter {
     #
     # Nothing is resolved from the schema here. Get-ConfigSchemaDefault logs a WARNING for a property
     # it cannot find, and a line logged BEFORE this assignment has nowhere at all to go - which is the
-    # one case the buffer exists to cover. The level this state starts with is provisional either way:
-    # Start-SessionLogFile re-filters every held line against the configured level once it knows it.
+    # one case the buffer exists to cover. The state carries no level of its own (issue #157): held
+    # lines are filtered when the file opens, against the application's level as it stands then.
     $Script:SessionLogFile = New-SessionLogFileState
 
     Initialize-OmadaSqlTroubleShooter

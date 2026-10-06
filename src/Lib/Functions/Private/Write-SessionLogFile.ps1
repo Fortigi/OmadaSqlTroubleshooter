@@ -13,32 +13,26 @@ function New-SessionLogFileState {
         unbounded growth; past the limit the oldest are kept, because the first failure explains the
         ones after it.
 
-    .PARAMETER LogLevel
-        The provisional level, used only until Start-SessionLogFile resolves the configured one.
-        Held lines are re-filtered against the resolved level when they are written, so this value
-        never decides what ends up in the file.
-
     .OUTPUTS
         [PSCustomObject]
 
     .NOTES
         No tracer preamble: everything in this file is on the path Write-LogOutput takes for every
         message, so logging from here would recurse.
+
+        No level of its own any more (issue #157). The file follows the application's log level, which
+        Write-SessionLogFile reads live, so there is nothing about the level to carry here.
     #>
 
     [CmdLetBinding()]
     [OutputType([PSCustomObject])]
-    param(
-        [Parameter(Mandatory = $false, Position = 0)]
-        [string]$LogLevel = "DEBUG"
-    )
+    param()
 
     return [PSCustomObject]@{
         StartTime      = Get-Date
         ProcessId      = $PID
         # Set when the file opens: the key depends on which other sessions are already in the folder.
         SessionKey     = $null
-        LogLevel       = $LogLevel
         Directory      = $null
         Path           = $null
         # For the session writing OmadaSqlTroubleshooter.log, the number the active file receives when
@@ -300,8 +294,15 @@ function Write-SessionLogFile {
         SessionLogFileRedaction.Tests.ps1 asserts exactly that set. A third caller, or a different
         argument in the second, is a message reaching disk unmasked.
 
-        The file applies its OWN level: the log window and the file filter differently, and the
-        window's decision has already been made by the time this is called.
+        The file follows the APPLICATION's log level (issue #157), read live from
+        $Script:RunTimeConfig.Logging.LogLevelSetting - the very same expression Write-LogOutput
+        evaluates for $LogMessage.Show. One value, read twice, so the file and the log window cannot
+        disagree about what belongs in them, and changing the level in the log window applies to the
+        file from the next line on without a restart.
+
+        It replaces the file's own SessionLogFileLogLevel of issue #121, which could be set more
+        verbose than the window - and, as reported, also quieter, silently dropping from the file what
+        the window was showing.
 
         When the part reaches the size limit it is split off after the line that crossed it, under
         the same lock the line was written under, so the next line - from any thread - lands in the
@@ -314,7 +315,8 @@ function Write-SessionLogFile {
         The finished, redacted log line - the same text that goes into AppLogObject.
 
     .PARAMETER LogType
-        The type of the message, tested against the file's own level.
+        The type of the message, tested against the application's log level. Also what a held line
+        carries in the Pending buffer, so the test can be applied when the file opens.
 
     .NOTES
         No tracer preamble, and this must never call Write-LogOutput: Write-LogOutput calls it for
@@ -341,8 +343,11 @@ function Write-SessionLogFile {
         [System.Threading.Monitor]::Enter($State.SyncRoot, [ref]$LockTaken)
 
         if ($null -eq $State.Writer) {
-            # Not open yet. Hold the line WITH its type: the level the file will run at is not known
-            # until the configuration has been read, so the filtering decision cannot be made here.
+            # Not open yet. Hold the line WITH its type, unfiltered: a line emitted this early may
+            # precede the point where the application's level is resolved at all, and a test against
+            # an unresolved level would drop it (Test-LogLevelThreshold includes nothing for an empty
+            # level). The held lines are filtered when they are flushed, against the level the
+            # application is actually running at by then - issue #157's third criterion.
             # A $null Pending means the file has been stopped, and stopped is final.
             if ($null -ne $State.Pending -and $State.Pending.Count -lt $State.PendingLimit) {
                 $State.Pending.Add([PSCustomObject]@{ LogType = $LogType; Line = $Line })
@@ -351,7 +356,12 @@ function Write-SessionLogFile {
             return
         }
 
-        if (-not (Test-LogLevelThreshold -Level $State.LogLevel -LogType $LogType)) {
+        # The application's level, read live rather than copied at session start - that is what makes
+        # a change in the log window apply to the file from the next line on. Deliberately NO fallback
+        # when it is unset: Write-LogOutput's $LogMessage.Show is this same test against this same
+        # value, so "nothing passes" is the file agreeing with a window that is showing nothing, and a
+        # fallback here would be a second, divergent level - the thing issue #157 removes.
+        if (-not (Test-LogLevelThreshold -Level $Script:RunTimeConfig.Logging.LogLevelSetting -LogType $LogType)) {
             return
         }
 

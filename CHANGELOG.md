@@ -10,6 +10,19 @@ semantic version.
 
 ## [Unreleased]
 
+### Changed
+
+- The session log file now follows the application log level (#157). The log viewer, the console and
+  the file filter on one and the same level and never differ: a line is written to the file exactly
+  when the viewer shows it, and changing the level in the log viewer applies to the file from the next
+  line on, without a restart. Lines buffered before the file opens are filtered when it opens, against
+  the level the application is running at by then. This replaces the file's own log level from #121 /
+  PR #124, which defaulted to `DEBUG` on the reasoning that the file should be more detailed than the
+  window — it did not cover a viewer set *more* verbose than the file, which silently dropped `VERBOSE`
+  and `VERBOSE2` entries from the file that the viewer was showing. The `SessionLogFileLogLevel`
+  setting is retired; a configuration file that still contains it loads without error and the value is
+  ignored. Redaction is unchanged: the file stays behind the same single gate as the window.
+
 ### Added
 
 - Every database in the SQL schema window, and completion across databases (#158). The schema window

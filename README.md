@@ -125,8 +125,11 @@ Tabs that share the same connection form a **connection pool**, identified by th
   and stops it immediately and is remembered for the next start), written continuously and flushed
   as it goes, so a crashed session still has a log — in `%APPDATA%\OmadaSqlTroubleshooter\logs`,
   shown in the log window, redacted exactly as the window is, split into 5 MB parts, and pruned to
-  the 10 most recent sessions. A file started mid-session holds only what is logged from that moment
-  on; **Export Log File** still saves everything the window is showing
+  the 10 most recent sessions. It follows the application's log level — a line is in the file exactly
+  when the log window is showing it, and changing the level applies to the file from the next line on
+  — so raise the level before reproducing something you intend to send in. A file started mid-session
+  holds only what is logged from that moment on; **Export Log File** still saves everything the
+  window is showing
 
 #### Keyboard Shortcuts
 

@@ -191,10 +191,12 @@ function Write-LogOutput {
         # strictly worse than the problem the file exists to solve. $LogMessage.Text is the masked
         # text, the same string AppLogObject receives above.
         #
-        # Outside the $LogMessage.Show block on purpose. Show is the LOG WINDOW's decision; the file
-        # has a level of its own, which is usually the more verbose of the two - that is what removes
-        # the "please reproduce it with -LogLevel VERBOSE" round trip. Write-SessionLogFile applies
-        # it, and does nothing at all when no file is being written.
+        # Outside the $LogMessage.Show block, but no longer because the file filters differently
+        # (issue #157). It applies the SAME level this function just used for $LogMessage.Show, read
+        # live from the same place, so the file and the window can never disagree. The call stays here
+        # rather than moving inside the block because Write-SessionLogFile also has to see the lines
+        # emitted before the level is resolved: it holds those unfiltered and filters them when the
+        # file opens. It does nothing at all when no file is being written.
         Write-SessionLogFile -Line (($LogMessage.Text) -join "`r`n") -LogType $LogType
         if ($LogMessage.ShowVerbose) {
             $LogMessage.Text | Write-Verbose

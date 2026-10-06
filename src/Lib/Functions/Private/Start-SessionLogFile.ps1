@@ -7,7 +7,8 @@ function Start-SessionLogFile {
     .DESCRIPTION
         Called once, from Invoke-OmadaSqlTroubleshooter, as soon as the global configuration has
         been read - because the configuration is what says whether a file is wanted at all, where it
-        goes, which level it runs at and how much of it is kept.
+        goes and how much of it is kept. Not which level it runs at: since issue #157 the file
+        follows the application's log level, which Write-SessionLogFile reads live.
 
         Off by default. When EnableSessionLogFile is not true, nothing is created: no folder, no file,
         and the lines held during start-up are dropped with the state.
@@ -17,8 +18,9 @@ function Start-SessionLogFile {
         Remove-ExcessSessionLogFile prunes to the retention count. Pruning runs after the file is
         opened, so the running session is one of the sessions counted.
 
-        Everything logged before that point was held by Write-SessionLogFile and is written here,
-        against the level this function resolves rather than the provisional one.
+        Everything logged before that point was held by Write-SessionLogFile, unfiltered, and is
+        written here - each held line tested against the application's log level as it now stands,
+        which is the level the log window was filtering on too.
 
         A file that cannot be opened is not a reason to fail the start-up path. The application runs
         without one and says so once.
@@ -50,7 +52,7 @@ function Start-SessionLogFile {
 
         $State = $Script:SessionLogFile
         if ($null -eq $State) {
-            $State = New-SessionLogFileState -LogLevel $Setting.LogLevel
+            $State = New-SessionLogFileState
         }
 
         $Opened = $null
@@ -63,7 +65,6 @@ function Start-SessionLogFile {
         try {
             [System.Threading.Monitor]::Enter($State.SyncRoot, [ref]$LockTaken)
 
-            $State.LogLevel = $Setting.LogLevel
             $State.Directory = $Setting.Directory
             $State.MaxBytes = [long]$Setting.MaxSizeMegabytes * 1MB
 
