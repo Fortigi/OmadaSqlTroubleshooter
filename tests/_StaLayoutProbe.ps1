@@ -46,6 +46,27 @@ try {
     # index follow.
     . (Join-Path $PrivatePath "Register-QueryResultGridHandler.ps1")
 
+    # Issue #166: the GotFocus handler clears the column-selection anchor through
+    # Clear-DataGridColumnSelectionAnchor. The REAL function is loaded rather than stubbed, because the
+    # whole question is whether that write reaches THIS scope's variable when it is called from inside a
+    # closure - a stub would answer a different question.
+    . (Join-Path $PrivatePath "Select-DataGridColumnCells.ps1")
+
+    # Issue #166: the copy the four shortcuts now call directly. Recorded rather than performed -
+    # Clipboard::SetText is machine-global shared state and not reliably available to an unattended
+    # session, and what would matter here is only that the call is reached.
+    #
+    # What this probe deliberately does NOT claim: that a shortcut triggers it. The handler reads
+    # [System.Windows.Input.Keyboard]::Modifiers, which reflects the REAL keyboard and cannot be faked -
+    # a synthetic Ctrl+C KeyEventArgs arrives with no modifiers held and matches no branch. The four
+    # branches are therefore asserted structurally in Register-QueryResultGridHandler.Tests.ps1, and
+    # this list exists so that a future probe which can press keys has somewhere to report to.
+    $script:CopyInvocation = [System.Collections.Generic.List[string]]::new()
+    function Copy-DataGridToClipboard {
+        param([switch]$IncludeHeader, [string]$OutputFormat = "Default")
+        $script:CopyInvocation.Add(("IncludeHeader={0};OutputFormat={1}" -f [bool]$IncludeHeader, $OutputFormat))
+    }
+
     # The two collaborators the functions above reach for. Silent, because this process prints JSON and
     # nothing else - a stray log line would make the output unparseable.
     function Write-LogOutput {
@@ -250,6 +271,36 @@ try {
             $FocusFollowsGrid = ($FocusedIndexAfter -eq ($Grids.Count - 1))
         }
 
+        # Issue #166: the column-selection anchor, which the GotFocus handler clears through
+        # Clear-DataGridColumnSelectionAnchor. Measured here because nothing else can see it. The clear
+        # used to be a bare $Script: assignment inside the closure, which landed in the closure's own
+        # detached scope and left this variable untouched - a no-op with no error and no log line, so
+        # the broken version and the fixed one are indistinguishable except by observing the variable
+        # after a real focus change.
+        #
+        # Armed AFTER the focus probe above has already moved focus to the last grid, so focusing grid 0
+        # below is a move to a DIFFERENT result - which is the case the handler exists for: a shift-click
+        # in the newly focused grid must not range-select from a column in the grid just left.
+        $AnchorProbe = @{
+            SetBefore         = $false
+            ClearedAfter      = $false
+            FocusCallReturned = $false
+        }
+
+        if ($Grids.Count -gt 1) {
+            # A sentinel string rather than a real DataGridColumn: the handler neither reads nor
+            # dereferences the anchor, and the only question is whether the variable still holds
+            # anything once focus has moved.
+            $script:DataGridQueryResultColumnSelectionAnchor = "anchor-sentinel"
+            $AnchorProbe.SetBefore = ($null -ne $script:DataGridQueryResultColumnSelectionAnchor)
+
+            $Window.Activate()
+            $AnchorProbe.FocusCallReturned = [bool]$Grids[0].Focus()
+            $Window.UpdateLayout()
+
+            $AnchorProbe.ClearedAfter = ($null -eq $script:DataGridQueryResultColumnSelectionAnchor)
+        }
+
         # Snapshotted BEFORE the drag probe below, which deliberately changes a grid's height. Reading
         # these inside the return statement instead would report post-drag numbers for every sizing
         # criterion - and the drag also moves the extent, which can bring the outer scrollbar in or
@@ -348,6 +399,13 @@ try {
                 HeightAfterClamp = [math]::Round($ResizeProbe.HeightAfterClamp, 2)
                 Floor            = [math]::Round($ResizeProbe.Floor, 2)
                 UserSizedSet     = $ResizeProbe.UserSizedSet
+            }
+            # Issue #166's silent half, reported as observations rather than a verdict: whether the
+            # anchor was armed, whether focus really moved, and whether anything was left behind.
+            AnchorProbe                = @{
+                SetBefore         = $AnchorProbe.SetBefore
+                ClearedAfter      = $AnchorProbe.ClearedAfter
+                FocusCallReturned = $AnchorProbe.FocusCallReturned
             }
         }
     }

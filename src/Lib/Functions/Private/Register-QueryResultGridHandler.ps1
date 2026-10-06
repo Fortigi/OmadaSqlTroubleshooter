@@ -100,7 +100,15 @@ function Register-QueryResultGridHandler {
                         # The column-selection anchor is single-grid state (Select-DataGridColumnCells
                         # keeps it in module scope). Moving focus to another result has to clear it, or
                         # a shift-click in the new grid would range-select from a column in the old one.
-                        $Script:DataGridQueryResultColumnSelectionAnchor = $null
+                        #
+                        # Through a function, never `$Script:... = $null` written here (issue #166). This
+                        # block is closed with .GetNewClosure() below, and a closure runs in a detached
+                        # dynamic module: the assignment landed in the closure's OWN scope, the variable
+                        # Select-DataGridColumnCells reads was never cleared, and the clear this comment
+                        # describes silently did nothing - no error and no log line to show it. Commands
+                        # resolve from a closure where variables do not, so the write lives in the file
+                        # that owns the state.
+                        Clear-DataGridColumnSelectionAnchor
                     }
                     catch {
                         $_.Exception.Message | Write-LogOutput -LogType DEBUG
@@ -143,24 +151,44 @@ function Register-QueryResultGridHandler {
                         $Private:ControlPressed = [System.Windows.Input.Keyboard]::Modifiers -band [System.Windows.Input.ModifierKeys]::Control
                         $Private:ShiftPressed = [System.Windows.Input.Keyboard]::Modifiers -band [System.Windows.Input.ModifierKeys]::Shift
 
+                        # Copy-DataGridToClipboard directly, NOT the shared menu item's RaiseEvent
+                        # (issue #166).
+                        #
+                        # These four branches run inside the .GetNewClosure() block below, and a closure
+                        # runs in a detached dynamic module whose scope does not include this module's
+                        # $Script: VARIABLES. So $Script:DataGridQueryResultMenuItemCopy and its three
+                        # siblings read as $null here, and .RaiseEvent() on $null threw "You cannot call a
+                        # method on a null-valued expression" - for all four shortcuts, on every grid, on
+                        # every tab, from the day #151 moved these handlers into a closure.
+                        #
+                        # MainForm.Definition.ps1 states the FUNCTION half of this trap at the top of the
+                        # file. The variable half is quieter and worse: a lost function throws
+                        # CommandNotFoundException at the call site, a lost variable reads $null and
+                        # surfaces frames later as a null-method error with nothing naming the cause.
+                        #
+                        # Commands DO resolve from a closure, which is why calling the function is the fix
+                        # rather than a null guard - and nothing is lost by not going through the menu:
+                        # Copy-DataGridToClipboard is exactly what each MenuItem's own Click handler calls,
+                        # and it finds the grid itself through Get-FocusedQueryResultGrid, which the
+                        # Set-FocusedQueryResult above has just pointed at this grid.
                         if ($EventArguments.Key -eq [System.Windows.Input.Key]::C -and $Private:ControlPressed -and $Private:ShiftPressed) {
                             "Ctrl+Shift+C key intercepted at DataGrid level - copying values with headers" | Write-LogOutput -LogType VERBOSE
-                            $Script:DataGridQueryResultMenuItemCopyWithHeader.RaiseEvent([System.Windows.RoutedEventArgs]::new([System.Windows.Controls.MenuItem]::ClickEvent))
+                            Copy-DataGridToClipboard -IncludeHeader
                             $EventArguments.Handled = $true
                         }
                         elseif ($EventArguments.Key -eq [System.Windows.Input.Key]::C -and $Private:ControlPressed -and -not $Private:ShiftPressed) {
                             "Ctrl+C key intercepted at DataGrid level - copying values only" | Write-LogOutput -LogType VERBOSE
-                            $Script:DataGridQueryResultMenuItemCopy.RaiseEvent([System.Windows.RoutedEventArgs]::new([System.Windows.Controls.MenuItem]::ClickEvent))
+                            Copy-DataGridToClipboard
                             $EventArguments.Handled = $true
                         }
                         elseif ($EventArguments.Key -eq [System.Windows.Input.Key]::P -and $Private:ControlPressed -and $Private:ShiftPressed) {
                             "Ctrl+Shift+P key intercepted at DataGrid level - copying values only as PowerShell array" | Write-LogOutput -LogType VERBOSE
-                            $Script:DataGridQueryResultMenuItemCopyAsPowerShellArray.RaiseEvent([System.Windows.RoutedEventArgs]::new([System.Windows.Controls.MenuItem]::ClickEvent))
+                            Copy-DataGridToClipboard -OutputFormat "PowerShellArray"
                             $EventArguments.Handled = $true
                         }
                         elseif ($EventArguments.Key -eq [System.Windows.Input.Key]::S -and $Private:ControlPressed -and $Private:ShiftPressed) {
                             "Ctrl+Shift+S key intercepted at DataGrid level - copying values only as Sql array" | Write-LogOutput -LogType VERBOSE
-                            $Script:DataGridQueryResultMenuItemCopyAsSqlArray.RaiseEvent([System.Windows.RoutedEventArgs]::new([System.Windows.Controls.MenuItem]::ClickEvent))
+                            Copy-DataGridToClipboard -OutputFormat "SqlArray"
                             $EventArguments.Handled = $true
                         }
                     }

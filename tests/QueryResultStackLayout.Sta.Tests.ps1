@@ -287,3 +287,47 @@ Describe "The Results pane's stacked layout, measured in an STA host" -Tag 'Sta'
         }
     }
 }
+
+Describe "Moving focus between results clears the column-selection anchor" -Tag 'Sta' {
+    # Issue #166, the silent half. A shift-click range-selects from the last column clicked, and that
+    # anchor is module-scope state - so when focus moves to another result it has to be forgotten, or
+    # the next shift-click ranges from a column in the grid the user has just left.
+    #
+    # Only measurable here. The clear was a bare `$Script:... = $null` inside the GotFocus handler,
+    # which is a .GetNewClosure() scriptblock: the assignment landed in the closure's own detached
+    # scope and the variable the selection logic reads was never touched. Nothing threw, nothing was
+    # logged, and no headless test could tell the two versions apart - the only evidence is observing
+    # the variable after a real grid really takes focus.
+    #
+    # Register-QueryResultGridHandler.Tests.ps1 asserts the structure (that the handler calls the
+    # function at all, and that no closure in that file touches a $Script: variable). This asserts the
+    # consequence.
+
+    BeforeEach {
+        if ([string]::IsNullOrWhiteSpace($Script:WebView2Assembly)) {
+            Set-ItResult -Inconclusive -Because "the bundled WebView2 assembly is not present; run ./build/build.ps1 -Task Dependencies first"
+        }
+        if ($null -eq $Script:Measured -or -not $Script:Measured.Ok) {
+            Set-ItResult -Inconclusive -Because ("the STA layout probe did not report measurements: {0}" -f $Script:Measured.Error)
+        }
+    }
+
+    It 'armed the anchor before moving focus, so the assertion below is not vacuous' {
+        # Without this, an anchor that was never set would make "it is null afterwards" pass against
+        # the broken code as well as the fixed code.
+        $Script:Measured.TwoResults.AnchorProbe.SetBefore | Should -BeTrue
+    }
+
+    It 'actually moved focus to the other result' {
+        # Separates "the handler did not run" from "the handler ran and did not clear", the same
+        # distinction the focus probe above reports. An off-screen window that was never activated has
+        # no keyboard focus to give.
+        $Script:Measured.TwoResults.AnchorProbe.FocusCallReturned | Should -BeTrue
+    }
+
+    It 'leaves no anchor behind once another grid has focus' {
+        # The fix: the write now goes through Clear-DataGridColumnSelectionAnchor, which owns the
+        # variable in the scope that owns the state.
+        $Script:Measured.TwoResults.AnchorProbe.ClearedAfter | Should -BeTrue
+    }
+}

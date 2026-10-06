@@ -87,3 +87,37 @@ function Select-DataGridColumnCells {
         $_.Exception.Message | Write-LogOutput -LogType ERROR -ErrorObject $_
     }
 }
+
+function Clear-DataGridColumnSelectionAnchor {
+    <#
+    .SYNOPSIS
+        Forgets the column a shift-click would range-select from.
+
+    .DESCRIPTION
+        Issue #166. The anchor is module-scope state that Select-DataGridColumnCells above owns, and
+        moving focus to another result has to clear it: without that, a shift-click in the newly
+        focused grid range-selects from a column in the grid the user has just left.
+
+        A FUNCTION rather than the bare assignment it replaces, and that is the whole point. The
+        GotFocus handler in Register-QueryResultGridHandler is a .GetNewClosure() scriptblock, and a
+        closure runs in a detached dynamic module whose scope does not include this module's $Script:
+        variables - so the `$Script:DataGridQueryResultColumnSelectionAnchor = $null` written there
+        landed in the closure's own scope and the variable this file reads was never cleared. The
+        clear was a no-op, silently: no error and no log line, leaving exactly the behaviour the
+        handler existed to prevent. Commands DO resolve from a closure, so routing the write through a
+        function is what makes it land in the scope that owns it.
+
+        No parameters, and deliberately no WPF types in its signature, so it can be exercised in the
+        headless test lane where System.Windows.* does not resolve.
+
+        No tracer preamble: this runs on every focus change between results, and the preamble would
+        add a line per click for a state reset that has nothing in it worth tracing.
+
+    .OUTPUTS
+        None.
+    #>
+    [CmdLetBinding()]
+    param()
+
+    $Script:DataGridQueryResultColumnSelectionAnchor = $null
+}

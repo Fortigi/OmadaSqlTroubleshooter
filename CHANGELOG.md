@@ -51,6 +51,24 @@ semantic version.
   and a four-part linked-server name are all rejected before any request is made. Works identically
   for selection execution, and costs a query with no prefix nothing.
 
+### Fixed
+
+- <kbd>Ctrl</kbd>+<kbd>C</kbd> and the other three copy shortcuts in a result grid (#166). Pressing
+  them with cells or rows selected logged `You cannot call a method on a null-valued expression` and
+  copied nothing, while the same copy from the context menu worked. The shortcuts re-raised the shared
+  menu item's `Click` event, and they do that from inside a `.GetNewClosure()` scriptblock — which runs
+  in a detached dynamic module whose scope does not include this module's `$Script:` variables, so
+  every one of those menu-item variables read as `$null`. They now call `Copy-DataGridToClipboard`
+  directly, exactly as each menu item's own handler does; commands resolve from a closure where
+  variables do not. <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>C</kbd>,
+  <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>P</kbd> and <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>S</kbd> were
+  broken by the same cause and are fixed with it.
+- The column-selection anchor is cleared when focus moves to another result grid (#166). The same
+  closure-scope detachment silently swallowed the `$null` assignment that clears it, so a
+  shift-click in a newly focused grid range-selected from a column in the grid just left. The clear now
+  goes through `Clear-DataGridColumnSelectionAnchor`, which owns the write in the scope that owns the
+  state. This one failed with no error and no log line, which is why it is called out separately.
+
 ## [Baseline] - 2026-09-16
 
 *This changelog was introduced on this date; earlier releases are not itemised here. The
