@@ -25,6 +25,25 @@ semantic version.
 
 ### Added
 
+- Every database's schema is loaded on connect, and the connection list is reduced to the databases
+  actually in use (#165). The schema window used to fetch a database's schema the first time you
+  expanded its node, so every unopened node was a stall and cross-database completion only worked for
+  the databases you happened to open. Now the schemas are requested as soon as the connection list is
+  known — one background request per connection, reusing the per-pool cache and the in-flight check, so
+  nothing is fetched twice and the window never blocks. **Refresh schema** now re-fetches every
+  database in the session rather than only the selected one. When background requests are unavailable
+  the preload is skipped entirely and the old on-expand fetch still applies, because the alternative
+  would be one blocking request per database at connect.
+- Data connections that address no deployed database are no longer offered (#165). Not every published
+  connection points at a database that exists: with ODW ingestion enabled, `ODWMD`,
+  `Source System Data DB` and `ODWS` are published and unused. The tenant's ingestion flag is read from
+  the settings Omada embeds in its own pages — one request, no side effects, cached per session — and
+  those three are then absent from the data connection dropdown, the schema window and the editor's
+  cross-database completion alike. The match is exact and case-insensitive on the connection's name,
+  never a substring, so a connection merely *containing* one of those names is kept. If the flag is
+  absent, false, or could not be read, nothing is filtered: offering a database that does not work is a
+  smaller failure than hiding one you need.
+
 - Every database in the SQL schema window, and completion across databases (#158). The schema window
   now lists one collapsible node per data connection and loads each one's schema **the first time you
   expand it**, so opening the window still costs a single round trip no matter how many connections

@@ -224,6 +224,26 @@ Describe "Get-SqlSchemaObject connection guard" {
         (Get-OmadaMockRequestLog -UriLike "*GetSqlSchema*").Count | Should -Be 0
     }
 
+    It "still fetches for any non-empty DoId, so the guard cannot block the connect path" {
+        # Issue #165, and the inverse of what this suite briefly asserted. Three cases here demanded
+        # that a DoId of 0 or a non-numeric DoId make no request - a stricter gate than
+        # IsNullOrWhiteSpace - and that gate broke
+        # NoReconnectStartup :: "accepting the reconnect prompt still connects the tab and retrieves
+        # its schema", whose own message is "the guard must not block the connect path". A restored tab
+        # accepting reconnect does not hold a positive-integer DoId at that moment, so the strict gate
+        # turned a wasted request into a missing schema.
+        #
+        # The junk DoId is filtered where it originates instead - Start-SqlSchemaPreload skips a
+        # non-positive DoId from the dropdown, and Get-DataConnectionReferenceList skips a nameless
+        # entry. This asserts the request site stays permissive, which is what the connect path needs.
+        Initialize-SchemaTestState -Connected $true
+        $Script:AppConfig.CurrentDataConnection.DoId = "0"
+
+        Get-SqlSchemaObject
+
+        (Get-OmadaMockRequestLog -UriLike "*GetSqlSchema*").Count | Should -Be 1
+    }
+
     It "retrieves the schema and pushes it to the editor when the tab is connected" {
         Initialize-SchemaTestState -Connected $true
 

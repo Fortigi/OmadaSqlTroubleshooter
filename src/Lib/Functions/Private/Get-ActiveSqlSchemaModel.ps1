@@ -127,7 +127,7 @@ function Get-ActiveSqlSchemaModel {
 function Reset-SqlSchemaCache {
     <#
     .SYNOPSIS
-        Throws away the cached schema for the active tab's data connection and fetches it again.
+        Throws away every cached schema for this connection pool and fetches them again.
 
     .DESCRIPTION
         The "Refresh schema" action of issue #61 section 2. The schema cache lives for the whole
@@ -135,9 +135,16 @@ function Reset-SqlSchemaCache {
         A stale cache is the reason the schema pass only ever warns, but the user still needs a way
         to say "it changed, look again" without restarting the application.
 
-        Both caches go: the raw response and the index built from it. Get-SqlSchemaObject then
-        re-fetches, repopulates, rebuilds the schema tree, pushes the schema to the editor and
-        re-triggers validation - the same path a connection change takes.
+        EVERY DATABASE IN THE POOL, not just the active one (issue #165). The window now shows every
+        data connection with its schema already loaded, so "refresh" that dropped one database's cache
+        would leave the rest of the tree showing whatever it read on connect - stale, and silently so.
+        Keys are matched on the "<SessionKey>|" prefix the schema cache is keyed by, so another
+        session's tabs keep their caches.
+
+        Both caches go for each of them: the raw response and the index built from it.
+        Get-SqlSchemaObject then re-fetches the active connection - repopulating the tree, pushing the
+        schema to the editor and re-triggering validation, the same path a connection change takes -
+        and Start-SqlSchemaPreload asks for the rest.
 
     .OUTPUTS
         None.
@@ -154,17 +161,27 @@ function Reset-SqlSchemaCache {
             return
         }
 
-        if ($null -ne $Script:SqlSchemaCache) {
-            $Script:SqlSchemaCache.Remove($CacheKey)
-        }
+        # The pool's own prefix, taken from the active key rather than rebuilt from RestMethodParam, so
+        # this cannot disagree with Get-SqlSchemaCacheKey about how a key is shaped.
+        $Private:PoolPrefix = "{0}|" -f $CacheKey.Split("|")[0]
 
-        if ($null -ne $Script:SqlSchemaModelCache) {
-            $Script:SqlSchemaModelCache.Remove($CacheKey)
+        foreach ($Private:Cache in @($Script:SqlSchemaCache, $Script:SqlSchemaModelCache)) {
+            if ($null -eq $Private:Cache) {
+                continue
+            }
+
+            # Keys snapshotted: the collection is modified in the loop.
+            foreach ($Private:Key in @($Private:Cache.Keys)) {
+                if ([string]$Private:Key -like ("{0}*" -f $Private:PoolPrefix)) {
+                    $Private:Cache.Remove($Private:Key)
+                }
+            }
         }
 
         "Refreshing the SQL schema." | Write-LogOutput
 
         Get-SqlSchemaObject
+        Start-SqlSchemaPreload
     }
     catch {
         $_.Exception.Message | Write-ContainedErrorLog -ErrorObject $_

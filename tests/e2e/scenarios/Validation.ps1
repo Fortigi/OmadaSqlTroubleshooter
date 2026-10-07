@@ -166,7 +166,49 @@ E2ESuite -Name "Validation" -Body {
         Reset-SqlSchemaCache
         Wait-E2ENoPendingRequests
 
-        E2EAssertEqual 1 (Get-E2ECallCount -MethodLike "POST" -UriLike "*getsqlschema*") "refreshing should fetch the schema again"
+        # ONE PER DATA CONNECTION since issue #165, not one in total. "Refresh schema" used to drop the
+        # active connection's cached schema and re-fetch that one; it now drops every key for the
+        # session's pool and re-fetches them all, because the window shows every database with its
+        # schema already loaded - refreshing only the selected one would leave the rest of the tree
+        # showing what it read on connect, stale and silently so.
+        #
+        # ASSERTED ON THE DISTINCT CONNECTION IDS, not on a bare count, and the first version of this
+        # was a bare count of 2 - which CI failed with 3. A count cannot tell "both databases were
+        # refreshed" from "one database was refreshed twice", and the second is a real defect rather
+        # than a number to adjust: Reset-SqlSchemaCache fetches the active connection and
+        # Start-SqlSchemaPreload fetches the rest, so a duplicate means the preload's active-skip did
+        # not hold. Get-SqlSchema.ps1 puts the target in the body as connectionId, and the harness
+        # records the body verbatim, so the ids are the evidence.
+        $Private:SchemaCall = @($script:E2ECalls | Where-Object {
+                $_.Method -like "POST" -and $_.Uri -like "*getsqlschema*"
+            })
+        $Private:RefreshedId = @($Private:SchemaCall | ForEach-Object { [string]$_.Body["connectionId"] } | Sort-Object -Unique)
+
+        # EVERY REAL DATABASE, AND NONE TWICE - not a total count, and the difference is the whole
+        # history of this assertion.
+        #
+        # It began as "exactly 1 call". Issue #165 made a refresh re-fetch the whole pool, so that
+        # became "exactly 2" - which CI failed with 3, ids 0,42,43. Carrying the ids into the message
+        # is what found the cause: a nameless ComboBoxItem (Set-DataConnection adds one whose Content
+        # is CurrentDataConnection.FullName, which is $null on a tab whose connection was never
+        # populated) parsed as DoId 0 and was then fetched.
+        #
+        # Why the count is still not 2. The junk DoId is filtered where it originates - the parser
+        # skips a nameless entry and the preload skips a non-positive DoId - but THIS scenario's active
+        # connection is itself DoId 0, and Reset-SqlSchemaCache fetches the active connection by
+        # calling Get-SqlSchemaObject with no DoId at all. Filtering that at the request site was tried
+        # and reverted: it broke NoReconnectStartup, whose message is "the guard must not block the
+        # connect path". A refresh fetching the selected connection, whatever the harness left in that
+        # field, is not a defect - so the total is a property of the fixture, not of the feature.
+        #
+        # What IS a property of the feature: both real databases come back, and neither is asked for
+        # twice. The duplicate check is kept because it is what would catch the preload's active-skip
+        # breaking.
+        $Private:Diagnostic = "ids: $($Private:RefreshedId -join ',')"
+
+        E2EAssertEqual @($Private:RefreshedId).Count @($Private:SchemaCall).Count "a refresh must not fetch the same database twice ($Private:Diagnostic)"
+        E2EAssertTrue ($Private:RefreshedId -contains "42") "refreshing should re-fetch OISES ($Private:Diagnostic)"
+        E2EAssertTrue ($Private:RefreshedId -contains "43") "refreshing should re-fetch OtherDB ($Private:Diagnostic)"
         E2EAssertTrue ($Script:SqlSchemaCache.ContainsKey($CacheKey)) "the refreshed response should repopulate the cache"
     }
 }
