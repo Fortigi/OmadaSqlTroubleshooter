@@ -98,14 +98,18 @@ function Clear-DataGridColumnSelectionAnchor {
         moving focus to another result has to clear it: without that, a shift-click in the newly
         focused grid range-selects from a column in the grid the user has just left.
 
-        A FUNCTION rather than the bare assignment it replaces, and that is the whole point. The
-        GotFocus handler in Register-QueryResultGridHandler is a .GetNewClosure() scriptblock, and a
-        closure runs in a detached dynamic module whose scope does not include this module's $Script:
-        variables - so the `$Script:DataGridQueryResultColumnSelectionAnchor = $null` written there
-        landed in the closure's own scope and the variable this file reads was never cleared. The
-        clear was a no-op, silently: no error and no log line, leaving exactly the behaviour the
-        handler existed to prevent. Commands DO resolve from a closure, so routing the write through a
-        function is what makes it land in the scope that owns it.
+        A FUNCTION rather than the bare assignment it replaces. The GotFocus handler in
+        Register-QueryResultGridHandler used to be a .GetNewClosure() scriptblock, and a closure runs
+        in a detached dynamic module whose scope does not include this module's $Script: variables -
+        so the `$Script:DataGridQueryResultColumnSelectionAnchor = $null` written there landed in the
+        closure's own scope and the variable this file reads was never cleared. The clear was a
+        no-op, silently: no error and no log line, leaving exactly the behaviour the handler existed
+        to prevent.
+
+        The closure could not reach this FUNCTION either, in the installed module (issue #169): a
+        closure resolves commands through the global scope, which only sees the three functions the
+        .psd1 exports. So the handler is now a plain scriptblock, and the write still lives here, in
+        the file that owns the state.
 
         No parameters, and deliberately no WPF types in its signature, so it can be exercised in the
         headless test lane where System.Windows.* does not resolve.

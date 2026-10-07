@@ -1,32 +1,30 @@
 #Requires -Version 7.0
-# Issue #166. The rule this file enforces, stated once: a scriptblock closed with .GetNewClosure()
-# may not read or write a module $Script: VARIABLE.
+# Issues #166 and #169. The rule this file enforces, stated once: no handler in
+# Register-QueryResultGridHandler.ps1 is closed with .GetNewClosure().
 #
-# A closure runs in a detached dynamic module. Module FUNCTIONS resolve from it perfectly well, which
-# is why the handlers in Register-QueryResultGridHandler.ps1 can call Write-LogOutput and
-# Set-FocusedQueryResult; module VARIABLES do not, and read as $null. Measured on PowerShell 7.6.5
-# with a minimal module: a bare scriptblock saw the variable, a .GetNewClosure() one saw nothing.
+# A closure runs in a detached dynamic module that resolves names through the GLOBAL scope. It sees
+# none of this module's $Script: variables, and none of its private functions either - unless they
+# happen to be exported. That last clause is what hid half the trap:
 #
-# That cost two defects with very different noise levels:
+#   * #166 found the VARIABLE half. The four copy shortcuts read $Script:DataGridQueryResultMenuItem*
+#     as $null and threw "You cannot call a method on a null-valued expression", and the GotFocus
+#     handler's `$Script:DataGridQueryResultColumnSelectionAnchor = $null` landed in the closure's
+#     own scope, silently.
+#   * #169 is the FUNCTION half, which #166 measured as safe. It is safe only when the module is
+#     imported through the .psm1, which has no Export-ModuleMember and so exports every function -
+#     development, and every test suite. The installed module is imported through the .psd1, whose
+#     FunctionsToExport names three functions, and there every handler threw CommandNotFoundException
+#     on its first private call and again on the Write-LogOutput in its own catch.
 #
-#   * the four copy shortcuts read $Script:DataGridQueryResultMenuItem* as $null and threw
-#     "You cannot call a method on a null-valued expression" on .RaiseEvent() - the reported bug;
-#   * the GotFocus handler's `$Script:DataGridQueryResultColumnSelectionAnchor = $null` wrote into the
-#     closure's own scope, so the anchor was never cleared and a shift-click in a newly focused grid
-#     ranged from a column in the previous one - no error, no log line, nothing to notice.
-#
-# ASSERTED BY PARSING, not by running. Nothing here imports the module or touches WPF: the handlers
-# only exist once an ItemsControl has realised its grids, and System.Windows.Input.* does not resolve
-# in the headless lane at all. What a real run would add - that a keystroke reaches the clipboard and
-# that focus genuinely clears the anchor - is measured in QueryResultStackLayout.Sta.Tests.ps1, which
-# raises real routed events in a pwsh -STA child and reports inconclusive where no GUI runtime exists.
-#
-# The AST is used rather than a regex over the text because the question is structural: is this
-# variable reference INSIDE a closure body? A regex cannot answer that, and the file legitimately
-# contains $Script: reads outside the closures.
+# Two kinds of proof below. The STRUCTURAL rule is asserted by parsing, headless: no closures, and
+# no captured index or grid in their place. The BEHAVIOUR is measured by _GridHandlerScopeProbe.ps1
+# in a pwsh -STA child, which runs the real handlers from inside a module that exports nothing but
+# its runner - the visibility the installed module has - and raises a real routed event at each one.
+# That half reports inconclusive where no WPF runtime exists.
 
 BeforeAll {
     $ParentPath = Split-Path -Path $PSScriptRoot -Parent
+    $Script:RepositoryRoot = $ParentPath
     $Script:SourcePath = Join-Path $ParentPath -ChildPath "src\Lib\Functions\Private\Register-QueryResultGridHandler.ps1"
     $Script:SourceText = Get-Content -Path $Script:SourcePath -Raw
 
@@ -35,28 +33,15 @@ BeforeAll {
     $Script:Ast = [System.Management.Automation.Language.Parser]::ParseFile($Script:SourcePath, [ref]$Private:Token, [ref]$Private:ParseError)
     $Script:ParseError = @($Private:ParseError)
 
-    # Every scriptblock that is closed with .GetNewClosure(), i.e. the expression's target.
-    $Script:ClosureBody = @(
+    # Every .GetNewClosure() call, by AST rather than by text: the source mentions the method in its
+    # comments, and those must not count.
+    $Script:ClosureCall = @(
         $Script:Ast.FindAll({
                 param($Node)
                 $Node -is [System.Management.Automation.Language.InvokeMemberExpressionAst] -and
                 "$($Node.Member.Value)" -eq "GetNewClosure"
-            }, $true) |
-            ForEach-Object { $_.Expression } |
-            Where-Object { $_ -is [System.Management.Automation.Language.ScriptBlockExpressionAst] }
+            }, $true)
     )
-
-    function Script:Get-ScriptScopedVariable {
-        param($Body)
-
-        return @(
-            $Body.FindAll({
-                    param($Node)
-                    $Node -is [System.Management.Automation.Language.VariableExpressionAst] -and
-                    $Node.VariablePath.UserPath -imatch '^script:'
-                }, $true)
-        )
-    }
 
     function Script:Get-CommandByName {
         param([string]$Name)
@@ -69,6 +54,18 @@ BeforeAll {
                 }, $true)
         )
     }
+
+    function Script:Get-VariableByName {
+        param([string]$Name)
+
+        return @(
+            $Script:Ast.FindAll({
+                    param($Node)
+                    $Node -is [System.Management.Automation.Language.VariableExpressionAst] -and
+                    $Node.VariablePath.UserPath -eq $Name
+                }, $true)
+        )
+    }
 }
 
 Describe "The source still parses" {
@@ -77,26 +74,29 @@ Describe "The source still parses" {
     }
 }
 
-Describe "No closure in this file reads or writes a module variable" {
+Describe "No handler is a closure" {
 
-    It "still has closures to check, so a green run is not an empty one" {
-        # If .GetNewClosure() were removed wholesale, every assertion below would pass vacuously. The
-        # closures are still required: they are what gives each handler the $GridIndex of its own
-        # iteration rather than the loop's last value.
-        $Script:ClosureBody.Count | Should -BeGreaterThan 0
-    }
-
-    It "references no `$Script: variable inside any GetNewClosure body" {
-        # THE regression test for issue #166, and for the whole class rather than the two instances
-        # that were found. A failure here names the variable and the line, which is the information the
-        # original bug report did not have.
-        $Private:Offender = foreach ($Private:Body in $Script:ClosureBody) {
-            foreach ($Private:Variable in (Script:Get-ScriptScopedVariable -Body $Private:Body)) {
-                "{0} (line {1})" -f $Private:Variable.Extent.Text, $Private:Variable.Extent.StartLineNumber
-            }
+    It "calls .GetNewClosure() nowhere in this file" {
+        # THE structural regression test for issue #169, and for #166 with it: a handler that is not a
+        # closure can neither lose a private function nor a $Script: variable. A failure names the line.
+        $Private:Offender = foreach ($Private:Call in $Script:ClosureCall) {
+            "line {0}" -f $Private:Call.Extent.StartLineNumber
         }
 
         @($Private:Offender) -join ", " | Should -BeExactly ""
+    }
+
+    It "captures no per-iteration index or grid for the handlers to read" {
+        # The closures existed to carry these two into the handlers. A plain scriptblock cannot see a
+        # local of the loop that registered it - it would read $null and focus the wrong result - so
+        # the handlers read the index from the sender's Tag, and the splitter's grid from the
+        # splitter's Tag, instead.
+        (Script:Get-VariableByName -Name "GridIndex").Count | Should -Be 0
+        (Script:Get-VariableByName -Name "SplitterGrid").Count | Should -Be 0
+    }
+
+    It "puts the grid on its splitter's Tag, where the splitter handlers look for it" {
+        $Script:SourceText | Should -Match '\$Private:Splitter\.Tag\s*=\s*\$Private:Grid'
     }
 }
 
@@ -125,8 +125,8 @@ Describe "The copy shortcuts call the copy function" {
     }
 
     It "no longer raises a Click on a shared menu item" {
-        # The mechanism that could only ever work from outside a closure. Asserted on the text as well
-        # as the structure, because this is the line that threw.
+        # The mechanism #166 removed. Asserted on the text as well as the structure, because this is
+        # the line that threw.
         $Script:SourceText | Should -Not -Match 'DataGridQueryResultMenuItem\w*\.RaiseEvent'
     }
 }
@@ -138,8 +138,70 @@ Describe "The focus handler clears the column-selection anchor through a functio
     }
 
     It "assigns the anchor variable nowhere in this file" {
-        # The silent half of #166. A bare assignment here is lost to the closure's scope, so the only
-        # correct way to touch this state from a handler is the function above.
+        # The file that owns the state is the one that writes it.
         $Script:SourceText | Should -Not -Match '\$Script:DataGridQueryResultColumnSelectionAnchor\s*='
+    }
+}
+
+Describe "The handlers run with the installed module's visibility" -Tag 'Sta' {
+
+    BeforeAll {
+        # One child process for every assertion below: a WPF host per test would multiply a ~2s
+        # start-up for no extra coverage.
+        $Private:ProbePath = Join-Path $PSScriptRoot "_GridHandlerScopeProbe.ps1"
+        $Private:Output = & pwsh -STA -NoProfile -File $Private:ProbePath -RepositoryRoot $Script:RepositoryRoot 2>&1
+        $Private:Text = ($Private:Output | Out-String)
+
+        try {
+            $Script:Probe = $Private:Text | ConvertFrom-Json
+        }
+        catch {
+            # The raw output is the diagnosis when the child could not produce JSON.
+            $Script:Probe = [pscustomobject]@{ Ok = $false; Error = $Private:Text }
+        }
+    }
+
+    BeforeEach {
+        # Set-ItResult rather than -Skip:, which is evaluated at discovery, before BeforeAll has run.
+        if (-not $Script:Probe.Ok) {
+            Set-ItResult -Inconclusive -Because ("the STA scope probe did not run: {0}" -f $Script:Probe.Error)
+        }
+    }
+
+    It "lets no exception escape any handler to the dispatcher" {
+        # The reported symptom itself: "'Write-LogOutput' is not recognized", escaping a handler's
+        # catch. Before the fix this listed all six handlers.
+        @($Script:Probe.Escaped) -join " | " | Should -BeExactly ""
+    }
+
+    It "focuses the result whose grid took focus, not the first or the last" {
+        # GotFocus, ContextMenuOpening and PreviewKeyDown each record the index they focused. Grid 1
+        # of 2 was the target, so 0 would mean a lost index and anything else a wrong one.
+        $Private:Focused = @($Script:Probe.Recorded | Where-Object { $_ -like "Focus:*" })
+        $Private:Focused.Count | Should -BeGreaterOrEqual 3
+        $Private:Focused | Should -Not -Contain "Focus:0"
+        ($Private:Focused | Select-Object -Unique) | Should -Be "Focus:1"
+    }
+
+    It "clears the column-selection anchor and refreshes the context menu" {
+        $Script:Probe.Recorded | Should -Contain "ClearAnchor"
+        $Script:Probe.Recorded | Should -Contain "MenuState"
+    }
+
+    It "selects the clicked column in the grid that raised the event" {
+        if (-not $Script:Probe.ColumnHeaderClicked) {
+            Set-ItResult -Inconclusive -Because "this WPF build exposes no way to give a detached column header its column"
+        }
+
+        $Script:Probe.Recorded | Should -Contain "SelectColumn:1"
+    }
+
+    It "resizes the dragged grid, marks it user-sized, and leaves the other grid alone" {
+        # The splitter handlers find their grid through the splitter's Tag; the drag is 40 and the
+        # stubbed floor is 10, so the grid lands on exactly 40.
+        $Script:Probe.Recorded | Should -Contain "Floor"
+        $Script:Probe.GridHeight | Should -Be 40
+        $Script:Probe.UserSized | Should -BeTrue
+        $Script:Probe.OtherGridHeightIsAuto | Should -BeTrue
     }
 }
