@@ -40,16 +40,19 @@ try {
     $PrivatePath = Join-Path $RepositoryRoot "src\Lib\Functions\Private"
     . (Join-Path $PrivatePath "Set-TabQueryResult.ps1")
     . (Join-Path $PrivatePath "Update-QueryResultStackLayout.ps1")
-    # Registration is measured too, because nothing else can measure it. Its handlers close over the
-    # grid's index with .GetNewClosure(), and whether that capture actually works is invisible to a
-    # parse and to every headless test - the only proof is focusing a real grid and seeing the focused
-    # index follow.
+    # Registration is measured too, because nothing else can measure it. Its handlers read the grid's
+    # index from the sender's Tag (issue #169), and whether a real focus change reaches the right index
+    # is invisible to a parse and to every headless test - the only proof is focusing a real grid and
+    # seeing the focused index follow.
+    #
+    # Dot-sourced here, every function is visible to every handler, so this probe cannot see the
+    # private-function half of #169. _GridHandlerScopeProbe.ps1 measures that, from a module scope.
     . (Join-Path $PrivatePath "Register-QueryResultGridHandler.ps1")
 
     # Issue #166: the GotFocus handler clears the column-selection anchor through
     # Clear-DataGridColumnSelectionAnchor. The REAL function is loaded rather than stubbed, because the
-    # whole question is whether that write reaches THIS scope's variable when it is called from inside a
-    # closure - a stub would answer a different question.
+    # whole question is whether that write reaches THIS scope's variable when it is called from a real
+    # event handler - a stub would answer a different question.
     . (Join-Path $PrivatePath "Select-DataGridColumnCells.ps1")
 
     # Issue #166: the copy the four shortcuts now call directly. Recorded rather than performed -
@@ -240,7 +243,7 @@ try {
 
         # Every grid wired exactly once. Tag is the registration marker, and it carries the grid's
         # index - so a Tag that is null means the handlers never attached, and a wrong one means the
-        # closure captured the loop variable instead of its own iteration.
+        # handlers would focus the wrong result, since they read their index from it.
         # Tag is a hashtable carrying the grid's index and its user-sized flag, not a bare int.
         $RegisteredCount = @($Grids | Where-Object { $_.Tag -is [hashtable] }).Count
         $TagsMatchPosition = $true
@@ -248,9 +251,9 @@ try {
             if (-not ($Grids[$t].Tag -is [hashtable]) -or [int]$Grids[$t].Tag.Index -ne $t) { $TagsMatchPosition = $false }
         }
 
-        # The closure test proper: focus the LAST grid and see whether the session's focused index
-        # follows it. With a broken capture every handler reports the same index and this stays at 0
-        # for a multi-result run.
+        # The focus test proper: focus the LAST grid and see whether the session's focused index
+        # follows it. With a lost index every handler reports the same one and this stays at 0 for a
+        # multi-result run.
         $FocusFollowsGrid = $false
         $FocusedIndexAfter = -1
         $FocusCallReturned = $false
@@ -260,7 +263,7 @@ try {
 
             # Activated first. An off-screen window that was shown but never activated has no keyboard
             # focus to give, so Focus() returns false and GotFocus never fires - which would look
-            # exactly like a broken closure capture. Reporting the call's own result and
+            # exactly like a lost index. Reporting the call's own result and
             # IsKeyboardFocusWithin is what separates "the handler did not run" from "the handler ran
             # with the wrong index".
             $Window.Activate()

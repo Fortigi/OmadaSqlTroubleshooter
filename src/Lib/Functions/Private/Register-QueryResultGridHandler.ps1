@@ -81,55 +81,68 @@ function Register-QueryResultGridHandler {
                 UserSized = $false
             }
 
-            # GetNewClosure on every handler: the index has to be the one from THIS iteration. Without
-            # it all of them would capture the loop variable and report the last grid, so clicking any
-            # result would focus the bottom one.
+            # PLAIN scriptblocks, every one of them - never .GetNewClosure() (issue #169). The rule is
+            # the one MainForm.Definition.ps1 states for the whole application: a closure runs in a
+            # detached dynamic module that resolves commands through the GLOBAL scope, so it cannot
+            # see this module's private functions or its $Script: variables. In the installed module,
+            # which exports three functions through the .psd1, every handler here threw
+            # CommandNotFoundException on its first private call - and again on the Write-LogOutput in
+            # its own catch, which is what reached the dispatcher safety net. Focus tracking, the
+            # context menu, all four copy shortcuts, column selection and the resize handle were dead.
             #
-            # A PLAIN local, deliberately - not $Private:GridIndex. GetNewClosure captures the
-            # enclosing scope's variables, and a $Private:-scoped one is not visible to the captured
-            # scope when the handler later runs, so every handler saw nothing and
-            # Set-FocusedQueryResult ignored the out-of-range index. Measured in the STA probe: the
-            # grid took keyboard focus (Focus() returned true, IsKeyboardFocusWithin true) and the
-            # focused index still read 0 for the second grid. The $Private: prefix is why.
-            $GridIndex = $Private:Index
+            # Why it once looked otherwise (#166 measured "commands DO resolve from a closure"):
+            # importing the .psm1 directly - development, and every test suite - exports EVERY
+            # function, because it has no Export-ModuleMember. Global resolution then finds them. Only
+            # the manifest import shows the failure; tests\_GridHandlerScopeProbe.ps1 reproduces it.
+            #
+            # The closures existed to give each handler the index of its own iteration. That index
+            # already travels on the grid: the handlers read it from the SENDER's Tag, set above, so a
+            # plain block gets the right grid without capturing anything.
 
             $Private:Grid.Add_GotFocus({
                     try {
-                        Set-FocusedQueryResult -Index $GridIndex
+                        # $args[0] is the sender - see the note above the key handler.
+                        $Private:GridState = $args[0].Tag
+                        if ($Private:GridState -isnot [hashtable]) {
+                            return
+                        }
+
+                        Set-FocusedQueryResult -Index $Private:GridState.Index
 
                         # The column-selection anchor is single-grid state (Select-DataGridColumnCells
                         # keeps it in module scope). Moving focus to another result has to clear it, or
                         # a shift-click in the new grid would range-select from a column in the old one.
                         #
-                        # Through a function, never `$Script:... = $null` written here (issue #166). This
-                        # block is closed with .GetNewClosure() below, and a closure runs in a detached
-                        # dynamic module: the assignment landed in the closure's OWN scope, the variable
-                        # Select-DataGridColumnCells reads was never cleared, and the clear this comment
-                        # describes silently did nothing - no error and no log line to show it. Commands
-                        # resolve from a closure where variables do not, so the write lives in the file
-                        # that owns the state.
+                        # Through a function rather than a `$Script:... = $null` written here (issue
+                        # #166): the file that owns the state is the one that writes it.
                         Clear-DataGridColumnSelectionAnchor
                     }
                     catch {
                         $_.Exception.Message | Write-LogOutput -LogType DEBUG
                     }
-                }.GetNewClosure())
+                })
 
             $Private:Grid.Add_ContextMenuOpening({
                     try {
+                        $Private:GridState = $args[0].Tag
+                        if ($Private:GridState -isnot [hashtable]) {
+                            return
+                        }
+
                         # Opening the menu over a grid is itself a statement of which result the user
                         # means - they may never have clicked into it. Focus first, then let the menu
                         # decide what it may offer for that result.
-                        Set-FocusedQueryResult -Index $GridIndex
+                        Set-FocusedQueryResult -Index $Private:GridState.Index
                         Update-DataGridQueryResultContextMenuState
                     }
                     catch {
                         $_.Exception.Message | Write-LogOutput -LogType DEBUG
                     }
-                }.GetNewClosure())
+                })
 
-            # These three handlers read $args[1] instead of declaring parameters, and the reason is a
-            # binding trap rather than a style preference.
+            # The handlers in this file read $args[0] (the sender) and $args[1] (the event args)
+            # instead of declaring parameters, and the reason is a binding trap rather than a style
+            # preference.
             #
             # WPF invokes a handler with TWO arguments, (sender, eventArgs). With a single declared
             # parameter PowerShell binds the FIRST of them - the sender - to it, and the real event
@@ -145,32 +158,24 @@ function Register-QueryResultGridHandler {
             # satisfies both the binding and the rule.
             $Private:Grid.Add_PreviewKeyDown({
                     try {
+                        $Private:GridState = $args[0].Tag
                         $EventArguments = $args[1]
-                        Set-FocusedQueryResult -Index $GridIndex
+                        if ($Private:GridState -isnot [hashtable]) {
+                            return
+                        }
+
+                        Set-FocusedQueryResult -Index $Private:GridState.Index
 
                         $Private:ControlPressed = [System.Windows.Input.Keyboard]::Modifiers -band [System.Windows.Input.ModifierKeys]::Control
                         $Private:ShiftPressed = [System.Windows.Input.Keyboard]::Modifiers -band [System.Windows.Input.ModifierKeys]::Shift
 
                         # Copy-DataGridToClipboard directly, NOT the shared menu item's RaiseEvent
-                        # (issue #166).
-                        #
-                        # These four branches run inside the .GetNewClosure() block below, and a closure
-                        # runs in a detached dynamic module whose scope does not include this module's
-                        # $Script: VARIABLES. So $Script:DataGridQueryResultMenuItemCopy and its three
-                        # siblings read as $null here, and .RaiseEvent() on $null threw "You cannot call a
-                        # method on a null-valued expression" - for all four shortcuts, on every grid, on
-                        # every tab, from the day #151 moved these handlers into a closure.
-                        #
-                        # MainForm.Definition.ps1 states the FUNCTION half of this trap at the top of the
-                        # file. The variable half is quieter and worse: a lost function throws
-                        # CommandNotFoundException at the call site, a lost variable reads $null and
-                        # surfaces frames later as a null-method error with nothing naming the cause.
-                        #
-                        # Commands DO resolve from a closure, which is why calling the function is the fix
-                        # rather than a null guard - and nothing is lost by not going through the menu:
-                        # Copy-DataGridToClipboard is exactly what each MenuItem's own Click handler calls,
-                        # and it finds the grid itself through Get-FocusedQueryResultGrid, which the
-                        # Set-FocusedQueryResult above has just pointed at this grid.
+                        # (issue #166). Copy-DataGridToClipboard is exactly what each MenuItem's own
+                        # Click handler calls, and it finds the grid itself through
+                        # Get-FocusedQueryResultGrid, which the Set-FocusedQueryResult above has just
+                        # pointed at this grid - so nothing is lost by not going through the menu, and
+                        # the shortcuts do not depend on the $Script:DataGridQueryResultMenuItem*
+                        # variables at all.
                         if ($EventArguments.Key -eq [System.Windows.Input.Key]::C -and $Private:ControlPressed -and $Private:ShiftPressed) {
                             "Ctrl+Shift+C key intercepted at DataGrid level - copying values with headers" | Write-LogOutput -LogType VERBOSE
                             Copy-DataGridToClipboard -IncludeHeader
@@ -195,7 +200,7 @@ function Register-QueryResultGridHandler {
                     catch {
                         $_.Exception.Message | Write-LogOutput -LogType ERROR -ErrorObject $_
                     }
-                }.GetNewClosure())
+                })
 
             $Private:Grid.AddHandler(
                 [System.Windows.UIElement]::PreviewMouseLeftButtonDownEvent,
@@ -224,7 +229,11 @@ function Register-QueryResultGridHandler {
                             return
                         }
 
-                        Set-FocusedQueryResult -Index $GridIndex
+                        if ($EventSender.Tag -isnot [hashtable]) {
+                            return
+                        }
+
+                        Set-FocusedQueryResult -Index $EventSender.Tag.Index
 
                         $Private:ControlPressed = [bool]([System.Windows.Input.Keyboard]::Modifiers -band [System.Windows.Input.ModifierKeys]::Control)
                         $Private:ShiftPressed = [bool]([System.Windows.Input.Keyboard]::Modifiers -band [System.Windows.Input.ModifierKeys]::Shift)
@@ -236,7 +245,7 @@ function Register-QueryResultGridHandler {
                     catch {
                         $_.Exception.Message | Write-LogOutput -LogType ERROR -ErrorObject $_
                     }
-                }.GetNewClosure()
+                }
             )
 
             $Private:Grid.Add_AutoGeneratingColumn({
@@ -307,10 +316,10 @@ function Register-QueryResultGridHandler {
             }
 
             if ($null -ne $Private:Splitter) {
-                # The grid this splitter resizes, captured for the handler. A plain local, not
-                # $Private:-scoped: a $Private: variable is not visible to the scope GetNewClosure
-                # captures, which is what silently broke the focus handlers earlier in this feature.
-                $SplitterGrid = $Private:Grid
+                # The grid this splitter resizes, on the splitter's own Tag - the same move as the
+                # grid's index above. The handlers below are plain scriptblocks and capture nothing,
+                # and their sender is the SPLITTER, so this is how each one finds its grid.
+                $Private:Splitter.Tag = $Private:Grid
 
                 # LIVE, on DragDelta - so the grid's rows move with the handle instead of appearing
                 # only when it is released. The markup pairs with this: ShowsPreview is False, because
@@ -323,43 +332,53 @@ function Register-QueryResultGridHandler {
                 # grid twice as far as the handle.
                 $Private:Splitter.Add_DragDelta({
                         try {
+                            $Private:SplitterGrid = $args[0].Tag
                             $Private:DragArgs = $args[1]
-                            $Private:Wanted = [double]$SplitterGrid.ActualHeight + [double]$Private:DragArgs.VerticalChange
+                            if ($Private:SplitterGrid -isnot [System.Windows.Controls.DataGrid]) {
+                                return
+                            }
+
+                            $Private:Wanted = [double]$Private:SplitterGrid.ActualHeight + [double]$Private:DragArgs.VerticalChange
 
                             # Never smaller than one row plus the header: a drag that collapses a
                             # result to nothing leaves the user with a grid they cannot grab again.
-                            $Private:Minimum = Get-QueryResultGridFloor -DataGrid $SplitterGrid -RowCount 1
+                            $Private:Minimum = Get-QueryResultGridFloor -DataGrid $Private:SplitterGrid -RowCount 1
                             if ($Private:Wanted -lt $Private:Minimum) {
                                 $Private:Wanted = $Private:Minimum
                             }
 
-                            $SplitterGrid.Height = $Private:Wanted
+                            $Private:SplitterGrid.Height = $Private:Wanted
 
                             # Marked on the first delta, not at the end: the sizing pass must already
                             # be leaving this grid alone while the drag is in progress, or a pane
                             # resize mid-drag would fight the handle.
-                            if ($SplitterGrid.Tag -is [hashtable]) {
-                                $SplitterGrid.Tag.UserSized = $true
+                            if ($Private:SplitterGrid.Tag -is [hashtable]) {
+                                $Private:SplitterGrid.Tag.UserSized = $true
                             }
                         }
                         catch {
                             $_.Exception.Message | Write-LogOutput -LogType DEBUG
                         }
-                    }.GetNewClosure())
+                    })
 
                 # The height is already applied by then - this only records what the user settled on.
                 $Private:Splitter.Add_DragCompleted({
                         try {
-                            if ($SplitterGrid.Tag -is [hashtable]) {
-                                $SplitterGrid.Tag.UserSized = $true
+                            $Private:SplitterGrid = $args[0].Tag
+                            if ($Private:SplitterGrid -isnot [System.Windows.Controls.DataGrid]) {
+                                return
                             }
 
-                            "Result grid resized by the user to {0:n1}" -f [double]$SplitterGrid.ActualHeight | Write-LogOutput -LogType VERBOSE
+                            if ($Private:SplitterGrid.Tag -is [hashtable]) {
+                                $Private:SplitterGrid.Tag.UserSized = $true
+                            }
+
+                            "Result grid resized by the user to {0:n1}" -f [double]$Private:SplitterGrid.ActualHeight | Write-LogOutput -LogType VERBOSE
                         }
                         catch {
                             $_.Exception.Message | Write-LogOutput -LogType DEBUG
                         }
-                    }.GetNewClosure())
+                    })
             }
 
             $Private:Grid.Add_LoadingRow({

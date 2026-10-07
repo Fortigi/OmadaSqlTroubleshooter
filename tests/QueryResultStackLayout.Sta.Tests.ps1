@@ -106,9 +106,8 @@ Describe "The Results pane's stacked layout, measured in an STA host" -Tag 'Sta'
         }
 
         It 'gives each grid its own index rather than all of them the last one' {
-            # The .GetNewClosure() capture, checked through the registration marker. Without it every
-            # handler closes over the loop variable and reports the final grid, so clicking any result
-            # would focus the bottom one.
+            # The index each handler reads from its sender's Tag (issue #169), checked through the
+            # registration marker. A wrong Tag would make clicking a result focus a different one.
             $Script:Measured.TwoResults.TagsMatchPosition | Should -BeTrue
         }
 
@@ -294,14 +293,13 @@ Describe "Moving focus between results clears the column-selection anchor" -Tag 
     # the next shift-click ranges from a column in the grid the user has just left.
     #
     # Only measurable here. The clear was a bare `$Script:... = $null` inside the GotFocus handler,
-    # which is a .GetNewClosure() scriptblock: the assignment landed in the closure's own detached
-    # scope and the variable the selection logic reads was never touched. Nothing threw, nothing was
-    # logged, and no headless test could tell the two versions apart - the only evidence is observing
-    # the variable after a real grid really takes focus.
+    # which was then a .GetNewClosure() scriptblock: the assignment landed in the closure's own
+    # detached scope and the variable the selection logic reads was never touched. Nothing threw,
+    # nothing was logged, and no headless test could tell the two versions apart - the only evidence
+    # is observing the variable after a real grid really takes focus.
     #
     # Register-QueryResultGridHandler.Tests.ps1 asserts the structure (that the handler calls the
-    # function at all, and that no closure in that file touches a $Script: variable). This asserts the
-    # consequence.
+    # function at all, and that no handler in that file is a closure). This asserts the consequence.
 
     BeforeEach {
         if ([string]::IsNullOrWhiteSpace($Script:WebView2Assembly)) {
