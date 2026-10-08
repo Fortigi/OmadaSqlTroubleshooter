@@ -33,7 +33,9 @@ function Get-OmadaIngestionSetting {
     [CmdLetBinding()]
     param()
 
-    # No tracer preamble: called from the render path on every list update, and it answers from memory.
+    # Traced like every other function: it runs once per list build, not per UI event, so the trace
+    # stays readable.
+    $Script:Tracer::WriteLine(("{0}: Function: {1} - Caller: {2}({3}) - Command: {4}" -f $($Script:RunTimeConfig.ApplicationName), $($MyInvocation.MyCommand.Name), $($MyInvocation.ScriptName).Split("\")[-1], $($MyInvocation.ScriptLineNumber), $MyInvocation.Statement))
 
     $Private:Key = Get-OmadaIngestionSettingCacheKey
     if ([string]::IsNullOrWhiteSpace($Private:Key)) {
@@ -62,6 +64,8 @@ function Get-OmadaIngestionSettingCacheKey {
     [CmdLetBinding()]
     param()
 
+    $Script:Tracer::WriteLine(("{0}: Function: {1} - Caller: {2}({3}) - Command: {4}" -f $($Script:RunTimeConfig.ApplicationName), $($MyInvocation.MyCommand.Name), $($MyInvocation.ScriptName).Split("\")[-1], $($MyInvocation.ScriptLineNumber), $MyInvocation.Statement))
+
     return [string]$Script:RunTimeData.RestMethodParam.SessionKey
 }
 
@@ -84,8 +88,10 @@ function Start-OmadaIngestionSettingProbe {
         but deliberately disconnected tab would reach the tenant on its own - the defect issue #64
         fixed - and it would defeat -NoReconnect and a declined reconnect prompt alike.
 
-        POST with no body, which is the shape verified against a live tenant; the page answers with the
-        same markup either way. Only the flag is read from the response - never the body of the page,
+        POST with an EMPTY-STRING body, which is the shape verified against a live tenant. Not $null:
+        Build-OmadaRequestParameter drops a null Body from the splat, and OmadaWeb.PS then refuses the
+        request with "Provided -Body is empty this is mandatory for a Post command" - which is how the
+        first version of this probe failed on every tenant. Only the flag is read from the response - never the body of the page,
         and never the parsed settings as a whole, because that blob carries AD topology, environment
         identifiers and endpoint configuration that have no business in a log.
 
@@ -130,7 +136,9 @@ function Start-OmadaIngestionSettingProbe {
 
         $Script:RunTimeData.RestMethodParam.Uri = "{0}/logon.aspx" -f $Script:AppConfig.BaseUrl
         $Script:RunTimeData.RestMethodParam.Method = "POST"
-        $Script:RunTimeData.RestMethodParam.Body = $null
+        # An empty string, never $null - see the description. Build-OmadaRequestParameter keeps a
+        # non-null Body, and OmadaWeb.PS requires one on every POST.
+        $Script:RunTimeData.RestMethodParam.Body = ""
 
         # The cache key travels on the context rather than being re-derived in the completion: by the
         # time that runs, the user may have switched to a tab on a different session, and the answer
@@ -200,8 +208,19 @@ function Complete-OmadaIngestionSettingProbe {
     )
 
     try {
-        if ($null -eq $Response -or $Response -is [System.Management.Automation.ErrorRecord]) {
-            "The ODW ingestion setting could not be read; the data connection list stays unfiltered." | Write-LogOutput -LogType DEBUG
+        $Script:Tracer::WriteLine(("{0}: Function: {1} - Caller: {2}({3}) - Command: {4}" -f $($Script:RunTimeConfig.ApplicationName), $($MyInvocation.MyCommand.Name), $($MyInvocation.ScriptName).Split("\")[-1], $($MyInvocation.ScriptLineNumber), $MyInvocation.Statement))
+
+        if ($null -eq $Response) {
+            "The ODW ingestion setting could not be read (no response); the data connection list stays unfiltered." | Write-LogOutput -LogType DEBUG
+            return
+        }
+
+        if ($Response -is [System.Management.Automation.ErrorRecord]) {
+            # The reason is logged, not just the fact. Resolve-OmadaRequestFailure returns an
+            # unclassified failure without logging it, so this line is the only place it can appear -
+            # and without it, a request the module refused looked exactly like a tenant that answered
+            # badly. The message only: the response body is the tenant's page.
+            "The ODW ingestion setting could not be read ({0}{1}); the data connection list stays unfiltered." -f $(if ($null -ne $Response.Exception.Response.StatusCode) { "HTTP {0}: " -f [int]$Response.Exception.Response.StatusCode }), $Response.Exception.Message | Write-LogOutput -LogType DEBUG
             return
         }
 

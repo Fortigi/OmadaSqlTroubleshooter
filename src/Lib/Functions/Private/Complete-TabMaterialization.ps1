@@ -72,8 +72,17 @@ function Complete-TabMaterialization {
             # Get-SqlSchemaObject now (correctly) refuses to request anything for a disconnected tab.
             # Retrieve it here instead, once the tab really is connected, so an auto-connected
             # restored tab still gets its IntelliSense schema.
+            #
+            # The same ordering defeats the two calls Complete-DataConnectionListUpdate makes at the end
+            # of the list build (issue #165): the ODW ingestion probe and the schema preload both refuse
+            # a disconnected tab, and a disconnected tab's list is built synchronously, so both ran -
+            # and declined - before Test-ConnectionSettings above connected the tab. They are repeated here for the same reason as
+            # the schema fetch. Both are idempotent (cached answer, in-flight check on the queue), so a
+            # path that already ran them costs nothing.
             if ($Script:ConnectionStatus) {
                 Get-SqlSchemaObject
+                Start-OmadaIngestionSettingProbe
+                Start-SqlSchemaPreload
             }
         }
         else {

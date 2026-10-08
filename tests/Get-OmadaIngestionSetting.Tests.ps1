@@ -189,6 +189,20 @@ Describe "Start-OmadaIngestionSettingProbe - the request it makes" {
         $Script:RunTimeData.RestMethodParam.Uri | Should -BeExactly "https://tenant.example/logon.aspx"
     }
 
+    It "sends an empty-string body, never null" {
+        # A null Body is dropped from the splat by Build-OmadaRequestParameter, and OmadaWeb.PS then
+        # refuses the POST: "Provided -Body is empty this is mandatory for a Post command". That was
+        # the first version of this probe, and it failed on every tenant.
+        $Script:RunTimeData.RestMethodParam.Body = "left over from the previous request"
+
+        Start-OmadaIngestionSettingProbe
+
+        $Script:RunTimeData.RestMethodParam.Method | Should -BeExactly "POST"
+        $null -ne $Script:RunTimeData.RestMethodParam.Body | Should -BeTrue -Because "a null body is dropped from the request"
+        $Script:RunTimeData.RestMethodParam.Body | Should -BeOfType [string]
+        $Script:RunTimeData.RestMethodParam.Body | Should -BeExactly ""
+    }
+
     It "labels the request so the in-flight check can find it" {
         Start-OmadaIngestionSettingProbe
 
@@ -244,6 +258,18 @@ Describe "Complete-OmadaIngestionSettingProbe - what it caches" {
 
         $Script:OmadaIngestionSettingCache.ContainsKey("session-a") | Should -BeFalse
         $script:PruneCalls | Should -Be 0
+    }
+
+    It "logs why the request failed, not only that it did" {
+        # Resolve-OmadaRequestFailure returns an unclassified failure without logging it, so this is
+        # the only line that can say what went wrong. Without the reason, a request the module refused
+        # was indistinguishable from a tenant that answered badly.
+        $Private:Failure = [System.Management.Automation.ErrorRecord]::new(
+            [System.Exception]::new("Provided -Body is empty this is mandatory for a Post command"), "x", [System.Management.Automation.ErrorCategory]::InvalidArgument, $null)
+
+        Complete-OmadaIngestionSettingProbe -Response $Private:Failure -CacheKey "session-a"
+
+        @($script:LogMessages | Where-Object { $_.Message -like "*could not be read*Provided -Body is empty*" }).Count | Should -Be 1
     }
 
     It "caches nothing for a null response" {

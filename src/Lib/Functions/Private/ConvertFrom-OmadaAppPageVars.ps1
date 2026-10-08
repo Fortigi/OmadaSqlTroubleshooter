@@ -43,8 +43,11 @@ function ConvertFrom-OmadaAppPageVars {
         is not the same as a key whose value is `false`. Callers must distinguish the two - an older
         tenant that does not publish a flag has not told us the flag is off.
 
-        No tracer preamble, following Get-DataConnectionOptionList: this is a pure parser, and its one
-        parameter is a page of the tenant's own configuration (issue #61 section 5).
+        TRACED, but without its parameters. The one parameter is a page of the tenant's own
+        configuration (issue #61 section 5), so the preamble writes only $MyInvocation.Statement - the
+        text of the call, never the value passed. The helpers below are traced the same way, except
+        Expand-OmadaAppPageVarNestedJson, which recurses once per nested element and would flood the
+        trace; its comment says so.
 
     .PARAMETER Html
         The page body. Null, empty, or a page with no `appPageVars` assignment yields an empty lookup
@@ -61,6 +64,8 @@ function ConvertFrom-OmadaAppPageVars {
         [AllowEmptyString()]
         [string]$Html
     )
+
+    $Script:Tracer::WriteLine(("{0}: Function: {1} - Caller: {2}({3}) - Command: {4}" -f $($Script:RunTimeConfig.ApplicationName), $($MyInvocation.MyCommand.Name), $($MyInvocation.ScriptName).Split("\")[-1], $($MyInvocation.ScriptLineNumber), $MyInvocation.Statement))
 
     # [ordered] rather than a plain hashtable: the page's own order is the most useful order to log
     # and to read, and PowerShell's ordered dictionary compares keys case-insensitively, which is what
@@ -115,6 +120,8 @@ function Get-OmadaAppPageVarBlock {
         [Parameter(Mandatory = $true)]
         [string]$Html
     )
+
+    $Script:Tracer::WriteLine(("{0}: Function: {1} - Caller: {2}({3}) - Command: {4}" -f $($Script:RunTimeConfig.ApplicationName), $($MyInvocation.MyCommand.Name), $($MyInvocation.ScriptName).Split("\")[-1], $($MyInvocation.ScriptLineNumber), $MyInvocation.Statement))
 
     $AssignmentIndex = $Html.IndexOf("appPageVars", [System.StringComparison]::Ordinal)
     if ($AssignmentIndex -lt 0) {
@@ -197,7 +204,9 @@ function Split-OmadaAppPageVarPair {
         [string]$Block
     )
 
-    $Pair = [System.Collections.Generic.List[object]]::new()
+    $Script:Tracer::WriteLine(("{0}: Function: {1} - Caller: {2}({3}) - Command: {4}" -f $($Script:RunTimeConfig.ApplicationName), $($MyInvocation.MyCommand.Name), $($MyInvocation.ScriptName).Split("\")[-1], $($MyInvocation.ScriptLineNumber), $MyInvocation.Statement))
+
+    $Pair =[System.Collections.Generic.List[object]]::new()
 
     $Depth = 0
     $QuoteCharacter = [char]0
@@ -297,6 +306,8 @@ function New-OmadaAppPageVarPair {
         [int]$End
     )
 
+    $Script:Tracer::WriteLine(("{0}: Function: {1} - Caller: {2}({3}) - Command: {4}" -f $($Script:RunTimeConfig.ApplicationName), $($MyInvocation.MyCommand.Name), $($MyInvocation.ScriptName).Split("\")[-1], $($MyInvocation.ScriptLineNumber), $MyInvocation.Statement))
+
     if ($SeparatorIndex -lt $Start -or $SeparatorIndex -ge $End) {
         return $null
     }
@@ -343,7 +354,9 @@ function ConvertFrom-OmadaAppPageVarValue {
         [string]$RawValue
     )
 
-    if ([string]::IsNullOrWhiteSpace($RawValue)) {
+    $Script:Tracer::WriteLine(("{0}: Function: {1} - Caller: {2}({3}) - Command: {4}" -f $($Script:RunTimeConfig.ApplicationName), $($MyInvocation.MyCommand.Name), $($MyInvocation.ScriptName).Split("\")[-1], $($MyInvocation.ScriptLineNumber), $MyInvocation.Statement))
+
+    if([string]::IsNullOrWhiteSpace($RawValue)) {
         return $null
     }
 
@@ -425,6 +438,8 @@ function ConvertFrom-OmadaAppPageVarJsonText {
         [string]$Text
     )
 
+    $Script:Tracer::WriteLine(("{0}: Function: {1} - Caller: {2}({3}) - Command: {4}" -f $($Script:RunTimeConfig.ApplicationName), $($MyInvocation.MyCommand.Name), $($MyInvocation.ScriptName).Split("\")[-1], $($MyInvocation.ScriptLineNumber), $MyInvocation.Statement))
+
     $Trimmed = $Text.Trim()
     if ($Trimmed.Length -eq 0 -or ($Trimmed[0] -ne "{" -and $Trimmed[0] -ne "[")) {
         return $Text
@@ -482,7 +497,12 @@ function Expand-OmadaAppPageVarNestedJson {
         [int]$MaxDepth = 6
     )
 
-    if ($null -eq $Value -or $Depth -ge $MaxDepth) {
+    # The one function in this file WITHOUT a tracer preamble. It recurses once per element of every
+    # nested object and array - custSettings, uiHomePageActions, the language list - so a trace line
+    # here would be thousands of lines per page, burying the calls that say what actually happened.
+    # The call that starts the walk is traced (ConvertFrom-OmadaAppPageVarJsonText).
+
+    if($null -eq $Value -or $Depth -ge $MaxDepth) {
         return $Value
     }
 
