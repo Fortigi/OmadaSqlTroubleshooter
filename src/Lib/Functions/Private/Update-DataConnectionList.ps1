@@ -234,9 +234,12 @@ function Complete-DataConnectionListUpdate {
             # is free on every connect after the first. The preload asks for every database's schema on
             # a worker, which is what makes a schema node populated before the user clicks it.
             #
-            # A schema preloaded for a connection the filter later removes is cached and never used:
-            # one wasted request, against the alternative of serialising the preload behind the probe
-            # and making every connect wait for it.
+            # The preload waits for the probe. The connections the filter removes answer 500 on a live
+            # tenant, and preloading them cost a synchronous retry each and switched background requests
+            # off. So the ORDER of these two calls matters: the probe has to be on the completion queue
+            # when the preload checks, so the preload declines and the probe's completion starts it
+            # after the prune. When the answer is already cached no probe is dispatched, and the
+            # preload runs here as before. Nothing else waits - the list is already on screen.
             Start-OmadaIngestionSettingProbe
             Start-SqlSchemaPreload
         }

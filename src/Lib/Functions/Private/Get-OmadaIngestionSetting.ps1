@@ -69,6 +69,48 @@ function Get-OmadaIngestionSettingCacheKey {
     return [string]$Script:RunTimeData.RestMethodParam.SessionKey
 }
 
+function Test-OmadaIngestionSettingProbePending {
+    <#
+    .SYNOPSIS
+        Whether a probe for the CURRENT connection pool is waiting on the completion queue.
+
+    .DESCRIPTION
+        Two callers ask this. Start-OmadaIngestionSettingProbe, so it does not ask twice. And
+        Start-SqlSchemaPreload, so it does not preload before the filter is known: the connections the
+        filter removes are the ones that fail server-side, and every such failure costs a synchronous
+        retry on the UI thread and switches background requests off for the session. The probe's
+        completion starts the preload instead.
+
+        Matched on the cache key as well as the label. Matching the label alone let one session's probe
+        stand in for another's, so the second session neither probed nor - since the completion runs
+        for the first session - preloaded.
+
+        Read off the completion queue rather than a side table of "probes in flight", for the reason
+        Get-SqlSchemaObject gives: a side table has to be cleared on every path a request can leave by,
+        and an entry left behind would block this pool for the rest of the session. The poll timer
+        removes an item from the queue BEFORE it runs the completion, so a preload started from the
+        completion does not find its own probe here.
+
+    .OUTPUTS
+        [bool]
+    #>
+    [CmdLetBinding()]
+    param()
+
+    $Script:Tracer::WriteLine(("{0}: Function: {1} - Caller: {2}({3}) - Command: {4}" -f $($Script:RunTimeConfig.ApplicationName), $($MyInvocation.MyCommand.Name), $($MyInvocation.ScriptName).Split("\")[-1], $($MyInvocation.ScriptLineNumber), $MyInvocation.Statement))
+
+    $Private:Key = Get-OmadaIngestionSettingCacheKey
+    if ([string]::IsNullOrWhiteSpace($Private:Key)) {
+        return $false
+    }
+
+    $Private:Pending = @($Script:PendingWebViewCompletions | Where-Object {
+            $_.Description -eq $Script:OmadaIngestionProbeDescription -and [string]$_.Context.Caller.CacheKey -eq $Private:Key
+        })
+
+    return $Private:Pending.Count -gt 0
+}
+
 function Start-OmadaIngestionSettingProbe {
     <#
     .SYNOPSIS
@@ -91,9 +133,11 @@ function Start-OmadaIngestionSettingProbe {
         POST with an EMPTY-STRING body, which is the shape verified against a live tenant. Not $null:
         Build-OmadaRequestParameter drops a null Body from the splat, and OmadaWeb.PS then refuses the
         request with "Provided -Body is empty this is mandatory for a Post command" - which is how the
-        first version of this probe failed on every tenant. Only the flag is read from the response - never the body of the page,
-        and never the parsed settings as a whole, because that blob carries AD topology, environment
-        identifiers and endpoint configuration that have no business in a log.
+        first version of this probe failed on every tenant.
+
+        Only the flag is read from the response - never the body of the page, and never the parsed
+        settings as a whole, because that blob carries AD topology, environment identifiers and
+        endpoint configuration that have no business in a log.
 
     .OUTPUTS
         None.
@@ -127,10 +171,9 @@ function Start-OmadaIngestionSettingProbe {
             return
         }
 
-        # Read off the completion queue rather than kept in a side table of "probes in flight", for the
-        # reason Get-SqlSchemaObject gives: a side table has to be cleared on every path a request can
-        # leave by, and an entry left behind would block this pool from ever learning the flag again.
-        if (@($Script:PendingWebViewCompletions | Where-Object { $_.Description -eq $Script:OmadaIngestionProbeDescription }).Count -gt 0) {
+        # This session's probe only - see Test-OmadaIngestionSettingProbePending for why the session
+        # matters and why the queue is the source of truth.
+        if (Test-OmadaIngestionSettingProbePending) {
             return
         }
 
@@ -266,5 +309,15 @@ function Complete-OmadaIngestionSettingProbe {
     }
     catch {
         $_.Exception.Message | Write-ContainedErrorLog -ErrorObject $_
+    }
+    finally {
+        # The schema preload waits for this answer (Start-SqlSchemaPreload declines while the probe is
+        # pending), so it is started here, on EVERY path: after the prune above, it asks only for the
+        # connections that are left; after a failure or a page without the flag, it asks for all of
+        # them, which is what it did before the probe existed. Skipping it on a failure would trade a
+        # wasted request for no preload at all.
+        #
+        # Its own guards still apply - the tab may have been disconnected while the probe was out.
+        Start-SqlSchemaPreload
     }
 }

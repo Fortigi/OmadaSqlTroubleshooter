@@ -78,7 +78,8 @@ function Complete-TabMaterialization {
             # a disconnected tab, and a disconnected tab's list is built synchronously, so both ran -
             # and declined - before Test-ConnectionSettings above connected the tab. They are repeated here for the same reason as
             # the schema fetch. Both are idempotent (cached answer, in-flight check on the queue), so a
-            # path that already ran them costs nothing.
+            # path that already ran them costs nothing. Probe first: the preload declines while the
+            # probe is pending, and the probe's completion starts it after the filter is applied.
             if ($Script:ConnectionStatus) {
                 Get-SqlSchemaObject
                 Start-OmadaIngestionSettingProbe

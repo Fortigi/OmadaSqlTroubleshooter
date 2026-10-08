@@ -37,6 +37,13 @@ function Start-SqlSchemaPreload {
         writing - and the runspace pool is sized to TabCapacity (default 8, floor 2), so a smaller pool
         queues the requests rather than blocking anything.
 
+        IT WAITS FOR THE ODW INGESTION PROBE. While a probe for this session is on the completion queue
+        this returns without asking for anything, and Complete-OmadaIngestionSettingProbe calls it again
+        once the dropdown has been pruned. Preloading first was meant to cost "one wasted request" per
+        filtered connection; on a live tenant those connections answer 500, each failure is retried
+        synchronously on the UI thread (~10 s apiece), and the first one switches background requests
+        off for the rest of the session. Three of them froze the window for half a minute.
+
         Every other guard belongs to Get-SqlSchemaObject and is reused unchanged: the per-pool cache,
         the in-flight check against the completion queue, the connection gate, and the UI-thread retry.
         This function adds no caching and no bookkeeping of its own.
@@ -65,6 +72,13 @@ function Start-SqlSchemaPreload {
 
         if (!(Test-ConnectionRequirements)) {
             "Connection not ready" | Write-LogOutput -LogType DEBUG
+            return
+        }
+
+        # Not before the ODW ingestion filter is known - see the description. The probe's completion
+        # starts the preload once it has pruned the dropdown, which is the list read below.
+        if (Test-OmadaIngestionSettingProbePending) {
+            "Waiting for the ODW ingestion setting before preloading schemas." | Write-LogOutput -LogType DEBUG
             return
         }
 

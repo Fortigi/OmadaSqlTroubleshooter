@@ -40,8 +40,23 @@ BeforeAll {
     function ConvertTo-RedactedLogString { param($InputObject, $MaxDepth, [switch]$ShapeOnly) return "<redacted>" }
     function Test-ConnectionRequirements { return $script:ConnectionReady }
 
-    # The prune that the completion triggers. Recorded, not performed: it touches WPF.
-    function Remove-FilteredDataConnectionItem { $script:PruneCalls++ }
+    # The prune that the completion triggers. Recorded, not performed: it touches WPF. The order list
+    # records it alongside the preload, so a test can assert which came first.
+    function Remove-FilteredDataConnectionItem { $script:PruneCalls++; $script:CallOrder.Add("Prune") }
+
+    # The preload the completion starts once the filter is known. Recorded, not performed.
+    function Start-SqlSchemaPreload { $script:PreloadCalls++; $script:CallOrder.Add("Preload") }
+
+    # A queue item shaped like the one Start-OmadaBackgroundRequest enqueues: the label, and the
+    # caller's context under .Context.Caller.
+    function script:New-QueuedProbe {
+        param([string]$Description = "ODW ingestion setting", [string]$CacheKey = "session-a")
+
+        return [pscustomobject]@{
+            Description = $Description
+            Context     = @{ Caller = @{ CacheKey = $CacheKey } }
+        }
+    }
 
     # Dispatch, stubbed. $null models "not dispatched", which is what sends the probe down the inline
     # path - the fallback that is acceptable here precisely because it is ONE request.
@@ -83,6 +98,8 @@ BeforeAll {
         $script:InlineCalls = 0
         $script:InlinePage = $Script:PageWithFlag
         $script:PruneCalls = 0
+        $script:PreloadCalls = 0
+        $script:CallOrder = [System.Collections.Generic.List[string]]::new()
         $script:LogMessages.Clear()
     }
 }
@@ -161,11 +178,21 @@ Describe "Start-OmadaIngestionSettingProbe - when it refuses to ask" {
     }
 
     It "asks nothing while a probe for this session is already on the queue" {
-        $Script:PendingWebViewCompletions.Add([pscustomobject]@{ Description = "ODW ingestion setting" })
+        $Script:PendingWebViewCompletions.Add((New-QueuedProbe -CacheKey "session-a"))
 
         Start-OmadaIngestionSettingProbe
 
         @($script:Dispatched).Count | Should -Be 0
+    }
+
+    It "still asks while another session's probe is on the queue" {
+        # Matching the label alone let one session's probe stand in for another's; the completion then
+        # ran for the other session, so this one never learned the flag.
+        $Script:PendingWebViewCompletions.Add((New-QueuedProbe -CacheKey "session-b"))
+
+        Start-OmadaIngestionSettingProbe
+
+        @($script:Dispatched).Count | Should -Be 1
     }
 
     It "is not confused by another request on the queue" {
@@ -223,6 +250,80 @@ Describe "Start-OmadaIngestionSettingProbe - the request it makes" {
 
         $script:InlineCalls | Should -Be 1
         Get-OmadaIngestionSetting | Should -BeTrue
+    }
+}
+
+Describe "Test-OmadaIngestionSettingProbePending - what counts as in flight" {
+
+    BeforeEach {
+        Reset-ProbeState
+    }
+
+    It "is true for this session's probe" {
+        $Script:PendingWebViewCompletions.Add((New-QueuedProbe -CacheKey "session-a"))
+
+        Test-OmadaIngestionSettingProbePending | Should -BeTrue
+    }
+
+    It "is false for another session's probe" {
+        $Script:PendingWebViewCompletions.Add((New-QueuedProbe -CacheKey "session-b"))
+
+        Test-OmadaIngestionSettingProbePending | Should -BeFalse
+    }
+
+    It "is false for another request of this session" {
+        $Script:PendingWebViewCompletions.Add((New-QueuedProbe -Description "SQL schema" -CacheKey "session-a"))
+
+        Test-OmadaIngestionSettingProbePending | Should -BeFalse
+    }
+
+    It "is false with an empty queue" {
+        Test-OmadaIngestionSettingProbePending | Should -BeFalse
+    }
+
+    It "is false when there is no session" {
+        $Script:RunTimeData.RestMethodParam.SessionKey = ""
+        $Script:PendingWebViewCompletions.Add((New-QueuedProbe -CacheKey ""))
+
+        Test-OmadaIngestionSettingProbePending | Should -BeFalse
+    }
+}
+
+Describe "Complete-OmadaIngestionSettingProbe - it starts the schema preload" {
+    # The preload declines while the probe is pending, because the connections the filter removes fail
+    # server-side and each failure froze the window. So the completion must start it, on every path -
+    # otherwise a failed probe would mean no preload at all.
+
+    BeforeEach {
+        Reset-ProbeState
+    }
+
+    It "starts it after the filter has been applied" {
+        Complete-OmadaIngestionSettingProbe -Response $Script:PageWithFlag -CacheKey "session-a"
+
+        $script:PreloadCalls | Should -Be 1
+        @($script:CallOrder) | Should -Be @("Prune", "Preload") -Because "the preload reads the pruned dropdown"
+    }
+
+    It "starts it when the page does not publish the flag" {
+        Complete-OmadaIngestionSettingProbe -Response $Script:PageWithoutFlag -CacheKey "session-a"
+
+        $script:PreloadCalls | Should -Be 1
+    }
+
+    It "starts it when the request failed" {
+        $Private:Failure = [System.Management.Automation.ErrorRecord]::new(
+            [System.Exception]::new("boom"), "x", [System.Management.Automation.ErrorCategory]::ConnectionError, $null)
+
+        Complete-OmadaIngestionSettingProbe -Response $Private:Failure -CacheKey "session-a"
+
+        $script:PreloadCalls | Should -Be 1
+    }
+
+    It "starts it when there was no response" {
+        Complete-OmadaIngestionSettingProbe -Response $null -CacheKey "session-a"
+
+        $script:PreloadCalls | Should -Be 1
     }
 }
 
