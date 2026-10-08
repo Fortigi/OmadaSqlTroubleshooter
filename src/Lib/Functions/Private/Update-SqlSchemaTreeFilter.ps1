@@ -17,13 +17,18 @@ function Update-SqlSchemaTreeFilter {
     - A database is visible when its own name matches or when anything below it matches.
     - Columns are never filtered: expanding a visible table always shows all of its columns.
 
-    A DATABASE WHOSE SCHEMA IS NOT LOADED YET IS NEVER EXPANDED BY THE FILTER, and matches on its own
-    name only (issue #158). Expanding it is what triggers its fetch, so expanding every name-matching
-    database would turn typing in the filter box into a burst of authenticated round trips - exactly
-    what criterion 3 and the issue's "lazy loading is the design" are about. Such a database
-    contributes no schema or table hits either, which is correct rather than unfortunate: the client
-    has nothing to match them against. A database that IS loaded expands to its hits, because showing
-    them costs nothing once the schema is in hand.
+    A DATABASE WHOSE SCHEMA IS CACHED IS FILLED BEFORE THE FIRST SEARCH (issue #165). The preload
+    caches every database's schema shortly after connect, but the window is usually opened later and
+    builds those databases as empty nodes - so the search missed every table in a folded database.
+    Add-SqlSchemaCachedDatabaseNode fills them from the cache, without a request, as soon as a filter
+    is typed; the first search pays the build once, and opening the window stays fast.
+
+    A DATABASE WHOSE SCHEMA IS NOT CACHED AT ALL is still never expanded by the filter, and matches on
+    its own name only (issue #158). Expanding it is what triggers its fetch, so expanding every
+    name-matching database would turn typing in the filter box into a burst of authenticated round
+    trips. It contributes no schema or table hits, because the client has nothing to match them
+    against; when its response lands, Complete-SqlSchemaRetrieval fills it and re-applies the filter.
+    A database that IS loaded expands to its hits.
 
     Called without -FilterValue the function re-applies whatever is currently typed in the filter
     box, which is what Complete-SqlSchemaRetrieval needs after it rebuilt a database's subtree.
@@ -50,6 +55,11 @@ function Update-SqlSchemaTreeFilter {
         }
 
         $Pattern = ConvertTo-WildcardFilterPattern -FilterValue $FilterValue
+
+        # Only when there is something to search for: clearing the box must not pay for a build.
+        if ($null -ne $Pattern) {
+            $null = Add-SqlSchemaCachedDatabaseNode
+        }
 
         $VisibleTableCount = 0
         foreach ($DatabaseItem in $Script:TreeViewSqlSchema.Items) {

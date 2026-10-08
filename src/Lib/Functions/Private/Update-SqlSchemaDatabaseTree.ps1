@@ -64,7 +64,10 @@ function Update-SqlSchemaDatabaseTree {
         fetch blocked the UI thread, so N connections meant N sequential freezes and loading them all
         was simply not available. Since #40 the fetch goes to a worker and is cached per pool, so
         Start-SqlSchemaPreload asks for every connection's schema as soon as the connection list is
-        known, and a node is normally populated before the user ever clicks it.
+        known. A response that lands while the window is open fills its node directly. One that landed
+        BEFORE the window was opened is only cached - this function still builds that node empty, so
+        opening the window stays fast - and Add-SqlSchemaCachedDatabaseNode fills it from the cache on
+        the first search, so the filter covers every database whose schema is in hand.
 
         Invoke-SqlSchemaDatabaseNodeExpanded below is therefore no longer the usual path, but it is not
         dead code: the preload is skipped entirely when background requests are unavailable - see the
