@@ -19,12 +19,36 @@ function Test-OmadaConnection {
                 $Script:RunTimeData.RestMethodParam.SessionKey = $ConnectionIdentity.Key
             }
 
+            # InPrivate signs in again once per application run, per session. Since issue #40 the
+            # app leaves ForceAuthentication unbound so a worker can load OmadaWeb.PS's encrypted
+            # on-disk cookie - and OmadaWeb.PS loads that cookie whatever -InPrivate says, so an
+            # InPrivate tab reconnected after a restart without ever showing a login. Forcing it on
+            # the FIRST connect of the run restores the prompt; the fresh cookie is cached again, so
+            # later tabs on the same session and the background workers reuse it.
+            $Private:SessionKey = [string]$Script:RunTimeData.RestMethodParam.SessionKey
+            $Private:IsInPrivate = $true -eq $Script:RunTimeData.RestMethodParam.InPrivate
+            if ($null -eq $Script:InPrivateSignedInSessionKeys) {
+                $Script:InPrivateSignedInSessionKeys = [System.Collections.Generic.HashSet[string]]::new()
+            }
+
+            if ($Private:IsInPrivate -and -not $Script:InPrivateSignedInSessionKeys.Contains($Private:SessionKey)) {
+                "InPrivate: signing in again for this application run." | Write-LogOutput -LogType DEBUG
+                $Script:RunTimeData.RestMethodParam.ForceAuthentication = $true
+            }
+
             $Script:RunTimeData.RestMethodParam.Uri = "{0}/odata/dataobjects/C_P_SQLTROUBLESHOOTING" -f $Script:AppConfig.BaseUrl
             $Script:RunTimeData.RestMethodParam.Body = $null
             $Script:RunTimeData.RestMethodParam.Method = "GET"
             $null = Invoke-OmadaPSWebRequestWrapper
             $Script:RunTimeData.RestMethodParam.ForceAuthentication = $false
             $Script:RunTimeData.AuthenticationRetryCount = 0
+
+            # Only a successful sign-in counts: a failed one leaves the key out, so the next connect
+            # prompts again.
+            if ($Private:IsInPrivate) {
+                [void]$Script:InPrivateSignedInSessionKeys.Add($Private:SessionKey)
+            }
+
             return $true
         }
         catch {

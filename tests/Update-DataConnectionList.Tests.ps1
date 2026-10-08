@@ -477,3 +477,129 @@ Describe "Two tabs with a lookup in flight" {
         ($script:Rendered | Where-Object { $_.Html -eq "<html>two</html>" }).NotShowPopupWindow | Should -BeTrue
     }
 }
+
+Describe "Remove-FilteredDataConnectionItem - pruning the dropdown once the ingestion flag is known" {
+    # Issue #165. The first time a probe answered on a live tenant, this emptied the dropdown: it wrapped
+    # Remove-UnusedDataConnection's ", $array" result in @() again, so the kept list was ONE element
+    # (the whole array) and every item was "-notin" it.
+    #
+    # The filter is loaded for REAL, so the shape of its result is what this function actually gets.
+    # The ComboBox is a headless stand-in - WPF types do not load on the CI runner - with what the
+    # function touches: Items (enumerable, with Count and Remove) and a settable SelectedItem.
+
+    BeforeAll {
+        $ParentPath = Split-Path -Path $PSScriptRoot -Parent
+        $PrivatePath = Join-Path $ParentPath -ChildPath "src\Lib\Functions\Private"
+        . (Join-Path $PrivatePath -ChildPath "Resolve-DataConnectionReference.ps1")
+        . (Join-Path $PrivatePath -ChildPath "Remove-UnusedDataConnection.ps1")
+
+        function Get-OmadaIngestionSetting { return $script:IngestionEnabled }
+        function Update-SqlSchemaDatabaseTree { $script:TreeUpdates++ }
+        function Push-SqlDatabaseNameList { $script:NamePushes++ }
+
+        # The list from the live tenant the defect was seen on.
+        $script:TenantConnections = @(
+            "ESARC - 1001574"
+            "ODW - 1001262"
+            "ODWMD - 1001265"
+            "ODWS - 1001570"
+            "OISES - 1001572"
+            "OPS - 1001319"
+            "RoPE - 1001261"
+            "Source System Data DB - 1001335"
+        )
+
+        function script:New-FakeComboBox {
+            param([string[]]$Content, [string]$Selected)
+
+            $Private:Items = [System.Collections.ArrayList]::new()
+            foreach ($Private:Text in $Content) {
+                [void]$Private:Items.Add([pscustomobject]@{ Content = $Private:Text })
+            }
+
+            return [pscustomobject]@{
+                Items        = $Private:Items
+                SelectedItem = ($Private:Items | Where-Object { $_.Content -eq $Selected } | Select-Object -First 1)
+            }
+        }
+
+        function script:Get-FakeComboBoxContent {
+            return @($Script:MainForm.Elements.ComboBoxSelectDataConnection.Items | ForEach-Object { $_.Content })
+        }
+    }
+
+    BeforeEach {
+        $script:IngestionEnabled = $true
+        $script:TreeUpdates = 0
+        $script:NamePushes = 0
+        $script:LogMessages.Clear()
+        $Script:RunTimeConfig = [pscustomobject]@{ ApplicationName = "Test" }
+        $Script:MainForm = [pscustomobject]@{
+            Elements = [pscustomobject]@{
+                ComboBoxSelectDataConnection = (New-FakeComboBox -Content $script:TenantConnections -Selected "OISES - 1001572")
+            }
+        }
+    }
+
+    It "removes exactly the unused ODW connections and keeps the rest" {
+        Remove-FilteredDataConnectionItem
+
+        Get-FakeComboBoxContent | Should -Be @(
+            "ESARC - 1001574"
+            "ODW - 1001262"
+            "OISES - 1001572"
+            "OPS - 1001319"
+            "RoPE - 1001261"
+        )
+    }
+
+    It "keeps the selection when it survives the filter" {
+        Remove-FilteredDataConnectionItem
+
+        $Script:MainForm.Elements.ComboBoxSelectDataConnection.SelectedItem.Content | Should -BeExactly "OISES - 1001572"
+    }
+
+    It "falls back to OISES when the selected connection is filtered away" {
+        $Script:MainForm.Elements.ComboBoxSelectDataConnection = New-FakeComboBox -Content $script:TenantConnections -Selected "ODWS - 1001570"
+
+        Remove-FilteredDataConnectionItem
+
+        $Script:MainForm.Elements.ComboBoxSelectDataConnection.SelectedItem.Content | Should -BeExactly "OISES - 1001572"
+    }
+
+    It "reconciles the tree and the editor's name list after a prune" {
+        Remove-FilteredDataConnectionItem
+
+        $script:TreeUpdates | Should -Be 1
+        $script:NamePushes | Should -Be 1
+    }
+
+    It "removes nothing when ingestion is off" {
+        $script:IngestionEnabled = $false
+
+        Remove-FilteredDataConnectionItem
+
+        Get-FakeComboBoxContent | Should -Be $script:TenantConnections
+        $script:TreeUpdates | Should -Be 0
+    }
+
+    It "removes nothing when the flag is not known" {
+        $script:IngestionEnabled = $null
+
+        Remove-FilteredDataConnectionItem
+
+        Get-FakeComboBoxContent | Should -Be $script:TenantConnections
+    }
+
+    It "never empties the list, even if the filter would remove everything" {
+        # Only unused ODW connections - the filter's answer is empty. An empty dropdown is worse than
+        # an unfiltered one.
+        $Private:OnlyFiltered = @("ODWMD - 1001265", "ODWS - 1001570", "Source System Data DB - 1001335")
+        $Script:MainForm.Elements.ComboBoxSelectDataConnection = New-FakeComboBox -Content $Private:OnlyFiltered -Selected "ODWS - 1001570"
+
+        Remove-FilteredDataConnectionItem
+
+        Get-FakeComboBoxContent | Should -Be $Private:OnlyFiltered
+        @($script:LogMessages | Where-Object { $_.Message -like "*kept no data connection*" }).Count | Should -Be 1
+    }
+}

@@ -293,9 +293,21 @@ function Remove-FilteredDataConnectionItem {
         }
 
         $Private:Current = @($Private:ComboBox.Items | ForEach-Object { [string]$_.Content })
-        $Private:Kept = @(Remove-UnusedDataConnection -OptionList $Private:Current -IngestionEnabled (Get-OmadaIngestionSetting))
+        # Not wrapped in @(): Remove-UnusedDataConnection returns its array through the ", $array"
+        # idiom, and wrapping it again nests the array one level deeper. That made $Kept ONE element
+        # (the whole list), so its count never matched and every item was "-notin" it - the first
+        # time a probe answered on a live tenant, the dropdown was emptied.
+        $Private:Kept = Remove-UnusedDataConnection -OptionList $Private:Current -IngestionEnabled (Get-OmadaIngestionSetting)
 
         if ($Private:Kept.Count -eq $Private:Current.Count) {
+            return
+        }
+
+        # The filter only ever removes the unused ODW connections, never all of them. An empty answer
+        # for a list that is not empty means something went wrong in it, and an empty dropdown is far
+        # worse than an unfiltered one - so nothing is removed.
+        if ($Private:Kept.Count -eq 0) {
+            "The ODW ingestion filter kept no data connection; leaving the list unfiltered." | Write-LogOutput -LogType DEBUG
             return
         }
 

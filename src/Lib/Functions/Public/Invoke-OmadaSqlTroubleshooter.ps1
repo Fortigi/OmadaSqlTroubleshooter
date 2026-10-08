@@ -223,6 +223,10 @@ function Invoke-OmadaSqlTroubleshooter {
             "Application '{0}': Start initialization..." -f $Script:RunTimeConfig.ApplicationTitle | Write-Host -ForegroundColor Green
             $Script:ConnectionStatus = $false
             $Script:RunTimeConfig.ReconnectStatus = 0
+
+            # Reset here, not at module import: module state survives between runs in one PowerShell
+            # window, and an InPrivate session must sign in again on every start (Test-OmadaConnection).
+            $Script:InPrivateSignedInSessionKeys = [System.Collections.Generic.HashSet[string]]::new()
             Initialize-GlobalConfigSettings -Reset:$Reset
 
             # As early as it can be: the configuration is what says whether a file is wanted at all,
