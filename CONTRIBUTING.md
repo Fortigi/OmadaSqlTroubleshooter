@@ -67,6 +67,51 @@ PSScriptAnalyzer gates the test run, so a style violation stops the build before
 executes. The repository's PowerShell conventions are Stroustrup braces, no aliases, full cmdlet
 names in correct casing, spaces around operators, and aligned hashtable values.
 
+The build modules - Pester, psake, PSDeploy, PSScriptAnalyzer, PSComplexity and PSMutant - are
+pinned to exact versions in `build/BuildModules.psd1`; `build/InstallModules.ps1` installs and
+`build/build.ps1` imports exactly those. Bump a version there, never by installing a newer module
+locally.
+
+## Quality gates: complexity and test strength
+
+Passing tests prove the code ran, not that a test would notice it being wrong. Two more gates
+answer that (issue #109), with their policy in `build/QualityGates.psd1`:
+
+- **Complexity** ([PSComplexity](https://github.com/Fortigi/PSComplexity)): every function and
+  event-handler script stays at or under **15 cyclomatic and 15 cognitive** complexity. Units that
+  were already over when the gate was introduced are recorded in `complexity-baseline.json`; they
+  may stay, but may not get worse.
+- **Mutation testing** ([PSMutant](https://github.com/Fortigi/PSMutant)): small faults are injected
+  into a copy of the source - `-eq` becomes `-ne`, `$true` becomes `$false`, `0` becomes `1` - and
+  the file's own tests must fail. The share of faults they catch is the mutation score, and it must
+  not drop below `Mutation.Thresholds.Break`. A file's tests are found by the naming convention
+  above, so a correctly named test file is all it takes to be measured.
+
+**On a pull request** only the changed `src/Lib` files are measured, and the result is posted as the
+**Quality gates (changed code)** check. In practice:
+
+- A new or touched function must be under the ceilings, unless it is already in the baseline.
+- A touched file's tests must catch at least the threshold share of injected faults. Touching a
+  weakly tested file therefore means strengthening its tests in the same pull request: the check
+  lists every surviving mutant with its line and change, and each one is an assertion to add.
+- Changed source with no test file of its own is listed as a warning.
+- If you brought a baselined unit's score down, renamed it or removed its file, the check fails
+  until the baseline follows: run `./build/build.ps1 -Task UpdateComplexityBaseline` and commit
+  `complexity-baseline.json`. The task refuses to record a unit that got worse.
+
+**Every week** `.github/workflows/quality-weekly.yml` measures the whole tree and keeps one bug per
+gate up to date - complexity debt, a mutation score below the threshold, and build module pins with
+a newer release - closing each bug once its gate passes again.
+
+```powershell
+# Reproduce the weekly run locally (writes buildoutput/quality/)
+./build/build.ps1 -Task QualityFull
+```
+
+Some mutants cannot change behaviour at all; declare those under `Mutation.Equivalents` with the
+reason, rather than writing a test that asserts nothing. PSMutant fails the run if a declaration is
+ever killed or stops matching, so a declaration cannot quietly outlive the code it describes.
+
 ## Workflow changes: pin every action to a commit SHA
 
 If your change touches a `.github/workflows/*.yml` file and adds or modifies a `uses:` line, pin it
