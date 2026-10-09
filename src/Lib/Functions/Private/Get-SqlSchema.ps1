@@ -312,14 +312,26 @@ function Complete-SqlSchemaRetrieval {
             if ($null -eq $Script:SqlSchemaCache) {
                 $Script:SqlSchemaCache = @{}
             }
-            $Script:SqlSchemaCache[$SchemaCacheKey] = $ReturnValue
 
-            # The index the schema validation pass resolves against is built from this response and
-            # memoised beside it. Dropping it here is what stops an index outliving the response it
-            # was built from - after a refresh, the pass would otherwise keep answering from the
-            # schema the user just asked to replace.
-            if ($null -ne $Script:SqlSchemaModelCache) {
-                $Script:SqlSchemaModelCache.Remove($SchemaCacheKey)
+            # A cache hit hands back the very object that is already cached (Get-SqlSchemaObject), and
+            # nothing derived from it can be stale - so nothing is dropped. Dropping it anyway made
+            # every tab switch, window open and node expand rebuild the validation index and the
+            # editor JSON for a response that had not changed: half a second and a second, per large
+            # database, on the UI thread.
+            $Private:IsSameResponse = $Script:SqlSchemaCache.ContainsKey($SchemaCacheKey) -and [object]::ReferenceEquals($Script:SqlSchemaCache[$SchemaCacheKey], $ReturnValue)
+
+            if (-not $Private:IsSameResponse) {
+                $Script:SqlSchemaCache[$SchemaCacheKey] = $ReturnValue
+
+                # The index the schema validation pass resolves against, and the editor's JSON, are
+                # built from this response and memoised beside it. Dropping them for a NEW response is
+                # what stops either outliving the response it was built from - after a refresh, the
+                # pass would otherwise keep answering from the schema the user just asked to replace.
+                foreach ($Private:DerivedCache in @($Script:SqlSchemaModelCache, $Script:SqlSchemaEditorJsonCache)) {
+                    if ($null -ne $Private:DerivedCache) {
+                        $Private:DerivedCache.Remove($SchemaCacheKey)
+                    }
+                }
             }
         }
 
@@ -371,15 +383,37 @@ function Complete-SqlSchemaRetrieval {
                 "No schema tree node for data connection DoId '{0}'; tree not updated." -f $DataConnectionDoId | Write-LogOutput -LogType DEBUG
             }
 
+            # Every other database whose schema is already cached is filled too. The preload usually
+            # lands before the window is opened, and its schemas would otherwise sit in the cache with
+            # their nodes empty - invisible to the search. Opening the window runs this through the
+            # active database's completion. A no-op once every cached database is loaded.
+            $null = Add-SqlSchemaCachedDatabaseNode
+
             # The subtree was rebuilt from scratch above, so every node under it is visible again.
             # Re-apply whatever the user has typed in the filter box, otherwise switching tab or data
             # connection - or expanding a second database - silently drops an active filter.
             Update-SqlSchemaTreeFilter
         }
 
-        $SchemaObjectsJson = ConvertTo-SqlSchemaEditorModel -SchemaResponse $ReturnValue | ConvertTo-Json -Depth 5
+        # Built once per response and reused for every later push of the same one.
+        $SchemaObjectsJson = Get-SqlSchemaEditorJson -SchemaCacheKey $SchemaCacheKey -SchemaResponse $ReturnValue
 
-        "Schema for Monaco editor: {0}" -f $SchemaObjectsJson | Write-LogOutput -LogType VERBOSE
+        # Sizes at VERBOSE; the schema itself only at VERBOSE2. Logged whole at VERBOSE, it was 30,000
+        # and more lines per large database, a quarter of a second each on the UI thread, and the
+        # names of every table and column in the customer's database in a log a user can export
+        # (issue #61 section 5). The indented form is built only when VERBOSE2 will show it.
+        $Private:TableTotal = 0
+        foreach ($Private:Property in $ReturnValue.d.PSObject.Properties) {
+            if ($Private:Property.MemberType -eq [System.Management.Automation.PSMemberTypes]::NoteProperty) {
+                $Private:TableTotal++
+            }
+        }
+
+        "Schema for Monaco editor: {0} table(s), {1} character(s)." -f $Private:TableTotal, $SchemaObjectsJson.Length | Write-LogOutput -LogType VERBOSE
+        $Private:LogLevel = [string]$Script:RunTimeConfig.Logging.LogLevelSetting
+        if (![string]::IsNullOrWhiteSpace($Private:LogLevel) -and (Test-LogLevelThreshold -Level $Private:LogLevel -LogType VERBOSE2)) {
+            "Schema for Monaco editor: {0}" -f (ConvertTo-SqlSchemaEditorModel -SchemaResponse $ReturnValue | ConvertTo-Json -Depth 5) | Write-LogOutput -LogType VERBOSE2
+        }
         $OnCompletedScriptBlock = {
             param($Pending)
             try {

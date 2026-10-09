@@ -41,6 +41,10 @@ BeforeAll {
     . (Join-Path $PrivatePath -ChildPath "Resolve-DataConnectionReference.ps1")
     . (Join-Path $PrivatePath -ChildPath "Update-SqlSchemaDatabaseTree.ps1")
     . (Join-Path $PrivatePath -ChildPath "Push-SqlDatabaseNameList.ps1")
+    # The completion decides whether to log the schema whole (VERBOSE2 only), and fills every cached
+    # database once the window exists - both real, for the reason given above.
+    . (Join-Path $PrivatePath -ChildPath "Test-LogLevelThreshold.ps1")
+    . (Join-Path $PrivatePath -ChildPath "Add-SqlSchemaCachedDatabaseNode.ps1")
     . (Join-Path $PrivatePath -ChildPath "Get-SqlSchema.ps1")
 
     # The dropdown accessor lives in Resolve-SqlStatementTarget.ps1 and refreshes the list from the
@@ -187,6 +191,8 @@ BeforeAll {
         $Script:SqlSchemaForm = $null
         $Script:TreeViewSqlSchema = $null
         $Script:SqlSchemaCache = @{}
+        $Script:SqlSchemaModelCache = @{}
+        $Script:SqlSchemaEditorJsonCache = @{}
         $Script:ConnectionStatus = $Connected
 
         $script:PushedEditorScripts.Clear()
@@ -490,5 +496,130 @@ Describe "Get-SqlSchemaObject for a database other than the active one (issue #1
 
         @($script:PushedEditorScripts | Where-Object { $_ -like "setSchema(*" }).Count | Should -Be 1
         @($script:PushedEditorScripts | Where-Object { $_ -like "setSchemaForDatabase(*" }).Count | Should -Be 0
+    }
+}
+
+Describe "Complete-SqlSchemaRetrieval - what it does not redo for a cached schema" {
+    # A cache hit hands the completion the object that is already cached. Every tab switch, window
+    # open and node expand goes through here, and rebuilding the validation index and the editor JSON
+    # each time cost half a second and a second per large database on the cloud PC's UI thread.
+
+    BeforeEach {
+        Initialize-SchemaTestState -Connected $true
+        $script:LoggedMessages.Clear()
+        $script:Response = [pscustomobject]@{ d = [pscustomobject]@{ "dbo.tblCustomer" = @("Id int NOT NULL", "Name nvarchar(50)") } }
+    }
+
+    It "keeps the validation index when the same response comes back" {
+        Complete-SqlSchemaRetrieval -SchemaResponse $script:Response -SchemaCacheKey "pool-under-test|1001572"
+        $Script:SqlSchemaModelCache["pool-under-test|1001572"] = "index built from it"
+
+        Complete-SqlSchemaRetrieval -SchemaResponse $script:Response -SchemaCacheKey "pool-under-test|1001572"
+
+        $Script:SqlSchemaModelCache["pool-under-test|1001572"] | Should -BeExactly "index built from it"
+    }
+
+    It "drops the validation index and the editor JSON for a NEW response" {
+        # A refresh: the index and the JSON describe the response being replaced.
+        Complete-SqlSchemaRetrieval -SchemaResponse $script:Response -SchemaCacheKey "pool-under-test|1001572"
+        $Script:SqlSchemaModelCache["pool-under-test|1001572"] = "index built from the old one"
+
+        $Private:Fresh = [pscustomobject]@{ d = [pscustomobject]@{ "dbo.tblOrder" = @("Id int") } }
+        Complete-SqlSchemaRetrieval -SchemaResponse $Private:Fresh -SchemaCacheKey "pool-under-test|1001572"
+
+        $Script:SqlSchemaModelCache.ContainsKey("pool-under-test|1001572") | Should -BeFalse
+        $Script:SqlSchemaEditorJsonCache["pool-under-test|1001572"] | Should -BeLike "*tblOrder*"
+        $Script:SqlSchemaEditorJsonCache["pool-under-test|1001572"] | Should -Not -BeLike "*tblCustomer*"
+    }
+
+    It "pushes the memoised JSON again for the same response, without rebuilding it" {
+        # Each tab has its own editor, so the push itself still happens.
+        Complete-SqlSchemaRetrieval -SchemaResponse $script:Response -SchemaCacheKey "pool-under-test|1001572"
+        $Script:SqlSchemaEditorJsonCache["pool-under-test|1001572"] = '{"memo":{"marker":[]}}'
+        $script:PushedEditorScripts.Clear()
+
+        Complete-SqlSchemaRetrieval -SchemaResponse $script:Response -SchemaCacheKey "pool-under-test|1001572"
+
+        $script:PushedEditorScripts | Where-Object { $_ -like "setSchema(*" } | Should -BeExactly 'setSchema({"memo":{"marker":[]}});'
+    }
+}
+
+Describe "Complete-SqlSchemaRetrieval - logging the schema" {
+    # Whole at VERBOSE, the schema was 30,000+ lines per large database, a quarter of a second each on
+    # the UI thread, and every table and column name in a log a user can export (issue #61 section 5).
+
+    BeforeEach {
+        Initialize-SchemaTestState -Connected $true
+        $script:LoggedMessages.Clear()
+        $script:Response = [pscustomobject]@{ d = [pscustomobject]@{ "dbo.tblCustomer" = @("Id int NOT NULL"); "dbo.tblOrder" = @("Id int") } }
+    }
+
+    It "logs only the size at VERBOSE" {
+        $Script:RunTimeConfig | Add-Member -NotePropertyName Logging -NotePropertyValue ([pscustomobject]@{ LogLevelSetting = "VERBOSE" }) -Force
+
+        Complete-SqlSchemaRetrieval -SchemaResponse $script:Response -SchemaCacheKey "pool-under-test|1001572"
+
+        $Private:Verbose = @($script:LoggedMessages | Where-Object { $_.LogType -eq "VERBOSE" -and $_.Message -like "Schema for Monaco editor*" })
+        $Private:Verbose.Count | Should -Be 1
+        $Private:Verbose[0].Message | Should -BeLike "*2 table(s)*character(s)*"
+        $Private:Verbose[0].Message | Should -Not -BeLike "*tblCustomer*"
+        @($script:LoggedMessages | Where-Object { $_.LogType -eq "VERBOSE2" }).Count | Should -Be 0
+    }
+
+    It "logs the schema itself at VERBOSE2" {
+        $Script:RunTimeConfig | Add-Member -NotePropertyName Logging -NotePropertyValue ([pscustomobject]@{ LogLevelSetting = "VERBOSE2" }) -Force
+
+        Complete-SqlSchemaRetrieval -SchemaResponse $script:Response -SchemaCacheKey "pool-under-test|1001572"
+
+        $Private:Full = @($script:LoggedMessages | Where-Object { $_.LogType -eq "VERBOSE2" -and $_.Message -like "Schema for Monaco editor*" })
+        $Private:Full.Count | Should -Be 1
+        $Private:Full[0].Message | Should -BeLike "*tblCustomer*"
+    }
+
+    It "does not fail when no log level is configured" {
+        Complete-SqlSchemaRetrieval -SchemaResponse $script:Response -SchemaCacheKey "pool-under-test|1001572"
+
+        @($script:PushedEditorScripts | Where-Object { $_ -like "setSchema(*" }).Count | Should -Be 1
+    }
+}
+
+Describe "Complete-SqlSchemaRetrieval - the schema window" {
+    # Opening the window runs the active database's completion; every other database whose schema the
+    # preload already cached is filled then, so the search covers them from the start.
+
+    BeforeAll {
+        # Not loaded in this file; the filter has its own suite.
+        function Update-SqlSchemaTreeFilter { }
+    }
+
+    BeforeEach {
+        Initialize-SchemaTestState -Connected $true
+        $Script:SqlSchemaForm = [pscustomobject]@{ Definition = [pscustomobject]@{ Title = "" } }
+        $Script:TreeViewSqlSchema = [pscustomobject]@{ Items = [System.Collections.Generic.List[object]]::new() }
+
+        # The tree itself is WPF; its own suites cover it. Here only the calls are counted.
+        Mock Update-SqlSchemaDatabaseTree { }
+        Mock Get-SqlSchemaDatabaseNode { return $null }
+        Mock Add-SqlSchemaCachedDatabaseNode { return 0 }
+    }
+
+    AfterEach {
+        $Script:SqlSchemaForm = $null
+        $Script:TreeViewSqlSchema = $null
+    }
+
+    It "fills every cached database when the window's schema lands" {
+        Complete-SqlSchemaRetrieval -SchemaResponse ([pscustomobject]@{ d = [pscustomobject]@{ "dbo.tblX" = @("Id int") } }) -SchemaCacheKey "pool-under-test|1001572"
+
+        Should -Invoke Add-SqlSchemaCachedDatabaseNode -Times 1 -Exactly
+    }
+
+    It "does not touch the tree when the window is not open" {
+        $Script:SqlSchemaForm = $null
+        $Script:TreeViewSqlSchema = $null
+
+        Complete-SqlSchemaRetrieval -SchemaResponse ([pscustomobject]@{ d = [pscustomobject]@{ "dbo.tblX" = @("Id int") } }) -SchemaCacheKey "pool-under-test|1001572"
+
+        Should -Invoke Add-SqlSchemaCachedDatabaseNode -Times 0 -Exactly
     }
 }

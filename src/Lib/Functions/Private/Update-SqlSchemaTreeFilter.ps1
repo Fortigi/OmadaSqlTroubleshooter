@@ -17,11 +17,11 @@ function Update-SqlSchemaTreeFilter {
     - A database is visible when its own name matches or when anything below it matches.
     - Columns are never filtered: expanding a visible table always shows all of its columns.
 
-    A DATABASE WHOSE SCHEMA IS CACHED IS FILLED BEFORE THE FIRST SEARCH (issue #165). The preload
+    A DATABASE WHOSE SCHEMA IS CACHED IS FILLED BEFORE IT IS SEARCHED (issue #165). The preload
     caches every database's schema shortly after connect, but the window is usually opened later and
     builds those databases as empty nodes - so the search missed every table in a folded database.
-    Add-SqlSchemaCachedDatabaseNode fills them from the cache, without a request, as soon as a filter
-    is typed; the first search pays the build once, and opening the window stays fast.
+    Add-SqlSchemaCachedDatabaseNode fills them from the cache, without a request: when the window's
+    own schema lands (Complete-SqlSchemaRetrieval), and here again before a search as the backstop.
 
     A DATABASE WHOSE SCHEMA IS NOT CACHED AT ALL is still never expanded by the filter, and matches on
     its own name only (issue #158). Expanding it is what triggers its fetch, so expanding every

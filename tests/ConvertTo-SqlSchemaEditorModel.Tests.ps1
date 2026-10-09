@@ -112,4 +112,70 @@ Describe "ConvertTo-SqlSchemaEditorModel" {
         # previous database's completions.
         (ConvertTo-SqlSchemaEditorModel -SchemaResponse $null | ConvertTo-Json -Depth 5) | Should -Be "{}"
     }
+
+    It "keeps every table of a schema when the schemas arrive interleaved" {
+        # The single pass groups as it goes; the tables of one schema need not be adjacent.
+        $Response = [PSCustomObject]@{ d = [PSCustomObject][ordered]@{
+                "dbo.tblA"   = @("Id int")
+                "stage.tblB" = @("Id int")
+                "dbo.tblC"   = @("Id int")
+            }
+        }
+
+        $Model = ConvertTo-SqlSchemaEditorModel -SchemaResponse $Response
+
+        @($Model["dbo"].Keys | Sort-Object) | Should -Be @("tblA", "tblC")
+        @($Model["stage"].Keys) | Should -Be @("tblB")
+    }
+
+    It "reads only the payload's own properties, not those of a non-object payload" {
+        # A string payload has a Length property, which is not a table.
+        (ConvertTo-SqlSchemaEditorModel -SchemaResponse ([PSCustomObject]@{ d = "not a schema" })).Count | Should -Be 0
+    }
+}
+
+Describe "Get-SqlSchemaEditorJson" {
+    # Every schema push - also the ones served from the cache - used to rebuild this string: about a
+    # second per large database on the UI thread, for a string that could not have changed.
+
+    BeforeEach {
+        $Script:SqlSchemaEditorJsonCache = @{}
+        $script:Response = New-SchemaResponse -Table @{ "dbo.tblObject" = @("DisplayName nvarchar(50) NOT NULL") }
+    }
+
+    It "is the editor model as JSON" {
+        $Json = Get-SqlSchemaEditorJson -SchemaCacheKey "pool|1" -SchemaResponse $script:Response
+
+        $Parsed = $Json | ConvertFrom-Json
+        $Parsed.dbo.tblObject[0].n | Should -Be "DisplayName"
+        $Parsed.dbo.tblObject[0].t | Should -Be "nvarchar(50) NOT NULL"
+    }
+
+    It "is compact" {
+        Get-SqlSchemaEditorJson -SchemaCacheKey "pool|1" -SchemaResponse $script:Response | Should -Not -Match "`n"
+    }
+
+    It "is built once per cache key" {
+        Get-SqlSchemaEditorJson -SchemaCacheKey "pool|1" -SchemaResponse $script:Response | Out-Null
+        $Script:SqlSchemaEditorJsonCache["pool|1"] = "memoised"
+
+        Get-SqlSchemaEditorJson -SchemaCacheKey "pool|1" -SchemaResponse $script:Response | Should -BeExactly "memoised"
+    }
+
+    It "keeps databases apart" {
+        Get-SqlSchemaEditorJson -SchemaCacheKey "pool|1" -SchemaResponse $script:Response | Out-Null
+
+        Get-SqlSchemaEditorJson -SchemaCacheKey "pool|2" -SchemaResponse (New-SchemaResponse -Table @{ "dbo.tblOther" = @("Id int") }) |
+            Should -BeLike "*tblOther*"
+    }
+
+    It "does not memoise without a key" {
+        Get-SqlSchemaEditorJson -SchemaCacheKey "" -SchemaResponse $script:Response | Out-Null
+
+        $Script:SqlSchemaEditorJsonCache.Count | Should -Be 0
+    }
+
+    It "serialises an empty model as {}" {
+        Get-SqlSchemaEditorJson -SchemaCacheKey "pool|1" -SchemaResponse $null | Should -BeExactly "{}"
+    }
 }

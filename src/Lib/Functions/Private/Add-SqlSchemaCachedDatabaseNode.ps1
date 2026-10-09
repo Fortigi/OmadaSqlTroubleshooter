@@ -11,10 +11,12 @@ function Add-SqlSchemaCachedDatabaseNode {
         placeholder. The schemas are in hand, yet the search could not see them: the filter skips a
         database that is not loaded, so a table in a folded database was simply not found.
 
-        CALLED FROM THE FILTER, NOT WHEN THE WINDOW OPENS. Building the nodes costs about 1.5 s on the
-        UI thread per ~500 tables, so filling every database at open would freeze the window for
-        several seconds on a large tenant. The first search pays that once instead; every later
-        keystroke finds the nodes loaded and only walks the database level here.
+        CALLED WHEN THE WINDOW'S OWN SCHEMA LANDS, and again before every search. Complete-SqlSchemaRetrieval
+        runs it after populating the database it was called for, which is what opening the window
+        does, so every cached database is searchable from the start. That used to cost about 1.5 s per
+        ~500 tables, so it waited for the first search; since Add-SqlSchemaTreeNode defers the column
+        nodes it is a few hundred milliseconds for a large tenant. The filter's call stays as the
+        backstop, and finds everything loaded - it only walks the database level then.
 
         A database whose schema is NOT cached - the preload was unavailable, or its response has not
         landed yet - is left as it is. When that response arrives, Complete-SqlSchemaRetrieval fills the

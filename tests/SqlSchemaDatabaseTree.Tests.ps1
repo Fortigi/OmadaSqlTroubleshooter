@@ -281,7 +281,14 @@ Describe "Add-SqlSchemaTreeNode" {
 
         @($Parent.Items.Header) | Should -Be @("dbo")
         @($Parent.Items[0].Items.Header) | Should -Be @("tblObject")
-        @($Parent.Items[0].Items[0].Items.Header) | Should -Be @("Id int", "DisplayName nvarchar(50)")
+
+        # The columns are built when the table is first expanded (Add-SqlSchemaTreeColumnNode); until
+        # then the table carries a placeholder for its expander arrow.
+        $Table = $Parent.Items[0].Items[0]
+        @($Table.Items.Header) | Should -Be @("Loading...")
+
+        Add-SqlSchemaTreeColumnNode -TableItem $Table | Should -BeTrue
+        @($Table.Items.Header) | Should -Be @("Id int", "DisplayName nvarchar(50)")
     }
 
     It "replaces the placeholder rather than appending beside it" {
