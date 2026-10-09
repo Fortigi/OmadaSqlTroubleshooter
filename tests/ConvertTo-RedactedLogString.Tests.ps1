@@ -203,6 +203,46 @@ Describe 'ConvertTo-RedactedLogString' {
     }
 }
 
+Describe 'ConvertTo-RedactedLogString -MaxProperties' {
+    # A SQL schema response is one object with a property per table. Walked whole it named every table
+    # and took over a second per large database; above the limit it is a count.
+
+    BeforeAll {
+        $script:Large = [PSCustomObject]@{}
+        for ($Index = 0; $Index -lt 565; $Index++) {
+            $script:Large | Add-Member -NotePropertyName ("dbo.tblName{0}" -f $Index) -NotePropertyValue @("Id int")
+        }
+    }
+
+    It 'summarises an object with more members than the limit, without its names' {
+        $Json = ConvertTo-RedactedLogString -InputObject ([PSCustomObject]@{ d = $script:Large }) -MaxProperties 50
+
+        $Json | Should -BeLike '*"d": "Object with 565 properties"*'
+        $Json | Should -Not -BeLike '*tblName*'
+    }
+
+    It 'summarises a dictionary with more entries than the limit' {
+        $Dictionary = @{}
+        foreach ($Index in 1..60) { $Dictionary["key$Index"] = $Index }
+
+        ConvertTo-RedactedLogString -InputObject @{ Inner = $Dictionary } -MaxProperties 50 | Should -BeLike '*Dictionary with 60 entries*'
+    }
+
+    It 'leaves an object within the limit exactly as it was' {
+        $Small = [PSCustomObject]@{ Id = 6128075; DisplayName = "My query"; Nested = [PSCustomObject]@{ A = 1 } }
+
+        ConvertTo-RedactedLogString -InputObject $Small -MaxProperties 50 | Should -BeExactly (ConvertTo-RedactedLogString -InputObject $Small)
+    }
+
+    It 'still redacts within the limit' {
+        ConvertTo-RedactedLogString -InputObject @{ SessionKey = "do-not-log" } -MaxProperties 50 | Should -Not -BeLike '*do-not-log*'
+    }
+
+    It 'has no limit by default' {
+        ConvertTo-RedactedLogString -InputObject ([PSCustomObject]@{ d = $script:Large }) | Should -BeLike '*tblName564*'
+    }
+}
+
 Describe 'ConvertTo-RedactedLogString with the body redaction lifted' {
 
     BeforeEach {

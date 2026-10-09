@@ -83,3 +83,34 @@ function Test-LogLevelThreshold {
 
     return ($LogTypeRank -le $LevelRank)
 }
+
+function Test-LogTypeShown {
+    <#
+    .SYNOPSIS
+        Answers whether a message of this log type would be shown at the application's log level.
+
+    .DESCRIPTION
+        For a caller whose MESSAGE is expensive to build. Write-LogOutput filters on the level itself,
+        but only after the caller has formatted the message - and for the request and response lines
+        that formatting is a redacting walk of the whole object, which for a SQL schema response took
+        over a second on the UI thread whether the line was then shown or not. Asking first lets the
+        caller skip building what nobody will see.
+
+    .PARAMETER LogType
+        The type the message would be written at.
+
+    .OUTPUTS
+        [bool] $false when no log level is configured.
+
+    .NOTES
+        No tracer preamble and no Write-LogOutput, for the reason Test-LogLevelThreshold gives.
+    #>
+    [CmdLetBinding()]
+    [OutputType([bool])]
+    param(
+        [Parameter(Mandatory = $true, Position = 0)]
+        [string]$LogType
+    )
+
+    return Test-LogLevelThreshold -Level ([string]$Script:RunTimeConfig.Logging.LogLevelSetting) -LogType $LogType
+}

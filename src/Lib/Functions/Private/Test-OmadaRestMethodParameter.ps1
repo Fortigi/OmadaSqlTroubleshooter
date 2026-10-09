@@ -19,6 +19,13 @@ function Test-OmadaRestMethodParameter {
     Dynamic parameters count: OmadaWeb.PS declares most of its own through New-DynamicParam, and they
     do appear in Get-Command's .Parameters - verified against both 2026.7.9.9 and 2026.9.9.
 
+    CACHED PER MODULE VERSION. Reading .Parameters runs the module's dynamic-parameter block, which
+    took 236 ms per call with OmadaWeb.PS 2026.9.23.47 - and Build-OmadaRequestParameter asks before
+    every request, so it was a quarter of a second of UI thread per request. Get-Command itself is a
+    millisecond. The key is the module's name, version and path, so an upgrade, a downgrade or a module
+    loaded from elsewhere is asked afresh. A command that does not come from a module (a function
+    defined in the session, a test double) is never cached.
+
     .PARAMETER Name
     The parameter to ask about.
 
@@ -38,7 +45,21 @@ function Test-OmadaRestMethodParameter {
             return $false
         }
 
-        return [bool]$Private:Command.Parameters.ContainsKey($Name)
+        $Private:Module = $Private:Command.Module
+        if ($null -eq $Private:Module) {
+            return [bool]$Private:Command.Parameters.ContainsKey($Name)
+        }
+
+        $Private:CacheKey = "{0}|{1}|{2}|{3}" -f $Private:Module.Name, $Private:Module.Version, $Private:Module.Path, $Name
+        if ($null -eq $Script:OmadaRestMethodParameterCache) {
+            $Script:OmadaRestMethodParameterCache = @{}
+        }
+
+        if (-not $Script:OmadaRestMethodParameterCache.ContainsKey($Private:CacheKey)) {
+            $Script:OmadaRestMethodParameterCache[$Private:CacheKey] = [bool]$Private:Command.Parameters.ContainsKey($Name)
+        }
+
+        return $Script:OmadaRestMethodParameterCache[$Private:CacheKey]
     }
     catch {
         # An unanswerable question is answered "no": not adding an optional parameter is always safe,

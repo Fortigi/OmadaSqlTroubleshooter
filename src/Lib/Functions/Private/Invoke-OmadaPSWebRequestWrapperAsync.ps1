@@ -70,7 +70,7 @@ function Invoke-OmadaPSWebRequestWrapperAsync {
             return $null
         }
 
-        "Parameters: {0}" -f (ConvertTo-RedactedLogString -InputObject $Private:Parameters) | Write-LogOutput -LogType VERBOSE
+        Write-RedactedRequestLog -Label "Parameters" -InputObject $Private:Parameters
 
         $Private:TabSession = Get-ActiveTabSession
         if ($null -eq $Private:TabSession) {
@@ -119,7 +119,7 @@ function Invoke-OmadaPSWebRequestWrapperAsync {
                     }
                 }
                 else {
-                    "Result: {0}" -f (ConvertTo-RedactedLogString -InputObject $Private:Outcome.Result) | Write-LogOutput -LogType VERBOSE
+                    Write-RedactedRequestLog -Label "Result" -InputObject $Private:Outcome.Result
                     $Script:RunTimeData.RestMethodParam.ForceAuthentication = $false
                 }
             }

@@ -410,8 +410,7 @@ function Complete-SqlSchemaRetrieval {
         }
 
         "Schema for Monaco editor: {0} table(s), {1} character(s)." -f $Private:TableTotal, $SchemaObjectsJson.Length | Write-LogOutput -LogType VERBOSE
-        $Private:LogLevel = [string]$Script:RunTimeConfig.Logging.LogLevelSetting
-        if (![string]::IsNullOrWhiteSpace($Private:LogLevel) -and (Test-LogLevelThreshold -Level $Private:LogLevel -LogType VERBOSE2)) {
+        if (Test-LogTypeShown -LogType VERBOSE2) {
             "Schema for Monaco editor: {0}" -f (ConvertTo-SqlSchemaEditorModel -SchemaResponse $ReturnValue | ConvertTo-Json -Depth 5) | Write-LogOutput -LogType VERBOSE2
         }
         $OnCompletedScriptBlock = {
