@@ -178,6 +178,9 @@ function Get-SqlSchemaObject {
             # The target database travels on the context for the same reason the cache key does: by
             # the time this completion runs the user may have switched tab or data connection, so
             # "which database is this a response for" cannot be re-derived from the active tab.
+            # A pipeline rather than a single request: the worker also builds the editor's JSON and the
+            # validation index from the response (Invoke-OmadaSqlSchemaPipeline), which used to be done
+            # on the UI thread when it landed - about two seconds per connect on a cloud PC.
             $Private:Pending = Invoke-OmadaPSWebRequestWrapperAsync -Description $Script:SqlSchemaRequestDescription -Context @{
                 SchemaCacheKey      = $SchemaCacheKey
                 DataConnectionDoId  = $Private:TargetDoId
@@ -186,8 +189,17 @@ function Get-SqlSchemaObject {
                 Uri                 = $Script:RunTimeData.RestMethodParam.Uri
                 Method              = $Script:RunTimeData.RestMethodParam.Method
                 Body                = $Script:RunTimeData.RestMethodParam.Body
+            } -PipelineContext @{
+                PipelineFunction = "Invoke-OmadaSqlSchemaPipeline"
+                PipelineFiles    = $Script:OmadaWorkerChainFile["Invoke-OmadaSqlSchemaPipeline"]
             } -OnResultScriptBlock {
                 param($Pending)
+
+                # What the worker sent back: the pipeline's outcome, whose log is replayed here and
+                # whose derived values are handed on, or - on a path that ran a plain request - the
+                # response itself. Either way the rest of this block sees just the response.
+                $Private:Unwrapped = ConvertFrom-SqlSchemaPipelineOutcome -Outcome $Pending.Outcome
+                $Pending | Add-Member -NotePropertyName "Outcome" -NotePropertyValue $Private:Unwrapped.Response -Force
                 # A worker that could not run the request at all is not an answer. Retry once on the
                 # UI thread, where authentication works - the same fallback the execute path takes,
                 # and for the same reason: a fresh worker runspace cannot always establish an
@@ -218,7 +230,8 @@ function Get-SqlSchemaObject {
                 }
                 Complete-SqlSchemaRetrieval -SchemaResponse $Pending.Outcome -SchemaCacheKey $Pending.Context.Caller.SchemaCacheKey `
                     -DataConnectionDoId $Pending.Context.Caller.DataConnectionDoId -DataConnectionName $Pending.Context.Caller.DataConnectionName `
-                    -IsActiveDatabase:([bool]$Pending.Context.Caller.IsActiveDatabase)
+                    -IsActiveDatabase:([bool]$Pending.Context.Caller.IsActiveDatabase) `
+                    -EditorJson $Private:Unwrapped.EditorJson -SchemaModel $Private:Unwrapped.SchemaModel
             }
 
             if ($null -ne $Private:Pending) {
@@ -239,6 +252,51 @@ function Get-SqlSchemaObject {
     }
     catch {
         $_.Exception.Message | Write-ContainedErrorLog -ErrorObject $_
+    }
+}
+
+function ConvertFrom-SqlSchemaPipelineOutcome {
+    <#
+    .SYNOPSIS
+    The schema response a background completion received, with whatever the worker built from it.
+
+    .DESCRIPTION
+    A schema request now normally runs as Invoke-OmadaSqlSchemaPipeline, whose outcome carries the
+    response together with the editor JSON, the validation index and a log. Not every path delivers
+    that shape: a request that could not be classified, a test double, or anything handing over a
+    plain response. This turns either into the same three values, so the completion never has to know
+    which path it came from - and replays the pipeline's log, which the worker could not write itself.
+
+    .PARAMETER Outcome
+    $Pending.Outcome: a pipeline outcome, a response, an ErrorRecord, or $null.
+
+    .OUTPUTS
+    Hashtable @{ Response; EditorJson; SchemaModel }. Response is the ErrorRecord when the request
+    failed, which is what every check after this one tests for.
+    #>
+    [CmdLetBinding()]
+    param(
+        [Parameter(Mandatory = $false)]
+        [AllowNull()]
+        $Outcome
+    )
+
+    # No tracer preamble: the outcome is the tenant's schema.
+
+    if ($Outcome -is [System.Collections.IDictionary] -and $true -eq $Outcome["IsSqlSchemaPipeline"]) {
+        Write-ExecutePipelineLog -Log $Outcome["Log"]
+
+        return @{
+            Response    = if ($null -ne $Outcome["ErrorRecord"]) { $Outcome["ErrorRecord"] } else { $Outcome["Result"] }
+            EditorJson  = $Outcome["EditorJson"]
+            SchemaModel = $Outcome["SchemaModel"]
+        }
+    }
+
+    return @{
+        Response    = $Outcome
+        EditorJson  = $null
+        SchemaModel = $null
     }
 }
 
@@ -273,6 +331,14 @@ function Complete-SqlSchemaRetrieval {
     window title, the editor's primary setSchema model and the validation re-trigger; a response for
     any other database (issue #158) populates its own tree node and its own per-database editor model
     and touches nothing else. Omitted means active, so every pre-#158 caller is unaffected.
+
+    .PARAMETER EditorJson
+    The editor's JSON for this response, when the background worker already built it
+    (Invoke-OmadaSqlSchemaPipeline). Stored as the memoised JSON, so it is not built again here.
+
+    .PARAMETER SchemaModel
+    The validation index for this response, when the background worker already built it. Stored as the
+    memoised index, so the validation pass does not build it on the UI thread.
     #>
     [CmdLetBinding()]
     param(
@@ -292,7 +358,16 @@ function Complete-SqlSchemaRetrieval {
         [string]$DataConnectionName,
 
         [Parameter(Mandatory = $false)]
-        [switch]$IsActiveDatabase
+        [switch]$IsActiveDatabase,
+
+        [Parameter(Mandatory = $false)]
+        [AllowNull()]
+        [AllowEmptyString()]
+        [string]$EditorJson,
+
+        [Parameter(Mandatory = $false)]
+        [AllowNull()]
+        $SchemaModel
     )
     try {
         # Unbound means active. The switch would otherwise default to $false and silently demote
@@ -332,6 +407,22 @@ function Complete-SqlSchemaRetrieval {
                         $Private:DerivedCache.Remove($SchemaCacheKey)
                     }
                 }
+            }
+
+            # What the background worker built from THIS response, so the UI thread does not build it
+            # again. Stored after the drop above: it belongs to the response just stored.
+            if (![string]::IsNullOrWhiteSpace($EditorJson)) {
+                if ($null -eq $Script:SqlSchemaEditorJsonCache) {
+                    $Script:SqlSchemaEditorJsonCache = @{}
+                }
+                $Script:SqlSchemaEditorJsonCache[$SchemaCacheKey] = $EditorJson
+            }
+
+            if ($null -ne $SchemaModel) {
+                if ($null -eq $Script:SqlSchemaModelCache) {
+                    $Script:SqlSchemaModelCache = @{}
+                }
+                $Script:SqlSchemaModelCache[$SchemaCacheKey] = $SchemaModel
             }
         }
 

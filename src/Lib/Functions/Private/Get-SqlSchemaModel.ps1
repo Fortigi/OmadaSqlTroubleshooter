@@ -39,7 +39,12 @@ function Get-SqlSchemaModel {
     param(
         [Parameter(Mandatory = $false, Position = 0, ValueFromPipeline = $true)]
         [AllowNull()]
-        $SchemaResponse
+        $SchemaResponse,
+
+        # Writes nothing. Invoke-OmadaSqlSchemaPipeline builds this index in a background worker,
+        # which has no Write-LogOutput - calling it there would throw and cost the index.
+        [Parameter(Mandatory = $false)]
+        [switch]$NoLog
     )
 
     # No tracer preamble: the parameter is the tenant's schema, which names every table and column in
@@ -124,7 +129,9 @@ function Get-SqlSchemaModel {
         }
 
         # Count only, never the names (issue #61 section 5).
-        "Indexed the cached SQL schema: {0} table(s) across {1} schema(s)." -f $Table.Count, $BySchema.Count | Write-LogOutput -LogType DEBUG
+        if (-not $NoLog) {
+            "Indexed the cached SQL schema: {0} table(s) across {1} schema(s)." -f $Table.Count, $BySchema.Count | Write-LogOutput -LogType DEBUG
+        }
 
         return [PSCustomObject]@{
             Table       = $Table

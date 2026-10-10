@@ -11,9 +11,10 @@ BeforeAll {
 
     . (Join-Path $PrivatePath -ChildPath "Get-SqlSchemaModel.ps1")
 
+    $script:LogCount = 0
     function Write-LogOutput {
         param([Parameter(ValueFromPipeline = $true)]$InputObject, [string]$LogType, $ErrorObject, [switch]$SkipDialog)
-        process { }
+        process { $script:LogCount++ }
     }
 
     function script:New-SchemaResponse {
@@ -76,6 +77,18 @@ Describe "Get-SqlSchemaModel" {
     It "answers no schema for a payload that is not an object" {
         # A string payload has a Length property, which is not a table.
         Get-SqlSchemaModel -SchemaResponse ([PSCustomObject]@{ d = "not a schema" }) | Should -BeNullOrEmpty
+    }
+
+    It "logs the table count, and nothing with -NoLog, which the background worker uses" {
+        # A worker has no Write-LogOutput: calling it there would throw and cost the index.
+        $script:LogCount = 0
+        Get-SqlSchemaModel -SchemaResponse (New-SchemaResponse -Table ([ordered]@{ "dbo.tblObject" = @("Id int") })) | Out-Null
+        $script:LogCount | Should -Be 1
+
+        $script:LogCount = 0
+        $Model = Get-SqlSchemaModel -SchemaResponse (New-SchemaResponse -Table ([ordered]@{ "dbo.tblObject" = @("Id int") })) -NoLog
+        $script:LogCount | Should -Be 0
+        $Model.Table.ContainsKey("dbo.tblObject") | Should -BeTrue
     }
 
     It "answers no schema for null, an ErrorRecord, or no payload" {

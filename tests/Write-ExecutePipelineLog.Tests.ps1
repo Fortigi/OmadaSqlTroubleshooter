@@ -8,6 +8,13 @@ BeforeAll {
     $ParentPath = Split-Path -Path $PSScriptRoot -Parent
     $PrivatePath = Join-Path $ParentPath -ChildPath "src\Lib\Functions\Private"
     . (Join-Path $PrivatePath -ChildPath "Write-ExecutePipelineLog.ps1")
+    # An object entry is only redacted when the log level would show it.
+    . (Join-Path $PrivatePath -ChildPath "Test-LogLevelThreshold.ps1")
+
+    function script:Set-TestLogLevel {
+        param([string]$Level)
+        $Script:RunTimeConfig = [pscustomobject]@{ ApplicationName = "Test"; Logging = [pscustomobject]@{ LogLevelSetting = $Level } }
+    }
 
     $script:LogMessages = [System.Collections.Generic.List[object]]::new()
     function Write-LogOutput {
@@ -23,8 +30,8 @@ BeforeAll {
 
     $script:RedactCalls = [System.Collections.Generic.List[object]]::new()
     function ConvertTo-RedactedLogString {
-        param($InputObject, [switch]$ShapeOnly, $MaxDepth)
-        $script:RedactCalls.Add([pscustomobject]@{ InputObject = $InputObject; ShapeOnly = [bool]$ShapeOnly })
+        param($InputObject, [switch]$ShapeOnly, $MaxDepth, [int]$MaxProperties)
+        $script:RedactCalls.Add([pscustomobject]@{ InputObject = $InputObject; ShapeOnly = [bool]$ShapeOnly; MaxProperties = $MaxProperties })
         if ($ShapeOnly) { return "<shape>" }
         return "<redacted:$($InputObject.Marker)>"
     }
@@ -34,6 +41,7 @@ Describe "Write-ExecutePipelineLog" {
     BeforeEach {
         $script:LogMessages.Clear()
         $script:RedactCalls.Clear()
+        Set-TestLogLevel -Level "VERBOSE"
     }
 
     It "replays finished lines at the level the worker chose, in order" {
@@ -110,5 +118,45 @@ Describe "Write-ExecutePipelineLog" {
     It "accepts a null log without throwing" {
         { Write-ExecutePipelineLog -Log $null } | Should -Not -Throw
         @($script:LogMessages).Count | Should -Be 0
+    }
+}
+
+Describe "Write-ExecutePipelineLog - how much of an object the log level shows" {
+    # A replayed SQL schema response named every table and took over a second to redact. Object entries
+    # follow the same rule as Write-RedactedRequestLog.
+
+    BeforeEach {
+        $script:LogMessages.Clear()
+        $script:RedactCalls.Clear()
+    }
+
+    It "bounds a VERBOSE object at VERBOSE" {
+        Set-TestLogLevel -Level "VERBOSE"
+
+        Write-ExecutePipelineLog -Log @(@{ Level = "VERBOSE"; Format = "Result: {0}"; Redact = @{ Marker = "schema" } })
+
+        $script:RedactCalls[0].MaxProperties | Should -Be 50
+        $script:LogMessages[0].LogType | Should -Be "VERBOSE"
+    }
+
+    It "writes it whole, at VERBOSE2, when VERBOSE2 is on" {
+        Set-TestLogLevel -Level "VERBOSE2"
+
+        Write-ExecutePipelineLog -Log @(@{ Level = "VERBOSE"; Format = "Result: {0}"; Redact = @{ Marker = "schema" } })
+
+        $script:RedactCalls[0].MaxProperties | Should -Be 0
+        $script:LogMessages[0].LogType | Should -Be "VERBOSE2"
+    }
+
+    It "does not redact at all below VERBOSE" {
+        Set-TestLogLevel -Level "DEBUG"
+
+        Write-ExecutePipelineLog -Log @(
+            @{ Level = "VERBOSE"; Format = "Result: {0}"; Redact = @{ Marker = "schema" } }
+            @{ Level = "DEBUG"; Text = "still written" }
+        )
+
+        @($script:RedactCalls).Count | Should -Be 0
+        @($script:LogMessages.Message) | Should -Be @("still written")
     }
 }

@@ -47,6 +47,11 @@ BeforeAll {
     # database once the window exists - both real, for the reason given above.
     . (Join-Path $PrivatePath -ChildPath "Test-LogLevelThreshold.ps1")
     . (Join-Path $PrivatePath -ChildPath "Add-SqlSchemaCachedDatabaseNode.ps1")
+    # The schema request runs as a worker chain (Invoke-OmadaSqlSchemaPipeline): its entry in the chain
+    # table, the chain itself, and the replay of the log it brings back.
+    . (Join-Path $PrivatePath -ChildPath "Get-OmadaPipelineWorkerFunction.ps1")
+    . (Join-Path $PrivatePath -ChildPath "Invoke-OmadaSqlSchemaPipeline.ps1")
+    . (Join-Path $PrivatePath -ChildPath "Write-ExecutePipelineLog.ps1")
     . (Join-Path $PrivatePath -ChildPath "Get-SqlSchema.ps1")
 
     # The dropdown accessor lives in Resolve-SqlStatementTarget.ps1 and refreshes the list from the
@@ -142,8 +147,10 @@ BeforeAll {
         param(
             [scriptblock]$OnResultScriptBlock,
             $Context,
+            [hashtable]$PipelineContext,
             [string]$Description
         )
+        $script:DispatchedPipelineContext = $PipelineContext
         if ($script:AsyncDispatchBehaviour -ne "InvokeInline") {
             return $null
         }
@@ -498,6 +505,109 @@ Describe "Get-SqlSchemaObject for a database other than the active one (issue #1
 
         @($script:PushedEditorScripts | Where-Object { $_ -like "setSchema(*" }).Count | Should -Be 1
         @($script:PushedEditorScripts | Where-Object { $_ -like "setSchemaForDatabase(*" }).Count | Should -Be 0
+    }
+}
+
+Describe "Get-SqlSchemaObject - the worker builds the editor JSON and the validation index" {
+    # They used to be built on the UI thread when each schema landed: about two seconds per connect on a
+    # cloud PC. Invoke-OmadaSqlSchemaPipeline builds them in the worker; the completion only stores them.
+
+    BeforeAll {
+        # The failure path switches background requests off before it retries on the UI thread.
+        function Disable-OmadaBackgroundRequest { param($Reason) $script:DisabledReason = $Reason }
+    }
+
+    BeforeEach {
+        Initialize-SchemaTestState -Connected $true
+        $script:AsyncDispatchBehaviour = "InvokeInline"
+        $script:Response = [pscustomobject]@{ d = [pscustomobject]@{ "dbo.tblX" = @("Id int NOT NULL") } }
+        $script:AsyncDispatchOutcome = @{
+            IsSqlSchemaPipeline = $true
+            Result              = $script:Response
+            ErrorRecord         = $null
+            EditorJson          = '{"built":{"in-the-worker":[]}}'
+            SchemaModel         = "index built in the worker"
+            Log                 = @()
+        }
+    }
+
+    It "dispatches the schema chain" {
+        Get-SqlSchemaObject
+
+        $script:DispatchedPipelineContext.PipelineFunction | Should -Be "Invoke-OmadaSqlSchemaPipeline"
+        $script:DispatchedPipelineContext.PipelineFiles | Should -Contain "Invoke-OmadaSqlSchemaPipeline.ps1"
+    }
+
+    It "caches the response itself, not the pipeline's outcome" {
+        Get-SqlSchemaObject
+
+        [object]::ReferenceEquals($Script:SqlSchemaCache["pool-under-test|1001572"], $script:Response) | Should -BeTrue
+    }
+
+    It "pushes the JSON the worker built, without building it again" {
+        Get-SqlSchemaObject
+
+        $script:PushedEditorScripts | Where-Object { $_ -like "setSchema(*" } | Should -BeExactly 'setSchema({"built":{"in-the-worker":[]}});'
+    }
+
+    It "keeps the index the worker built for the validation pass" {
+        Get-SqlSchemaObject
+
+        $Script:SqlSchemaModelCache["pool-under-test|1001572"] | Should -BeExactly "index built in the worker"
+    }
+
+    It "builds them on the UI thread when the worker could not" {
+        $script:AsyncDispatchOutcome.EditorJson = $null
+        $script:AsyncDispatchOutcome.SchemaModel = $null
+
+        Get-SqlSchemaObject
+
+        $script:PushedEditorScripts | Where-Object { $_ -like "setSchema(*" } | Should -BeLike "*tblX*"
+        $Script:SqlSchemaModelCache.ContainsKey("pool-under-test|1001572") | Should -BeFalse -Because "the validation pass builds it on demand, as before"
+    }
+
+    It "treats a failed pipeline as a failed request" {
+        $script:AsyncDispatchOutcome = @{
+            IsSqlSchemaPipeline = $true
+            Result              = $null
+            ErrorRecord         = [System.Management.Automation.ErrorRecord]::new([System.Exception]::new("boom"), "x", [System.Management.Automation.ErrorCategory]::ConnectionError, $null)
+            EditorJson          = $null
+            SchemaModel         = $null
+            Log                 = @()
+        }
+        $Script:ConnectionStatus = $true
+
+        Get-SqlSchemaObject
+
+        # As for a plain failure: retried once on the UI thread, which the mock tenant answers.
+        (Get-OmadaMockRequestLog -UriLike "*GetSqlSchema*").Count | Should -Be 1
+    }
+}
+
+Describe "ConvertFrom-SqlSchemaPipelineOutcome" {
+
+    It "passes a plain response through" {
+        $Private:Response = [pscustomobject]@{ d = [pscustomobject]@{} }
+
+        $Private:Unwrapped = ConvertFrom-SqlSchemaPipelineOutcome -Outcome $Private:Response
+
+        [object]::ReferenceEquals($Private:Unwrapped.Response, $Private:Response) | Should -BeTrue
+        $Private:Unwrapped.EditorJson | Should -BeNullOrEmpty
+    }
+
+    It "passes null and an ErrorRecord through" {
+        (ConvertFrom-SqlSchemaPipelineOutcome -Outcome $null).Response | Should -BeNullOrEmpty
+
+        $Private:Failure = [System.Management.Automation.ErrorRecord]::new([System.Exception]::new("boom"), "x", [System.Management.Automation.ErrorCategory]::ConnectionError, $null)
+        (ConvertFrom-SqlSchemaPipelineOutcome -Outcome $Private:Failure).Response | Should -BeOfType [System.Management.Automation.ErrorRecord]
+    }
+
+    It "replays the pipeline's log" {
+        $script:LoggedMessages.Clear()
+
+        ConvertFrom-SqlSchemaPipelineOutcome -Outcome @{ IsSqlSchemaPipeline = $true; Result = $null; ErrorRecord = $null; Log = @(@{ Level = "DEBUG"; Text = "from the worker" }) } | Out-Null
+
+        @($script:LoggedMessages | Where-Object { $_.Message -eq "from the worker" }).Count | Should -Be 1
     }
 }
 
