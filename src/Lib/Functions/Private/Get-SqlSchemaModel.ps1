@@ -39,7 +39,12 @@ function Get-SqlSchemaModel {
     param(
         [Parameter(Mandatory = $false, Position = 0, ValueFromPipeline = $true)]
         [AllowNull()]
-        $SchemaResponse
+        $SchemaResponse,
+
+        # Writes nothing. Invoke-OmadaSqlSchemaPipeline builds this index in a background worker,
+        # which has no Write-LogOutput - calling it there would throw and cost the index.
+        [Parameter(Mandatory = $false)]
+        [switch]$NoLog
     )
 
     # No tracer preamble: the parameter is the tenant's schema, which names every table and column in
@@ -59,7 +64,18 @@ function Get-SqlSchemaModel {
         $BySchema = @{}
         $ByTableName = @{}
 
-        foreach ($Property in @($Payload | Get-Member -MemberType NoteProperty)) {
+        # PSObject.Properties rather than Get-Member, and one compiled regex for every column rather
+        # than the -split operator per entry: 0.2 s instead of 0.7 s for a 565-table database, on the
+        # UI thread, for the same index.
+        $ColumnSplitter = [regex]::new("\s+")
+
+        foreach ($Property in $Payload.PSObject.Properties) {
+            # NoteProperties only, which is exactly what Get-Member -MemberType NoteProperty returned:
+            # a payload that is not an object (a string, say) has CLR properties such as Length too.
+            if ($Property.MemberType -ne [System.Management.Automation.PSMemberTypes]::NoteProperty) {
+                continue
+            }
+
             $FullName = $Property.Name
 
             # Split on the FIRST dot only: a table name may legitimately contain one, the schema name
@@ -73,12 +89,12 @@ function Get-SqlSchemaModel {
             $TableName = $Part[1]
 
             $Column = @{}
-            foreach ($Entry in @($Payload.$FullName)) {
+            foreach ($Entry in @($Property.Value)) {
                 if ([string]::IsNullOrWhiteSpace([string]$Entry)) {
                     continue
                 }
 
-                $ColumnPart = ([string]$Entry).Trim() -split "\s+", 2
+                $ColumnPart = $ColumnSplitter.Split(([string]$Entry).Trim(), 2)
                 $ColumnName = $ColumnPart[0]
                 if ([string]::IsNullOrWhiteSpace($ColumnName)) {
                     continue
@@ -113,7 +129,9 @@ function Get-SqlSchemaModel {
         }
 
         # Count only, never the names (issue #61 section 5).
-        "Indexed the cached SQL schema: {0} table(s) across {1} schema(s)." -f $Table.Count, $BySchema.Count | Write-LogOutput -LogType DEBUG
+        if (-not $NoLog) {
+            "Indexed the cached SQL schema: {0} table(s) across {1} schema(s)." -f $Table.Count, $BySchema.Count | Write-LogOutput -LogType DEBUG
+        }
 
         return [PSCustomObject]@{
             Table       = $Table

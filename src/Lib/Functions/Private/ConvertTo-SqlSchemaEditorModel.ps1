@@ -56,28 +56,106 @@ function ConvertTo-SqlSchemaEditorModel {
             return $SchemaObject
         }
 
-        $Property = @($Payload | Get-Member -MemberType NoteProperty)
+        # ONE pass over the tables, grouping them by schema as it goes. This used to collect the schema
+        # names first and then filter every table again for each schema, with a pipeline per column -
+        # 1.5 s for a 565-table database on the UI thread, against 0.4 s for this, for the same model.
+        # PSObject.Properties rather than Get-Member: same NoteProperties, without the cmdlet. One
+        # compiled regex for every column, rather than the -split operator per entry.
+        $ColumnSplitter = [regex]::new("\s+")
+        foreach ($Property in $Payload.PSObject.Properties) {
+            # NoteProperties only, which is exactly what Get-Member -MemberType NoteProperty returned:
+            # a payload that is not an object (a string, say) has CLR properties such as Length too.
+            if ($Property.MemberType -ne [System.Management.Automation.PSMemberTypes]::NoteProperty) {
+                continue
+            }
 
-        $SchemaNameList = @($Property.Name | ForEach-Object { $_.Split(".", 2)[0] } | Select-Object -Unique)
-        foreach ($SchemaName in $SchemaNameList) {
-            $TableObject = @{}
+            $Part = $Property.Name.Split(".", 2)
+            $SchemaName = $Part[0]
 
-            foreach ($Table in @($Property | Where-Object { $_.Name -like ("{0}.*" -f $SchemaName) })) {
-                $TableFullName = $Table.Name
-                $TableName = $TableFullName.Split(".", 2)[1]
+            if (-not $SchemaObject.ContainsKey($SchemaName)) {
+                $SchemaObject[$SchemaName] = @{}
+            }
 
-                $TableObject[$TableName] = @($Payload.$TableFullName | ForEach-Object {
-                        $Part = $_.Trim() -split "\s+", 2
-                        [PSCustomObject][Ordered]@{
-                            n = $Part[0]
-                            t = if ($Part.Count -gt 1) { $Part[1].Trim() } else { "" }
-                        }
+            # A name without a dot has a schema and no table, which is what the two-pass version made
+            # of it too: the schema, empty.
+            if ($Part.Count -lt 2) {
+                continue
+            }
+
+            $ColumnList = [System.Collections.Generic.List[object]]::new()
+            foreach ($Entry in @($Property.Value)) {
+                $ColumnPart = $ColumnSplitter.Split(([string]$Entry).Trim(), 2)
+                $ColumnList.Add([PSCustomObject][Ordered]@{
+                        n = $ColumnPart[0]
+                        t = if ($ColumnPart.Count -gt 1) { $ColumnPart[1].Trim() } else { "" }
                     })
             }
 
-            $SchemaObject[$SchemaName] = $TableObject
+            $SchemaObject[$SchemaName][$Part[1]] = $ColumnList.ToArray()
         }
 
         return $SchemaObject
     }
+}
+
+function Get-SqlSchemaEditorJson {
+    <#
+    .SYNOPSIS
+        The editor model of a cached schema as compact JSON, built once per response.
+
+    .DESCRIPTION
+        Every completion of a schema request pushes the schema to the editor - also when it is served
+        from the cache, because the CALLER (a tab switch, the schema window opening, a database node
+        being expanded) still has to be served, and each tab has its own editor. Converting the response
+        again for every one of those cost about a second per large database on the UI thread, for a
+        string that cannot have changed. So the string is kept beside the response, under the same
+        cache key.
+
+        Complete-SqlSchemaRetrieval drops the entry whenever it stores a DIFFERENT response object for
+        the key (a fresh fetch, a refresh), and Reset-SqlSchemaCache drops the pool's entries, so a
+        string never outlives the response it was built from.
+
+        -Compress: the editor parses the payload, and nobody reads it. The indented form took 3.5 times
+        as long and 35,000 lines for a large database; Complete-SqlSchemaRetrieval still logs it at
+        VERBOSE2 for whoever needs to read it.
+
+    .PARAMETER SchemaCacheKey
+        The "<SessionKey>|<DoId>" key the response is cached under. Empty means "do not memoise".
+
+    .PARAMETER SchemaResponse
+        The response the JSON is built from when it is not memoised yet.
+
+    .OUTPUTS
+        [string] the JSON the editor's setSchema / setSchemaForDatabase receive.
+    #>
+    [CmdletBinding()]
+    [OutputType([string])]
+    param(
+        [Parameter(Mandatory = $false)]
+        [AllowNull()]
+        [AllowEmptyString()]
+        [string]$SchemaCacheKey,
+
+        [Parameter(Mandatory = $false)]
+        [AllowNull()]
+        $SchemaResponse
+    )
+
+    # No tracer preamble: called once per schema push, and its result is the tenant's schema.
+
+    if ($null -eq $Script:SqlSchemaEditorJsonCache) {
+        $Script:SqlSchemaEditorJsonCache = @{}
+    }
+
+    if (![string]::IsNullOrWhiteSpace($SchemaCacheKey) -and $Script:SqlSchemaEditorJsonCache.ContainsKey($SchemaCacheKey)) {
+        return $Script:SqlSchemaEditorJsonCache[$SchemaCacheKey]
+    }
+
+    $Private:Json = ConvertTo-SqlSchemaEditorModel -SchemaResponse $SchemaResponse | ConvertTo-Json -Depth 5 -Compress
+
+    if (![string]::IsNullOrWhiteSpace($SchemaCacheKey)) {
+        $Script:SqlSchemaEditorJsonCache[$SchemaCacheKey] = $Private:Json
+    }
+
+    return $Private:Json
 }

@@ -70,7 +70,7 @@ function Invoke-OmadaPSWebRequestWrapperAsync {
             return $null
         }
 
-        "Parameters: {0}" -f (ConvertTo-RedactedLogString -InputObject $Private:Parameters) | Write-LogOutput -LogType VERBOSE
+        Write-RedactedRequestLog -Label "Parameters" -InputObject $Private:Parameters
 
         $Private:TabSession = Get-ActiveTabSession
         if ($null -eq $Private:TabSession) {
@@ -83,8 +83,12 @@ function Invoke-OmadaPSWebRequestWrapperAsync {
         # cannot fire - but it would be correct only by that accident, and this queue is about to be
         # drained by more code than it is now.
         $Private:RequestContext = @{
-            Caller   = $Context
-            OnResult = $OnResultScriptBlock
+            Caller     = $Context
+            OnResult   = $OnResultScriptBlock
+            # A pipeline records its own requests and responses in its outcome's log, which the caller
+            # replays; the generic "Result:" line below would log the whole outcome object a second
+            # time - for a schema, the response, the editor JSON and the validation index together.
+            IsPipeline = $null -ne $PipelineContext
         }
 
         # The completion block below is the bridge back onto the UI thread. It is a plain block: it
@@ -119,7 +123,9 @@ function Invoke-OmadaPSWebRequestWrapperAsync {
                     }
                 }
                 else {
-                    "Result: {0}" -f (ConvertTo-RedactedLogString -InputObject $Private:Outcome.Result) | Write-LogOutput -LogType VERBOSE
+                    if (-not $Pending.Context.IsPipeline) {
+                        Write-RedactedRequestLog -Label "Result" -InputObject $Private:Outcome.Result
+                    }
                     $Script:RunTimeData.RestMethodParam.ForceAuthentication = $false
                 }
             }

@@ -64,7 +64,11 @@ function Update-SqlSchemaDatabaseTree {
         fetch blocked the UI thread, so N connections meant N sequential freezes and loading them all
         was simply not available. Since #40 the fetch goes to a worker and is cached per pool, so
         Start-SqlSchemaPreload asks for every connection's schema as soon as the connection list is
-        known, and a node is normally populated before the user ever clicks it.
+        known. A response that lands while the window is open fills its node directly. One that landed
+        BEFORE the window was opened is only cached - this function still builds that node empty - and
+        Complete-SqlSchemaRetrieval fills it from the cache through Add-SqlSchemaCachedDatabaseNode as
+        soon as the window's own schema lands, so the filter covers every database whose schema is in
+        hand. That is cheap since the tree defers its column nodes (Add-SqlSchemaTreeNode).
 
         Invoke-SqlSchemaDatabaseNodeExpanded below is therefore no longer the usual path, but it is not
         dead code: the preload is skipped entirely when background requests are unavailable - see the
@@ -184,6 +188,10 @@ function Invoke-SqlSchemaDatabaseNodeExpanded {
         collapse-and-expand from costing a second round trip, and what stops the active node from
         re-entering the fetch that is populating it.
 
+        It also builds a table's column nodes when the TABLE is expanded: Expanded bubbles up to this
+        handler from every node inside the database, and Add-SqlSchemaTreeColumnNode turns the
+        columns the table carries on its Tag into nodes the first time.
+
     .PARAMETER Sender
         The database TreeViewItem that was expanded.
 
@@ -213,6 +221,16 @@ function Invoke-SqlSchemaDatabaseNodeExpanded {
         # handler again for the database node above it.
         if ($null -ne $EventArgs) {
             $EventArgs.Handled = $true
+        }
+
+        # A TABLE inside this database was expanded: build its columns, which Add-SqlSchemaTreeNode
+        # leaves on the table's Tag until now. This handler sees it because Expanded bubbles, so no
+        # handler is attached per table. A schema node, or a table already built, falls through to
+        # the database's own check below, which returns because the database is loaded.
+        if ($null -ne $EventArgs -and $null -ne $EventArgs.OriginalSource -and -not [object]::ReferenceEquals($EventArgs.OriginalSource, $Sender)) {
+            if (Add-SqlSchemaTreeColumnNode -TableItem $EventArgs.OriginalSource) {
+                return
+            }
         }
 
         if ($Sender.Tag.Loaded -or $Sender.Tag.Requested) {

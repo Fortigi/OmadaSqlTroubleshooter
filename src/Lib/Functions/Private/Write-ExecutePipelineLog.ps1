@@ -39,7 +39,23 @@ function Write-ExecutePipelineLog {
 
             $Private:Text = $Private:Entry.Text
             if ($null -ne $Private:Entry.Format) {
-                $Private:Text = $Private:Entry.Format -f (ConvertTo-RedactedLogString -InputObject $Private:Entry.Redact -ShapeOnly:([bool]$Private:Entry.ShapeOnly))
+                # An object entry is redacted HERE, and that walk is the expensive part: a replayed SQL
+                # schema response named every table and took over a second. So the same rule as
+                # Write-RedactedRequestLog: a VERBOSE entry is written whole at VERBOSE2, bounded at
+                # VERBOSE (an object with more than 50 members becomes its count), and not built at
+                # all at a level that would not show it.
+                $Private:MaxProperties = 0
+                if ($Private:Level -eq "VERBOSE" -and (Test-LogTypeShown -LogType VERBOSE2)) {
+                    $Private:Level = "VERBOSE2"
+                }
+                elseif (-not (Test-LogTypeShown -LogType $Private:Level)) {
+                    continue
+                }
+                elseif ($Private:Level -eq "VERBOSE") {
+                    $Private:MaxProperties = 50
+                }
+
+                $Private:Text = $Private:Entry.Format -f (ConvertTo-RedactedLogString -InputObject $Private:Entry.Redact -ShapeOnly:([bool]$Private:Entry.ShapeOnly) -MaxProperties $Private:MaxProperties)
             }
 
             if ([string]::IsNullOrWhiteSpace($Private:Text)) {

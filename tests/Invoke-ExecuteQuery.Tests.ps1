@@ -49,6 +49,8 @@ BeforeAll {
     . (Join-Path $PrivatePath -ChildPath "Set-TabQueryResult.ps1")
     . (Join-Path $PrivatePath -ChildPath "Update-QueryResultStackLayout.ps1")
     . (Join-Path $PrivatePath -ChildPath "Invoke-ExecuteQuery.ps1")
+    # An execute forgets a reused fetch of the selected query (Get-RecentSqlQueryObject.ps1).
+    . (Join-Path $PrivatePath -ChildPath "Get-RecentSqlQueryObject.ps1")
 
     $Script:Tracer = [System.Diagnostics.Trace]
 
