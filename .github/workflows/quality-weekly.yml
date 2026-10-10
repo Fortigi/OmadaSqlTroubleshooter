@@ -7,6 +7,8 @@ name: Weekly Quality
 #   - the mutation score below thresholds.break in build/QualityGates.psd1,
 #   - build module pins in build/BuildModules.psd1 with a newer PowerShell Gallery release.
 # Thresholds and ceilings live in build/QualityGates.psd1, not here.
+# A failing gate shows up as its bug and on the run summary, not as a red run; the run is red only
+# when the measurement itself broke.
 on:
   schedule:
     # Mondays 04:23 UTC - clear of the 01:17 nightly build and the 03:41 E2E run.
@@ -48,9 +50,14 @@ jobs:
       - name: Install modules
         run: ./build/InstallModules.ps1
 
-      # Fails when any gate fails, after writing buildoutput/quality/weekly.json - the report job
-      # below reads that file either way.
+      # Task QualityFull exits non-zero when any gate fails, after writing
+      # buildoutput/quality/weekly.json. A failing gate is not a broken run: the complexity debt alone
+      # keeps that gate red for months, and a lane that is red every week stops being looked at. So
+      # a failing gate is reported by the bug the report job files, and the run itself only goes red
+      # when the measurement produced no results (the last step below).
       - name: Measure complexity, mutation score and module pins
+        id: measure
+        continue-on-error: true
         run: ./build/build.ps1 -Task QualityFull -BuildVersion '0.0.0'
 
       - name: Upload quality reports
@@ -60,6 +67,28 @@ jobs:
           name: QualityReports
           path: buildoutput/quality/
           if-no-files-found: warn
+
+      # Puts the verdict per gate on the run page, so a manual run without file_issues still shows
+      # which gates failed - and fails the job only when there is no verdict to show.
+      - name: Summarise the gates
+        if: always()
+        run: |
+          $Path = 'buildoutput/quality/weekly.json'
+          if (-not (Test-Path -LiteralPath $Path)) {
+            Write-Error "The measurement produced no results (step outcome: ${{ steps.measure.outcome }}). See the 'Measure complexity, mutation score and module pins' step."
+            exit 1
+          }
+          $Gates = @((Get-Content -LiteralPath $Path -Raw | ConvertFrom-Json).Gates)
+          $Lines = @('| Gate | Result | Metric |', '|---|---|---|')
+          foreach ($Gate in $Gates) {
+            $Lines += '| {0} | {1} | {2} |' -f $Gate.Key, $(if ($Gate.Passed) { '✅ passed' } else { '❌ failed' }), $Gate.Metric
+          }
+          $Lines += ''
+          $Lines += 'A failed gate is filed as a bug by the report job (scheduled runs, or a manual run with file_issues); it does not fail this run.'
+          $Lines -join "`n" | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append -Encoding utf8
+          foreach ($Gate in @($Gates | Where-Object { -not $_.Passed })) {
+            "::warning title=Quality gate failed::$($Gate.Title)" | Write-Host
+          }
 
   report:
     name: Open, update or close the quality bugs
