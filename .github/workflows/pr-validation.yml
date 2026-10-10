@@ -257,6 +257,56 @@ jobs:
 
             await core.summary.addRaw(summary).write();
 
+      # Task QualityChanged (issue #109) measures only what this PR changed: complexity against
+      # complexity-baseline.json and the mutation score against build/QualityGates.psd1. It writes a
+      # summary whether it passes, fails or has nothing to measure.
+      - name: Check for quality gate results
+        id: quality-results
+        if: always()
+        run: |
+          $exists = Test-Path 'buildoutput/quality/changed-summary.json'
+          "exists=$exists" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+
+      # Its own check run, created against the PR head for the same reason as the Pester check above.
+      - name: Publish quality gate results
+        if: always() && steps.quality-results.outputs.exists == 'True'
+        uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b # v7.1.0
+        with:
+          script: |
+            const fs = require('fs');
+            const raw = fs.readFileSync('buildoutput/quality/changed-summary.json', 'utf8').replace(/^﻿/, '');
+            const result = JSON.parse(raw);
+            const conclusion = { passed: 'success', failed: 'failure', skipped: 'neutral' }[result.Status] || 'neutral';
+            const summary = [
+              result.Markdown,
+              '',
+              `Validated \`${{ needs.dispatch.outputs.head_sha }}\`. The full reports are in the run's \`QualityReports\` artifact.`
+            ].join('\n').slice(0, 65000);
+
+            await github.rest.checks.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              name: 'Quality gates (changed code)',
+              head_sha: '${{ needs.dispatch.outputs.head_sha }}',
+              status: 'completed',
+              conclusion,
+              details_url: `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`,
+              output: {
+                title: result.Title,
+                summary
+              }
+            });
+
+            await core.summary.addRaw(summary).write();
+
+      - name: Upload quality reports
+        if: always() && steps.quality-results.outputs.exists == 'True'
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: QualityReports
+          path: buildoutput/quality/
+          if-no-files-found: warn
+
   report-status:
     name: Report status
     needs: [dispatch, validate]

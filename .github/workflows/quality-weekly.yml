@@ -1,0 +1,198 @@
+name: Weekly Quality
+
+# Holds the WHOLE tree to the complexity and mutation-testing bar (issue #109) - pull request
+# validation only measures what a PR changed. One bug per gate is opened, updated or closed:
+#   - complexity above the ceilings (the debt complexity-baseline.json still carries, plus whether
+#     that baseline still describes the tree),
+#   - the mutation score below thresholds.break in build/QualityGates.psd1,
+#   - build module pins in build/BuildModules.psd1 with a newer PowerShell Gallery release.
+# Thresholds and ceilings live in build/QualityGates.psd1, not here.
+on:
+  schedule:
+    # Mondays 04:23 UTC - clear of the 01:17 nightly build and the 03:41 E2E run.
+    - cron: '23 4 * * 1'
+  workflow_dispatch:
+    inputs:
+      file_issues:
+        description: 'Open, update or close the quality bugs from this manual run (the schedule always does)'
+        type: boolean
+        default: false
+
+permissions: {}
+
+# Two runs filing the same bugs at once would race to create duplicates.
+concurrency:
+  group: quality-weekly
+  cancel-in-progress: false
+
+jobs:
+  measure:
+    name: Measure (whole tree)
+    runs-on: windows-latest
+    timeout-minutes: 60
+    permissions:
+      contents: read
+    defaults:
+      run:
+        shell: pwsh
+
+    steps:
+      - name: Harden the runner (audit all outgoing network calls)
+        uses: step-security/harden-runner@e14015d583714f6e62063499dc959a02595150a1 # v2.21.1
+        with:
+          egress-policy: audit
+
+      - name: Checkout
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+
+      - name: Install modules
+        run: ./build/InstallModules.ps1
+
+      # Fails when any gate fails, after writing buildoutput/quality/weekly.json - the report job
+      # below reads that file either way.
+      - name: Measure complexity, mutation score and module pins
+        run: ./build/build.ps1 -Task QualityFull -BuildVersion '0.0.0'
+
+      - name: Upload quality reports
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: QualityReports
+          path: buildoutput/quality/
+          if-no-files-found: warn
+
+  report:
+    name: Open, update or close the quality bugs
+    needs: measure
+    # Runs whether the gates passed (to close bugs) or failed (to file them). A manual run only
+    # touches issues when asked to, so experimenting with the workflow cannot spam the tracker.
+    if: always() && needs.measure.result != 'cancelled' && (github.event_name == 'schedule' || inputs.file_issues)
+    runs-on: ubuntu-latest
+    permissions:
+      issues: write
+
+    steps:
+      - name: Harden the runner (audit all outgoing network calls)
+        uses: step-security/harden-runner@e14015d583714f6e62063499dc959a02595150a1 # v2.21.1
+        with:
+          egress-policy: audit
+
+      # Missing when the measure job died before writing anything; the script below files that as
+      # its own bug rather than going quiet.
+      - name: Download quality reports
+        continue-on-error: true
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: QualityReports
+          path: quality/
+
+      - name: Open, update or close one bug per gate
+        uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b # v7.1.0
+        with:
+          script: |
+            const fs = require('fs');
+            const { owner, repo } = context.repo;
+            const runUrl = `${context.serverUrl}/${owner}/${repo}/actions/runs/${context.runId}`;
+            const commit = context.sha.substring(0, 7);
+            const runFailedTitle = 'Weekly quality: the run itself failed';
+
+            let gates = null;
+            try {
+              const raw = fs.readFileSync('quality/weekly.json', 'utf8').replace(/^﻿/, '');
+              gates = JSON.parse(raw).Gates;
+              // ConvertTo-Json collapses a single-element array to a bare object.
+              if (!Array.isArray(gates)) { gates = [gates]; }
+            } catch (error) {
+              core.warning(`No usable quality/weekly.json: ${error.message}`);
+            }
+
+            // The run-failure bug is a gate of its own, so a run that produces results again closes it.
+            if (gates) {
+              gates.push({ Key: 'run', Title: runFailedTitle, Passed: true, Metric: null, Body: '' });
+            } else {
+              gates = [{
+                Key: 'run',
+                Title: runFailedTitle,
+                Passed: false,
+                Metric: null,
+                Body: [
+                  'The weekly quality run produced no results, so none of the quality gates was evaluated.',
+                  'Open the run below for the failing step; `./build/build.ps1 -Task QualityFull` reproduces it locally.'
+                ].join('\n')
+              }];
+            }
+
+            // The labels are created explicitly rather than relying on what issues.create does with
+            // an unknown one: the cost of being wrong is that the bug is never filed.
+            const labels = [
+              { name: 'bug', color: 'd73a4a', description: "Something isn't working" },
+              { name: 'quality', color: '5319e7', description: 'Weekly complexity and mutation-testing gates' }
+            ];
+            for (const label of labels) {
+              try {
+                await github.rest.issues.getLabel({ owner, repo, name: label.name });
+              } catch (error) {
+                if (error.status !== 404) { throw error; }
+                await github.rest.issues.createLabel({ owner, repo, ...label });
+              }
+            }
+
+            // Matched on the exact title, paginated, as in e2e.yml: a lookup that misses the existing
+            // issue files a duplicate every week.
+            const openIssues = await github.paginate(github.rest.issues.listForRepo, {
+              owner, repo, state: 'open', per_page: 100
+            });
+
+            // The previous run's metric rides in the issue body, so the next comment can state the delta.
+            const markerPattern = /<!-- quality-gate:(\{.*?\}) -->/;
+            const readMetric = body => {
+              const match = markerPattern.exec(body || '');
+              if (!match) { return null; }
+              try { return JSON.parse(match[1]).metric; } catch { return null; }
+            };
+
+            for (const gate of gates) {
+              const existing = openIssues.find(issue => issue.title === gate.Title && !issue.pull_request);
+
+              if (gate.Passed) {
+                if (existing) {
+                  await github.rest.issues.createComment({
+                    owner, repo, issue_number: existing.number,
+                    body: `Passing again on \`${commit}\`: ${runUrl}`
+                  });
+                  await github.rest.issues.update({
+                    owner, repo, issue_number: existing.number, state: 'closed', state_reason: 'completed'
+                  });
+                }
+                continue;
+              }
+
+              const body = [
+                `<!-- quality-gate:${JSON.stringify({ key: gate.Key, metric: gate.Metric })} -->`,
+                gate.Body,
+                '',
+                `Measured on \`${commit}\` by ${runUrl}. Thresholds and ceilings: \`build/QualityGates.psd1\`. Reports: the run's \`QualityReports\` artifact.`
+              ].join('\n').slice(0, 65000);
+
+              if (existing) {
+                const previous = readMetric(existing.body);
+                const delta = (previous === null || gate.Metric === null || previous === gate.Metric)
+                  ? (gate.Metric === null ? '' : ` (unchanged at ${gate.Metric})`)
+                  : ` (${previous} → ${gate.Metric})`;
+                await github.rest.issues.update({ owner, repo, issue_number: existing.number, body });
+                await github.rest.issues.createComment({
+                  owner, repo, issue_number: existing.number,
+                  body: `Still failing on \`${commit}\`${delta}. The description above is updated to this run: ${runUrl}`
+                });
+                continue;
+              }
+
+              const issue = { owner, repo, title: gate.Title, body, labels: labels.map(label => label.name) };
+              try {
+                // The organisation's Bug issue type, where it exists; plain labels otherwise.
+                await github.rest.issues.create({ ...issue, type: 'Bug' });
+              } catch (error) {
+                if (error.status !== 422) { throw error; }
+                await github.rest.issues.create(issue);
+              }
+            }

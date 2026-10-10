@@ -25,6 +25,14 @@ semantic version.
 
 ### Added
 
+- Complexity and test-strength gates in the build (#109). Pull request validation now measures the
+  changed `src/Lib` files with PSComplexity (at most 15 cyclomatic / 15 cognitive per unit, with the
+  units already over that recorded in `complexity-baseline.json` and not allowed to get worse) and
+  with PSMutant mutation testing (the file's own tests must catch at least 73% of injected faults),
+  reported as a **Quality gates (changed code)** check. A weekly workflow measures the whole tree
+  and keeps one bug per failing gate up to date. The build modules are now pinned to exact versions
+  in `build/BuildModules.psd1`, and the test runner moves to Pester 6.2.0. Nothing about the
+  published module changes.
 - Every database's schema is loaded on connect, and the connection list is reduced to the databases
   actually in use (#165). The schema window used to fetch a database's schema the first time you
   expanded its node, so every unopened node was a stall and cross-database completion only worked for

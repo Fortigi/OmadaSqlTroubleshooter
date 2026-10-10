@@ -26,7 +26,9 @@ Properties {
 }
 
 Task default -Depends Analyze, Test, Build, TestAssemblies, ImportModule
-Task TestBuildOnly -Depends Analyze, Test, Build, TestAssemblies
+# QualityChanged is a no-op outside pull request validation (no PR_CHANGED_FILES), so a local
+# TestBuildOnly does not pay for mutation testing.
+Task TestBuildOnly -Depends Analyze, Test, QualityChanged, Build, TestAssemblies
 Task Pipeline -Depends Analyze, Test, Build, TestAssemblies
 Task DeployOnly -Depends Build, Deploy
 
@@ -153,6 +155,9 @@ Task Test -Depends Analyze {
             # source file with a matching name - the mapping below has nothing to associate it with,
             # so without this it would skip on exactly the pull requests that remove the block (#140).
             'WorkflowPermissions.Tests.ps1'
+            # Guards build\BuildModules.psd1, build\QualityGates.psd1 and complexity-baseline.json -
+            # none of them a <Name>.ps1 the mapping below could associate with this suite (#109).
+            'QualityGateConfiguration.Tests.ps1'
         )
 
         if ($ChangedFiles.Count -gt 0) {
@@ -185,6 +190,181 @@ Task Test -Depends Analyze {
     catch {
         throw
     }
+}
+
+# Complexity and mutation-testing gates (issue #109). Policy in build\QualityGates.psd1, functions in
+# build\QualityGates.ps1, accepted legacy complexity in complexity-baseline.json.
+. (Join-Path -Path $PSScriptRoot -ChildPath 'QualityGates.ps1')
+
+# Pull request lane: holds only the code the pull request changed to the bar. Skips, and says so,
+# when nothing under src\Lib changed - both modules refuse an empty changed-file list by design, so
+# the skip has to be decided here. Writes buildoutput\quality\changed-summary.json for the
+# "Quality gates (changed code)" check run, then fails the build if a gate failed.
+Task QualityChanged -Depends Test {
+    $QualityOutput = Join-Path -Path $ParentPath -ChildPath 'buildoutput\quality'
+    New-Item -Path $QualityOutput -ItemType Directory -Force | Out-Null
+    $SummaryPath = Join-Path -Path $QualityOutput -ChildPath 'changed-summary.json'
+
+    if (-not $env:PR_CHANGED_FILES) {
+        "Quality gates (changed code): not a pull request validation run, skipped." | Write-Host
+        return
+    }
+
+    $Setting = Get-QualityGateSetting -Path (Join-Path -Path $PSScriptRoot -ChildPath 'QualityGates.psd1')
+    $Changed = @(Select-QualityChangedFile -RepositoryRoot $ParentPath -ChangedFile ($env:PR_CHANGED_FILES -split ';') -SourcePath $Setting.Complexity.SourcePath)
+    if ($Changed.Count -eq 0) {
+        $Message = 'No PowerShell source under `src/Lib` changed, so there was nothing to measure.'
+        $Message | Write-Host
+        [pscustomobject]@{ Status = 'skipped'; Title = 'No PowerShell source changed'; Markdown = $Message } |
+            ConvertTo-Json | Set-Content -Path $SummaryPath -Encoding utf8
+        return
+    }
+    "Quality gates (changed code) for {0} file(s):`n  {1}" -f $Changed.Count, ($Changed -join "`n  ") | Write-Host
+
+    Push-Location -Path $ParentPath
+    try {
+        $BaselinePath = Join-Path -Path $ParentPath -ChildPath $Setting.Complexity.BaselineFile
+        $Orphaned = @(Get-OrphanedBaselineEntry -BaselineFile $BaselinePath -RepositoryRoot $ParentPath)
+        $ScopedBaseline = New-ScopedComplexityBaseline -BaselineFile $BaselinePath -ChangedFile $Changed -OutputPath (Join-Path -Path $QualityOutput -ChildPath 'complexity-baseline.changed.json')
+        $Complexity = Invoke-ComplexityGate -RepositoryRoot $ParentPath -Setting $Setting.Complexity -ChangedFile $Changed -BaselineFile $ScopedBaseline -ReportPath (Join-Path -Path $QualityOutput -ChildPath 'complexity.changed.json')
+        $Mutation = Invoke-MutationGate -RepositoryRoot $ParentPath -Setting $Setting.Mutation -ChangedFile $Changed -OutputDirectory $QualityOutput
+    }
+    finally {
+        Pop-Location
+    }
+
+    $ComplexityPassed = $Complexity.Passed -and $Orphaned.Count -eq 0
+    $Passed = $ComplexityPassed -and $Mutation.Passed
+
+    $Markdown = [System.Collections.Generic.List[string]]::new()
+    $Markdown.Add(('Measured {0} changed file(s): {1}' -f $Changed.Count, (($Changed | ForEach-Object { '`{0}`' -f $_ }) -join ', ')))
+    $Markdown.Add('')
+    $Markdown.Add(('## {0} Complexity (max {1} cyclomatic / {2} cognitive per unit)' -f $(if ($ComplexityPassed) { '✅' } else { '❌' }), $Setting.Complexity.MaxCyclomatic, $Setting.Complexity.MaxCognitive))
+    $Markdown.Add('')
+    $Markdown.Add('A unit listed in `complexity-baseline.json` may not get worse; any other unit must be under the ceilings.')
+    $Markdown.Add('')
+    $Markdown.Add($Complexity.Markdown)
+    if ($Orphaned.Count -gt 0) {
+        $Markdown.Add('')
+        $Markdown.Add(('`complexity-baseline.json` names files that no longer exist: {0}. Run `./build/build.ps1 -Task UpdateComplexityBaseline` and commit the result.' -f (($Orphaned | ForEach-Object { '`{0}`' -f $_.file } | Sort-Object -Unique) -join ', ')))
+    }
+    $Markdown.Add('')
+    $Markdown.Add(('## {0} Mutation testing' -f $(if ($Mutation.Skipped) { '➖' } elseif ($Mutation.Passed) { '✅' } else { '❌' })))
+    $Markdown.Add('')
+    $Markdown.Add($Mutation.Markdown)
+    if ($Mutation.Untested.Count -gt 0) {
+        $Markdown.Add('')
+        $Markdown.Add(('⚠️ Changed source with no owning unit test file (`tests/<FunctionName>.Tests.ps1`), so no test strength could be measured: {0}' -f (($Mutation.Untested | ForEach-Object { '`{0}`' -f $_ }) -join ', ')))
+    }
+
+    $Title = if ($Passed) { 'Changed code meets the quality gates' } else { 'Changed code does not meet the quality gates' }
+    if (-not $Mutation.Skipped) {
+        $Title = '{0} (mutation score {1}%)' -f $Title, $Mutation.Score
+    }
+    [pscustomobject]@{
+        Status   = if ($Passed) { 'passed' } else { 'failed' }
+        Title    = $Title
+        Markdown = Limit-MarkdownLength -Text ($Markdown -join "`n")
+    } | ConvertTo-Json | Set-Content -Path $SummaryPath -Encoding utf8
+
+    if (-not $Passed) {
+        Write-Error -Message 'The changed code does not meet the complexity and/or mutation-testing gates. See buildoutput\quality\changed-summary.json.' -ErrorAction Stop
+    }
+}
+
+# Weekly lane (.github/workflows/quality-weekly.yml): holds the whole tree to the bar. One result per
+# gate - complexity, mutation, build module pins - in buildoutput\quality\weekly.json, from which the
+# workflow opens, updates or closes one bug per gate. Fails the build if any gate failed, after the
+# results are written.
+Task QualityFull {
+    $QualityOutput = Join-Path -Path $ParentPath -ChildPath 'buildoutput\quality'
+    New-Item -Path $QualityOutput -ItemType Directory -Force | Out-Null
+    $Setting = Get-QualityGateSetting -Path (Join-Path -Path $PSScriptRoot -ChildPath 'QualityGates.psd1')
+
+    Push-Location -Path $ParentPath
+    try {
+        # The debt view: absolute ceilings, no baseline.
+        $Complexity = Invoke-ComplexityGate -RepositoryRoot $ParentPath -Setting $Setting.Complexity -ReportPath (Join-Path -Path $QualityOutput -ChildPath 'complexity.json') -SarifPath (Join-Path -Path $QualityOutput -ChildPath 'complexity.sarif')
+        # The ratchet: the committed baseline must still describe the tree exactly.
+        $Baseline = Invoke-ComplexityGate -RepositoryRoot $ParentPath -Setting $Setting.Complexity -BaselineFile (Join-Path -Path $ParentPath -ChildPath $Setting.Complexity.BaselineFile) -ReportPath (Join-Path -Path $QualityOutput -ChildPath 'complexity.baseline.json')
+        $Mutation = Invoke-MutationGate -RepositoryRoot $ParentPath -Setting $Setting.Mutation -OutputDirectory $QualityOutput
+    }
+    finally {
+        Pop-Location
+    }
+    $BuildModules = Import-PowerShellDataFile -Path (Join-Path -Path $PSScriptRoot -ChildPath 'BuildModules.psd1')
+    $Pins = @(Get-ModulePinStatus -Pin $BuildModules.Modules)
+
+    $ComplexityBody = @(
+        ('**{0} unit(s) in {1} file(s)** are over {2} cyclomatic / {3} cognitive.' -f $Complexity.Violations.Count, @($Complexity.Violations.File | Sort-Object -Unique).Count, $Setting.Complexity.MaxCyclomatic, $Setting.Complexity.MaxCognitive)
+        ''
+        'Pull requests already hold changed code to the ceilings, with `complexity-baseline.json` letting a unit that was over them stay - but not get worse. This list is the debt that baseline still carries; tick a file off by bringing its units under the ceilings, then run `./build/build.ps1 -Task UpdateComplexityBaseline` to ratchet the baseline down.'
+        ''
+        $(if ($Baseline.Passed) { '**Baseline:** `complexity-baseline.json` describes the tree exactly.' } else { "**Baseline:** does not describe the tree.`n`n$($Baseline.Markdown)" })
+        ''
+        $Complexity.Markdown
+    ) -join "`n"
+
+    $StalePins = @($Pins | Where-Object { $_.IsStale })
+    $UncheckedPins = @($Pins | Where-Object { $_.Error })
+    $PinRows = $Pins | ForEach-Object { '| {0} | {1} | {2} | {3} |' -f $_.Name, $_.Pinned, $(if ($_.Latest) { $_.Latest } else { "_lookup failed: $($_.Error)_" }), $(if ($_.IsStale) { 'update available' } elseif ($_.Error) { 'unknown' } else { 'current' }) }
+    $PinBody = @(
+        'Pinned in `build/BuildModules.psd1`. Dependabot does not cover the PowerShell Gallery, so this is where a new release shows up. Bump the version there and run `./build/build.ps1 -Task TestBuildOnly` to adopt it.'
+        ''
+        '| Module | Pinned | Latest | Status |'
+        '|---|---|---|---|'
+        $PinRows
+    ) -join "`n"
+
+    $Gates = @(
+        [pscustomobject]@{
+            Key    = 'complexity'
+            Title  = 'Weekly quality: complexity above {0}/{1}' -f $Setting.Complexity.MaxCyclomatic, $Setting.Complexity.MaxCognitive
+            Passed = $Complexity.Passed -and $Baseline.Passed
+            Metric = $Complexity.Violations.Count
+            Body   = Limit-MarkdownLength -Text $ComplexityBody
+        }
+        [pscustomobject]@{
+            Key    = 'mutation'
+            Title  = 'Weekly quality: mutation score below threshold'
+            Passed = $Mutation.Passed
+            Metric = $Mutation.Score
+            Body   = Limit-MarkdownLength -Text $Mutation.Markdown
+        }
+        [pscustomobject]@{
+            Key    = 'pins'
+            # A lookup that failed counts as a failure too: a freshness check that silently stopped
+            # checking is the same as no check.
+            Title  = 'Weekly quality: build module pins need attention'
+            Passed = $StalePins.Count -eq 0 -and $UncheckedPins.Count -eq 0
+            Metric = $StalePins.Count
+            Body   = $PinBody
+        }
+    )
+    [pscustomobject]@{ Gates = $Gates } | ConvertTo-Json -Depth 4 | Set-Content -Path (Join-Path -Path $QualityOutput -ChildPath 'weekly.json') -Encoding utf8
+
+    foreach ($Gate in $Gates) {
+        "{0} {1}" -f $(if ($Gate.Passed) { 'PASS' } else { 'FAIL' }), $Gate.Title | Write-Host
+    }
+    $Failed = @($Gates | Where-Object { -not $_.Passed })
+    if ($Failed.Count -gt 0) {
+        Write-Error -Message ('{0} quality gate(s) failed: {1}' -f $Failed.Count, (($Failed | ForEach-Object { $_.Key }) -join ', ')) -ErrorAction Stop
+    }
+}
+
+# Ratchets complexity-baseline.json down after units improved, were renamed or were removed. Refuses
+# to record a unit that got worse - that is a regression to fix, not to absorb.
+Task UpdateComplexityBaseline {
+    $Setting = Get-QualityGateSetting -Path (Join-Path -Path $PSScriptRoot -ChildPath 'QualityGates.psd1')
+    $Files = Get-QualitySourceFile -RepositoryRoot $ParentPath -SourcePath $Setting.Complexity.SourcePath
+    Push-Location -Path $ParentPath
+    try {
+        $null = Test-PSComplexity -Path ([string[]]$Files.FullName) -MaxCyclomatic $Setting.Complexity.MaxCyclomatic -MaxCognitive $Setting.Complexity.MaxCognitive -BaselineFile (Join-Path -Path $ParentPath -ChildPath $Setting.Complexity.BaselineFile) -UpdateBaseline -WarningAction SilentlyContinue
+    }
+    finally {
+        Pop-Location
+    }
+    "Updated {0}. Review the diff and commit it." -f $Setting.Complexity.BaselineFile | Write-Host
 }
 
 Task Dependencies {
