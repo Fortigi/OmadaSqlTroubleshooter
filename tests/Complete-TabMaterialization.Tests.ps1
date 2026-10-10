@@ -27,7 +27,9 @@ BeforeAll {
 
     function Set-ActiveTabContext { param($TabSession) }
     function Test-OmadaConnection { return $script:ConnectionSucceeds }
-    function Update-DataConnectionList { param([switch]$NotShowPopupWindow) $script:Calls.Add("Update-DataConnectionList") }
+    # Records whether the tab counted as connected at the moment of the call: connected, the list goes to
+    # a background worker; disconnected, its three requests run on the UI thread.
+    function Update-DataConnectionList { param([switch]$NotShowPopupWindow) $script:Calls.Add("Update-DataConnectionList:{0}" -f $Script:ConnectionStatus) }
     function Set-DataConnection { $script:Calls.Add("Set-DataConnection") }
     function Test-ConnectionButton { }
     function Initialize-WebViewForTab { param($TabSession) }
@@ -123,6 +125,29 @@ Describe "Complete-TabMaterialization - connected-only work after an auto-connec
 
         @($script:Calls | Where-Object { $_ -like "Start-OmadaIngestionSettingProbe*" }).Count | Should -Be 0
         @($script:Calls | Where-Object { $_ -like "Start-SqlSchemaPreload*" }).Count | Should -Be 0
+    }
+
+    It "builds the data connection list after the connect, so it goes to a worker" {
+        # It used to come first, while the tab was still disconnected - three requests on the UI
+        # thread, about 2.3 s of frozen window on a cloud PC.
+        Complete-TabMaterialization -TabSession (New-TestTabSession)
+
+        @($script:Calls | Where-Object { $_ -like "Update-DataConnectionList*" }) | Should -Be @("Update-DataConnectionList:True")
+        $script:Calls.IndexOf("Update-DataConnectionList:True") | Should -BeGreaterThan $script:Calls.IndexOf("Test-ConnectionSettings")
+    }
+
+    It "builds it before the connected-only work, so the preload has the list to read" {
+        Complete-TabMaterialization -TabSession (New-TestTabSession)
+
+        $script:Calls.IndexOf("Update-DataConnectionList:True") | Should -BeLessThan $script:Calls.IndexOf("Start-SqlSchemaPreload:True")
+    }
+
+    It "still builds the list once for a tab that did not connect" {
+        $script:ConnectSetsStatus = $false
+
+        Complete-TabMaterialization -TabSession (New-TestTabSession)
+
+        @($script:Calls | Where-Object { $_ -like "Update-DataConnectionList*" }) | Should -Be @("Update-DataConnectionList:False")
     }
 
     It "does nothing for a tab that is already materialized" {
