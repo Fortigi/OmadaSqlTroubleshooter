@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "metricVersion": 1,
-  "generatedAt": "2026-10-09T16:03:35Z",
+  "generatedAt": "2026-10-10T09:38:32Z",
   "units": [
     {
       "file": "src/Lib/Events/MainForm.Definition.ps1",
@@ -138,8 +138,8 @@
     {
       "file": "src/Lib/Functions/Private/ConvertTo-RedactedLogString.ps1",
       "unit": "ConvertTo-RedactedLogValue",
-      "cyclomatic": 29,
-      "cognitive": 38
+      "cyclomatic": 33,
+      "cognitive": 44
     },
     {
       "file": "src/Lib/Functions/Private/ConvertTo-SqlLiteral.ps1",
@@ -151,7 +151,7 @@
       "file": "src/Lib/Functions/Private/ConvertTo-SqlSchemaEditorModel.ps1",
       "unit": "ConvertTo-SqlSchemaEditorModel",
       "cyclomatic": 10,
-      "cognitive": 18
+      "cognitive": 16
     },
     {
       "file": "src/Lib/Functions/Private/ConvertTo-UnqualifiedSqlQuery.ps1",
@@ -252,8 +252,8 @@
     {
       "file": "src/Lib/Functions/Private/Get-SqlSchema.ps1",
       "unit": "Complete-SqlSchemaRetrieval",
-      "cyclomatic": 26,
-      "cognitive": 35
+      "cyclomatic": 36,
+      "cognitive": 57
     },
     {
       "file": "src/Lib/Functions/Private/Get-SqlSchema.ps1",
@@ -276,8 +276,8 @@
     {
       "file": "src/Lib/Functions/Private/Get-SqlSchemaModel.ps1",
       "unit": "Get-SqlSchemaModel",
-      "cyclomatic": 15,
-      "cognitive": 24
+      "cyclomatic": 17,
+      "cognitive": 27
     },
     {
       "file": "src/Lib/Functions/Private/Get-SqlScriptStatement.ps1",
@@ -350,6 +350,12 @@
       "unit": "Invoke-OmadaExecutePipeline",
       "cyclomatic": 39,
       "cognitive": 79
+    },
+    {
+      "file": "src/Lib/Functions/Private/Invoke-OmadaPSWebRequestWrapperAsync.ps1",
+      "unit": "Invoke-OmadaPSWebRequestWrapperAsync",
+      "cyclomatic": 10,
+      "cognitive": 17
     },
     {
       "file": "src/Lib/Functions/Private/Invoke-OmadaViewLookupPipeline.ps1",
@@ -480,8 +486,8 @@
     {
       "file": "src/Lib/Functions/Private/Set-SqlConnectionState.ps1",
       "unit": "Set-SqlConnectionState",
-      "cyclomatic": 12,
-      "cognitive": 16
+      "cyclomatic": 13,
+      "cognitive": 17
     },
     {
       "file": "src/Lib/Functions/Private/Set-SqlQueryFunctionState.ps1",
@@ -510,8 +516,8 @@
     {
       "file": "src/Lib/Functions/Private/Start-SqlSchemaPreload.ps1",
       "unit": "Start-SqlSchemaPreload",
-      "cyclomatic": 15,
-      "cognitive": 18
+      "cyclomatic": 16,
+      "cognitive": 19
     },
     {
       "file": "src/Lib/Functions/Private/Test-LogLevelThreshold.ps1",
@@ -540,14 +546,20 @@
     {
       "file": "src/Lib/Functions/Private/Update-SqlSchemaTreeFilter.ps1",
       "unit": "Update-SqlSchemaTreeFilter",
-      "cyclomatic": 24,
-      "cognitive": 45
+      "cyclomatic": 25,
+      "cognitive": 46
     },
     {
       "file": "src/Lib/Functions/Private/Update-TabHeaderTitle.ps1",
       "unit": "Update-TabHeaderTitle",
       "cyclomatic": 20,
       "cognitive": 22
+    },
+    {
+      "file": "src/Lib/Functions/Private/Write-ExecutePipelineLog.ps1",
+      "unit": "Write-ExecutePipelineLog",
+      "cyclomatic": 11,
+      "cognitive": 18
     },
     {
       "file": "src/Lib/Functions/Private/Write-LogOutput.ps1",
