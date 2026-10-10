@@ -48,13 +48,13 @@ jobs:
       head_sha: ${{ steps.resolve.outputs.head_sha }}
     steps:
       - name: Harden the runner (audit all outgoing network calls)
-        uses: step-security/harden-runner@e14015d583714f6e62063499dc959a02595150a1 # v2.21.1
+        uses: step-security/harden-runner@ccd8616d44fd3846e67624a50d5aad6d37bf2d25 # v2.22.1
         with:
           egress-policy: audit
 
       - name: Resolve trigger context
         id: resolve
-        uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b # v7.1.0
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
         with:
           script: |
             if (context.eventName === 'workflow_dispatch') {
@@ -81,7 +81,7 @@ jobs:
 
       - name: Set pending status
         if: steps.resolve.outputs.should_run == 'true'
-        uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b # v7.1.0
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
         with:
           script: |
             await github.rest.repos.createCommitStatus({
@@ -96,7 +96,7 @@ jobs:
 
       - name: Acknowledge comment
         if: github.event_name == 'issue_comment' && steps.resolve.outputs.should_run == 'true'
-        uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b # v7.1.0
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
         with:
           script: |
             await github.rest.reactions.createForIssueComment({
@@ -122,12 +122,12 @@ jobs:
 
     steps:
       - name: Harden the runner (audit all outgoing network calls)
-        uses: step-security/harden-runner@e14015d583714f6e62063499dc959a02595150a1 # v2.21.1
+        uses: step-security/harden-runner@ccd8616d44fd3846e67624a50d5aad6d37bf2d25 # v2.22.1
         with:
           egress-policy: audit
 
       - name: Checkout
-        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ needs.dispatch.outputs.head_sha }}
           fetch-depth: 0
@@ -215,7 +215,7 @@ jobs:
         # failed there is no TestSummary.json, and the reader's ENOENT would bury the
         # real error.
         if: always() && steps.summarize.outcome == 'success'
-        uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b # v7.1.0
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
         with:
           script: |
             const fs = require('fs');
@@ -270,7 +270,7 @@ jobs:
       # Its own check run, created against the PR head for the same reason as the Pester check above.
       - name: Publish quality gate results
         if: always() && steps.quality-results.outputs.exists == 'True'
-        uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b # v7.1.0
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
         with:
           script: |
             const fs = require('fs');
@@ -301,7 +301,7 @@ jobs:
 
       - name: Upload quality reports
         if: always() && steps.quality-results.outputs.exists == 'True'
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: QualityReports
           path: buildoutput/quality/
@@ -320,12 +320,12 @@ jobs:
       statuses: write
     steps:
       - name: Harden the runner (audit all outgoing network calls)
-        uses: step-security/harden-runner@e14015d583714f6e62063499dc959a02595150a1 # v2.21.1
+        uses: step-security/harden-runner@ccd8616d44fd3846e67624a50d5aad6d37bf2d25 # v2.22.1
         with:
           egress-policy: audit
 
       - name: Set final commit status
-        uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b # v7.1.0
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
         with:
           script: |
             const success = '${{ needs.validate.result }}' === 'success';
