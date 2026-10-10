@@ -93,6 +93,31 @@ Describe "Test-OmadaRestMethodParameter - the cache" {
         Test-OmadaRestMethodParameter -Name "SkipBodyRedaction" | Should -BeTrue
     }
 
+    It "asks again when the function was redefined in the same module" {
+        # What CI exposed: functions a test defines belong to the test framework's module there, so two
+        # of them share name, version and path. A redefinition is a new ScriptBlock.
+        $script:Command = New-FakeCommand -Parameter "Uri" -Module (New-FakeModule)
+        $script:Command | Add-Member -NotePropertyName ScriptBlock -NotePropertyValue { "first" }
+        Mock Get-Command { return $script:Command }
+        Test-OmadaRestMethodParameter -Name "SkipBodyRedaction" | Should -BeFalse
+
+        $script:Command = New-FakeCommand -Parameter "Uri", "SkipBodyRedaction" -Module (New-FakeModule)
+        $script:Command | Add-Member -NotePropertyName ScriptBlock -NotePropertyValue { "second" }
+        Test-OmadaRestMethodParameter -Name "SkipBodyRedaction" | Should -BeTrue
+    }
+
+    It "keeps answering from the cache while the ScriptBlock is the same" {
+        $Private:Block = { "unchanged" }
+        $script:Command = New-FakeCommand -Parameter "Uri", "SkipBodyRedaction" -Module (New-FakeModule)
+        $script:Command | Add-Member -NotePropertyName ScriptBlock -NotePropertyValue $Private:Block
+        Mock Get-Command { return $script:Command }
+
+        Test-OmadaRestMethodParameter -Name "SkipBodyRedaction" | Out-Null
+        Test-OmadaRestMethodParameter -Name "SkipBodyRedaction" | Out-Null
+
+        $script:ParameterReads | Should -Be 1
+    }
+
     It "never caches a command that does not come from a module" {
         $script:Command = New-FakeCommand -Parameter "Uri", "SkipBodyRedaction" -Module $null
         Mock Get-Command { return $script:Command }

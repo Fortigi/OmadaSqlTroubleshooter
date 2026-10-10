@@ -55,11 +55,22 @@ function Test-OmadaRestMethodParameter {
             $Script:OmadaRestMethodParameterCache = @{}
         }
 
-        if (-not $Script:OmadaRestMethodParameterCache.ContainsKey($Private:CacheKey)) {
-            $Script:OmadaRestMethodParameterCache[$Private:CacheKey] = [bool]$Private:Command.Parameters.ContainsKey($Name)
+        # The answer is also tied to the function's own ScriptBlock. Get-Command hands back the same
+        # ScriptBlock object for as long as the function is unchanged and a new one once it is
+        # redefined - which the module key alone cannot see: two functions defined in the same module
+        # (a test framework's, on CI) share name, version and path.
+        $Private:Cached = $Script:OmadaRestMethodParameterCache[$Private:CacheKey]
+        if ($null -ne $Private:Cached -and [object]::ReferenceEquals($Private:Cached.ScriptBlock, $Private:Command.ScriptBlock)) {
+            return $Private:Cached.Answer
         }
 
-        return $Script:OmadaRestMethodParameterCache[$Private:CacheKey]
+        $Private:Answer = [bool]$Private:Command.Parameters.ContainsKey($Name)
+        $Script:OmadaRestMethodParameterCache[$Private:CacheKey] = @{
+            Answer      = $Private:Answer
+            ScriptBlock = $Private:Command.ScriptBlock
+        }
+
+        return $Private:Answer
     }
     catch {
         # An unanswerable question is answered "no": not adding an optional parameter is always safe,
