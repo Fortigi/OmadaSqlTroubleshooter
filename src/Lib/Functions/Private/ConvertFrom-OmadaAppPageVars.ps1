@@ -206,7 +206,7 @@ function Split-OmadaAppPageVarPair {
 
     $Script:Tracer::WriteLine(("{0}: Function: {1} - Caller: {2}({3}) - Command: {4}" -f $($Script:RunTimeConfig.ApplicationName), $($MyInvocation.MyCommand.Name), $($MyInvocation.ScriptName).Split("\")[-1], $($MyInvocation.ScriptLineNumber), $MyInvocation.Statement))
 
-    $Pair =[System.Collections.Generic.List[object]]::new()
+    $Pair = [System.Collections.Generic.List[object]]::new()
 
     $Depth = 0
     $QuoteCharacter = [char]0
@@ -356,7 +356,7 @@ function ConvertFrom-OmadaAppPageVarValue {
 
     $Script:Tracer::WriteLine(("{0}: Function: {1} - Caller: {2}({3}) - Command: {4}" -f $($Script:RunTimeConfig.ApplicationName), $($MyInvocation.MyCommand.Name), $($MyInvocation.ScriptName).Split("\")[-1], $($MyInvocation.ScriptLineNumber), $MyInvocation.Statement))
 
-    if([string]::IsNullOrWhiteSpace($RawValue)) {
+    if ([string]::IsNullOrWhiteSpace($RawValue)) {
         return $null
     }
 
@@ -502,7 +502,7 @@ function Expand-OmadaAppPageVarNestedJson {
     # here would be thousands of lines per page, burying the calls that say what actually happened.
     # The call that starts the walk is traced (ConvertFrom-OmadaAppPageVarJsonText).
 
-    if($null -eq $Value -or $Depth -ge $MaxDepth) {
+    if ($null -eq $Value -or $Depth -ge $MaxDepth) {
         return $Value
     }
 
