@@ -16,6 +16,10 @@ BeforeAll {
 
     . (Join-Path $PrivatePath -ChildPath "ConvertFrom-OmadaAppPageVars.ps1")
 
+    # Every function in the file opens with the tracer preamble, which needs both of these.
+    $Script:Tracer = [System.Diagnostics.Trace]
+    $Script:RunTimeConfig = [pscustomobject]@{ ApplicationName = "Test" }
+
     # Shaped after the real page: a bool, a single-quoted string, a time span whose colons must not be
     # read as separators, a nested JSON object, an array, and a JSON document carried as a string.
     $Script:RealisticPage = @'

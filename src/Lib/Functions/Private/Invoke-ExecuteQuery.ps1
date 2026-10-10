@@ -8,6 +8,10 @@ function Invoke-ExecuteQuery {
             return
         }
 
+        # The execute chain can write the selected query on the tenant, so a fetch Set-EditorValue
+        # might reuse is no longer safe to reuse.
+        Clear-RecentSqlQueryObject -DoId $Script:AppConfig.CurrentSqlQuery.DoId
+
         # selectionStartLine/Column come back so the syntax pass can put its markers where the
         # selected text actually sits in the model; the parser only ever sees the selection, so it
         # numbers the selection's first line as line 1.

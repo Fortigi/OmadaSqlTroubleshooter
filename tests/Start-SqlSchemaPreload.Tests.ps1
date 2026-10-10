@@ -41,6 +41,10 @@ BeforeAll {
     function Test-ConnectionRequirements { return $script:ConnectionReady }
     function Get-DataConnectionOptionText { param([switch]$NoRefresh) return , @($script:OptionList) }
 
+    # Whether the ODW ingestion probe for this session is still out. Its matching rules have their own
+    # suite (Get-OmadaIngestionSetting.Tests.ps1); here only the answer matters.
+    function Test-OmadaIngestionSettingProbePending { return $script:ProbePending }
+
     # The real one builds a splat from live request state; what matters here is only that the gate is
     # asked, which the next stub records.
     function Build-OmadaRequestParameter { return @{ } }
@@ -80,6 +84,7 @@ BeforeAll {
         $script:ConnectionReady = $true
         $script:Eligible = $true
         $script:EligibilityAsked = 0
+        $script:ProbePending = $false
         $script:Requested = @()
         $script:LogMessages.Clear()
 
@@ -132,6 +137,46 @@ Describe "Start-SqlSchemaPreload - the eligibility gate" {
         Start-SqlSchemaPreload
 
         $script:EligibilityAsked | Should -Be 1
+        @($script:Requested).Count | Should -Be 2
+    }
+}
+
+Describe "Start-SqlSchemaPreload - it waits for the ODW ingestion probe" {
+    # The connections the ingestion filter removes answer 500 on a live tenant. Preloading them before
+    # the filter was known cost a synchronous ~10 s retry each and switched background requests off -
+    # half a minute of frozen window on connect. The probe's completion starts the preload instead.
+
+    BeforeEach {
+        Reset-PreloadState
+    }
+
+    It "requests nothing while the probe is pending" {
+        $script:ProbePending = $true
+
+        Start-SqlSchemaPreload
+
+        @($script:Requested).Count | Should -Be 0
+    }
+
+    It "does not even ask the eligibility gate while the probe is pending" {
+        $script:ProbePending = $true
+
+        Start-SqlSchemaPreload
+
+        $script:EligibilityAsked | Should -Be 0
+    }
+
+    It "says it is waiting, so the gap in the log is explainable" {
+        $script:ProbePending = $true
+
+        Start-SqlSchemaPreload
+
+        @($script:LogMessages | Where-Object { $_.Message -like "*Waiting for the ODW ingestion setting*" }).Count | Should -Be 1
+    }
+
+    It "preloads as before once nothing is pending" {
+        Start-SqlSchemaPreload
+
         @($script:Requested).Count | Should -Be 2
     }
 }

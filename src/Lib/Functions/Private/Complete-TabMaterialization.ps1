@@ -40,11 +40,6 @@ function Complete-TabMaterialization {
             # editor and nothing selected.
             $Script:RunTimeConfig.ReconnectStatus = 2
 
-            # Populate the full data connection dropdown for this tab. Auto-connect (restore /
-            # duplicate) otherwise skipped this - unlike the interactive Connect button - so the
-            # dropdown only ever showed the single current connection set by Set-DataConnection below.
-            Update-DataConnectionList -NotShowPopupWindow
-
             if (![string]::IsNullOrWhiteSpace($Script:AppConfig.CurrentSqlQuery.DoId)) {
                 $ComboBoxSelectQueryItem = $Script:MainForm.Elements.ComboBoxSelectQuery.Items | Where-Object { $_.Content -like "*$($Script:AppConfig.CurrentSqlQuery.DoId)" }
                 if ($null -eq $ComboBoxSelectQueryItem) {
@@ -66,14 +61,29 @@ function Complete-TabMaterialization {
             Test-ConnectionSettings
             Test-ConnectionButton
 
-            # Unlike the Connect button, this branch populates the data connection list BEFORE the
-            # connection is actually established, so the ComboBox SelectionChanged handler that
-            # normally fetches the schema runs while this tab still counts as disconnected - and
-            # Get-SqlSchemaObject now (correctly) refuses to request anything for a disconnected tab.
-            # Retrieve it here instead, once the tab really is connected, so an auto-connected
-            # restored tab still gets its IntelliSense schema.
+            # The full data connection dropdown for this tab - auto-connect (restore / duplicate)
+            # otherwise only ever showed the single current connection set by Set-DataConnection above.
+            #
+            # AFTER the connect, as the Connect button does it. It used to come first, while the tab
+            # still counted as disconnected, and a disconnected tab may not use a background worker -
+            # so the list's three requests ran one after another on the UI thread, about 2.3 s of
+            # frozen window on a cloud PC. Connected, the list goes to a worker, and its completion
+            # runs the ODW ingestion probe and the schema preload as it does after the Connect button.
+            #
+            # A tab that did not connect still gets its list, synchronously, as before.
+            Update-DataConnectionList -NotShowPopupWindow
+
+            # Connected-only work, now that the tab really is connected: the active connection's
+            # IntelliSense schema (the query selection above ran while the tab was still disconnected,
+            # and Get-SqlSchemaObject refuses that), the ingestion probe and the preload. The list
+            # completion asks for the last two as well; both are idempotent (cached answer, in-flight
+            # check on the queue), so whichever comes second costs nothing. Probe first: the preload
+            # declines while the probe is pending, and the probe's completion starts it after the
+            # filter is applied.
             if ($Script:ConnectionStatus) {
                 Get-SqlSchemaObject
+                Start-OmadaIngestionSettingProbe
+                Start-SqlSchemaPreload
             }
         }
         else {

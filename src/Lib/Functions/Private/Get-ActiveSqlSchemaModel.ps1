@@ -141,7 +141,8 @@ function Reset-SqlSchemaCache {
         Keys are matched on the "<SessionKey>|" prefix the schema cache is keyed by, so another
         session's tabs keep their caches.
 
-        Both caches go for each of them: the raw response and the index built from it.
+        All three caches go for each of them: the raw response, the index built from it, and the
+        editor JSON built from it.
         Get-SqlSchemaObject then re-fetches the active connection - repopulating the tree, pushing the
         schema to the editor and re-triggering validation, the same path a connection change takes -
         and Start-SqlSchemaPreload asks for the rest.
@@ -165,7 +166,7 @@ function Reset-SqlSchemaCache {
         # this cannot disagree with Get-SqlSchemaCacheKey about how a key is shaped.
         $Private:PoolPrefix = "{0}|" -f $CacheKey.Split("|")[0]
 
-        foreach ($Private:Cache in @($Script:SqlSchemaCache, $Script:SqlSchemaModelCache)) {
+        foreach ($Private:Cache in @($Script:SqlSchemaCache, $Script:SqlSchemaModelCache, $Script:SqlSchemaEditorJsonCache)) {
             if ($null -eq $Private:Cache) {
                 continue
             }

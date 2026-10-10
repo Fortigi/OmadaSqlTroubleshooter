@@ -120,6 +120,20 @@ BeforeAll {
 
         return $Tree.Items | Where-Object { $_.Header -eq $Header }
     }
+
+    # Fills cached databases before a search (issue #165). It has its own suite; here it is recorded,
+    # and by default fills nothing - which is the tree every Describe above was written against: a
+    # database whose schema is not cached. The cache Describe below gives it something to fill.
+    $script:CachedFillCalls = 0
+    $script:CachedFill = $null
+    function Add-SqlSchemaCachedDatabaseNode {
+        $script:CachedFillCalls++
+        if ($null -ne $script:CachedFill) {
+            & $script:CachedFill
+        }
+
+        return 0
+    }
 }
 
 Describe 'Update-SqlSchemaTreeFilter' {
@@ -349,5 +363,72 @@ Describe 'Update-SqlSchemaTreeFilter across the data connection level (issue #15
         $Script:TreeViewSqlSchema.Items[1].Tag = $null
 
         { Update-SqlSchemaTreeFilter -FilterValue "Object" } | Should -Not -Throw
+    }
+}
+
+Describe 'Update-SqlSchemaTreeFilter searches databases whose schema is cached (issue #165)' {
+    # The preload caches every database's schema, but the window is usually opened afterwards and
+    # builds those databases empty. Before this, a search never found a table in a folded database.
+
+    BeforeEach {
+        $Script:TreeViewSqlSchema = New-SchemaTreeStub
+        $script:CachedFillCalls = 0
+
+        # What the real Add-SqlSchemaCachedDatabaseNode does to the "Reporting" stub when its schema is
+        # cached: the placeholder is replaced by its schemas and the node is marked loaded.
+        $script:CachedFill = {
+            $Reporting = $Script:TreeViewSqlSchema.Items | Where-Object { $_.Header -eq "Reporting" }
+            if ($Reporting.Tag.Loaded) {
+                return
+            }
+
+            $Reporting.Items = @(
+                [PSCustomObject]@{
+                    Header     = "rpt"
+                    Items      = @(
+                        [PSCustomObject]@{ Header = "CalculatedAssignment"; Items = @(); Visibility = [System.Windows.Visibility]::Visible; IsExpanded = $false }
+                        [PSCustomObject]@{ Header = "Report"; Items = @(); Visibility = [System.Windows.Visibility]::Visible; IsExpanded = $false }
+                    )
+                    Visibility = [System.Windows.Visibility]::Visible
+                    IsExpanded = $false
+                }
+            )
+            $Reporting.Tag.Loaded = $true
+            $Reporting.Tag.Requested = $true
+        }
+    }
+
+    AfterAll {
+        $script:CachedFill = $null
+    }
+
+    It 'finds a table inside a folded database whose schema is cached' {
+        Update-SqlSchemaTreeFilter -FilterValue "Calculated"
+
+        Get-VisibleTreeLine -Tree $Script:TreeViewSqlSchema | Should -Be @(
+            "Reporting"
+            "  rpt"
+            "    CalculatedAssignment"
+        )
+    }
+
+    It 'expands that database to show the hit' {
+        Update-SqlSchemaTreeFilter -FilterValue "Calculated"
+
+        (Get-DatabaseNode -Tree $Script:TreeViewSqlSchema -Header "Reporting").IsExpanded | Should -BeTrue
+    }
+
+    It 'fills the cached databases before a search' {
+        Update-SqlSchemaTreeFilter -FilterValue "Calculated"
+
+        $script:CachedFillCalls | Should -Be 1
+    }
+
+    It 'does not fill anything when the filter is cleared' {
+        # Clearing the box must not pay for building every database.
+        Update-SqlSchemaTreeFilter -FilterValue ""
+
+        $script:CachedFillCalls | Should -Be 0
+        (Get-DatabaseNode -Tree $Script:TreeViewSqlSchema -Header "Reporting").Tag.Loaded | Should -BeFalse
     }
 }
