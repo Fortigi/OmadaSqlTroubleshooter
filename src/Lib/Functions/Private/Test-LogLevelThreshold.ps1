@@ -4,17 +4,21 @@ function Test-LogLevelThreshold {
         Answers whether a message of a given log type survives a given log level.
 
     .DESCRIPTION
-        The one inclusion table the application filters on. Write-LogOutput applied it inline for a
-        single level - the log window's - which was enough until the session log file (issue #121)
-        gained a level of its own that may reasonably be more verbose than the window's. Two callers
-        asking the same question needed one answer, not two copies of the table that could drift.
+        The one inclusion table the application filters on. Write-LogOutput applied it inline until
+        the session log file (issue #121) needed the same question answered, and two callers asking it
+        needed one answer rather than two copies of the table that could drift.
+
+        Both callers now pass the same level: the application's LogLevelSetting (issue #157). The file
+        had a level of its own until then, which could be set quieter than the log window and silently
+        drop from disk what the window was showing. Keeping the table here is what makes "the file
+        shows exactly what the window shows" one implementation rather than a coincidence.
 
         The table is unchanged from the switch statement it replaces, including its default branch:
         a level the application does not know includes nothing at all.
 
     .PARAMETER Level
-        The configured log level to filter at, for example the log window's LogLevelSetting or the
-        session log file's own level.
+        The configured log level to filter at - the application's LogLevelSetting, which the log
+        window, the console and the session log file all filter on.
 
     .PARAMETER LogType
         The type of the message being written.
@@ -78,4 +82,35 @@ function Test-LogLevelThreshold {
     }
 
     return ($LogTypeRank -le $LevelRank)
+}
+
+function Test-LogTypeShown {
+    <#
+    .SYNOPSIS
+        Answers whether a message of this log type would be shown at the application's log level.
+
+    .DESCRIPTION
+        For a caller whose MESSAGE is expensive to build. Write-LogOutput filters on the level itself,
+        but only after the caller has formatted the message - and for the request and response lines
+        that formatting is a redacting walk of the whole object, which for a SQL schema response took
+        over a second on the UI thread whether the line was then shown or not. Asking first lets the
+        caller skip building what nobody will see.
+
+    .PARAMETER LogType
+        The type the message would be written at.
+
+    .OUTPUTS
+        [bool] $false when no log level is configured.
+
+    .NOTES
+        No tracer preamble and no Write-LogOutput, for the reason Test-LogLevelThreshold gives.
+    #>
+    [CmdLetBinding()]
+    [OutputType([bool])]
+    param(
+        [Parameter(Mandatory = $true, Position = 0)]
+        [string]$LogType
+    )
+
+    return Test-LogLevelThreshold -Level ([string]$Script:RunTimeConfig.Logging.LogLevelSetting) -LogType $LogType
 }

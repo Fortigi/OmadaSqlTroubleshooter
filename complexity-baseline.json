@@ -1,0 +1,595 @@
+{
+  "schemaVersion": 1,
+  "metricVersion": 1,
+  "generatedAt": "2026-10-10T09:38:32Z",
+  "units": [
+    {
+      "file": "src/Lib/Events/MainForm.Definition.ps1",
+      "unit": "<script-body>",
+      "cyclomatic": 74,
+      "cognitive": 128
+    },
+    {
+      "file": "src/Lib/Events/MainForm.Elements.TabControlSessions.ps1",
+      "unit": "<script-body>",
+      "cyclomatic": 17,
+      "cognitive": 34
+    },
+    {
+      "file": "src/Lib/Events/MainFormTabContent.Elements.ButtonConnect.ps1",
+      "unit": "<script-body>",
+      "cyclomatic": 16,
+      "cognitive": 42
+    },
+    {
+      "file": "src/Lib/Events/MainFormTabContent.Elements.CheckboxCheckboxMyUpdatedQueries.ps1",
+      "unit": "<script-body>",
+      "cyclomatic": 10,
+      "cognitive": 24
+    },
+    {
+      "file": "src/Lib/Events/MainFormTabContent.Elements.CheckboxMyCreatedQueries.ps1",
+      "unit": "<script-body>",
+      "cyclomatic": 10,
+      "cognitive": 24
+    },
+    {
+      "file": "src/Lib/Events/MainFormTabContent.Elements.ComboBoxSelectAuthenticationOption.ps1",
+      "unit": "<script-body>",
+      "cyclomatic": 13,
+      "cognitive": 29
+    },
+    {
+      "file": "src/Lib/Events/MainFormTabContent.Elements.ComboBoxSelectQuery.ps1",
+      "unit": "<script-body>",
+      "cyclomatic": 10,
+      "cognitive": 22
+    },
+    {
+      "file": "src/Lib/Events/MainFormTabContent.Elements.DataGridQueryResult.ps1",
+      "unit": "<script-body>",
+      "cyclomatic": 11,
+      "cognitive": 20
+    },
+    {
+      "file": "src/Lib/Events/MainFormTabContent.Elements.TextBoxAppIdUri.ps1",
+      "unit": "<script-body>",
+      "cyclomatic": 10,
+      "cognitive": 23
+    },
+    {
+      "file": "src/Lib/Events/MainFormTabContent.Elements.TextBoxEntraIdTenantId.ps1",
+      "unit": "<script-body>",
+      "cyclomatic": 10,
+      "cognitive": 23
+    },
+    {
+      "file": "src/Lib/Events/MainFormTabContent.Elements.TextBoxPassword.ps1",
+      "unit": "<script-body>",
+      "cyclomatic": 16,
+      "cognitive": 42
+    },
+    {
+      "file": "src/Lib/Events/MainFormTabContent.Elements.TextBoxUserName.ps1",
+      "unit": "<script-body>",
+      "cyclomatic": 15,
+      "cognitive": 37
+    },
+    {
+      "file": "src/Lib/Events/SqlHistoryForm.Elements.ButtonExportHistory.ps1",
+      "unit": "<script-body>",
+      "cyclomatic": 9,
+      "cognitive": 18
+    },
+    {
+      "file": "src/Lib/Functions/Private/Add-ConfigProperty.ps1",
+      "unit": "Add-ConfigProperty",
+      "cyclomatic": 15,
+      "cognitive": 24
+    },
+    {
+      "file": "src/Lib/Functions/Private/Add-QueryToConnectedPoolTabs.ps1",
+      "unit": "Add-QueryToConnectedPoolTabs",
+      "cyclomatic": 20,
+      "cognitive": 32
+    },
+    {
+      "file": "src/Lib/Functions/Private/Complete-DuplicateTab.ps1",
+      "unit": "Complete-DuplicateTab",
+      "cyclomatic": 14,
+      "cognitive": 21
+    },
+    {
+      "file": "src/Lib/Functions/Private/Complete-TabClose.ps1",
+      "unit": "Complete-TabClose",
+      "cyclomatic": 16,
+      "cognitive": 19
+    },
+    {
+      "file": "src/Lib/Functions/Private/Complete-TabMaterialization.ps1",
+      "unit": "Complete-TabMaterialization",
+      "cyclomatic": 11,
+      "cognitive": 18
+    },
+    {
+      "file": "src/Lib/Functions/Private/ConvertFrom-OmadaAppPageVars.ps1",
+      "unit": "Expand-OmadaAppPageVarNestedJson",
+      "cyclomatic": 12,
+      "cognitive": 18
+    },
+    {
+      "file": "src/Lib/Functions/Private/ConvertFrom-OmadaAppPageVars.ps1",
+      "unit": "Get-OmadaAppPageVarBlock",
+      "cyclomatic": 13,
+      "cognitive": 22
+    },
+    {
+      "file": "src/Lib/Functions/Private/ConvertFrom-OmadaAppPageVars.ps1",
+      "unit": "Split-OmadaAppPageVarPair",
+      "cyclomatic": 19,
+      "cognitive": 29
+    },
+    {
+      "file": "src/Lib/Functions/Private/ConvertTo-PowerShellLiteral.ps1",
+      "unit": "ConvertTo-PowerShellLiteral",
+      "cyclomatic": 31,
+      "cognitive": 35
+    },
+    {
+      "file": "src/Lib/Functions/Private/ConvertTo-RedactedLogString.ps1",
+      "unit": "ConvertTo-RedactedLogValue",
+      "cyclomatic": 33,
+      "cognitive": 44
+    },
+    {
+      "file": "src/Lib/Functions/Private/ConvertTo-SqlLiteral.ps1",
+      "unit": "ConvertTo-SqlLiteral",
+      "cyclomatic": 24,
+      "cognitive": 21
+    },
+    {
+      "file": "src/Lib/Functions/Private/ConvertTo-SqlSchemaEditorModel.ps1",
+      "unit": "ConvertTo-SqlSchemaEditorModel",
+      "cyclomatic": 10,
+      "cognitive": 16
+    },
+    {
+      "file": "src/Lib/Functions/Private/ConvertTo-UnqualifiedSqlQuery.ps1",
+      "unit": "ConvertTo-UnqualifiedSqlQuery",
+      "cyclomatic": 17,
+      "cognitive": 21
+    },
+    {
+      "file": "src/Lib/Functions/Private/Copy-DataGridToClipboard.ps1",
+      "unit": "Copy-DataGridToClipboard",
+      "cyclomatic": 18,
+      "cognitive": 25
+    },
+    {
+      "file": "src/Lib/Functions/Private/Format-QueryResultSelection.ps1",
+      "unit": "Format-QueryResultSelection",
+      "cyclomatic": 32,
+      "cognitive": 58
+    },
+    {
+      "file": "src/Lib/Functions/Private/Format-QueryResultSelection.ps1",
+      "unit": "Get-QueryResultColumnKind",
+      "cyclomatic": 16,
+      "cognitive": 26
+    },
+    {
+      "file": "src/Lib/Functions/Private/Get-DataGridSelectionSchema.ps1",
+      "unit": "Get-DataGridSelectionSchema",
+      "cyclomatic": 14,
+      "cognitive": 16
+    },
+    {
+      "file": "src/Lib/Functions/Private/Get-OmadaCompatibilityDiagnostic.ps1",
+      "unit": "Get-OmadaCompatibilityDiagnostic",
+      "cyclomatic": 10,
+      "cognitive": 16
+    },
+    {
+      "file": "src/Lib/Functions/Private/Get-OmadaCompatibilityRule.ps1",
+      "unit": "Get-OmadaCompatibilityRule",
+      "cyclomatic": 26,
+      "cognitive": 62
+    },
+    {
+      "file": "src/Lib/Functions/Private/Get-QueryColumnSqlTypeMap.ps1",
+      "unit": "Get-QueryColumnSqlTypeMap",
+      "cyclomatic": 27,
+      "cognitive": 43
+    },
+    {
+      "file": "src/Lib/Functions/Private/Get-QueryResultValueKind.ps1",
+      "unit": "Get-QueryResultValueKind",
+      "cyclomatic": 27,
+      "cognitive": 20
+    },
+    {
+      "file": "src/Lib/Functions/Private/Get-QueryResultValueKind.ps1",
+      "unit": "Get-SqlTypeNameKind",
+      "cyclomatic": 29,
+      "cognitive": 2
+    },
+    {
+      "file": "src/Lib/Functions/Private/Get-QueryResultValueKind.ps1",
+      "unit": "Test-QueryResultRowIsUntyped",
+      "cyclomatic": 20,
+      "cognitive": 17
+    },
+    {
+      "file": "src/Lib/Functions/Private/Get-QueryResultValueKind.ps1",
+      "unit": "Test-QueryResultValueFitsKind",
+      "cyclomatic": 50,
+      "cognitive": 37
+    },
+    {
+      "file": "src/Lib/Functions/Private/Get-SqlDatabaseReference.ps1",
+      "unit": "Get-SqlDatabaseReference",
+      "cyclomatic": 14,
+      "cognitive": 19
+    },
+    {
+      "file": "src/Lib/Functions/Private/Get-SqlDiagnostic.ps1",
+      "unit": "Get-SqlDiagnostic",
+      "cyclomatic": 16,
+      "cognitive": 19
+    },
+    {
+      "file": "src/Lib/Functions/Private/Get-SqlFragmentDescendant.ps1",
+      "unit": "Get-SqlFragmentDescendant",
+      "cyclomatic": 23,
+      "cognitive": 42
+    },
+    {
+      "file": "src/Lib/Functions/Private/Get-SqlHistory.ps1",
+      "unit": "Get-SqlHistory",
+      "cyclomatic": 12,
+      "cognitive": 27
+    },
+    {
+      "file": "src/Lib/Functions/Private/Get-SqlSchema.ps1",
+      "unit": "Complete-SqlSchemaRetrieval",
+      "cyclomatic": 36,
+      "cognitive": 57
+    },
+    {
+      "file": "src/Lib/Functions/Private/Get-SqlSchema.ps1",
+      "unit": "Get-SqlSchemaObject",
+      "cyclomatic": 20,
+      "cognitive": 34
+    },
+    {
+      "file": "src/Lib/Functions/Private/Get-SqlSchemaDiagnostic.ps1",
+      "unit": "Get-SqlQueryScopeSource",
+      "cyclomatic": 16,
+      "cognitive": 30
+    },
+    {
+      "file": "src/Lib/Functions/Private/Get-SqlSchemaDiagnostic.ps1",
+      "unit": "Get-SqlSchemaDiagnostic",
+      "cyclomatic": 52,
+      "cognitive": 113
+    },
+    {
+      "file": "src/Lib/Functions/Private/Get-SqlSchemaModel.ps1",
+      "unit": "Get-SqlSchemaModel",
+      "cyclomatic": 17,
+      "cognitive": 27
+    },
+    {
+      "file": "src/Lib/Functions/Private/Get-SqlScriptStatement.ps1",
+      "unit": "Get-SqlScriptStatement",
+      "cyclomatic": 14,
+      "cognitive": 17
+    },
+    {
+      "file": "src/Lib/Functions/Private/Get-SqlTroubleShooterView.ps1",
+      "unit": "Start-SqlTroubleShooterViewLookup",
+      "cyclomatic": 17,
+      "cognitive": 28
+    },
+    {
+      "file": "src/Lib/Functions/Private/Initialize-FormObject.ps1",
+      "unit": "Initialize-FormObject",
+      "cyclomatic": 21,
+      "cognitive": 38
+    },
+    {
+      "file": "src/Lib/Functions/Private/Initialize-OmadaSqltroubleShooter.ps1",
+      "unit": "Initialize-OmadaSqlTroubleShooter",
+      "cyclomatic": 23,
+      "cognitive": 41
+    },
+    {
+      "file": "src/Lib/Functions/Private/Initialize-WebViewForTab.ps1",
+      "unit": "Initialize-WebViewForTab",
+      "cyclomatic": 53,
+      "cognitive": 94
+    },
+    {
+      "file": "src/Lib/Functions/Private/Install-WebView2.ps1",
+      "unit": "Install-WebView2",
+      "cyclomatic": 17,
+      "cognitive": 24
+    },
+    {
+      "file": "src/Lib/Functions/Private/Invoke-DuplicateTab.ps1",
+      "unit": "Invoke-DuplicateTab",
+      "cyclomatic": 14,
+      "cognitive": 24
+    },
+    {
+      "file": "src/Lib/Functions/Private/Invoke-ExecuteQuery.ps1",
+      "unit": "Complete-ExecuteQueryPipeline",
+      "cyclomatic": 13,
+      "cognitive": 17
+    },
+    {
+      "file": "src/Lib/Functions/Private/Invoke-ExecuteQuery.ps1",
+      "unit": "Complete-ExecuteQueryResult",
+      "cyclomatic": 22,
+      "cognitive": 34
+    },
+    {
+      "file": "src/Lib/Functions/Private/Invoke-ExecuteQuery.ps1",
+      "unit": "Invoke-ExecuteQuery",
+      "cyclomatic": 24,
+      "cognitive": 69
+    },
+    {
+      "file": "src/Lib/Functions/Private/Invoke-GenerateDiffView.ps1",
+      "unit": "Invoke-GenerateDiffView",
+      "cyclomatic": 10,
+      "cognitive": 20
+    },
+    {
+      "file": "src/Lib/Functions/Private/Invoke-OmadaExecutePipeline.ps1",
+      "unit": "Invoke-OmadaExecutePipeline",
+      "cyclomatic": 39,
+      "cognitive": 79
+    },
+    {
+      "file": "src/Lib/Functions/Private/Invoke-OmadaPSWebRequestWrapperAsync.ps1",
+      "unit": "Invoke-OmadaPSWebRequestWrapperAsync",
+      "cyclomatic": 10,
+      "cognitive": 17
+    },
+    {
+      "file": "src/Lib/Functions/Private/Invoke-OmadaViewLookupPipeline.ps1",
+      "unit": "Invoke-OmadaViewLookupPipeline",
+      "cyclomatic": 17,
+      "cognitive": 25
+    },
+    {
+      "file": "src/Lib/Functions/Private/Invoke-OnTreeViewItemShiftClick.ps1",
+      "unit": "Invoke-OnTreeViewItemShiftClick",
+      "cyclomatic": 14,
+      "cognitive": 34
+    },
+    {
+      "file": "src/Lib/Functions/Private/Invoke-SanitizeObject.ps1",
+      "unit": "Invoke-SanitizeObject",
+      "cyclomatic": 9,
+      "cognitive": 20
+    },
+    {
+      "file": "src/Lib/Functions/Private/Invoke-SaveEditorValue.ps1",
+      "unit": "Invoke-SaveEditorValue",
+      "cyclomatic": 8,
+      "cognitive": 18
+    },
+    {
+      "file": "src/Lib/Functions/Private/Move-TabSession.ps1",
+      "unit": "Move-TabSession",
+      "cyclomatic": 13,
+      "cognitive": 17
+    },
+    {
+      "file": "src/Lib/Functions/Private/New-TabContextMenu.ps1",
+      "unit": "New-TabContextMenu",
+      "cyclomatic": 22,
+      "cognitive": 40
+    },
+    {
+      "file": "src/Lib/Functions/Private/New-TabSession.ps1",
+      "unit": "New-TabSession",
+      "cyclomatic": 41,
+      "cognitive": 68
+    },
+    {
+      "file": "src/Lib/Functions/Private/Open-LogForm.ps1",
+      "unit": "Open-LogForm",
+      "cyclomatic": 16,
+      "cognitive": 23
+    },
+    {
+      "file": "src/Lib/Functions/Private/Open-SqlSchemaForm.ps1",
+      "unit": "Open-SqlSchemaForm",
+      "cyclomatic": 12,
+      "cognitive": 19
+    },
+    {
+      "file": "src/Lib/Functions/Private/Register-QueryResultGridHandler.ps1",
+      "unit": "Register-QueryResultGridHandler",
+      "cyclomatic": 54,
+      "cognitive": 118
+    },
+    {
+      "file": "src/Lib/Functions/Private/Remove-ExcessSessionLogFile.ps1",
+      "unit": "Remove-ExcessSessionLogFile",
+      "cyclomatic": 14,
+      "cognitive": 25
+    },
+    {
+      "file": "src/Lib/Functions/Private/Reset-Application.ps1",
+      "unit": "Reset-Application",
+      "cyclomatic": 17,
+      "cognitive": 21
+    },
+    {
+      "file": "src/Lib/Functions/Private/Resolve-SqlStatementTarget.ps1",
+      "unit": "Resolve-SqlStatementTarget",
+      "cyclomatic": 18,
+      "cognitive": 28
+    },
+    {
+      "file": "src/Lib/Functions/Private/Resolve-StrictBoolean.ps1",
+      "unit": "Resolve-StrictBoolean",
+      "cyclomatic": 16,
+      "cognitive": 9
+    },
+    {
+      "file": "src/Lib/Functions/Private/Restore-TabSessions.ps1",
+      "unit": "Restore-TabSessions",
+      "cyclomatic": 27,
+      "cognitive": 50
+    },
+    {
+      "file": "src/Lib/Functions/Private/Save-Query.ps1",
+      "unit": "Save-Query",
+      "cyclomatic": 18,
+      "cognitive": 35
+    },
+    {
+      "file": "src/Lib/Functions/Private/Save-QueryResultToFile.ps1",
+      "unit": "Save-QueryResultToFile",
+      "cyclomatic": 25,
+      "cognitive": 36
+    },
+    {
+      "file": "src/Lib/Functions/Private/Select-DataGridColumnCells.ps1",
+      "unit": "Select-DataGridColumnCells",
+      "cyclomatic": 16,
+      "cognitive": 32
+    },
+    {
+      "file": "src/Lib/Functions/Private/Set-AuthenticationOption.ps1",
+      "unit": "Set-AuthenticationOption",
+      "cyclomatic": 10,
+      "cognitive": 23
+    },
+    {
+      "file": "src/Lib/Functions/Private/Set-ConfigProperty.ps1",
+      "unit": "Set-ConfigProperty",
+      "cyclomatic": 44,
+      "cognitive": 105
+    },
+    {
+      "file": "src/Lib/Functions/Private/Set-OmadaUrl.ps1",
+      "unit": "Set-OmadaUrl",
+      "cyclomatic": 17,
+      "cognitive": 31
+    },
+    {
+      "file": "src/Lib/Functions/Private/Set-SqlConnectionState.ps1",
+      "unit": "Set-SqlConnectionState",
+      "cyclomatic": 13,
+      "cognitive": 17
+    },
+    {
+      "file": "src/Lib/Functions/Private/Set-SqlQueryFunctionState.ps1",
+      "unit": "Set-SqlQueryFunctionState",
+      "cyclomatic": 15,
+      "cognitive": 28
+    },
+    {
+      "file": "src/Lib/Functions/Private/Set-TabQueryResult.ps1",
+      "unit": "Set-TabQueryResult",
+      "cyclomatic": 13,
+      "cognitive": 17
+    },
+    {
+      "file": "src/Lib/Functions/Private/Show-EventInfo.ps1",
+      "unit": "Show-EventInfo",
+      "cyclomatic": 15,
+      "cognitive": 22
+    },
+    {
+      "file": "src/Lib/Functions/Private/Start-OmadaBackgroundRequest.ps1",
+      "unit": "Start-OmadaBackgroundRequest",
+      "cyclomatic": 16,
+      "cognitive": 27
+    },
+    {
+      "file": "src/Lib/Functions/Private/Start-SqlSchemaPreload.ps1",
+      "unit": "Start-SqlSchemaPreload",
+      "cyclomatic": 16,
+      "cognitive": 19
+    },
+    {
+      "file": "src/Lib/Functions/Private/Test-LogLevelThreshold.ps1",
+      "unit": "Test-LogLevelThreshold",
+      "cyclomatic": 18,
+      "cognitive": 4
+    },
+    {
+      "file": "src/Lib/Functions/Private/Update-DataConnectionList.ps1",
+      "unit": "Complete-DataConnectionListUpdate",
+      "cyclomatic": 15,
+      "cognitive": 19
+    },
+    {
+      "file": "src/Lib/Functions/Private/Update-QueryList.ps1",
+      "unit": "Update-QueryList",
+      "cyclomatic": 41,
+      "cognitive": 58
+    },
+    {
+      "file": "src/Lib/Functions/Private/Update-QueryResultStackLayout.ps1",
+      "unit": "Update-QueryResultStackLayout",
+      "cyclomatic": 20,
+      "cognitive": 23
+    },
+    {
+      "file": "src/Lib/Functions/Private/Update-SqlSchemaTreeFilter.ps1",
+      "unit": "Update-SqlSchemaTreeFilter",
+      "cyclomatic": 25,
+      "cognitive": 46
+    },
+    {
+      "file": "src/Lib/Functions/Private/Update-TabHeaderTitle.ps1",
+      "unit": "Update-TabHeaderTitle",
+      "cyclomatic": 20,
+      "cognitive": 22
+    },
+    {
+      "file": "src/Lib/Functions/Private/Write-ExecutePipelineLog.ps1",
+      "unit": "Write-ExecutePipelineLog",
+      "cyclomatic": 11,
+      "cognitive": 18
+    },
+    {
+      "file": "src/Lib/Functions/Private/Write-LogOutput.ps1",
+      "unit": "Write-LogOutput",
+      "cyclomatic": 53,
+      "cognitive": 67
+    },
+    {
+      "file": "src/Lib/Functions/Private/Write-SessionLogFile.ps1",
+      "unit": "Switch-SessionLogFilePart",
+      "cyclomatic": 10,
+      "cognitive": 16
+    },
+    {
+      "file": "src/Lib/Functions/Private/Write-TabMessage.ps1",
+      "unit": "Write-TabExecuteSummary",
+      "cyclomatic": 7,
+      "cognitive": 16
+    },
+    {
+      "file": "src/Lib/Functions/Public/Clear-OmadaSqlTroubleshooterCache.ps1",
+      "unit": "Clear-OmadaSqlTroubleshooterCache",
+      "cyclomatic": 10,
+      "cognitive": 16
+    },
+    {
+      "file": "src/Lib/Functions/Public/Invoke-OmadaSqlTroubleshooter.ps1",
+      "unit": "Invoke-OmadaSqlTroubleshooter",
+      "cyclomatic": 30,
+      "cognitive": 53
+    }
+  ]
+}

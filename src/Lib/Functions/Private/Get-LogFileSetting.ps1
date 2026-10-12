@@ -9,10 +9,9 @@ function Get-LogFileSetting {
         before these properties existed, and a hard fallback covers a schema that cannot be read at
         all. No call site repeats any of it.
 
-        The five properties, as the maintainer set them for issue #121:
+        The four properties, as the maintainer set them for issue #121 and amended for #157:
 
           EnableSessionLogFile            write a file for the session at all; off by default
-          SessionLogFileLogLevel          the file's OWN level, independent of the log window's
           SessionLogFileDirectory         empty means "beside the other per-user state"
           SessionLogFileRetentionCount    keep at most this many sessions, the running one included
           SessionLogFileMaxSizeMegabytes  split the active file into a numbered part past this size
@@ -21,7 +20,11 @@ function Get-LogFileSetting {
         would delete every other session, and a zero size would split the file after every line.
 
     .OUTPUTS
-        [PSCustomObject] with Enabled, LogLevel, Directory, RetentionCount and MaxSizeMegabytes.
+        [PSCustomObject] with Enabled, Directory, RetentionCount and MaxSizeMegabytes.
+
+        No level: the file follows the application's log level (issue #157), which Write-SessionLogFile
+        reads live, so there is nothing to resolve here. A configuration file still carrying the
+        retired SessionLogFileLogLevel is simply never asked for it.
 
     .EXAMPLE
         $Setting = Get-LogFileSetting
@@ -40,14 +43,6 @@ function Get-LogFileSetting {
     # Off unless something says otherwise: a file on disk is opt-in.
     $Enabled = Resolve-SessionLogFileBooleanSetting -Property "EnableSessionLogFile" -Fallback $false
 
-    # Resolve-LogLevel is the module's one answer to "is this string a log level?", and it already
-    # falls back from a stored value to the schema default without guessing. A level nobody can read
-    # must not silently switch the file to a quieter one.
-    $LogLevel = Resolve-LogLevel -PersistedLogLevel ([string]$Script:AppGlobalConfig.SessionLogFileLogLevel) -SchemaDefault ([string](Get-ConfigSchemaDefault -Property "SessionLogFileLogLevel"))
-    if ([string]::IsNullOrWhiteSpace($LogLevel)) {
-        $LogLevel = "DEBUG"
-    }
-
     # Beside the configuration file and the persisted tabs, under the same AppDataFolder - which the
     # E2E lane redirects with OMADASQL_E2E_APPDATA, so an automated run writes its logs into its own
     # sandbox rather than the developer's profile.
@@ -65,7 +60,6 @@ function Get-LogFileSetting {
 
     return [PSCustomObject]@{
         Enabled          = $Enabled
-        LogLevel         = $LogLevel
         Directory        = $Directory
         RetentionCount   = $RetentionCount
         MaxSizeMegabytes = $MaxSizeMegabytes

@@ -88,7 +88,9 @@ try {
         $Elements.ButtonExecuteQuery.RaiseEvent([System.Windows.RoutedEventArgs]::new([System.Windows.Controls.Primitives.ButtonBase]::ClickEvent))
         Wait-DriveIdle -Milliseconds 5000
 
-        $Rows = @($Elements.DataGridQueryResult.ItemsSource)
+        # One result per statement since issue #151; the drive script checks the first, which is what
+        # it meant by "the grid" when there was only ever one.
+        $Rows = @(@($Elements.ItemsControlQueryResults.ItemsSource)[0].Rows)
         $Report.ResultRowCount = $Rows.Count
         $Report.StatusBarRows = [string]$Elements.TextBlockStatusBarRows.Text
     }

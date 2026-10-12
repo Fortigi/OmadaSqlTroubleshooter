@@ -29,7 +29,8 @@ Exit code is `0` when every scenario passes, non-zero otherwise. A JUnit report 
   including WPF event handlers.
 - The scenarios drive the **real** UI: they set fields on `$Script:MainForm.Elements`, `RaiseEvent`
   the real Connect/Execute/New buttons, and assert on real app state (connection status, the query and
-  data-connection dropdowns, `DataGridQueryResult.ItemsSource`, the tab list, etc.).
+  data-connection dropdowns, the stacked results pane (`Get-E2EResultRowCount` /
+  `Get-E2EResultCount`, since issue #151 binds one result grid per statement), the tab list, etc.).
 
 The editor read/write seams and the synchronous backend seam (`Invoke-OmadaPSWebRequestWrapper`) are
 mocked to complete inline, so most button clicks still run their whole handler chain before

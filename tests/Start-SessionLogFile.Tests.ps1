@@ -69,9 +69,13 @@ Describe "Start-SessionLogFile" {
         $Script:RunTimeConfig = [PSCustomObject]@{
             ApplicationName = "Test"
             AppDataFolder   = $Script:AppDataFolder
+            # The level the file now follows (issue #157), read by Write-SessionLogFile for every
+            # line. Without it Test-LogLevelThreshold includes nothing and the content assertions
+            # below would fail for a reason that has nothing to do with what they are testing.
+            Logging         = [PSCustomObject]@{ LogLevelSetting = "DEBUG" }
         }
         $Script:AppGlobalConfig = [PSCustomObject]@{ EnableSessionLogFile = $true }
-        $Script:SessionLogFile = New-SessionLogFileState -LogLevel "DEBUG"
+        $Script:SessionLogFile = New-SessionLogFileState
         $Script:LoggedMessage = [System.Collections.Generic.List[PSCustomObject]]::new()
         $Script:OtherInstance = $null
     }
@@ -115,13 +119,21 @@ Describe "Start-SessionLogFile" {
             Test-Path -LiteralPath $Path | Should -BeTrue
         }
 
-        It "leaves the state ready to be written to, at the configured level and a 5 MB split size" {
+        It "leaves the state ready to be written to, with a 5 MB split size" {
             Start-SessionLogFile | Out-Null
 
             $Script:SessionLogFile.Writer | Should -Not -BeNullOrEmpty
-            $Script:SessionLogFile.LogLevel | Should -BeExactly "DEBUG"
             $Script:SessionLogFile.MaxBytes | Should -Be (5 * 1MB)
             $Script:SessionLogFile.UsesActiveName | Should -BeTrue
+        }
+
+        It "carries no level of its own on the state (issue #157)" {
+            # The file follows the application's level, read live by Write-SessionLogFile. A LogLevel
+            # key here would be a second, stale copy of that decision - and assigning a property a
+            # [PSCustomObject] does not have throws, so a leftover writer to it would fail loudly.
+            Start-SessionLogFile | Out-Null
+
+            $Script:SessionLogFile.PSObject.Properties.Name | Should -Not -Contain "LogLevel"
         }
 
         It "writes the lines that were emitted before it opened" {
@@ -160,7 +172,7 @@ Describe "Start-SessionLogFile" {
             Write-SessionLogFile -Line "from the first session" -LogType "ERROR"
             $FirstKey = $Script:SessionLogFile.SessionKey
             Stop-SessionLogFile
-            $Script:SessionLogFile = New-SessionLogFileState -LogLevel "DEBUG"
+            $Script:SessionLogFile = New-SessionLogFileState
 
             $Path = Start-SessionLogFile
 
@@ -175,7 +187,7 @@ Describe "Start-SessionLogFile" {
             Start-SessionLogFile | Out-Null
             Write-SessionLogFile -Line "the first instance is running" -LogType "ERROR"
             $Script:OtherInstance = $Script:SessionLogFile
-            $Script:SessionLogFile = New-SessionLogFileState -LogLevel "DEBUG"
+            $Script:SessionLogFile = New-SessionLogFileState
 
             $Path = Start-SessionLogFile
 

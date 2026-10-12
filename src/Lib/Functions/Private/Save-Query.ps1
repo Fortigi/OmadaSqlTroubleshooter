@@ -5,6 +5,10 @@ function Save-Query {
     )
     try {
         $Script:Tracer::WriteLine(("{0}: Function: {1} - Caller: {2}({3}) - Command: {4} - Parameters: {5}" -f $($Script:RunTimeConfig.ApplicationName), $($MyInvocation.MyCommand.Name), $($MyInvocation.ScriptName).Split("\")[-1], $($MyInvocation.ScriptLineNumber), $MyInvocation.Statement, (ConvertTo-RedactedLogString -InputObject $PSBoundParameters -MaxDepth 1)))
+
+        # Also before: a save that fails part-way must not leave a reusable fetch of the old text.
+        Clear-RecentSqlQueryObject -DoId $Script:AppConfig.CurrentSqlQuery.DoId
+
         if ($NewQuery) {
             "Create new query" | Write-LogOutput -LogType DEBUG
 
@@ -87,6 +91,10 @@ function Save-Query {
 
             "Save query" | Write-LogOutput
             $private:Result = Invoke-OmadaPSWebRequestWrapper
+
+            # The text on the tenant has just changed, so a fetch Set-EditorValue may reuse is stale -
+            # and selecting the saved query below runs Set-EditorValue straight away.
+            Clear-RecentSqlQueryObject -DoId $Script:AppConfig.CurrentSqlQuery.DoId
 
             if ($null -ne $private:Result -and $NewQuery -or $private:Result.DisplayName -ne $Script:RunTimeData.CurrentSqlQuery.DisplayName) {
                 "Query saved!" | Write-LogOutput

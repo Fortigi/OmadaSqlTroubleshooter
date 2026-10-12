@@ -216,12 +216,34 @@ E2ESuite -Name "BackgroundTabEditor" -Body {
         E2EAssertTrue ($BackgroundTab.NeedsEditorSync) "a background restored tab must still need an editor sync after restore (the flag must NOT be consumed at creation, or its query never re-loads on selection)"
 
         # Selecting the background tab for the first time must reload its query into the editor.
+        #
+        # As a user does it: some time after start-up. The restore fetched this very query moments
+        # ago, and within Get-RecentSqlQueryObject's reuse window Set-EditorValue would take that
+        # fetch instead of asking again (the next case) - so the window is closed first, which is
+        # what the passing of time does.
+        Clear-RecentSqlQueryObject
         $script:E2ECalls.Clear()
         (Get-TabControlSessions).SelectedItem = $BackgroundTab.TabItem
         Invoke-E2EFlushDispatcher
 
         E2EAssertTrue (-not $BackgroundTab.NeedsEditorSync) "selecting the background tab should consume its NeedsEditorSync flag"
         E2EAssertTrue ((Get-E2ECallCount -MethodLike "GET" -UriLike "*C_P_SQLTROUBLESHOOTING(*") -ge 1) "selecting the background tab should reload its query into the editor (Set-EditorValue -> Get-SqlQueryObject)"
+    }
+
+    E2ECase -Name "a background restored tab selected right after start-up reuses the query the restore just fetched" -Body {
+        Reset-E2ETabsToOne
+
+        # The same two restored tabs, selected within the reuse window: the query was fetched moments
+        # ago on this session, so selecting the tab syncs its editor without a second round trip.
+        $BackgroundTab = New-E2ERestoredTab -DisplayName "Restored1"
+        $null = New-E2ERestoredTab -DisplayName "Restored2"
+
+        $script:E2ECalls.Clear()
+        (Get-TabControlSessions).SelectedItem = $BackgroundTab.TabItem
+        Invoke-E2EFlushDispatcher
+
+        E2EAssertTrue (-not $BackgroundTab.NeedsEditorSync) "selecting the background tab should still sync its editor"
+        E2EAssertEqual 0 (Get-E2ECallCount -MethodLike "GET" -UriLike "*C_P_SQLTROUBLESHOOTING(*") "a query fetched moments ago on the same session should not be fetched again"
     }
 }
 

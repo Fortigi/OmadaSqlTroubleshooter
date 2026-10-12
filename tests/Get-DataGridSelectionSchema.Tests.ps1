@@ -61,18 +61,29 @@ Describe "Get-DataGridSelectionSchema" {
             # simply unset in a test session, so the fallback also yields nothing. With a real grid
             # present, an explicit -DataGrid $null must still mean "no grid" - an omitted parameter
             # is what asks for the default, and the two are indistinguishable from the value alone.
-            $Script:MainForm = [PSCustomObject]@{
-                Elements = [PSCustomObject]@{
-                    DataGridQueryResult = New-GridStub -Column @{ Header = "Id"; SortMemberPath = "Id"; DisplayIndex = 0 }
-                }
-            }
+            # The default grid is the FOCUSED result's grid since issue #151 - the Results pane holds
+            # one per statement, so there is no single named grid to stub any more. The contract under
+            # test is unchanged: an omitted parameter asks for the default, an explicit $null means
+            # "no grid". Only where the default comes from has moved.
+            # A PLAIN local, not $Private:Stub. GetNewClosure captures the enclosing scope's
+            # variables, and a $Private:-scoped one is not visible to the captured scope when the
+            # scriptblock later runs - so the stub returned nothing and the default-grid assertion
+            # failed. The same mistake this slice had just fixed in Register-QueryResultGridHandler.
+            $Stub = New-GridStub -Column @{ Header = "Id"; SortMemberPath = "Id"; DisplayIndex = 0 }
+            $Private:Original = ${function:Get-FocusedQueryResultGrid}
+            Set-Item -Path "function:Get-FocusedQueryResultGrid" -Value { return $Stub }.GetNewClosure()
 
             try {
                 @(Get-DataGridSelectionSchema -DataGrid $null).Count | Should -Be 0
                 @(Get-DataGridSelectionSchema).Count | Should -Be 1 -Because "an omitted parameter is what selects the default grid"
             }
             finally {
-                $Script:MainForm = $null
+                if ($null -ne $Private:Original) {
+                    Set-Item -Path "function:Get-FocusedQueryResultGrid" -Value $Private:Original
+                }
+                else {
+                    Remove-Item -Path "function:Get-FocusedQueryResultGrid" -ErrorAction SilentlyContinue
+                }
             }
         }
     }

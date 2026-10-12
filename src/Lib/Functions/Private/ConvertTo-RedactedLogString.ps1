@@ -28,7 +28,12 @@ function ConvertTo-RedactedLogString {
         [int]$MaxStringLength = 512,
         # Keep keys and value shapes but no values at all. Used where the object being logged IS a
         # request body, rather than a parameter set containing one.
-        [switch]$ShapeOnly
+        [switch]$ShapeOnly,
+        # An object or dictionary with more members than this is summarised by its count alone, without
+        # its member names and without walking it. 0 means no limit. A SQL schema response is one
+        # object with a property per table: logged in full it was hundreds of lines naming every table,
+        # and over a second on the UI thread per large database.
+        [int]$MaxProperties = 0
     )
 
     try {
@@ -36,7 +41,7 @@ function ConvertTo-RedactedLogString {
         # well. Without this the "Body:" line would keep showing String(24) while the "Parameters:"
         # line from the same request showed the query - one log contradicting itself.
         $MaskBodyValues = [bool]$ShapeOnly -and -not $Script:SkipBodyRedaction
-        $Redacted = ConvertTo-RedactedLogValue -Value $InputObject -Depth 0 -MaxDepth $MaxDepth -MaxStringLength $MaxStringLength -Visited ([System.Collections.Generic.List[object]]::new()) -MaskValues $MaskBodyValues
+        $Redacted = ConvertTo-RedactedLogValue -Value $InputObject -Depth 0 -MaxDepth $MaxDepth -MaxStringLength $MaxStringLength -Visited ([System.Collections.Generic.List[object]]::new()) -MaskValues $MaskBodyValues -MaxProperties $MaxProperties
         if ($null -eq $Redacted) {
             return "null"
         }
@@ -62,7 +67,8 @@ function ConvertTo-RedactedLogValue {
         [int]$MaxDepth,
         [int]$MaxStringLength,
         [System.Collections.Generic.List[object]]$Visited,
-        [bool]$MaskValues
+        [bool]$MaskValues,
+        [int]$MaxProperties = 0
     )
 
     $RedactedToken = "***REDACTED***"
@@ -138,9 +144,13 @@ function ConvertTo-RedactedLogValue {
     $Visited.Add($Value)
 
     if ($Value -is [System.Collections.IDictionary]) {
+        if ($MaxProperties -gt 0 -and $Value.Count -gt $MaxProperties) {
+            return "Dictionary with {0} entries" -f $Value.Count
+        }
+
         $Result = [ordered]@{}
         foreach ($Key in @($Value.Keys)) {
-            $Result[[string]$Key] = Get-RedactedMemberValue -Name ([string]$Key) -MemberValue $Value[$Key] -Depth $Depth -MaxDepth $MaxDepth -MaxStringLength $MaxStringLength -Visited $Visited -MaskValues $MaskValues -SensitiveNamePatterns $SensitiveNamePatterns -RedactedToken $RedactedToken
+            $Result[[string]$Key] = Get-RedactedMemberValue -Name ([string]$Key) -MemberValue $Value[$Key] -Depth $Depth -MaxDepth $MaxDepth -MaxStringLength $MaxStringLength -Visited $Visited -MaskValues $MaskValues -SensitiveNamePatterns $SensitiveNamePatterns -RedactedToken $RedactedToken -MaxProperties $MaxProperties
         }
 
         return $Result
@@ -161,7 +171,7 @@ function ConvertTo-RedactedLogValue {
 
         $Result = @()
         foreach ($Item in $Items) {
-            $Result += , (ConvertTo-RedactedLogValue -Value $Item -Depth ($Depth + 1) -MaxDepth $MaxDepth -MaxStringLength $MaxStringLength -Visited $Visited -MaskValues $MaskValues)
+            $Result += , (ConvertTo-RedactedLogValue -Value $Item -Depth ($Depth + 1) -MaxDepth $MaxDepth -MaxStringLength $MaxStringLength -Visited $Visited -MaskValues $MaskValues -MaxProperties $MaxProperties)
         }
 
         return $Result
@@ -170,9 +180,16 @@ function ConvertTo-RedactedLogValue {
     # Anything else: walk its properties, tolerating members that throw when read.
     $Result = [ordered]@{}
     try {
+        if ($MaxProperties -gt 0) {
+            $PropertyCount = @($Value.PSObject.Properties).Count
+            if ($PropertyCount -gt $MaxProperties) {
+                return "Object with {0} properties" -f $PropertyCount
+            }
+        }
+
         foreach ($Property in $Value.PSObject.Properties) {
             try {
-                $Result[$Property.Name] = Get-RedactedMemberValue -Name $Property.Name -MemberValue $Property.Value -Depth $Depth -MaxDepth $MaxDepth -MaxStringLength $MaxStringLength -Visited $Visited -MaskValues $MaskValues -SensitiveNamePatterns $SensitiveNamePatterns -RedactedToken $RedactedToken
+                $Result[$Property.Name] = Get-RedactedMemberValue -Name $Property.Name -MemberValue $Property.Value -Depth $Depth -MaxDepth $MaxDepth -MaxStringLength $MaxStringLength -Visited $Visited -MaskValues $MaskValues -SensitiveNamePatterns $SensitiveNamePatterns -RedactedToken $RedactedToken -MaxProperties $MaxProperties
             }
             catch {
                 $Result[$Property.Name] = "<unreadable>"
@@ -206,7 +223,8 @@ function Get-RedactedMemberValue {
         [System.Collections.Generic.List[object]]$Visited,
         [bool]$MaskValues,
         [string[]]$SensitiveNamePatterns,
-        [string]$RedactedToken
+        [string]$RedactedToken,
+        [int]$MaxProperties = 0
     )
 
     # Credential objects are handled by the type rules in the walker, which keep the user name -
@@ -233,5 +251,5 @@ function Get-RedactedMemberValue {
         $ChildMaskValues = $true
     }
 
-    return ConvertTo-RedactedLogValue -Value $MemberValue -Depth ($Depth + 1) -MaxDepth $MaxDepth -MaxStringLength $MaxStringLength -Visited $Visited -MaskValues $ChildMaskValues
+    return ConvertTo-RedactedLogValue -Value $MemberValue -Depth ($Depth + 1) -MaxDepth $MaxDepth -MaxStringLength $MaxStringLength -Visited $Visited -MaskValues $ChildMaskValues -MaxProperties $MaxProperties
 }

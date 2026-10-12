@@ -10,6 +10,102 @@ semantic version.
 
 ## [Unreleased]
 
+### Changed
+
+- The session log file now follows the application log level (#157). The log viewer, the console and
+  the file filter on one and the same level and never differ: a line is written to the file exactly
+  when the viewer shows it, and changing the level in the log viewer applies to the file from the next
+  line on, without a restart. Lines buffered before the file opens are filtered when it opens, against
+  the level the application is running at by then. This replaces the file's own log level from #121 /
+  PR #124, which defaulted to `DEBUG` on the reasoning that the file should be more detailed than the
+  window — it did not cover a viewer set *more* verbose than the file, which silently dropped `VERBOSE`
+  and `VERBOSE2` entries from the file that the viewer was showing. The `SessionLogFileLogLevel`
+  setting is retired; a configuration file that still contains it loads without error and the value is
+  ignored. Redaction is unchanged: the file stays behind the same single gate as the window.
+
+### Added
+
+- Auto-merge for Dependabot's GitHub Actions updates, gated on reputation. Auto-merge is enabled on
+  such a pull request when every update in it is a semver patch or minor update, its GitHub release
+  is at least 3 days old, the action repository's OpenSSF Scorecard (via deps.dev) is at least 7.0
+  with a perfect `Dangerous-Workflow` score, and it holds nothing but verified Dependabot commits to
+  workflow files. The workflow then starts `PR Validation` itself, and GitHub merges once that and
+  `Dependency Review` pass. Everything else - NuGet bumps included - gets a comment explaining why
+  and waits for review as before. Policy in `build/DependabotAutoMerge.psd1`; see
+  [Dependabot auto-merge](SECURITY.md#dependabot-auto-merge). `PR Validation` can now be dispatched
+  for a pull request through its `pr_number` input.
+
+- Complexity and test-strength gates in the build (#109). Pull request validation now measures the
+  changed `src/Lib` files with PSComplexity (at most 15 cyclomatic / 15 cognitive per unit, with the
+  units already over that recorded in `complexity-baseline.json` and not allowed to get worse) and
+  with PSMutant mutation testing (the file's own tests must catch at least 73% of injected faults),
+  reported as a **Quality gates (changed code)** check. A weekly workflow measures the whole tree
+  and keeps one bug per failing gate up to date. The build modules are now pinned to exact versions
+  in `build/BuildModules.psd1`, and the test runner moves to Pester 6.2.0. Nothing about the
+  published module changes.
+- Every database's schema is loaded on connect, and the connection list is reduced to the databases
+  actually in use (#165). The schema window used to fetch a database's schema the first time you
+  expanded its node, so every unopened node was a stall and cross-database completion only worked for
+  the databases you happened to open. Now the schemas are requested as soon as the connection list is
+  known — one background request per connection, reusing the per-pool cache and the in-flight check, so
+  nothing is fetched twice and the window never blocks. **Refresh schema** now re-fetches every
+  database in the session rather than only the selected one. When background requests are unavailable
+  the preload is skipped entirely and the old on-expand fetch still applies, because the alternative
+  would be one blocking request per database at connect.
+- Data connections that address no deployed database are no longer offered (#165). Not every published
+  connection points at a database that exists: with ODW ingestion enabled, `ODWMD`,
+  `Source System Data DB` and `ODWS` are published and unused. The tenant's ingestion flag is read from
+  the settings Omada embeds in its own pages — one request, no side effects, cached per session — and
+  those three are then absent from the data connection dropdown, the schema window and the editor's
+  cross-database completion alike. The match is exact and case-insensitive on the connection's name,
+  never a substring, so a connection merely *containing* one of those names is kept. If the flag is
+  absent, false, or could not be read, nothing is filtered: offering a database that does not work is a
+  smaller failure than hiding one you need.
+
+- Every database in the SQL schema window, and completion across databases (#158). The schema window
+  now lists one collapsible node per data connection and loads each one's schema **the first time you
+  expand it**, so opening the window still costs a single round trip no matter how many connections
+  the tenant has; the wildcard filter works across the new level, and a database that has not been
+  loaded matches on its own name only. In the editor, `[DatabaseA].` completes that database's
+  schemas and `[DatabaseA].[Schema].` its tables — fetched in the background the first time a
+  database is named, and served from the per-pool cache with no request after that. Bracketed
+  identifiers are now understood by the completion parser generally, so `FROM [dbo].[Person] p`
+  resolves its alias where it previously did not. The schema validation pass also checks
+  `[DatabaseA].[Schema].[Table]` names once that database's schema is cached, which additionally
+  restores the column diagnostics of local tables in a query that joins another database — those
+  were previously suppressed for the whole query. It still never makes a request of its own, so a
+  database that has not been loaded is left alone exactly as before.
+
+- Explicit database selection inside the SQL query (#152). `SELECT * FROM [Db].[Schema].[Table]`,
+  `Db.Schema.Table` and `[Db]..[Table]` now run against the named database whatever the **Data
+  connection** dropdown has selected, and `USE [Db]` switches the dropdown, the status bar and the
+  loaded schema and sticks for later executions. The name is resolved client-side against the data
+  connection list, so nothing changes about what Omada receives: the prefix and the `USE` are
+  stripped from the text that is posted, and the query stored on the data object stays the original
+  text. The database is resolved **per statement**, on top of #151, so one script may span databases
+  — each statement runs against its own connection with its own result grid, and a `USE` applies
+  from its own statement onward. An unknown database, a single statement addressing two databases,
+  and a four-part linked-server name are all rejected before any request is made. Works identically
+  for selection execution, and costs a query with no prefix nothing.
+
+### Fixed
+
+- <kbd>Ctrl</kbd>+<kbd>C</kbd> and the other three copy shortcuts in a result grid (#166). Pressing
+  them with cells or rows selected logged `You cannot call a method on a null-valued expression` and
+  copied nothing, while the same copy from the context menu worked. The shortcuts re-raised the shared
+  menu item's `Click` event, and they do that from inside a `.GetNewClosure()` scriptblock — which runs
+  in a detached dynamic module whose scope does not include this module's `$Script:` variables, so
+  every one of those menu-item variables read as `$null`. They now call `Copy-DataGridToClipboard`
+  directly, exactly as each menu item's own handler does; commands resolve from a closure where
+  variables do not. <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>C</kbd>,
+  <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>P</kbd> and <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>S</kbd> were
+  broken by the same cause and are fixed with it.
+- The column-selection anchor is cleared when focus moves to another result grid (#166). The same
+  closure-scope detachment silently swallowed the `$null` assignment that clears it, so a
+  shift-click in a newly focused grid range-selected from a column in the grid just left. The clear now
+  goes through `Clear-DataGridColumnSelectionAnchor`, which owns the write in the scope that owns the
+  state. This one failed with no error and no log line, which is why it is called out separately.
+
 ## [Baseline] - 2026-09-16
 
 *This changelog was introduced on this date; earlier releases are not itemised here. The

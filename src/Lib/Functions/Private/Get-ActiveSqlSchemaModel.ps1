@@ -1,3 +1,47 @@
+function Get-SqlSchemaCacheKey {
+    <#
+    .SYNOPSIS
+        Returns the "<SessionKey>|<DataConnectionDoId>" key under which a given data connection's
+        schema is cached, or $null when there is no connection pool to key it against.
+
+    .DESCRIPTION
+        The format lived only in Get-ActiveSqlSchemaCacheKey until issue #158, which needs the key of
+        a data connection that is NOT the active one - the schema window now holds a node per
+        connection and fetches each one's schema on first expand. That is the same cache, under the
+        same per-pool contract, for a different DoId.
+
+        Still exactly one formatter. The reason Get-ActiveSqlSchemaCacheKey gives for that is
+        unchanged and now covers more callers: a second copy of this string would be another chance
+        for the validation pass, the completion list and the schema window to disagree about which
+        tenant's schema they are looking at.
+
+    .PARAMETER DataConnectionDoId
+        The data connection's DoId.
+
+    .OUTPUTS
+        [string] the cache key, or $null.
+    #>
+    [CmdLetBinding()]
+    param(
+        [Parameter(Mandatory = $false, Position = 0)]
+        [AllowNull()]
+        [AllowEmptyString()]
+        [string]$DataConnectionDoId
+    )
+
+    # No tracer preamble: called from the debounced validation path on every idle tick.
+
+    if ($null -eq $Script:RunTimeData -or $null -eq $Script:RunTimeData.RestMethodParam) {
+        return $null
+    }
+
+    if ([string]::IsNullOrWhiteSpace($DataConnectionDoId)) {
+        return $null
+    }
+
+    return "{0}|{1}" -f $Script:RunTimeData.RestMethodParam.SessionKey, $DataConnectionDoId
+}
+
 function Get-ActiveSqlSchemaCacheKey {
     <#
     .SYNOPSIS
@@ -19,16 +63,12 @@ function Get-ActiveSqlSchemaCacheKey {
 
     # No tracer preamble: called from the debounced validation path on every idle tick.
 
-    if ($null -eq $Script:RunTimeData -or $null -eq $Script:RunTimeData.RestMethodParam) {
-        return $null
-    }
-
     if ($null -eq $Script:AppConfig -or $null -eq $Script:AppConfig.CurrentDataConnection -or
         [string]::IsNullOrWhiteSpace($Script:AppConfig.CurrentDataConnection.DoId)) {
         return $null
     }
 
-    return "{0}|{1}" -f $Script:RunTimeData.RestMethodParam.SessionKey, $Script:AppConfig.CurrentDataConnection.DoId
+    return Get-SqlSchemaCacheKey -DataConnectionDoId $Script:AppConfig.CurrentDataConnection.DoId
 }
 
 function Get-ActiveSqlSchemaModel {
@@ -87,7 +127,7 @@ function Get-ActiveSqlSchemaModel {
 function Reset-SqlSchemaCache {
     <#
     .SYNOPSIS
-        Throws away the cached schema for the active tab's data connection and fetches it again.
+        Throws away every cached schema for this connection pool and fetches them again.
 
     .DESCRIPTION
         The "Refresh schema" action of issue #61 section 2. The schema cache lives for the whole
@@ -95,9 +135,17 @@ function Reset-SqlSchemaCache {
         A stale cache is the reason the schema pass only ever warns, but the user still needs a way
         to say "it changed, look again" without restarting the application.
 
-        Both caches go: the raw response and the index built from it. Get-SqlSchemaObject then
-        re-fetches, repopulates, rebuilds the schema tree, pushes the schema to the editor and
-        re-triggers validation - the same path a connection change takes.
+        EVERY DATABASE IN THE POOL, not just the active one (issue #165). The window now shows every
+        data connection with its schema already loaded, so "refresh" that dropped one database's cache
+        would leave the rest of the tree showing whatever it read on connect - stale, and silently so.
+        Keys are matched on the "<SessionKey>|" prefix the schema cache is keyed by, so another
+        session's tabs keep their caches.
+
+        All three caches go for each of them: the raw response, the index built from it, and the
+        editor JSON built from it.
+        Get-SqlSchemaObject then re-fetches the active connection - repopulating the tree, pushing the
+        schema to the editor and re-triggering validation, the same path a connection change takes -
+        and Start-SqlSchemaPreload asks for the rest.
 
     .OUTPUTS
         None.
@@ -114,17 +162,27 @@ function Reset-SqlSchemaCache {
             return
         }
 
-        if ($null -ne $Script:SqlSchemaCache) {
-            $Script:SqlSchemaCache.Remove($CacheKey)
-        }
+        # The pool's own prefix, taken from the active key rather than rebuilt from RestMethodParam, so
+        # this cannot disagree with Get-SqlSchemaCacheKey about how a key is shaped.
+        $Private:PoolPrefix = "{0}|" -f $CacheKey.Split("|")[0]
 
-        if ($null -ne $Script:SqlSchemaModelCache) {
-            $Script:SqlSchemaModelCache.Remove($CacheKey)
+        foreach ($Private:Cache in @($Script:SqlSchemaCache, $Script:SqlSchemaModelCache, $Script:SqlSchemaEditorJsonCache)) {
+            if ($null -eq $Private:Cache) {
+                continue
+            }
+
+            # Keys snapshotted: the collection is modified in the loop.
+            foreach ($Private:Key in @($Private:Cache.Keys)) {
+                if ([string]$Private:Key -like ("{0}*" -f $Private:PoolPrefix)) {
+                    $Private:Cache.Remove($Private:Key)
+                }
+            }
         }
 
         "Refreshing the SQL schema." | Write-LogOutput
 
         Get-SqlSchemaObject
+        Start-SqlSchemaPreload
     }
     catch {
         $_.Exception.Message | Write-ContainedErrorLog -ErrorObject $_

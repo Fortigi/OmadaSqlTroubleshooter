@@ -40,7 +40,7 @@ function Invoke-OmadaPSWebRequestWrapper {
             # eligible for a worker or no worker could be had.
             $Private:Parameters = Build-OmadaRequestParameter
 
-            "Parameters: {0}" -f (ConvertTo-RedactedLogString -InputObject $Private:Parameters) | Write-LogOutput -LogType VERBOSE
+            Write-RedactedRequestLog -Label "Parameters" -InputObject $Private:Parameters
 
             # The call itself lives in Invoke-OmadaRequestCore, which reads no $Script: state and
             # writes no log - the one part of this function that can legally run in a worker runspace.
@@ -68,7 +68,7 @@ function Invoke-OmadaPSWebRequestWrapper {
             # Set-SqlQueryFunctionState for the dropdowns and Display name). Connection state is
             # single-sourced: Set-SqlConnectionState is the only writer of both the flag and the
             # status bar text.
-            "Result: {0}" -f (ConvertTo-RedactedLogString -InputObject $Private:Result) | Write-LogOutput -LogType VERBOSE
+            Write-RedactedRequestLog -Label "Result" -InputObject $Private:Result
             $Script:RunTimeData.RestMethodParam.ForceAuthentication = $false
             return $Private:Result
         }

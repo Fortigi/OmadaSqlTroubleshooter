@@ -50,9 +50,13 @@ function Set-SqlQueryFunctionState {
             "ButtonSaveQuery"              = @{
                 AllowedStatusChange = "Disable"
             }
-            "DataGridQueryResult"          = @{
-                AllowedStatusChange = "Disable"
-            }
+            # DataGridQueryResult is deliberately absent. Issue #151 retired that name when the single
+            # result grid became one grid per statement, so this list would resolve it to $null - and
+            # the loops below call .GetType().Name on every entry, which throws on $null. That would
+            # have taken down every connect and disconnect.
+            #
+            # Clearing the results is now an explicit Clear-TabQueryResult call in the disable branch,
+            # which also clears the list on the tab session rather than only the control bound to it.
         }
 
         if ($Status) {
@@ -71,6 +75,13 @@ function Set-SqlQueryFunctionState {
             }
         }
         else {
+            # What the DataGridQueryResult entry used to achieve through the switch below: a tab that
+            # disconnects must not keep showing results it can no longer refresh. Both halves are
+            # cleared - the per-statement list on the tab session and the pane bound to it - because
+            # clearing only the control would leave the session believing in results that are no
+            # longer on screen.
+            Clear-TabQueryResult
+
             $ElementList.Keys | Where-Object { $ElementList.$_.AllowedStatusChange -ne "Enable" } | ForEach-Object {
                 $Item = $_
 

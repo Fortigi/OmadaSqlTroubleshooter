@@ -145,11 +145,6 @@
     "DefaultValue": false
   },
   {
-    "Name": "SessionLogFileLogLevel",
-    "Type": "String",
-    "DefaultValue": "DEBUG"
-  },
-  {
     "Name": "SessionLogFileDirectory",
     "Type": "String"
   },

@@ -77,3 +77,35 @@ Describe "Test-LogLevelThreshold" {
         }
     }
 }
+
+Describe "Test-LogTypeShown" {
+    # For a caller whose message is expensive to build: it asks against the application's own level.
+
+    AfterAll {
+        $Script:RunTimeConfig = $null
+    }
+
+    It "answers <Expected> for <LogType> at level <Level>" -TestCases @(
+        @{ Level = "VERBOSE"; LogType = "VERBOSE"; Expected = $true }
+        @{ Level = "VERBOSE"; LogType = "VERBOSE2"; Expected = $false }
+        @{ Level = "VERBOSE2"; LogType = "VERBOSE2"; Expected = $true }
+        @{ Level = "VERBOSE2"; LogType = "VERBOSE"; Expected = $true }
+        @{ Level = "INFO"; LogType = "VERBOSE"; Expected = $false }
+    ) {
+        $Script:RunTimeConfig = [pscustomobject]@{ Logging = [pscustomobject]@{ LogLevelSetting = $Level } }
+
+        Test-LogTypeShown -LogType $LogType | Should -Be $Expected
+    }
+
+    It "answers no when no log level is configured" {
+        $Script:RunTimeConfig = [pscustomobject]@{ ApplicationName = "Test" }
+
+        Test-LogTypeShown -LogType "ERROR" | Should -BeFalse
+    }
+
+    It "declares LogType as mandatory" {
+        (Get-Command Test-LogTypeShown).Parameters["LogType"].Attributes |
+            Where-Object { $_ -is [System.Management.Automation.ParameterAttribute] } |
+            ForEach-Object { $_.Mandatory } | Should -Contain $true
+    }
+}

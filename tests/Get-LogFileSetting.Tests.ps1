@@ -71,7 +71,6 @@ Describe "Get-LogFileSetting" {
 
         It "declares <Property>" -ForEach @(
             @{ Property = "EnableSessionLogFile" }
-            @{ Property = "SessionLogFileLogLevel" }
             @{ Property = "SessionLogFileDirectory" }
             @{ Property = "SessionLogFileRetentionCount" }
             @{ Property = "SessionLogFileMaxSizeMegabytes" }
@@ -83,6 +82,12 @@ Describe "Get-LogFileSetting" {
         It "no longer declares an age rule" {
             Get-Content $Script:SchemaPath -Raw | ConvertFrom-Json | Where-Object { $_.Name -eq "SessionLogFileRetentionDays" } | Should -BeNullOrEmpty
         }
+
+        It "no longer declares a log level of its own (issue #157)" {
+            # Retired: the file follows the application's level. Leaving it in the schema would put it
+            # back in every new configuration file and invite someone to set it.
+            Get-Content $Script:SchemaPath -Raw | ConvertFrom-Json | Where-Object { $_.Name -eq "SessionLogFileLogLevel" } | Should -BeNullOrEmpty
+        }
     }
 
     Context "Defaults, with nothing stored" {
@@ -91,12 +96,17 @@ Describe "Get-LogFileSetting" {
             (Get-LogFileSetting).Enabled | Should -BeFalse
         }
 
-        It "resolves the documented level, retention and split size" {
+        It "resolves the documented retention and split size" {
             $Setting = Get-LogFileSetting
 
-            $Setting.LogLevel | Should -BeExactly "DEBUG"
             $Setting.RetentionCount | Should -Be 10
             $Setting.MaxSizeMegabytes | Should -Be 5
+        }
+
+        It "resolves no level at all (issue #157)" {
+            # The file follows the application's level, which Write-SessionLogFile reads live. A
+            # LogLevel here would be a second copy of that decision, resolved once per session.
+            (Get-LogFileSetting).PSObject.Properties.Name | Should -Not -Contain "LogLevel"
         }
 
         It "has no age setting to resolve" {
@@ -138,10 +148,21 @@ Describe "Get-LogFileSetting" {
             (Get-LogFileSetting).Directory | Should -BeExactly "D:\Logs\Omada"
         }
 
-        It "honours a stored level, upper-cased" {
+        It "ignores a stored SessionLogFileLogLevel without error, as a config file written before #157 still has one" {
+            # The acceptance criterion for retiring the setting: an existing configuration file keeps
+            # the value on disk, and loading it must neither fail nor warn nor resurrect a file level.
             $Script:AppGlobalConfig = [PSCustomObject]@{ SessionLogFileLogLevel = "verbose2" }
 
-            (Get-LogFileSetting).LogLevel | Should -BeExactly "VERBOSE2"
+            # Two statements, not an assignment inside Should -Not -Throw: a scriptblock handed to
+            # Should runs in its own scope, so assigning there leaves this $Setting null and the
+            # assertions below would read the scope rather than the function.
+            { Get-LogFileSetting } | Should -Not -Throw
+            $Setting = Get-LogFileSetting
+
+            $Setting | Should -Not -BeNullOrEmpty
+            $Setting.PSObject.Properties.Name | Should -Not -Contain "LogLevel"
+            $Setting.RetentionCount | Should -Be 10
+            $Setting.MaxSizeMegabytes | Should -Be 5
         }
 
         It "honours stored retention and size numbers" {
@@ -177,10 +198,13 @@ Describe "Get-LogFileSetting" {
             (Get-LogFileSetting).MaxSizeMegabytes | Should -Be 5
         }
 
-        It "ignores a level the application does not know" {
+        It "ignores an unreadable stored SessionLogFileLogLevel just as quietly" {
+            # It was never read in the first place since #157, so even nonsense in that property is
+            # inert. Kept as a test because "loads without error" is the criterion, not "is parsed".
             $Script:AppGlobalConfig = [PSCustomObject]@{ SessionLogFileLogLevel = "CHATTY" }
 
-            (Get-LogFileSetting).LogLevel | Should -BeExactly "DEBUG"
+            { Get-LogFileSetting } | Should -Not -Throw
+            (Get-LogFileSetting).PSObject.Properties.Name | Should -Not -Contain "LogLevel"
         }
 
         It "ignores an unreadable EnableSessionLogFile, leaving the file off" {

@@ -55,13 +55,13 @@ E2ESuite -Name "CancelExecute" -Body {
 
         Invoke-E2EExecuteAndWait
         $Elements = Get-E2EElements
-        E2EAssertEqual 2 (@($Elements.DataGridQueryResult.ItemsSource).Count) "arrange: the grid should hold a result"
+        E2EAssertEqual 2 (Get-E2EResultRowCount) "arrange: the pane should hold a result"
 
         $script:E2ERequestDelayMs = 4000
         Invoke-E2EExecute
         Invoke-E2EExecute   # cancel
 
-        E2EAssertEqual 2 (@($Elements.DataGridQueryResult.ItemsSource).Count) "the previous result must survive a cancellation"
+        E2EAssertEqual 2 (Get-E2EResultRowCount) "the previous result must survive a cancellation"
     }
 
     E2ECase -Name "cancelling says so honestly, without claiming the query was stopped" -Body {
@@ -115,7 +115,7 @@ E2ESuite -Name "CancelExecute" -Body {
 
         Invoke-E2EExecuteAndWait
         $Elements = Get-E2EElements
-        $BeforeCount = @($Elements.DataGridQueryResult.ItemsSource).Count
+        $BeforeCount = Get-E2EResultRowCount
 
         $script:E2ERequestDelayMs = 800
         Invoke-E2EExecute
@@ -128,7 +128,7 @@ E2ESuite -Name "CancelExecute" -Body {
             Start-Sleep -Milliseconds 50
         }
 
-        E2EAssertEqual $BeforeCount (@($Elements.DataGridQueryResult.ItemsSource).Count) "a cancelled query's late result must not land in the grid"
+        E2EAssertEqual $BeforeCount (Get-E2EResultRowCount) "a cancelled query's late result must not land in the pane"
         E2EAssertEqual "_Execute" (Get-E2EExecuteButtonText) "the tab must still be in the Execute state"
     }
 

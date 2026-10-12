@@ -215,17 +215,56 @@ function Write-TabExecuteSummary {
     The tab the execute belongs to. Defaults to the active tab.
 
     .PARAMETER RowsRead
-    The number of rows the query returned. Zero on a failure that never got as far as rows.
+    The number of rows the query returned - across every statement, for a multi-statement run. Zero
+    on a failure that never got as far as rows.
 
     .PARAMETER Elapsed
-    The completion time, already formatted.
+    The completion time for the whole run, already formatted.
+
+    .PARAMETER StatementOutcome
+    The pipeline's per-statement outcomes (issue #151). When there is more than one, each gets its own
+    line - its rows and its own elapsed time - before the run totals, which is the SSMS shape the
+    issue asks for:
+
+        Statement 1: 3 row(s) in 00:00:00.412
+        Statement 2: 49 row(s) in 00:00:01.004
+        Rows read: 52
+        Completion time: 00:00:01.416
+
+    Omitted, or holding a single statement, and only the two totals are written - exactly what every
+    execute produced before this issue, because a one-statement run has nothing to break down.
+
+    Issue #93's rule holds per statement: a statement that RAN and found nothing says "0 row(s)", and
+    a statement that FAILED says so, so the two stay distinguishable per statement and not just per
+    run.
     #>
     [CmdLetBinding()]
     param(
         $TabSession,
         [int]$RowsRead = 0,
-        [string]$Elapsed
+        [string]$Elapsed,
+        $StatementOutcome
     )
+
+    $Private:Statement = @($StatementOutcome | Where-Object { $null -ne $_ })
+
+    if ($Private:Statement.Count -gt 1) {
+        foreach ($Private:Current in $Private:Statement) {
+            # A failed statement reports the failure rather than a row count of zero, which would
+            # read as "it ran and found nothing" - the issue #44 ambiguity, per statement.
+            if ($null -ne $Private:Current.ErrorRecord) {
+                Add-TabMessage -TabSession $TabSession -Text ("Statement {0}: failed{1}" -f $Private:Current.Ordinal, $(
+                        if ($null -ne $Private:Current.Elapsed) { " after " + (Format-ElapsedTime -TimeSpan $Private:Current.Elapsed) } else { "" }
+                    ))
+                continue
+            }
+
+            $Private:StatementRows = [int]$Private:Current.QueryResult.d.Records
+            Add-TabMessage -TabSession $TabSession -Text ("Statement {0}: {1:n0} row(s){2}" -f $Private:Current.Ordinal, $Private:StatementRows, $(
+                    if ($null -ne $Private:Current.Elapsed) { " in " + (Format-ElapsedTime -TimeSpan $Private:Current.Elapsed) } else { "" }
+                ))
+        }
+    }
 
     Add-TabMessage -TabSession $TabSession -Text ("Rows read: {0:n0}" -f $RowsRead)
     Add-TabMessage -TabSession $TabSession -Text ("Completion time: {0}" -f $Elapsed)
