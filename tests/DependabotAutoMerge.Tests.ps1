@@ -298,6 +298,45 @@ Describe 'Format-AutoMergeReport' {
     }
 }
 
+Describe 'Set-AutoMergeComment' {
+    BeforeEach {
+        $Script:Body = "<!-- dependabot-auto-merge -->`n### Dependabot auto-merge`n`nBody"
+        Mock Invoke-AutoMergeApi -ParameterFilter { $Method -in 'Post', 'Patch' } { New-ApiResponse -StatusCode 201 }
+    }
+
+    It 'creates the comment when the pull request has none yet' {
+        Mock Invoke-AutoMergeApi -ParameterFilter { $Uri -like '*/issues/3/comments?per_page=100' } {
+            New-ApiResponse -Content @([PSCustomObject]@{ id = 1; user = [PSCustomObject]@{ login = 'someone' }; body = $Script:Body })
+        }
+        Set-AutoMergeComment -Repository 'o/r' -Number 3 -Body $Script:Body
+        Should -Invoke Invoke-AutoMergeApi -Times 1 -ParameterFilter { $Method -eq 'Post' -and $Uri -like '*/issues/3/comments' -and $Body.body -eq $Script:Body }
+        Should -Invoke Invoke-AutoMergeApi -Times 0 -ParameterFilter { $Method -eq 'Patch' }
+    }
+
+    It 'writes nothing when its own comment already says the same, line endings aside' {
+        Mock Invoke-AutoMergeApi -ParameterFilter { $Uri -like '*/issues/3/comments?per_page=100' } {
+            New-ApiResponse -Content @([PSCustomObject]@{ id = 9; user = [PSCustomObject]@{ login = 'github-actions[bot]' }; body = ($Script:Body -replace "`n", "`r`n") })
+        }
+        Set-AutoMergeComment -Repository 'o/r' -Number 3 -Body $Script:Body
+        Should -Invoke Invoke-AutoMergeApi -Times 0 -ParameterFilter { $Method -in 'Post', 'Patch' }
+    }
+
+    It 'edits its own comment in place when the verdict changed' {
+        Mock Invoke-AutoMergeApi -ParameterFilter { $Uri -like '*/issues/3/comments?per_page=100' } {
+            New-ApiResponse -Content @([PSCustomObject]@{ id = 9; user = [PSCustomObject]@{ login = 'github-actions[bot]' }; body = "<!-- dependabot-auto-merge -->`nOld verdict" })
+        }
+        Set-AutoMergeComment -Repository 'o/r' -Number 3 -Body $Script:Body
+        Should -Invoke Invoke-AutoMergeApi -Times 1 -ParameterFilter { $Method -eq 'Patch' -and $Uri -like '*/issues/comments/9' -and $Body.body -eq $Script:Body }
+        Should -Invoke Invoke-AutoMergeApi -Times 0 -ParameterFilter { $Method -eq 'Post' }
+    }
+
+    It 'writes nothing under -WhatIf' {
+        Mock Invoke-AutoMergeApi -ParameterFilter { $Uri -like '*/issues/3/comments?per_page=100' } { New-ApiResponse -Content @() }
+        Set-AutoMergeComment -Repository 'o/r' -Number 3 -Body $Script:Body -WhatIf
+        Should -Invoke Invoke-AutoMergeApi -Times 0 -ParameterFilter { $Method -in 'Post', 'Patch' }
+    }
+}
+
 Describe 'Get-DependabotPullRequestEvaluation' {
     It 'judges every dependency of an untouched Dependabot pull request and passes when all pass' {
         Mock Invoke-AutoMergeApi -ParameterFilter { $Uri -like '*/pulls/5/commits*' } { New-ApiResponse -Content @(New-Commit -Message $Script:GroupedMessage) }
