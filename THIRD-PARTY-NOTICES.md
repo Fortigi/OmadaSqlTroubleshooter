@@ -233,14 +233,14 @@ redistributed by Fortigi — which is why it is described here as well as in §1
 | Field | Value |
 |---|---|
 | Component | `Microsoft.SqlServer.TransactSql.ScriptDom` |
-| Version | **180.102.0** — pinned in `src/DependencyLock.psd1` |
+| Version | **180.117.0** — pinned in `src/DependencyLock.psd1` |
 | Publisher | Microsoft Corporation |
 | Licence | **MIT** — declared as `<license type="expression">MIT</license>` in the `.nuspec` of the pinned package |
 | Licence text | <https://licenses.nuget.org/MIT> · <https://github.com/microsoft/SqlScriptDOM/blob/main/LICENSE> |
 | Project | <https://github.com/microsoft/SqlScriptDOM> |
 | Downloaded by | `src/Lib/Functions/Private/Install-ScriptDom.ps1`, on application start |
-| Downloaded from | `https://api.nuget.org/v3-flatcontainer/microsoft.sqlserver.transactsql.scriptdom/180.102.0/microsoft.sqlserver.transactsql.scriptdom.180.102.0.nupkg` |
-| Verified against | SHA-256 `91fc1a3f7b9de4b2a75388a1d72717d616684ac4d05c7aa0987d74ef78c0ae6d`, pinned in `src/DependencyLock.psd1` |
+| Downloaded from | `https://api.nuget.org/v3-flatcontainer/microsoft.sqlserver.transactsql.scriptdom/180.117.0/microsoft.sqlserver.transactsql.scriptdom.180.117.0.nupkg` |
+| Verified against | SHA-256 `6c002292912846e55715c100afc8ab20cba4f51aa8b53c489ce6e8d64aa4f97c`, pinned in `src/DependencyLock.psd1` |
 | Installed to | `%LOCALAPPDATA%\OmadaSqlTroubleshooter\Bin\` |
 
 One file is extracted from the package: `lib/net8.0/Microsoft.SqlServer.TransactSql.ScriptDom.dll`
@@ -249,18 +249,18 @@ parser SQL Server's own tooling uses — so a syntax error is reported in the ed
 server's own wording, before a query is submitted.
 
 **Licence verification, against the pinned version rather than the project page.** The `.nuspec`
-inside `microsoft.sqlserver.transactsql.scriptdom.180.102.0.nupkg` carries
+inside `microsoft.sqlserver.transactsql.scriptdom.180.117.0.nupkg` carries
 `<license type="expression">MIT</license>`, `<licenseUrl>https://licenses.nuget.org/MIT</licenseUrl>`
 and `<copyright>© Microsoft Corporation. All rights reserved.</copyright>`, and names the
 repository `https://github.com/microsoft/SqlScriptDOM` at commit
-`9d1d1c1d062bd900ad9cac5e4e05bdf950d5a229`. The package embeds no `LICENSE` file of its own; the MIT
+`e3e282510b9d2254feac6354395ab423e1bd308f`. The package embeds no `LICENSE` file of its own; the MIT
 grant is carried by the SPDX licence expression, which is how NuGet has expressed licensing since
 `licenseUrl` was deprecated.
 
 The licence link above points at `main` rather than at that commit deliberately. The commit the
-nuspec records is **not resolvable in the public repository** — `GET
-/repos/microsoft/SqlScriptDOM/commits/9d1d1c1d062bd900ad9cac5e4e05bdf950d5a229` returns HTTP 422
-"No commit found", and the repository publishes no tags — so there is no version-pinned licence URL
+nuspec records is **not resolvable in the public repository** —
+`https://github.com/microsoft/SqlScriptDOM/commit/e3e282510b9d2254feac6354395ab423e1bd308f` returns
+HTTP 404, as the commit recorded for the previous pin did, and the repository publishes no tags — so there is no version-pinned licence URL
 to link. The statement that *is* pinned to this exact version is the SPDX expression inside the
 package itself, recorded above; the GitHub link is a convenience copy of the same MIT terms.
 
