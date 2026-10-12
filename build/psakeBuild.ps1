@@ -158,6 +158,10 @@ Task Test -Depends Analyze {
             # Guards build\BuildModules.psd1, build\QualityGates.psd1 and complexity-baseline.json -
             # none of them a <Name>.ps1 the mapping below could associate with this suite (#109).
             'QualityGateConfiguration.Tests.ps1'
+            # Pins the Dependabot auto-merge decisions against build\DependabotAutoMerge.psd1. The
+            # mapping below would associate it with DependabotAutoMerge.ps1 only, so a policy change -
+            # the one change most likely to make it merge something it should not - would skip it.
+            'DependabotAutoMerge.Tests.ps1'
         )
 
         if ($ChangedFiles.Count -gt 0) {

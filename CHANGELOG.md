@@ -25,6 +25,16 @@ semantic version.
 
 ### Added
 
+- Auto-merge for Dependabot's GitHub Actions updates, gated on reputation. Auto-merge is enabled on
+  such a pull request when every update in it is a semver patch or minor update, its GitHub release
+  is at least 3 days old, the action repository's OpenSSF Scorecard (via deps.dev) is at least 7.0
+  with a perfect `Dangerous-Workflow` score, and it holds nothing but verified Dependabot commits to
+  workflow files. The workflow then starts `PR Validation` itself, and GitHub merges once that and
+  `Dependency Review` pass. Everything else - NuGet bumps included - gets a comment explaining why
+  and waits for review as before. Policy in `build/DependabotAutoMerge.psd1`; see
+  [Dependabot auto-merge](SECURITY.md#dependabot-auto-merge). `PR Validation` can now be dispatched
+  for a pull request through its `pr_number` input.
+
 - Complexity and test-strength gates in the build (#109). Pull request validation now measures the
   changed `src/Lib` files with PSComplexity (at most 15 cyclomatic / 15 cognitive per unit, with the
   units already over that recorded in `complexity-baseline.json` and not allowed to get worse) and

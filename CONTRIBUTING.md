@@ -161,7 +161,10 @@ gh api repos/<owner>/<repo>/git/tags/<sha> --jq '.object.sha'
    differently.
 2. **Validation does not start on its own.** Comment `/validate` on the pull request to run the
    analyzer, the unit tests and the build on `pwsh`. Post it as the most recent comment; a later
-   comment cancels the run through the workflow's concurrency group.
+   comment cancels the run through the workflow's concurrency group. A Dependabot GitHub Actions
+   update that passes the auto-merge policy is validated and merged without this; one that does not
+   says why in a comment and is handled like any other pull request (see
+   [Dependabot auto-merge](SECURITY.md#dependabot-auto-merge)).
 3. Keep the branch up to date with `main` — validation refuses to run on a branch that is behind.
 4. Resolve every review thread, automated ones included, before asking for a merge.
 

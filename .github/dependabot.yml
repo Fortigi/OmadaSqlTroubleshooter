@@ -11,7 +11,8 @@
 # refreshes the matching SHA-256 in the lock file. PR validation fails while the two disagree.
 #
 # Cooldown. Both update blocks below wait 7 days before opening a pull request for a new version
-# (3 days for a semver-patch bump), instead of the platform default of 3/3 days that GitHub made
+# (3 days for a semver-patch bump on NuGet; github-actions supports no per-semver cooldown, so every
+# action update waits 7), instead of the platform default of 3/3 days that GitHub made
 # the default for all version updates on 14 July 2026. This is a deliberate increase, not a new
 # control.
 #
@@ -25,6 +26,12 @@
 #     never the one that pulled the bad release during that window.
 # Given the Monday-weekly schedule, the practical cost is that a routine new version lands one
 # cycle later than it otherwise would.
+#
+# Auto-merge. .github/workflows/dependabot-auto-merge.yml enables auto-merge on a github-actions pull
+# request from here only when every update in it is patch or minor, at least 3 days old, and from an
+# action repository with a sufficient OpenSSF Scorecard; GitHub then merges it once PR Validation and
+# Dependency Review pass. NuGet and everything else waits for a maintainer.
+# Policy: build/DependabotAutoMerge.psd1.
 version: 2
 updates:
   - package-ecosystem: "github-actions"
@@ -42,8 +49,10 @@ updates:
         patterns:
           - "*"
     cooldown:
+      # No semver-patch-days here: Dependabot rejects the semver-* cooldown keys for the
+      # github-actions ecosystem ("not supported for the package ecosystem 'github-actions'"), so
+      # every action update waits the full 7 days.
       default-days: 7
-      semver-patch-days: 3
 
   - package-ecosystem: "nuget"
     directory: "/build/Dependencies"
