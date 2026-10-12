@@ -47,7 +47,9 @@ function Copy-DataGridToClipboard {
     )
 
     try {
-        $DataGrid = $Script:MainForm.Elements.DataGridQueryResult
+        # The focused result's grid (issue #151). With several results stacked, copying from "the"
+        # grid would silently take the top one whatever the user had selected.
+        $DataGrid = Get-FocusedQueryResultGrid
 
         if ($DataGrid.SelectedCells.Count -le 0) {
             return

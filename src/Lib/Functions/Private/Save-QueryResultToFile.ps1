@@ -96,14 +96,31 @@ function Save-QueryResultToFile {
 
         $SelectionSuffix = if ($IsSelection) { "_Selection" } else { "" }
 
+        # Which statement's result this is (issue #151), as "_Statement3". Only when the run produced
+        # MORE THAN ONE result: a single-statement execute exports exactly the filename it always has,
+        # which is the same rule the rest of this feature follows - one result is indistinguishable
+        # from before the issue.
+        #
+        # Taken from the focused result's ordinal rather than its position in the stack, so the number
+        # is the statement the user wrote. A run where statement 2 failed exports statements 1 and 3
+        # as Statement1 and Statement3, not as Statement1 and Statement2.
+        $StatementSuffix = ""
+        $Private:ResultStack = @((Get-ActiveTabSession).QueryResults)
+        if ($Private:ResultStack.Count -gt 1) {
+            $Private:FocusedResult = Get-FocusedQueryResult
+            if ($null -ne $Private:FocusedResult -and $null -ne $Private:FocusedResult.Ordinal) {
+                $StatementSuffix = "_Statement{0}" -f $Private:FocusedResult.Ordinal
+            }
+        }
+
         $FilterIndex = if ($null -ne $Script:AppGlobalConfig.LastExtensionIndex -and $Script:AppGlobalConfig.LastExtensionIndex -gt 0) { [int]$Script:AppGlobalConfig.LastExtensionIndex } else { [int]$DefaultFilterIndex }
         $SelectedExtension = $SaveFileDialogFilterList[$FilterIndex].Extension.Replace("*", "")
 
-        $SaveFileDialog.FileName = "SqlQuery_{0}_{1}_{2}_{3}_Output{4}{5}" -f $Script:AppConfig.CurrentSqlQuery.DoId, $SaveFileDisplayName, $Script:AppConfig.CurrentDataConnection.DisplayName, [system.uri]::New($Script:AppConfig.BaseUrl).Host, $SelectionSuffix, $SelectedExtension
+        $SaveFileDialog.FileName = "SqlQuery_{0}_{1}_{2}_{3}{4}_Output{5}{6}" -f $Script:AppConfig.CurrentSqlQuery.DoId, $SaveFileDisplayName, $Script:AppConfig.CurrentDataConnection.DisplayName, [system.uri]::New($Script:AppConfig.BaseUrl).Host, $StatementSuffix, $SelectionSuffix, $SelectedExtension
         $ExistingFiles = Get-ChildItem -Path $SaveFileDialog.InitialDirectory -Filter $SaveFileDialog.FileName -File -ErrorAction SilentlyContinue
         $Count = 1
         while ($null -ne $ExistingFiles -and $ExistingFiles.Count -gt 0) {
-            $SaveFileDialog.FileName = "SqlQuery_{0}_{1}_{2}_{3}_Output{4}({5}){6}" -f $Script:AppConfig.CurrentSqlQuery.DoId, $SaveFileDisplayName, $Script:AppConfig.CurrentDataConnection.DisplayName, [system.uri]::New($Script:AppConfig.BaseUrl).Host, $SelectionSuffix, $Count, $SelectedExtension
+            $SaveFileDialog.FileName = "SqlQuery_{0}_{1}_{2}_{3}{4}_Output{5}({6}){7}" -f $Script:AppConfig.CurrentSqlQuery.DoId, $SaveFileDisplayName, $Script:AppConfig.CurrentDataConnection.DisplayName, [system.uri]::New($Script:AppConfig.BaseUrl).Host, $StatementSuffix, $SelectionSuffix, $Count, $SelectedExtension
             $ExistingFiles = Get-ChildItem -Path $SaveFileDialog.InitialDirectory -Filter $SaveFileDialog.FileName -File -ErrorAction SilentlyContinue
             $Count++
         }

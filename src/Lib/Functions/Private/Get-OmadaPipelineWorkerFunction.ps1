@@ -20,6 +20,7 @@
 $Script:OmadaWorkerChainFile = [ordered]@{
     "Invoke-OmadaExecutePipeline"    = @("New-OmadaQueryRequest.ps1", "Invoke-OmadaExecutePipeline.ps1")
     "Invoke-OmadaViewLookupPipeline" = @("New-OmadaPagingRequest.ps1", "Invoke-OmadaViewLookupPipeline.ps1")
+    "Invoke-OmadaSqlSchemaPipeline"  = @("ConvertTo-SqlSchemaEditorModel.ps1", "Get-SqlSchemaModel.ps1", "Invoke-OmadaSqlSchemaPipeline.ps1")
 }
 
 # Dot-sourced by every worker, whatever chain it runs - it is the one statement that actually talks to

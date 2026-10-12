@@ -27,18 +27,18 @@ E2ESuite -Name "AsyncExecute" -Body {
 
         $script:E2ERequestDelayMs = 700
         $Elements = Get-E2EElements
-        $Elements.DataGridQueryResult.ItemsSource = $null
+        Clear-E2EResults
 
         Invoke-E2EExecute
 
-        E2EAssertTrue ($null -eq $Elements.DataGridQueryResult.ItemsSource) "the grid must not be populated by the time the click returns"
+        E2EAssertEqual 0 (Get-E2EResultCount) "the pane must not be populated by the time the click returns"
         E2EAssertTrue (Test-E2EExecuteInFlight) "the query should still be outstanding when the click returns"
         E2EAssertEqual "_Cancel" (Get-E2EExecuteButtonText) "the Execute button should read Cancel while the query is in flight"
         E2EAssertTrue $Elements.ButtonExecuteQuery.IsEnabled "the Cancel button must stay enabled - it is the only way out"
 
         Wait-E2EUntil -TimeoutSeconds 15 -Message "the query to complete" -Condition { -not (Test-E2EExecuteInFlight) }
         Invoke-E2EFlushDispatcher
-        E2EAssertEqual 2 (@($Elements.DataGridQueryResult.ItemsSource).Count) "the grid should be populated once the result lands"
+        E2EAssertEqual 2 (Get-E2EResultRowCount) "the pane should be populated once the result lands"
     }
 
     E2ECase -Name "the UI thread stays responsive while a long query is in flight" -Body {
@@ -76,7 +76,7 @@ E2ESuite -Name "AsyncExecute" -Body {
         Select-E2EQuery | Out-Null
 
         $ExecutingTab = Get-ActiveTabSession
-        $ExecutingTab.Elements.DataGridQueryResult.ItemsSource = $null
+        Clear-E2EResults -TabSession $ExecutingTab
 
         $script:E2ERequestDelayMs = 700
         Invoke-E2EExecute
@@ -89,8 +89,12 @@ E2ESuite -Name "AsyncExecute" -Body {
         }
         Invoke-E2EFlushDispatcher
 
-        E2EAssertEqual 2 (@($ExecutingTab.Elements.DataGridQueryResult.ItemsSource).Count) "the result must land on the tab that issued it"
-        E2EAssertTrue ($null -eq $OtherTab.Elements.DataGridQueryResult.ItemsSource) "the result must NOT land on the tab that happened to be active"
+        E2EAssertEqual 2 (Get-E2EResultRowCount -TabSession $ExecutingTab) "the result must land on the tab that issued it"
+        # Counted rather than null-checked. "ItemsSource is null" would also be satisfied by the
+        # property simply not being there - on a stub, a renamed control, or a tab whose pane never
+        # materialised - so the one assertion that proves a result did NOT leak across tabs would pass
+        # for a reason that has nothing to do with the feature.
+        E2EAssertEqual 0 (Get-E2EResultCount -TabSession $OtherTab) "the result must NOT land on the tab that happened to be active"
         E2EAssertTrue ((Get-ActiveTabSession).Id -eq $OtherTab.Id) "the active tab must be restored after the completion ran"
     }
 
@@ -100,14 +104,14 @@ E2ESuite -Name "AsyncExecute" -Body {
         Invoke-E2EConnect
         Select-E2EQuery | Out-Null
         $FirstTab = Get-ActiveTabSession
-        $FirstTab.Elements.DataGridQueryResult.ItemsSource = $null
+        Clear-E2EResults -TabSession $FirstTab
 
         $script:E2ERequestDelayMs = 900
         Invoke-E2EExecute
 
         $SecondTab = New-E2EConnectedTab
         Select-E2EQuery | Out-Null
-        $SecondTab.Elements.DataGridQueryResult.ItemsSource = $null
+        Clear-E2EResults -TabSession $SecondTab
         Invoke-E2EExecute
 
         Wait-E2EUntil -TimeoutSeconds 20 -Message "both tabs' queries to complete" -Condition {
@@ -115,8 +119,8 @@ E2ESuite -Name "AsyncExecute" -Body {
         }
         Invoke-E2EFlushDispatcher
 
-        E2EAssertEqual 2 (@($FirstTab.Elements.DataGridQueryResult.ItemsSource).Count) "the first tab should have its own result"
-        E2EAssertEqual 2 (@($SecondTab.Elements.DataGridQueryResult.ItemsSource).Count) "the second tab should have its own result"
+        E2EAssertEqual 2 (Get-E2EResultRowCount -TabSession $FirstTab) "the first tab should have its own result"
+        E2EAssertEqual 2 (Get-E2EResultRowCount -TabSession $SecondTab) "the second tab should have its own result"
     }
 
     E2ECase -Name "an error mid-flight returns the UI to a clean state" -Body {

@@ -1,0 +1,145 @@
+name: Dependabot Auto-Merge
+
+# Enables GitHub auto-merge on a Dependabot pull request when - and only when - it passes the policy in
+# build/DependabotAutoMerge.psd1: every update is patch or minor, at least 3 days old, from an action
+# repository whose OpenSSF Scorecard (via deps.dev) meets the bar, and every commit on it is a verified
+# Dependabot commit touching nothing but workflow files. The logic is build/DependabotAutoMerge.ps1,
+# unit tested by tests/DependabotAutoMerge.Tests.ps1. The pattern follows Fortigi/IdentityAtlas's
+# dependabot-auto-merge.yml, with the reputation gate added.
+#
+# Auto-merge bypasses nothing. GitHub holds the pull request until every check the "Protect Main"
+# ruleset requires is green on its head - PR Validation and Dependency Review - and squashes it then.
+# A red pull request is never merged. Because PR Validation normally waits for a maintainer's
+# /validate, this workflow starts it for an eligible pull request through its pr_number input:
+# a comment posted with the GITHUB_TOKEN would start no run, a dispatch does.
+#
+# Anything that falls short gets a comment explaining why, and stays a normal pull request: a
+# maintainer reviews it and comments /validate, as before. That includes every NuGet bump - those
+# need the lock-file refresh and start a release on merge, and stay a human decision.
+#
+# When the branch falls behind main, the ruleset's up-to-date requirement holds the merge. Comment
+# "@dependabot rebase": Dependabot's push re-runs this workflow, which starts validation again.
+#
+# Why pull_request_target: it runs the definition on main, never the pull request's own copy. On a
+# github-actions bump that copy already references the NEW action versions, and running it with
+# write permissions would execute exactly the release this workflow exists to vet. That trigger is only
+# dangerous when the workflow checks out and runs pull request code, which this one never does: it
+# checks out the BASE commit, and reads the pull request through the API only. Do not change the
+# checkout below to the pull request head.
+
+on:
+  pull_request_target:
+    types: [opened, synchronize, reopened]
+    branches:
+      - main
+
+permissions: {}
+
+concurrency:
+  group: dependabot-auto-merge-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  evaluate:
+    name: Evaluate and enable auto-merge
+    # Both halves are required, and they check different things: who AUTHORED the pull request, and
+    # who triggered THIS run. Once anyone else pushes to a Dependabot branch, this job is skipped and
+    # the withdraw job below runs instead.
+    if: >-
+      github.event.pull_request.user.login == 'dependabot[bot]' &&
+      github.actor == 'dependabot[bot]'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      # Enable auto-merge.
+      contents: write
+      # Write the one status comment, and enable or disable auto-merge.
+      pull-requests: write
+      # Dispatch PR Validation.
+      actions: write
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+      - name: Harden the runner (audit all outgoing network calls)
+        uses: step-security/harden-runner@ccd8616d44fd3846e67624a50d5aad6d37bf2d25 # v2.22.1
+        with:
+          egress-policy: audit
+
+      # The base commit - this repository's reviewed code - never the pull request.
+      - name: Checkout the base branch
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.pull_request.base.sha }}
+          persist-credentials: false
+
+      - name: Evaluate against the auto-merge policy
+        id: policy
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: ./build/Invoke-DependabotAutoMerge.ps1 -PullRequestNumber $env:PR_NUMBER
+
+      - name: Start PR Validation and enable auto-merge
+        if: steps.policy.outputs.eligible == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          HEAD_SHA: ${{ steps.policy.outputs.head_sha }}
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+        run: |
+          # Dispatched on the default branch, so the validation definition that runs is the reviewed one;
+          # it checks out the pull request head itself.
+          gh workflow run pr-validation.yml --ref $env:DEFAULT_BRANCH -f "pr_number=$env:PR_NUMBER"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+          # --match-head-commit: only the head that was just evaluated. Anything pushed since gets its
+          # own run of this workflow.
+          gh pr merge $env:PR_NUMBER --auto --squash --match-head-commit $env:HEAD_SHA
+          exit $LASTEXITCODE
+
+      # A later push can make a pull request ineligible that an earlier one enabled auto-merge for -
+      # for example a recreate that now carries a major update.
+      - name: Disable auto-merge
+        if: steps.policy.outputs.eligible == 'false' && github.event.pull_request.auto_merge != null
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          gh pr merge $env:PR_NUMBER --disable-auto
+          exit $LASTEXITCODE
+
+  withdraw:
+    name: Withdraw auto-merge after a foreign push
+    # Someone other than Dependabot pushed to a Dependabot pull request. GitHub keeps auto-merge
+    # enabled for a push by anyone with write access, so it is disabled here explicitly: what merges
+    # unattended is Dependabot's update, never a change that rode in on it.
+    if: >-
+      github.event.pull_request.user.login == 'dependabot[bot]' &&
+      github.actor != 'dependabot[bot]' &&
+      github.event.pull_request.auto_merge != null
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      pull-requests: write
+      contents: write
+    steps:
+      - name: Harden the runner (audit all outgoing network calls)
+        uses: step-security/harden-runner@ccd8616d44fd3846e67624a50d5aad6d37bf2d25 # v2.22.1
+        with:
+          egress-policy: audit
+
+      - name: Disable auto-merge
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          ACTOR: ${{ github.actor }}
+        run: |
+          gh pr merge $env:PR_NUMBER --disable-auto
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          gh pr comment $env:PR_NUMBER --body "Auto-merge disabled: ``$env:ACTOR`` pushed to this Dependabot branch, so it is no longer only Dependabot's update. Review it and comment ``/validate`` as for any other pull request."
+          exit $LASTEXITCODE

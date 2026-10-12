@@ -44,12 +44,14 @@ BeforeAll {
     $Script:SecretSessionId = "sessionvalue1234"
 
     function Open-TestSessionLogFile {
-        param([string]$LogLevel = "DEBUG")
+        param()
 
         $Folder = Join-Path ([System.IO.Path]::GetTempPath()) -ChildPath ("OmadaSqlLogGate_{0}" -f ([guid]::NewGuid().ToString("N")))
         New-Item -Path $Folder -ItemType Directory -Force | Out-Null
 
-        $State = New-SessionLogFileState -LogLevel $LogLevel
+        # No level argument since issue #157: the file follows the application's level, which this
+        # suite's BeforeEach sets on $Script:RunTimeConfig.
+        $State = New-SessionLogFileState
         $State.Directory = $Folder
         $State.MaxBytes = [long]5 * 1MB
         $State.SessionKey = New-SessionLogFileSessionKey -StartTime $State.StartTime
@@ -228,7 +230,7 @@ Describe "What actually reaches the file" {
         }
 
         It "masks a full request parameter set on disk, end to end through both redaction layers" {
-            $State = Open-TestSessionLogFile -LogLevel "VERBOSE"
+            $State = Open-TestSessionLogFile
             $Credential = [PSCredential]::new("omada\svc_sql", (ConvertTo-SecureString $Script:SecretPassword -AsPlainText -Force))
             $RequestParameters = @{
                 Uri                = "https://tenant.omada.cloud/OData/BuiltIn/C_P_SQLTROUBLESHOOTING"
@@ -269,7 +271,7 @@ Describe "What actually reaches the file" {
             # one gate both the window and the file are behind - so the file agrees with the window
             # by construction. Diverging would mean a second redaction decision applied only to the
             # file, which is the structure this whole issue forbids.
-            $State = Open-TestSessionLogFile -LogLevel "VERBOSE"
+            $State = Open-TestSessionLogFile
             $Script:SkipBodyRedaction = $true
 
             "Body: {0}" -f (ConvertTo-RedactedLogString -InputObject @{ query = "SELECT * FROM dbo.Identity" } -ShapeOnly) | Write-LogOutput -LogType VERBOSE -SkipDialog
@@ -280,7 +282,7 @@ Describe "What actually reaches the file" {
         }
 
         It "keeps the query text off disk when the user has not" {
-            $State = Open-TestSessionLogFile -LogLevel "VERBOSE"
+            $State = Open-TestSessionLogFile
             $Script:SkipBodyRedaction = $false
 
             "Body: {0}" -f (ConvertTo-RedactedLogString -InputObject @{ query = "SELECT * FROM dbo.Identity" } -ShapeOnly) | Write-LogOutput -LogType VERBOSE -SkipDialog
@@ -303,24 +305,31 @@ Describe "What actually reaches the file" {
             (Read-SessionLogFileWhileOpen -Path $State.Path) | Should -Match "something worth keeping"
         }
 
-        It "records at its own level what the window is too quiet to show" {
-            # The window at its shipped default, the file at DEBUG: the detail that removes the
-            # "please reproduce it with -LogLevel VERBOSE" round trip is already on disk.
-            $State = Open-TestSessionLogFile -LogLevel "DEBUG"
+        It "records exactly what the window records, at whatever level the application is on" {
+            # Inverted by issue #157, and the two assertions are now the same answer rather than
+            # opposite ones. Until then the file had a level of its own and this asserted that a
+            # DEBUG line reached disk while the window at WARNING did not show it - the same
+            # mechanism that, with the viewer set MORE verbose than the file, silently dropped from
+            # the file what the viewer was showing. The redaction guarantees around this test are
+            # untouched; only the level contract changed.
+            $State = Open-TestSessionLogFile
             $Script:RunTimeConfig.Logging.LogLevelSetting = "WARNING"
 
             "a detail the window never showed" | Write-LogOutput -LogType DEBUG -SkipDialog
 
             ($Script:RunTimeConfig.Logging.AppLogObject -join "`r`n") | Should -Not -Match "a detail the window never showed"
-            (Read-SessionLogFileWhileOpen -Path $State.Path) | Should -Match "a detail the window never showed"
+            (Read-SessionLogFileWhileOpen -Path $State.Path) | Should -Not -Match "a detail the window never showed"
         }
 
-        It "does not write what is below the file's own level either" {
-            $State = Open-TestSessionLogFile -LogLevel "WARNING"
+        It "writes what the window shows once the application level is raised" {
+            # The other direction of the same equivalence, which is the defect #157 was reported for.
+            $State = Open-TestSessionLogFile
+            $Script:RunTimeConfig.Logging.LogLevelSetting = "VERBOSE"
 
-            "a detail nobody asked for" | Write-LogOutput -LogType DEBUG -SkipDialog
+            "a verbose detail the window did show" | Write-LogOutput -LogType VERBOSE -SkipDialog
 
-            (Read-SessionLogFileWhileOpen -Path $State.Path) | Should -Not -Match "a detail nobody asked for"
+            ($Script:RunTimeConfig.Logging.AppLogObject -join "`r`n") | Should -Match "a verbose detail the window did show"
+            (Read-SessionLogFileWhileOpen -Path $State.Path) | Should -Match "a verbose detail the window did show"
         }
     }
 

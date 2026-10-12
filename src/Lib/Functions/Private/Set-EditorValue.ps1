@@ -23,7 +23,9 @@ function Set-EditorValue {
                 return
             }
 
-            $Private:Result = Get-SqlQueryObject
+            # Through the short-lived reuse: this runs from five places while a tab loads, and each
+            # used to fetch the same query again on the UI thread.
+            $Private:Result = Get-RecentSqlQueryObject
             if ($null -ne $Private:Result) {
 
                 $Script:RunTimeData.CurrentSqlQuery.DoId = $Private:Result.Id

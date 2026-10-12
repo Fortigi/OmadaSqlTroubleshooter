@@ -19,6 +19,13 @@ function Test-OmadaRestMethodParameter {
     Dynamic parameters count: OmadaWeb.PS declares most of its own through New-DynamicParam, and they
     do appear in Get-Command's .Parameters - verified against both 2026.7.9.9 and 2026.9.9.
 
+    CACHED PER MODULE VERSION. Reading .Parameters runs the module's dynamic-parameter block, which
+    took 236 ms per call with OmadaWeb.PS 2026.9.23.47 - and Build-OmadaRequestParameter asks before
+    every request, so it was a quarter of a second of UI thread per request. Get-Command itself is a
+    millisecond. The key is the module's name, version and path, so an upgrade, a downgrade or a module
+    loaded from elsewhere is asked afresh. A command that does not come from a module (a function
+    defined in the session, a test double) is never cached.
+
     .PARAMETER Name
     The parameter to ask about.
 
@@ -38,7 +45,32 @@ function Test-OmadaRestMethodParameter {
             return $false
         }
 
-        return [bool]$Private:Command.Parameters.ContainsKey($Name)
+        $Private:Module = $Private:Command.Module
+        if ($null -eq $Private:Module) {
+            return [bool]$Private:Command.Parameters.ContainsKey($Name)
+        }
+
+        $Private:CacheKey = "{0}|{1}|{2}|{3}" -f $Private:Module.Name, $Private:Module.Version, $Private:Module.Path, $Name
+        if ($null -eq $Script:OmadaRestMethodParameterCache) {
+            $Script:OmadaRestMethodParameterCache = @{}
+        }
+
+        # The answer is also tied to the function's own ScriptBlock. Get-Command hands back the same
+        # ScriptBlock object for as long as the function is unchanged and a new one once it is
+        # redefined - which the module key alone cannot see: two functions defined in the same module
+        # (a test framework's, on CI) share name, version and path.
+        $Private:Cached = $Script:OmadaRestMethodParameterCache[$Private:CacheKey]
+        if ($null -ne $Private:Cached -and [object]::ReferenceEquals($Private:Cached.ScriptBlock, $Private:Command.ScriptBlock)) {
+            return $Private:Cached.Answer
+        }
+
+        $Private:Answer = [bool]$Private:Command.Parameters.ContainsKey($Name)
+        $Script:OmadaRestMethodParameterCache[$Private:CacheKey] = @{
+            Answer      = $Private:Answer
+            ScriptBlock = $Private:Command.ScriptBlock
+        }
+
+        return $Private:Answer
     }
     catch {
         # An unanswerable question is answered "no": not adding an optional parameter is always safe,

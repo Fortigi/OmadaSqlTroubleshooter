@@ -31,6 +31,9 @@ BeforeAll {
     . (Join-Path $PrivatePath -ChildPath "Build-OmadaRequestParameter.ps1")
     . (Join-Path $PrivatePath -ChildPath "Resolve-OmadaRequestFailure.ps1")
     . (Join-Path $PrivatePath -ChildPath "Invoke-OmadaPSWebRequestWrapper.ps1")
+    # The request and response lines go through Write-RedactedRequestLog, which asks the log level first.
+    . (Join-Path $PrivatePath -ChildPath "Write-RedactedRequestLog.ps1")
+    . (Join-Path $PrivatePath -ChildPath "Test-LogLevelThreshold.ps1")
 
     $Script:Tracer = [System.Diagnostics.Trace]
 

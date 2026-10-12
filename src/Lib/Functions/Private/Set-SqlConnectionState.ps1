@@ -7,6 +7,15 @@ function Set-SqlConnectionState {
         $Script:Tracer::WriteLine(("{0}: Function: {1} - Caller: {2}({3}) - Command: {4} - Parameters: {5}" -f $($Script:RunTimeConfig.ApplicationName), $($MyInvocation.MyCommand.Name), $($MyInvocation.ScriptName).Split("\")[-1], $($MyInvocation.ScriptLineNumber), $MyInvocation.Statement, (ConvertTo-RedactedLogString -InputObject $PSBoundParameters -MaxDepth 1)))
 
         Set-SqlQueryFunctionState -Status $Status
+
+        # A disconnect ends the session: nothing fetched in it is reused after it. NOT on connect -
+        # a restored tab selects its query (and fetches it) before it connects, so clearing here would
+        # throw away the very fetch the rest of its load is meant to reuse. The reuse is keyed by
+        # session already, so another session never sees it.
+        if (-not $Status) {
+            Clear-RecentSqlQueryObject
+        }
+
         if ($Status) {
             # Flip the active tab's connection flag FIRST, before the dropdown refreshes below. Those
             # refreshes are part of the connect sequence and reach connected-only work (for example

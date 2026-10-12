@@ -1,0 +1,323 @@
+# The label the ingestion probe carries on the completion queue. A constant because it is MATCHED, not
+# just displayed: Start-OmadaIngestionSettingProbe reads the queue through it to decide whether a probe
+# for this session is already outstanding - the same arrangement as $Script:SqlSchemaRequestDescription
+# at the top of Get-SqlSchema.ps1. Left undefined it would be $null, which matches every unlabelled
+# item on the queue and would stop the probe from ever dispatching.
+$Script:OmadaIngestionProbeDescription = "ODW ingestion setting"
+
+function Get-OmadaIngestionSetting {
+    <#
+    .SYNOPSIS
+        The tenant's ODW ingestion flag as this session has already learned it, or $null.
+
+    .DESCRIPTION
+        Issue #165. CACHE-ONLY, and deliberately so: it never makes a request, so the filter that uses
+        it can run at any point - including the first build of the data connection list, before the
+        probe has answered - without blocking the window or dragging a round trip into a render path.
+
+        Three state, and the distinction is the whole contract:
+
+          $true   ingestion is on, so the unused ODW connections may be filtered;
+          $false  ingestion is off, so they may not;
+          $null   this session does not know yet, has not asked, or asked and failed - which must be
+                  treated exactly like $false by the filter. Hiding a database the user needs is worse
+                  than offering one that does not work, which is what the application did before.
+
+        Per CONNECTION POOL, not per tab and not per connect. The key is the SessionKey, the same
+        component Get-SqlSchemaCacheKey builds its own key from: one tenant session gives one answer,
+        and every tab sharing that session reuses it.
+
+    .OUTPUTS
+        [bool] or $null.
+    #>
+    [CmdLetBinding()]
+    param()
+
+    # Traced like every other function: it runs once per list build, not per UI event, so the trace
+    # stays readable.
+    $Script:Tracer::WriteLine(("{0}: Function: {1} - Caller: {2}({3}) - Command: {4}" -f $($Script:RunTimeConfig.ApplicationName), $($MyInvocation.MyCommand.Name), $($MyInvocation.ScriptName).Split("\")[-1], $($MyInvocation.ScriptLineNumber), $MyInvocation.Statement))
+
+    $Private:Key = Get-OmadaIngestionSettingCacheKey
+    if ([string]::IsNullOrWhiteSpace($Private:Key)) {
+        return $null
+    }
+
+    if ($null -eq $Script:OmadaIngestionSettingCache -or -not $Script:OmadaIngestionSettingCache.ContainsKey($Private:Key)) {
+        return $null
+    }
+
+    return $Script:OmadaIngestionSettingCache[$Private:Key]
+}
+
+function Get-OmadaIngestionSettingCacheKey {
+    <#
+    .SYNOPSIS
+        The cache key for the current connection pool, or an empty string when there is none.
+
+    .DESCRIPTION
+        The SessionKey alone. Unlike the schema cache there is no data connection in the key: the flag
+        is a property of the TENANT, not of a database, so every connection in one session shares it.
+
+    .OUTPUTS
+        [string] possibly empty.
+    #>
+    [CmdLetBinding()]
+    param()
+
+    $Script:Tracer::WriteLine(("{0}: Function: {1} - Caller: {2}({3}) - Command: {4}" -f $($Script:RunTimeConfig.ApplicationName), $($MyInvocation.MyCommand.Name), $($MyInvocation.ScriptName).Split("\")[-1], $($MyInvocation.ScriptLineNumber), $MyInvocation.Statement))
+
+    return [string]$Script:RunTimeData.RestMethodParam.SessionKey
+}
+
+function Test-OmadaIngestionSettingProbePending {
+    <#
+    .SYNOPSIS
+        Whether a probe for the CURRENT connection pool is waiting on the completion queue.
+
+    .DESCRIPTION
+        Two callers ask this. Start-OmadaIngestionSettingProbe, so it does not ask twice. And
+        Start-SqlSchemaPreload, so it does not preload before the filter is known: the connections the
+        filter removes are the ones that fail server-side, and every such failure costs a synchronous
+        retry on the UI thread and switches background requests off for the session. The probe's
+        completion starts the preload instead.
+
+        Matched on the cache key as well as the label. Matching the label alone let one session's probe
+        stand in for another's, so the second session neither probed nor - since the completion runs
+        for the first session - preloaded.
+
+        Read off the completion queue rather than a side table of "probes in flight", for the reason
+        Get-SqlSchemaObject gives: a side table has to be cleared on every path a request can leave by,
+        and an entry left behind would block this pool for the rest of the session. The poll timer
+        removes an item from the queue BEFORE it runs the completion, so a preload started from the
+        completion does not find its own probe here.
+
+    .OUTPUTS
+        [bool]
+    #>
+    [CmdLetBinding()]
+    param()
+
+    $Script:Tracer::WriteLine(("{0}: Function: {1} - Caller: {2}({3}) - Command: {4}" -f $($Script:RunTimeConfig.ApplicationName), $($MyInvocation.MyCommand.Name), $($MyInvocation.ScriptName).Split("\")[-1], $($MyInvocation.ScriptLineNumber), $MyInvocation.Statement))
+
+    $Private:Key = Get-OmadaIngestionSettingCacheKey
+    if ([string]::IsNullOrWhiteSpace($Private:Key)) {
+        return $false
+    }
+
+    $Private:Pending = @($Script:PendingWebViewCompletions | Where-Object {
+            $_.Description -eq $Script:OmadaIngestionProbeDescription -and [string]$_.Context.Caller.CacheKey -eq $Private:Key
+        })
+
+    return $Private:Pending.Count -gt 0
+}
+
+function Start-OmadaIngestionSettingProbe {
+    <#
+    .SYNOPSIS
+        Learns the tenant's ODW ingestion flag, in the background, once per connection pool.
+
+    .DESCRIPTION
+        Issue #165. The flag lives in the `appPageVars` block that every Omada page embeds, so it costs
+        ONE request to read. The alternative - running
+        `SELECT [ValueStr] FROM [dbo].[tblApplicationSetting] WHERE [key] = 'odwIngestionEnabled'` -
+        goes through Invoke-OmadaExecutePipeline, which is up to four round trips AND creates and
+        deletes a TMP_ query object on the tenant. The page read has no side effects at all, which is
+        why the SQL probe was dropped rather than kept as a fallback.
+
+        Does nothing when the answer is already cached, so a second tab on the same session is free.
+
+        GUARDED BY $Script:ConnectionStatus, exactly as Get-SqlSchemaObject is. Without it a restored
+        but deliberately disconnected tab would reach the tenant on its own - the defect issue #64
+        fixed - and it would defeat -NoReconnect and a declined reconnect prompt alike.
+
+        POST with an EMPTY-STRING body, which is the shape verified against a live tenant. Not $null:
+        Build-OmadaRequestParameter drops a null Body from the splat, and OmadaWeb.PS then refuses the
+        request with "Provided -Body is empty this is mandatory for a Post command" - which is how the
+        first version of this probe failed on every tenant.
+
+        Only the flag is read from the response - never the body of the page, and never the parsed
+        settings as a whole, because that blob carries AD topology, environment identifiers and
+        endpoint configuration that have no business in a log.
+
+    .OUTPUTS
+        None.
+    #>
+    [CmdLetBinding()]
+    param()
+
+    try {
+        $Script:Tracer::WriteLine(("{0}: Function: {1} - Caller: {2}({3}) - Command: {4}" -f $($Script:RunTimeConfig.ApplicationName), $($MyInvocation.MyCommand.Name), $($MyInvocation.ScriptName).Split("\")[-1], $($MyInvocation.ScriptLineNumber), $MyInvocation.Statement))
+
+        if (-not $Script:ConnectionStatus) {
+            "Tab is not connected; not probing the ODW ingestion setting." | Write-LogOutput -LogType DEBUG
+            return
+        }
+
+        if (!(Test-ConnectionRequirements)) {
+            "Connection not ready" | Write-LogOutput -LogType DEBUG
+            return
+        }
+
+        $Private:Key = Get-OmadaIngestionSettingCacheKey
+        if ([string]::IsNullOrWhiteSpace($Private:Key)) {
+            return
+        }
+
+        if ($null -eq $Script:OmadaIngestionSettingCache) {
+            $Script:OmadaIngestionSettingCache = @{}
+        }
+
+        if ($Script:OmadaIngestionSettingCache.ContainsKey($Private:Key)) {
+            return
+        }
+
+        # This session's probe only - see Test-OmadaIngestionSettingProbePending for why the session
+        # matters and why the queue is the source of truth.
+        if (Test-OmadaIngestionSettingProbePending) {
+            return
+        }
+
+        $Script:RunTimeData.RestMethodParam.Uri = "{0}/logon.aspx" -f $Script:AppConfig.BaseUrl
+        $Script:RunTimeData.RestMethodParam.Method = "POST"
+        # An empty string, never $null - see the description. Build-OmadaRequestParameter keeps a
+        # non-null Body, and OmadaWeb.PS requires one on every POST.
+        $Script:RunTimeData.RestMethodParam.Body = ""
+
+        # The cache key travels on the context rather than being re-derived in the completion: by the
+        # time that runs, the user may have switched to a tab on a different session, and the answer
+        # belongs to the session that was asked.
+        $Private:Pending = Invoke-OmadaPSWebRequestWrapperAsync -Description $Script:OmadaIngestionProbeDescription -Context @{
+            CacheKey = $Private:Key
+        } -OnResultScriptBlock {
+            param($Pending)
+
+            Complete-OmadaIngestionSettingProbe -Response $Pending.Outcome -CacheKey $Pending.Context.Caller.CacheKey
+        }
+
+        if ($null -ne $Private:Pending) {
+            return
+        }
+
+        # Not eligible for a worker, or none available. One request inline is acceptable here - it is a
+        # single read with no tenant side effects - which is NOT true of the schema fan-out, where the
+        # same fallback would mean one synchronous request per database on connect.
+        Complete-OmadaIngestionSettingProbe -Response (Invoke-OmadaPSWebRequestWrapper) -CacheKey $Private:Key
+    }
+    catch {
+        # Contained: this runs from a list-update completion, where a terminating log would unwind into
+        # the poll timer rather than into anything that can act on it. Not knowing the flag is a
+        # recoverable state - the list simply stays unfiltered.
+        $_.Exception.Message | Write-ContainedErrorLog -ErrorObject $_
+    }
+}
+
+function Complete-OmadaIngestionSettingProbe {
+    <#
+    .SYNOPSIS
+        Caches the ingestion flag from a probe response and applies it to the connection list.
+
+    .DESCRIPTION
+        Split out of Start-OmadaIngestionSettingProbe so the same work runs whether the response came
+        from a worker or inline, exactly as Complete-SqlSchemaRetrieval is split from Get-SqlSchemaObject.
+        It touches WPF, so it is UI thread only - which it always is: the background path reaches it
+        from the completion poll timer, with the owning tab already made active.
+
+        ONLY A DEFINITE ANSWER IS CACHED. A failed request, a page this parser cannot read, or a page
+        with no such setting leaves the cache empty, so the next connect on this session asks again.
+        Caching "unknown" would turn one bad response into a session-long refusal to filter.
+
+        The flag is logged; the settings blob is not. The page carries AD topology, environment
+        identifiers and endpoint configuration, and a log a user can export and attach to a ticket is
+        the wrong place for any of it.
+
+    .PARAMETER Response
+        What the request produced: the page, an ErrorRecord, or $null.
+
+    .PARAMETER CacheKey
+        The SessionKey this answer belongs to. Passed in rather than re-derived, because the active tab
+        may have changed since the probe was dispatched.
+
+    .OUTPUTS
+        None.
+    #>
+    [CmdLetBinding()]
+    param(
+        [Parameter(Mandatory = $false, Position = 0)]
+        [AllowNull()]
+        $Response,
+
+        [Parameter(Mandatory = $true, Position = 1)]
+        [string]$CacheKey
+    )
+
+    try {
+        $Script:Tracer::WriteLine(("{0}: Function: {1} - Caller: {2}({3}) - Command: {4}" -f $($Script:RunTimeConfig.ApplicationName), $($MyInvocation.MyCommand.Name), $($MyInvocation.ScriptName).Split("\")[-1], $($MyInvocation.ScriptLineNumber), $MyInvocation.Statement))
+
+        if ($null -eq $Response) {
+            "The ODW ingestion setting could not be read (no response); the data connection list stays unfiltered." | Write-LogOutput -LogType DEBUG
+            return
+        }
+
+        if ($Response -is [System.Management.Automation.ErrorRecord]) {
+            # The reason is logged, not just the fact. Resolve-OmadaRequestFailure returns an
+            # unclassified failure without logging it, so this line is the only place it can appear -
+            # and without it, a request the module refused looked exactly like a tenant that answered
+            # badly. The message only: the response body is the tenant's page.
+            "The ODW ingestion setting could not be read ({0}{1}); the data connection list stays unfiltered." -f $(if ($null -ne $Response.Exception.Response.StatusCode) { "HTTP {0}: " -f [int]$Response.Exception.Response.StatusCode }), $Response.Exception.Message | Write-LogOutput -LogType DEBUG
+            return
+        }
+
+        $Private:Setting = ConvertFrom-OmadaAppPageVars -Html ([string]$Response)
+        if ($null -eq $Private:Setting -or -not $Private:Setting.Contains("isIngestionEnabled")) {
+            # Absent is not false: an older tenant that does not publish the flag has not said
+            # ingestion is off, so nothing is filtered.
+            #
+            # But it IS an answer, and it is cached as $null for that reason. The page was read and it
+            # does not carry the setting; asking the same tenant again on the next connect cannot
+            # produce a different result, and not caching it meant exactly that - one request per
+            # connect, for the rest of the session. The three-state contract is unaffected, because
+            # the cache is read through ContainsKey: a cached $null means "asked, not published",
+            # which Remove-UnusedDataConnection already treats like "off".
+            #
+            # Initialised here as well as on the success path below: this branch can be reached with a
+            # cold cache (Complete- is also called directly by the inline fallback), and writing into
+            # a $null hashtable would throw into the contained catch - leaving the re-probe in place
+            # with nothing to show that the fix had not taken effect.
+            if ($null -eq $Script:OmadaIngestionSettingCache) {
+                $Script:OmadaIngestionSettingCache = @{}
+            }
+            $Script:OmadaIngestionSettingCache[$CacheKey] = $null
+            "The page carries no ingestion setting; the data connection list stays unfiltered." | Write-LogOutput -LogType DEBUG
+            return
+        }
+
+        $Private:Enabled = [bool]$Private:Setting["isIngestionEnabled"]
+
+        if ($null -eq $Script:OmadaIngestionSettingCache) {
+            $Script:OmadaIngestionSettingCache = @{}
+        }
+        $Script:OmadaIngestionSettingCache[$CacheKey] = $Private:Enabled
+
+        "ODW ingestion enabled: {0}" -f $Private:Enabled | Write-LogOutput -LogType DEBUG
+
+        # The list was built before the answer arrived, which is the ordering the issue asks for: the
+        # tables are retrieved as they always were, and the filter is applied afterwards. Pruning the
+        # dropdown is all that is needed - Update-SqlSchemaDatabaseTree removes the nodes of a
+        # connection that has left it, and Push-SqlDatabaseNameList re-pushes what the editor may
+        # complete, both reading the dropdown back.
+        Remove-FilteredDataConnectionItem
+    }
+    catch {
+        $_.Exception.Message | Write-ContainedErrorLog -ErrorObject $_
+    }
+    finally {
+        # The schema preload waits for this answer (Start-SqlSchemaPreload declines while the probe is
+        # pending), so it is started here, on EVERY path: after the prune above, it asks only for the
+        # connections that are left; after a failure or a page without the flag, it asks for all of
+        # them, which is what it did before the probe existed. Skipping it on a failure would trade a
+        # wasted request for no preload at all.
+        #
+        # Its own guards still apply - the tab may have been disconnected while the probe was out.
+        Start-SqlSchemaPreload
+    }
+}

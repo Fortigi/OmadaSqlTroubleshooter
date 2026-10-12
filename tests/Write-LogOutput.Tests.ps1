@@ -131,3 +131,71 @@ Describe 'Write-LogOutput redaction' {
         }
     }
 }
+
+Describe 'Write-LogOutput dialog values (issue #135)' {
+
+    BeforeAll {
+        # The WARNING branch sets the icon to a [System.Windows.Forms.MessageBoxIcon]. CI runs the
+        # unit tests in a plain pwsh host, which does not load WinForms on its own - without this the
+        # branch throws inside Write-LogOutput's own catch, no dialog call happens at all, and the
+        # assertions below would "pass" for entirely the wrong reason. Mirrors the Add-Type in
+        # Update-QueryList.Tests.ps1.
+        Add-Type -AssemblyName System.Windows.Forms
+
+        # $LogMessageDialog is local to Write-LogOutput, so the only place its finished values are
+        # observable is the call it makes with them.
+        function Show-LogMessageDialog {
+            param(
+                [string]$Text,
+                [string]$Title,
+                $Icon
+            )
+            $Script:DialogCall = [PSCustomObject]@{ Text = $Text; Title = $Title; Icon = $Icon }
+        }
+    }
+
+    BeforeEach {
+        $Script:RunTimeConfig = [PSCustomObject]@{
+            ApplicationName     = "Test"
+            VerboseParameterSet = $true
+            Logging             = [PSCustomObject]@{
+                LogLevelSetting = "VERBOSE2"
+                LogToConsole    = $false
+                AppLogObject    = [System.Collections.ObjectModel.ObservableCollection[string]]::new()
+            }
+        }
+        $Script:Tabs = @()
+        $Script:ActiveTabId = $null
+        $Script:TextBoxLog = $null
+        $Script:SessionLogFile = $null
+        $Script:DialogCall = $null
+        # A visible main form is what selects the Show-LogMessageDialog path over the no-window
+        # MessageBox one.
+        $Script:MainForm = [PSCustomObject]@{ Definition = [PSCustomObject]@{ IsVisible = $true } }
+    }
+
+    AfterEach {
+        $Script:MainForm = $null
+    }
+
+    It 'shows the dialog with the title and icon the WARNING branch set' {
+        "Query did not return any results" | Write-LogOutput -LogType WARNING
+
+        # Guards against a vacuous pass: with no call, nothing below proves anything.
+        $Script:DialogCall | Should -Not -BeNullOrEmpty
+        $Script:DialogCall.Title | Should -Be "Warning - Main"
+        $Script:DialogCall.Icon | Should -Be ([System.Windows.Forms.MessageBoxIcon]::Warning)
+        $Script:DialogCall.Text | Should -Match "^Warning:"
+    }
+
+    It 'initializes only the keys the function goes on to read' {
+        # Issue #135: the initializer declared DialogTitle/DialogIcon, while every reader and writer
+        # in the function uses .Title/.Icon on the same hashtable. Those two were therefore always
+        # $null and never read - the shape that invites a future edit to set the wrong pair and
+        # wonder why the dialog is blank.
+        $Source = Get-Content -Path (Join-Path $FunctionPath -ChildPath "Write-LogOutput.ps1") -Raw
+
+        $Source | Should -Not -Match 'DialogTitle'
+        $Source | Should -Not -Match 'DialogIcon'
+    }
+}

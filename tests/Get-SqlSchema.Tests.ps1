@@ -24,13 +24,43 @@ BeforeAll {
     . (Join-Path $PrivatePath -ChildPath "Build-OmadaRequestParameter.ps1")
     . (Join-Path $PrivatePath -ChildPath "Resolve-OmadaRequestFailure.ps1")
     . (Join-Path $PrivatePath -ChildPath "Invoke-OmadaPSWebRequestWrapper.ps1")
+    # The request and response lines go through Write-RedactedRequestLog, which asks the log level first.
+    . (Join-Path $PrivatePath -ChildPath "Write-RedactedRequestLog.ps1")
     . (Join-Path $PrivatePath -ChildPath "Write-ContainedErrorLog.ps1")
     # Get-SqlSchemaObject now takes its cache key from the one place that builds it, which is shared
     # with the schema validation pass of issue #61: two copies of that string format would be two
     # chances for the pass to read a different tenant's schema than the editor shows completions for.
     . (Join-Path $PrivatePath -ChildPath "Get-SqlSchemaModel.ps1")
     . (Join-Path $PrivatePath -ChildPath "Get-ActiveSqlSchemaModel.ps1")
+    # Issue #158 split the response handling into pieces that a second database reuses: the editor
+    # model builder, the tree builder, and the database level of the tree. They are dot-sourced for
+    # the same reason as everything above - a missing one throws CommandNotFound inside
+    # Complete-SqlSchemaRetrieval's own catch, and "nothing was pushed to the editor" then passes for
+    # entirely the wrong reason.
+    . (Join-Path $PrivatePath -ChildPath "ConvertTo-JavaScriptLiteral.ps1")
+    . (Join-Path $PrivatePath -ChildPath "ConvertTo-SqlSchemaEditorModel.ps1")
+    . (Join-Path $PrivatePath -ChildPath "Add-SqlSchemaTreeNode.ps1")
+    . (Join-Path $PrivatePath -ChildPath "Resolve-DataConnectionReference.ps1")
+    . (Join-Path $PrivatePath -ChildPath "Update-SqlSchemaDatabaseTree.ps1")
+    . (Join-Path $PrivatePath -ChildPath "Push-SqlDatabaseNameList.ps1")
+    # The completion decides whether to log the schema whole (VERBOSE2 only), and fills every cached
+    # database once the window exists - both real, for the reason given above.
+    . (Join-Path $PrivatePath -ChildPath "Test-LogLevelThreshold.ps1")
+    . (Join-Path $PrivatePath -ChildPath "Add-SqlSchemaCachedDatabaseNode.ps1")
+    # The schema request runs as a worker chain (Invoke-OmadaSqlSchemaPipeline): its entry in the chain
+    # table, the chain itself, and the replay of the log it brings back.
+    . (Join-Path $PrivatePath -ChildPath "Get-OmadaPipelineWorkerFunction.ps1")
+    . (Join-Path $PrivatePath -ChildPath "Invoke-OmadaSqlSchemaPipeline.ps1")
+    . (Join-Path $PrivatePath -ChildPath "Write-ExecutePipelineLog.ps1")
     . (Join-Path $PrivatePath -ChildPath "Get-SqlSchema.ps1")
+
+    # The dropdown accessor lives in Resolve-SqlStatementTarget.ps1 and refreshes the list from the
+    # tenant when it is empty, which is not something this file wants to reach. Stubbed with the two
+    # connections the tests below use.
+    function Get-DataConnectionOptionText {
+        param([switch]$NoRefresh)
+        return , @("OISES - 1001572", "Reporting - 1001999")
+    }
 
     . (Join-Path $PSScriptRoot -ChildPath "mock\OmadaMockRouter.ps1")
     . (Join-Path $PSScriptRoot -ChildPath "mock\OmadaMockServer.ps1")
@@ -117,8 +147,10 @@ BeforeAll {
         param(
             [scriptblock]$OnResultScriptBlock,
             $Context,
+            [hashtable]$PipelineContext,
             [string]$Description
         )
+        $script:DispatchedPipelineContext = $PipelineContext
         if ($script:AsyncDispatchBehaviour -ne "InvokeInline") {
             return $null
         }
@@ -168,6 +200,8 @@ BeforeAll {
         $Script:SqlSchemaForm = $null
         $Script:TreeViewSqlSchema = $null
         $Script:SqlSchemaCache = @{}
+        $Script:SqlSchemaModelCache = @{}
+        $Script:SqlSchemaEditorJsonCache = @{}
         $Script:ConnectionStatus = $Connected
 
         $script:PushedEditorScripts.Clear()
@@ -203,6 +237,26 @@ Describe "Get-SqlSchemaObject connection guard" {
         Get-SqlSchemaObject
 
         (Get-OmadaMockRequestLog -UriLike "*GetSqlSchema*").Count | Should -Be 0
+    }
+
+    It "still fetches for any non-empty DoId, so the guard cannot block the connect path" {
+        # Issue #165, and the inverse of what this suite briefly asserted. Three cases here demanded
+        # that a DoId of 0 or a non-numeric DoId make no request - a stricter gate than
+        # IsNullOrWhiteSpace - and that gate broke
+        # NoReconnectStartup :: "accepting the reconnect prompt still connects the tab and retrieves
+        # its schema", whose own message is "the guard must not block the connect path". A restored tab
+        # accepting reconnect does not hold a positive-integer DoId at that moment, so the strict gate
+        # turned a wasted request into a missing schema.
+        #
+        # The junk DoId is filtered where it originates instead - Start-SqlSchemaPreload skips a
+        # non-positive DoId from the dropdown, and Get-DataConnectionReferenceList skips a nameless
+        # entry. This asserts the request site stays permissive, which is what the connect path needs.
+        Initialize-SchemaTestState -Connected $true
+        $Script:AppConfig.CurrentDataConnection.DoId = "0"
+
+        Get-SqlSchemaObject
+
+        (Get-OmadaMockRequestLog -UriLike "*GetSqlSchema*").Count | Should -Be 1
     }
 
     It "retrieves the schema and pushes it to the editor when the tab is connected" {
@@ -351,5 +405,333 @@ Describe "Get-SqlSchemaObject's Monaco push completion" {
 
         { & $Block ([pscustomobject]@{ Task = $null }) } | Should -Not -Throw
         @($script:LoggedMessages | Where-Object { $_.LogType -in @("ERROR", "WARNING") }).Count | Should -Be 0
+    }
+}
+
+Describe "Get-SqlSchemaObject for a database other than the active one (issue #158)" {
+    # The schema window now holds a node per data connection and the editor completes
+    # "[Other].[dbo].", so the same fetch has to serve a database the tab is NOT connected to. What
+    # makes that safe is that such a response may touch only its own editor model: the primary
+    # setSchema model, the window title and the validation re-trigger all describe the ACTIVE
+    # connection, and a second database landing must not speak for them.
+
+    It "pushes setSchemaForDatabase, naming the database" {
+        Initialize-SchemaTestState -Connected $true
+
+        Get-SqlSchemaObject -DataConnectionDoId "1001999" -DataConnectionName "Reporting"
+
+        $Push = $script:PushedEditorScripts | Where-Object { $_ -like "setSchemaForDatabase(*" } | Select-Object -Last 1
+        $Push | Should -Not -BeNullOrEmpty
+        $Push | Should -BeLike '*"Reporting"*'
+    }
+
+    It "does not push setSchema, which belongs to the connected database" {
+        # The discriminating assertion of this whole feature. Overwriting the primary model would
+        # make the completion list describe a database the user is not connected to, for every query
+        # in the tab - including the ones that never mention another database.
+        Initialize-SchemaTestState -Connected $true
+
+        Get-SqlSchemaObject -DataConnectionDoId "1001999" -DataConnectionName "Reporting"
+
+        @($script:PushedEditorScripts | Where-Object { $_ -like "setSchema(*" }).Count | Should -Be 0
+    }
+
+    It "does not re-trigger validation, which describes the active database" {
+        Initialize-SchemaTestState -Connected $true
+        $script:ValidationRequests = 0
+
+        Get-SqlSchemaObject -DataConnectionDoId "1001999" -DataConnectionName "Reporting"
+
+        $script:ValidationRequests | Should -Be 0
+    }
+
+    It "caches under its own key, leaving the active database's cache entry alone" {
+        Initialize-SchemaTestState -Connected $true
+
+        Get-SqlSchemaObject
+        Get-SqlSchemaObject -DataConnectionDoId "1001999" -DataConnectionName "Reporting"
+
+        $Script:SqlSchemaCache.ContainsKey("pool-under-test|1001572") | Should -BeTrue
+        $Script:SqlSchemaCache.ContainsKey("pool-under-test|1001999") | Should -BeTrue
+    }
+
+    It "serves a cached database with no request at all (criterion 5)" {
+        Initialize-SchemaTestState -Connected $true
+
+        Get-SqlSchemaObject -DataConnectionDoId "1001999" -DataConnectionName "Reporting"
+        Clear-OmadaMockRequestLog
+        $script:PushedEditorScripts.Clear()
+
+        Get-SqlSchemaObject -DataConnectionDoId "1001999" -DataConnectionName "Reporting"
+
+        (Get-OmadaMockRequestLog).Count | Should -Be 0
+        # Served, not merely skipped: the caller still needs the model, because the editor that
+        # asked has none for this database yet.
+        @($script:PushedEditorScripts | Where-Object { $_ -like "setSchemaForDatabase(*" }).Count | Should -Be 1
+    }
+
+    It "requests the database it was asked for, not the active one" {
+        Initialize-SchemaTestState -Connected $true
+
+        Get-SqlSchemaObject -DataConnectionDoId "1001999" -DataConnectionName "Reporting"
+
+        $Request = @(Get-OmadaMockRequestLog -UriLike "*GetSqlSchema*")
+        $Request.Count | Should -Be 1
+        # connectionId off the recorded body, not a substring of it: the log keeps the body as the
+        # hashtable that was sent, so a -BeLike against it only ever matches the type name.
+        [string]$Request[0].Body.connectionId | Should -Be "1001999"
+    }
+
+    It "still pushes setSchema and the database names for the active connection" {
+        # The other half of the switch: called the way every pre-#158 caller calls it, nothing about
+        # the active path changes - and the editor is told which names are databases so it can ask.
+        Initialize-SchemaTestState -Connected $true
+
+        Get-SqlSchemaObject
+
+        @($script:PushedEditorScripts | Where-Object { $_ -like "setSchema(*" }).Count | Should -Be 1
+        $Names = $script:PushedEditorScripts | Where-Object { $_ -like "setDatabaseNames(*" } | Select-Object -Last 1
+        $Names | Should -Not -BeNullOrEmpty
+        $Names | Should -BeLike "*Reporting*"
+        # The active connection's own name, so the editor answers "[OISES]." from setSchema instead
+        # of asking for a schema it will never be sent.
+        $Names | Should -BeLike '*"OISES"*'
+    }
+
+    It "treats an explicit DoId that happens to be the active one as the active database" {
+        Initialize-SchemaTestState -Connected $true
+
+        Get-SqlSchemaObject -DataConnectionDoId "1001572" -DataConnectionName "OISES"
+
+        @($script:PushedEditorScripts | Where-Object { $_ -like "setSchema(*" }).Count | Should -Be 1
+        @($script:PushedEditorScripts | Where-Object { $_ -like "setSchemaForDatabase(*" }).Count | Should -Be 0
+    }
+}
+
+Describe "Get-SqlSchemaObject - the worker builds the editor JSON and the validation index" {
+    # They used to be built on the UI thread when each schema landed: about two seconds per connect on a
+    # cloud PC. Invoke-OmadaSqlSchemaPipeline builds them in the worker; the completion only stores them.
+
+    BeforeAll {
+        # The failure path switches background requests off before it retries on the UI thread.
+        function Disable-OmadaBackgroundRequest { param($Reason) $script:DisabledReason = $Reason }
+    }
+
+    BeforeEach {
+        Initialize-SchemaTestState -Connected $true
+        $script:AsyncDispatchBehaviour = "InvokeInline"
+        $script:Response = [pscustomobject]@{ d = [pscustomobject]@{ "dbo.tblX" = @("Id int NOT NULL") } }
+        $script:AsyncDispatchOutcome = @{
+            IsSqlSchemaPipeline = $true
+            Result              = $script:Response
+            ErrorRecord         = $null
+            EditorJson          = '{"built":{"in-the-worker":[]}}'
+            SchemaModel         = "index built in the worker"
+            Log                 = @()
+        }
+    }
+
+    It "dispatches the schema chain" {
+        Get-SqlSchemaObject
+
+        $script:DispatchedPipelineContext.PipelineFunction | Should -Be "Invoke-OmadaSqlSchemaPipeline"
+        $script:DispatchedPipelineContext.PipelineFiles | Should -Contain "Invoke-OmadaSqlSchemaPipeline.ps1"
+    }
+
+    It "caches the response itself, not the pipeline's outcome" {
+        Get-SqlSchemaObject
+
+        [object]::ReferenceEquals($Script:SqlSchemaCache["pool-under-test|1001572"], $script:Response) | Should -BeTrue
+    }
+
+    It "pushes the JSON the worker built, without building it again" {
+        Get-SqlSchemaObject
+
+        $script:PushedEditorScripts | Where-Object { $_ -like "setSchema(*" } | Should -BeExactly 'setSchema({"built":{"in-the-worker":[]}});'
+    }
+
+    It "keeps the index the worker built for the validation pass" {
+        Get-SqlSchemaObject
+
+        $Script:SqlSchemaModelCache["pool-under-test|1001572"] | Should -BeExactly "index built in the worker"
+    }
+
+    It "builds them on the UI thread when the worker could not" {
+        $script:AsyncDispatchOutcome.EditorJson = $null
+        $script:AsyncDispatchOutcome.SchemaModel = $null
+
+        Get-SqlSchemaObject
+
+        $script:PushedEditorScripts | Where-Object { $_ -like "setSchema(*" } | Should -BeLike "*tblX*"
+        $Script:SqlSchemaModelCache.ContainsKey("pool-under-test|1001572") | Should -BeFalse -Because "the validation pass builds it on demand, as before"
+    }
+
+    It "treats a failed pipeline as a failed request" {
+        $script:AsyncDispatchOutcome = @{
+            IsSqlSchemaPipeline = $true
+            Result              = $null
+            ErrorRecord         = [System.Management.Automation.ErrorRecord]::new([System.Exception]::new("boom"), "x", [System.Management.Automation.ErrorCategory]::ConnectionError, $null)
+            EditorJson          = $null
+            SchemaModel         = $null
+            Log                 = @()
+        }
+        $Script:ConnectionStatus = $true
+
+        Get-SqlSchemaObject
+
+        # As for a plain failure: retried once on the UI thread, which the mock tenant answers.
+        (Get-OmadaMockRequestLog -UriLike "*GetSqlSchema*").Count | Should -Be 1
+    }
+}
+
+Describe "ConvertFrom-SqlSchemaPipelineOutcome" {
+
+    It "passes a plain response through" {
+        $Private:Response = [pscustomobject]@{ d = [pscustomobject]@{} }
+
+        $Private:Unwrapped = ConvertFrom-SqlSchemaPipelineOutcome -Outcome $Private:Response
+
+        [object]::ReferenceEquals($Private:Unwrapped.Response, $Private:Response) | Should -BeTrue
+        $Private:Unwrapped.EditorJson | Should -BeNullOrEmpty
+    }
+
+    It "passes null and an ErrorRecord through" {
+        (ConvertFrom-SqlSchemaPipelineOutcome -Outcome $null).Response | Should -BeNullOrEmpty
+
+        $Private:Failure = [System.Management.Automation.ErrorRecord]::new([System.Exception]::new("boom"), "x", [System.Management.Automation.ErrorCategory]::ConnectionError, $null)
+        (ConvertFrom-SqlSchemaPipelineOutcome -Outcome $Private:Failure).Response | Should -BeOfType [System.Management.Automation.ErrorRecord]
+    }
+
+    It "replays the pipeline's log" {
+        $script:LoggedMessages.Clear()
+
+        ConvertFrom-SqlSchemaPipelineOutcome -Outcome @{ IsSqlSchemaPipeline = $true; Result = $null; ErrorRecord = $null; Log = @(@{ Level = "DEBUG"; Text = "from the worker" }) } | Out-Null
+
+        @($script:LoggedMessages | Where-Object { $_.Message -eq "from the worker" }).Count | Should -Be 1
+    }
+}
+
+Describe "Complete-SqlSchemaRetrieval - what it does not redo for a cached schema" {
+    # A cache hit hands the completion the object that is already cached. Every tab switch, window
+    # open and node expand goes through here, and rebuilding the validation index and the editor JSON
+    # each time cost half a second and a second per large database on the cloud PC's UI thread.
+
+    BeforeEach {
+        Initialize-SchemaTestState -Connected $true
+        $script:LoggedMessages.Clear()
+        $script:Response = [pscustomobject]@{ d = [pscustomobject]@{ "dbo.tblCustomer" = @("Id int NOT NULL", "Name nvarchar(50)") } }
+    }
+
+    It "keeps the validation index when the same response comes back" {
+        Complete-SqlSchemaRetrieval -SchemaResponse $script:Response -SchemaCacheKey "pool-under-test|1001572"
+        $Script:SqlSchemaModelCache["pool-under-test|1001572"] = "index built from it"
+
+        Complete-SqlSchemaRetrieval -SchemaResponse $script:Response -SchemaCacheKey "pool-under-test|1001572"
+
+        $Script:SqlSchemaModelCache["pool-under-test|1001572"] | Should -BeExactly "index built from it"
+    }
+
+    It "drops the validation index and the editor JSON for a NEW response" {
+        # A refresh: the index and the JSON describe the response being replaced.
+        Complete-SqlSchemaRetrieval -SchemaResponse $script:Response -SchemaCacheKey "pool-under-test|1001572"
+        $Script:SqlSchemaModelCache["pool-under-test|1001572"] = "index built from the old one"
+
+        $Private:Fresh = [pscustomobject]@{ d = [pscustomobject]@{ "dbo.tblOrder" = @("Id int") } }
+        Complete-SqlSchemaRetrieval -SchemaResponse $Private:Fresh -SchemaCacheKey "pool-under-test|1001572"
+
+        $Script:SqlSchemaModelCache.ContainsKey("pool-under-test|1001572") | Should -BeFalse
+        $Script:SqlSchemaEditorJsonCache["pool-under-test|1001572"] | Should -BeLike "*tblOrder*"
+        $Script:SqlSchemaEditorJsonCache["pool-under-test|1001572"] | Should -Not -BeLike "*tblCustomer*"
+    }
+
+    It "pushes the memoised JSON again for the same response, without rebuilding it" {
+        # Each tab has its own editor, so the push itself still happens.
+        Complete-SqlSchemaRetrieval -SchemaResponse $script:Response -SchemaCacheKey "pool-under-test|1001572"
+        $Script:SqlSchemaEditorJsonCache["pool-under-test|1001572"] = '{"memo":{"marker":[]}}'
+        $script:PushedEditorScripts.Clear()
+
+        Complete-SqlSchemaRetrieval -SchemaResponse $script:Response -SchemaCacheKey "pool-under-test|1001572"
+
+        $script:PushedEditorScripts | Where-Object { $_ -like "setSchema(*" } | Should -BeExactly 'setSchema({"memo":{"marker":[]}});'
+    }
+}
+
+Describe "Complete-SqlSchemaRetrieval - logging the schema" {
+    # Whole at VERBOSE, the schema was 30,000+ lines per large database, a quarter of a second each on
+    # the UI thread, and every table and column name in a log a user can export (issue #61 section 5).
+
+    BeforeEach {
+        Initialize-SchemaTestState -Connected $true
+        $script:LoggedMessages.Clear()
+        $script:Response = [pscustomobject]@{ d = [pscustomobject]@{ "dbo.tblCustomer" = @("Id int NOT NULL"); "dbo.tblOrder" = @("Id int") } }
+    }
+
+    It "logs only the size at VERBOSE" {
+        $Script:RunTimeConfig | Add-Member -NotePropertyName Logging -NotePropertyValue ([pscustomobject]@{ LogLevelSetting = "VERBOSE" }) -Force
+
+        Complete-SqlSchemaRetrieval -SchemaResponse $script:Response -SchemaCacheKey "pool-under-test|1001572"
+
+        $Private:Verbose = @($script:LoggedMessages | Where-Object { $_.LogType -eq "VERBOSE" -and $_.Message -like "Schema for Monaco editor*" })
+        $Private:Verbose.Count | Should -Be 1
+        $Private:Verbose[0].Message | Should -BeLike "*2 table(s)*character(s)*"
+        $Private:Verbose[0].Message | Should -Not -BeLike "*tblCustomer*"
+        @($script:LoggedMessages | Where-Object { $_.LogType -eq "VERBOSE2" }).Count | Should -Be 0
+    }
+
+    It "logs the schema itself at VERBOSE2" {
+        $Script:RunTimeConfig | Add-Member -NotePropertyName Logging -NotePropertyValue ([pscustomobject]@{ LogLevelSetting = "VERBOSE2" }) -Force
+
+        Complete-SqlSchemaRetrieval -SchemaResponse $script:Response -SchemaCacheKey "pool-under-test|1001572"
+
+        $Private:Full = @($script:LoggedMessages | Where-Object { $_.LogType -eq "VERBOSE2" -and $_.Message -like "Schema for Monaco editor*" })
+        $Private:Full.Count | Should -Be 1
+        $Private:Full[0].Message | Should -BeLike "*tblCustomer*"
+    }
+
+    It "does not fail when no log level is configured" {
+        Complete-SqlSchemaRetrieval -SchemaResponse $script:Response -SchemaCacheKey "pool-under-test|1001572"
+
+        @($script:PushedEditorScripts | Where-Object { $_ -like "setSchema(*" }).Count | Should -Be 1
+    }
+}
+
+Describe "Complete-SqlSchemaRetrieval - the schema window" {
+    # Opening the window runs the active database's completion; every other database whose schema the
+    # preload already cached is filled then, so the search covers them from the start.
+
+    BeforeAll {
+        # Not loaded in this file; the filter has its own suite.
+        function Update-SqlSchemaTreeFilter { }
+    }
+
+    BeforeEach {
+        Initialize-SchemaTestState -Connected $true
+        $Script:SqlSchemaForm = [pscustomobject]@{ Definition = [pscustomobject]@{ Title = "" } }
+        $Script:TreeViewSqlSchema = [pscustomobject]@{ Items = [System.Collections.Generic.List[object]]::new() }
+
+        # The tree itself is WPF; its own suites cover it. Here only the calls are counted.
+        Mock Update-SqlSchemaDatabaseTree { }
+        Mock Get-SqlSchemaDatabaseNode { return $null }
+        Mock Add-SqlSchemaCachedDatabaseNode { return 0 }
+    }
+
+    AfterEach {
+        $Script:SqlSchemaForm = $null
+        $Script:TreeViewSqlSchema = $null
+    }
+
+    It "fills every cached database when the window's schema lands" {
+        Complete-SqlSchemaRetrieval -SchemaResponse ([pscustomobject]@{ d = [pscustomobject]@{ "dbo.tblX" = @("Id int") } }) -SchemaCacheKey "pool-under-test|1001572"
+
+        Should -Invoke Add-SqlSchemaCachedDatabaseNode -Times 1 -Exactly
+    }
+
+    It "does not touch the tree when the window is not open" {
+        $Script:SqlSchemaForm = $null
+        $Script:TreeViewSqlSchema = $null
+
+        Complete-SqlSchemaRetrieval -SchemaResponse ([pscustomobject]@{ d = [pscustomobject]@{ "dbo.tblX" = @("Id int") } }) -SchemaCacheKey "pool-under-test|1001572"
+
+        Should -Invoke Add-SqlSchemaCachedDatabaseNode -Times 0 -Exactly
     }
 }

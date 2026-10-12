@@ -173,7 +173,17 @@ function Complete-DataConnectionListUpdate {
             $Script:MainForm.Elements.ComboBoxSelectDataConnection.Items.Clear()
 
             $SetInitialConnection = $true
-            foreach ($DataConnectionDisplayName in (Get-DataConnectionOptionList -Html $Private:Result)) {
+
+            # Filtered here, where the dropdown is built, because the dropdown is the single definition
+            # of which databases exist: Get-DataConnectionOptionText, Resolve-DataConnectionReference,
+            # Push-SqlDatabaseNameList and Update-SqlSchemaDatabaseTree all read it back, so one filter
+            # covers the tree, the editor's name list and name resolution (issue #165).
+            #
+            # Get-OmadaIngestionSetting answers from cache and never makes a request, so the FIRST build
+            # on a session filters nothing - it does not know the flag yet. That is the ordering the
+            # issue asks for: retrieve as before, then filter. Remove-FilteredDataConnectionItem applies
+            # it when the probe answers, and every later build on the same session filters here.
+            foreach ($DataConnectionDisplayName in (Remove-UnusedDataConnection -OptionList (Get-DataConnectionOptionList -Html $Private:Result) -IngestionEnabled (Get-OmadaIngestionSetting))) {
                 if ($DataConnectionDisplayName -notin $Script:MainForm.Elements.ComboBoxSelectDataConnection.Items.Content) {
                     "Add data connection {0}" -f $DataConnectionDisplayName | Write-LogOutput -LogType DEBUG
                     $ComboBoxDataConnectionItem = New-Object System.Windows.Controls.ComboBoxItem
@@ -207,6 +217,31 @@ function Complete-DataConnectionListUpdate {
             $Script:MainForm.Elements.ButtonShowSqlSchema.IsEnabled = $true
 
             "{0} data connections processed!" -f ($Script:MainForm.Elements.ComboBoxSelectDataConnection.Items | Measure-Object).Count | Write-LogOutput
+
+            # The list IS the database level of the schema tree and the list of names the editor
+            # recognises between brackets (issue #158), so both are brought up to date here rather
+            # than waiting for the next schema response. This is the moment the list is known to be
+            # current, and it closes the ordering gap: the schema can land before the connection
+            # list does, and neither of these may trigger a request of its own to catch up.
+            Update-SqlSchemaDatabaseTree
+            Push-SqlDatabaseNameList
+
+            # Issue #165, and last in this block on purpose: both dispatch and return, so neither
+            # blocks the render path, and an exception in either cannot cost the list that has just
+            # been built.
+            #
+            # The probe learns the tenant's ingestion flag - one request, cached per session, so this
+            # is free on every connect after the first. The preload asks for every database's schema on
+            # a worker, which is what makes a schema node populated before the user clicks it.
+            #
+            # The preload waits for the probe. The connections the filter removes answer 500 on a live
+            # tenant, and preloading them cost a synchronous retry each and switched background requests
+            # off. So the ORDER of these two calls matters: the probe has to be on the completion queue
+            # when the preload checks, so the preload declines and the probe's completion starts it
+            # after the prune. When the answer is already cached no probe is dispatched, and the
+            # preload runs here as before. Nothing else waits - the list is already on screen.
+            Start-OmadaIngestionSettingProbe
+            Start-SqlSchemaPreload
         }
         finally {
             if (!$NotShowPopupWindow) {
@@ -217,6 +252,93 @@ function Complete-DataConnectionListUpdate {
     catch {
         # Contained: this is reached from the completion poll timer, where a terminating log would
         # unwind into the timer's own Tick handler rather than into anything that can act on it.
+        $_.Exception.Message | Write-ContainedErrorLog -ErrorObject $_
+    }
+}
+
+function Remove-FilteredDataConnectionItem {
+    <#
+    .SYNOPSIS
+    Prunes the data connections the ingestion flag rules out from the dropdown, after the fact.
+
+    .DESCRIPTION
+    Issue #165. The dropdown is built before the ingestion probe has answered - deliberately, so the
+    list appears as quickly as it always did - which leaves the filter to be applied when the answer
+    arrives. This is that second pass, and the only caller is the probe's completion.
+
+    ONLY THE DROPDOWN IS PRUNED, which is the reason the whole feature needs so little code:
+    Update-SqlSchemaDatabaseTree removes the node of any connection that has left the dropdown, and
+    Push-SqlDatabaseNameList re-pushes the names the editor may complete - both read the dropdown back.
+    So one prune reconciles the tree and the editor's name list, and there is no second definition of
+    "which databases exist" to keep in step with this one.
+
+    Returns without touching anything when the filter keeps everything, so a tenant with ingestion off
+    - or one whose flag could not be read - pays nothing and sees no spurious reconcile.
+
+    UI thread only, like everything else in this file: the poll timer invokes the probe's completion
+    with the owning tab already made active.
+
+    .OUTPUTS
+    None.
+    #>
+    [CmdLetBinding()]
+    param()
+
+    try {
+        $Script:Tracer::WriteLine(("{0}: Function: {1} - Caller: {2}({3}) - Command: {4}" -f $($Script:RunTimeConfig.ApplicationName), $($MyInvocation.MyCommand.Name), $($MyInvocation.ScriptName).Split("\")[-1], $($MyInvocation.ScriptLineNumber), $MyInvocation.Statement))
+
+        $Private:ComboBox = $Script:MainForm.Elements.ComboBoxSelectDataConnection
+        if ($null -eq $Private:ComboBox -or $Private:ComboBox.Items.Count -eq 0) {
+            return
+        }
+
+        $Private:Current = @($Private:ComboBox.Items | ForEach-Object { [string]$_.Content })
+        # Not wrapped in @(): Remove-UnusedDataConnection returns its array through the ", $array"
+        # idiom, and wrapping it again nests the array one level deeper. That made $Kept ONE element
+        # (the whole list), so its count never matched and every item was "-notin" it - the first
+        # time a probe answered on a live tenant, the dropdown was emptied.
+        $Private:Kept = Remove-UnusedDataConnection -OptionList $Private:Current -IngestionEnabled (Get-OmadaIngestionSetting)
+
+        if ($Private:Kept.Count -eq $Private:Current.Count) {
+            return
+        }
+
+        # The filter only ever removes the unused ODW connections, never all of them. An empty answer
+        # for a list that is not empty means something went wrong in it, and an empty dropdown is far
+        # worse than an unfiltered one - so nothing is removed.
+        if ($Private:Kept.Count -eq 0) {
+            "The ODW ingestion filter kept no data connection; leaving the list unfiltered." | Write-LogOutput -LogType DEBUG
+            return
+        }
+
+        # Read before the removals: removing the selected item clears SelectedItem, so asking
+        # afterwards cannot tell "the selection was filtered away" from "there was no selection".
+        $Private:SelectedContent = [string]$Private:ComboBox.SelectedItem.Content
+
+        # Taken off a snapshot because the collection is modified in the loop.
+        foreach ($Private:Item in @($Private:ComboBox.Items)) {
+            if ([string]$Private:Item.Content -notin $Private:Kept) {
+                $Private:ComboBox.Items.Remove($Private:Item)
+            }
+        }
+
+        # A user whose selected connection has just been filtered away must not be left with a dropdown
+        # pointing at nothing. Falls back the same way the initial build does - OISES first, then
+        # whatever is left - and the resulting SelectionChanged is the same event the initial build
+        # raises, so nothing downstream sees a case it has not already handled.
+        if ($Private:SelectedContent -notin $Private:Kept) {
+            $Private:ComboBox.SelectedItem = $Private:ComboBox.Items | Where-Object { $_.Content -like "OISES -*" }
+            if ($null -eq $Private:ComboBox.SelectedItem) {
+                $Private:ComboBox.SelectedItem = $Private:ComboBox.Items | Select-Object -First 1
+            }
+        }
+
+        Update-SqlSchemaDatabaseTree
+        Push-SqlDatabaseNameList
+    }
+    catch {
+        # Contained: reached from the completion poll timer. A failed prune leaves a connection in the
+        # list that does not work, which is exactly what the application did before this feature.
         $_.Exception.Message | Write-ContainedErrorLog -ErrorObject $_
     }
 }

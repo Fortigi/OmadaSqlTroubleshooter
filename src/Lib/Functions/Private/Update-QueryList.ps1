@@ -62,7 +62,7 @@ function Update-QueryList {
                     $SqlQueryViewContents = Get-SqlTroubleShooterView | Where-Object { $_.$($Script:RunTimeData.DataobjdlgAspxAttributeMapping.SqlQueryCreatedBy) -eq $Script:AppConfig.IdentityUserName -or $_.$($Script:RunTimeData.DataobjdlgAspxAttributeMapping.SqlQueryChangedBy) -eq $Script:AppConfig.IdentityUserName }
                 }
                 elseif ($Script:AppConfig.MyCreatedQueriesOnly -and !$Script:AppConfig.MyUpdatedQueriesOnly -and ![string]::IsNullOrWhiteSpace($Script:AppConfig.IdentityUserName)) {
-                    $SqlQueryViewContents = Get-SqlTroubleShooterView | Where-Object { $_.$($Script:RunTimeData.DataobjdlgAspxAttributeMapping.SqlQueryCreatedBy) -eq $Script:AppConfig.IdentityUserName -eq $Script:AppConfig.IdentityUserName }
+                    $SqlQueryViewContents = Get-SqlTroubleShooterView | Where-Object { $_.$($Script:RunTimeData.DataobjdlgAspxAttributeMapping.SqlQueryCreatedBy) -eq $Script:AppConfig.IdentityUserName }
                 }
                 elseif (!$Script:AppConfig.MyCreatedQueriesOnly -and $Script:AppConfig.MyUpdatedQueriesOnly -and ![string]::IsNullOrWhiteSpace($Script:AppConfig.IdentityUserName)) {
                     $SqlQueryViewContents = Get-SqlTroubleShooterView | Where-Object { $_.$($Script:RunTimeData.DataobjdlgAspxAttributeMapping.SqlQueryChangedBy) -eq $Script:AppConfig.IdentityUserName }
