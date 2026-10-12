@@ -4,17 +4,12 @@
 
     Dot-sourced by build/Invoke-DependabotAutoMerge.ps1 and by tests/DependabotAutoMerge.Tests.ps1.
 
-    Why a reconciler and not a reaction to pull request events: everything a workflow does with the
-    repository's GITHUB_TOKEN - a push, a merge, a comment - deliberately starts no further workflow
-    runs, with workflow_dispatch as the one exception. So a merge made here would not run release.yml on
-    its push to main, and a lock-file commit made here would not re-run validation on the new head.
-    Instead, each run looks at every open Dependabot pull request, works out the one next step for the
-    first eligible one, takes it (dispatching what needs to run), and leaves the rest to the next run.
-    Running it twice in a row does nothing the first run did not already do.
+    These functions only DECIDE whether a Dependabot pull request may merge on its own, and say why in
+    one comment on it. Starting validation and enabling GitHub auto-merge is left to the workflow.
 
     All network access goes through Invoke-AutoMergeApi, which is what the tests mock. The decisions -
-    parsing the Dependabot commit, judging provenance and reputation, picking the next step - are plain
-    functions of their inputs.
+    parsing the Dependabot commit, judging provenance and reputation - are plain functions of their
+    inputs.
 #>
 
 $Script:AutoMergeCommentMarker = '<!-- dependabot-auto-merge -->'
@@ -217,38 +212,6 @@ function Get-DepsDevScorecard {
     return $null
 }
 
-function Get-NuGetVersionProvenance {
-    <#
-    .SYNOPSIS
-        When a NuGet package version was published, and the source repository deps.dev links it to.
-        $null when deps.dev does not know the version at all.
-    #>
-    [CmdletBinding()]
-    [OutputType([pscustomobject])]
-    param(
-        [Parameter(Mandatory = $true)]
-        [string]$Name,
-
-        [Parameter(Mandatory = $true)]
-        [string]$Version
-    )
-
-    # nuget.org ids are case-insensitive; deps.dev may key them either way, so try both.
-    foreach ($Candidate in @($Name, $Name.ToLowerInvariant()) | Select-Object -Unique) {
-        $Uri = 'https://api.deps.dev/v3/systems/nuget/packages/{0}/versions/{1}' -f [uri]::EscapeDataString($Candidate), [uri]::EscapeDataString($Version)
-        $Response = Invoke-AutoMergeApi -Uri $Uri
-        if ($Response.StatusCode -ne 200) {
-            continue
-        }
-        $Source = @($Response.Content.relatedProjects | Where-Object { $_.relationType -eq 'SOURCE_REPO' }) | Select-Object -First 1
-        return [PSCustomObject]@{
-            PublishedAt = if ($Response.Content.publishedAt) { ConvertTo-UtcDate -Value $Response.Content.publishedAt } else { $null }
-            ProjectKey  = if ($Source) { $Source.projectKey.id } else { $null }
-        }
-    }
-    return $null
-}
-
 function Get-GitHubActionRelease {
     <#
     .SYNOPSIS
@@ -396,21 +359,6 @@ function Test-DependencyReputation {
                 $Result.PublishedAt = $Release.PublishedAt
             }
         }
-        'nuget' {
-            $Provenance = Get-NuGetVersionProvenance -Name $Dependency.Name -Version $Dependency.Version
-            if ($null -eq $Provenance) {
-                $Reasons.Add(('deps.dev does not know {0} {1}' -f $Dependency.Name, $Dependency.Version))
-                break
-            }
-            $Result.PublishedAt = $Provenance.PublishedAt
-            $Result.ProjectKey = $Provenance.ProjectKey
-            if ($null -eq $Provenance.PublishedAt) {
-                $Reasons.Add(('deps.dev reports no publication date for {0} {1}' -f $Dependency.Name, $Dependency.Version))
-            }
-            if ([string]::IsNullOrEmpty($Provenance.ProjectKey)) {
-                $Reasons.Add(('deps.dev links {0} to no source repository, so there is no Scorecard to judge it by' -f $Dependency.Name))
-            }
-        }
         default {
             $Reasons.Add(("ecosystem '{0}' has no reputation source" -f $Ecosystem))
         }
@@ -440,12 +388,11 @@ function Test-DependencyReputation {
 function Test-PullRequestProvenance {
     <#
     .SYNOPSIS
-        Whether a pull request is still purely Dependabot's bump plus this repository's own workflow
-        commits, and touches nothing outside the files its ecosystem may change.
+        Whether a pull request is still purely Dependabot's own work, and touches nothing outside the
+        files its ecosystem may change.
     .DESCRIPTION
         GitHub attributes a commit to an account by its author e-mail, which anyone can set - so the
-        account alone proves nothing. The verified signature is what ties the commit to Dependabot or to
-        a GitHub Actions API call.
+        account alone proves nothing. The verified signature is what ties the commit to Dependabot.
     #>
     [CmdletBinding()]
     [OutputType([pscustomobject])]
@@ -508,188 +455,6 @@ function Test-PullRequestProvenance {
     }
 }
 
-function Get-AutoMergeStep {
-    <#
-    .SYNOPSIS
-        The one next step for an eligible pull request, from its current state.
-    .DESCRIPTION
-        Check states are 'missing', 'pending', 'success' or 'failure'. The order matters: nothing is
-        validated while the lock file is out of date or the branch is behind main, because either
-        would invalidate the result - validation itself refuses a branch that is behind.
-    #>
-    [CmdletBinding()]
-    [OutputType([pscustomobject])]
-    param(
-        [Parameter(Mandatory = $true)]
-        [bool]$NeedsLockSync,
-
-        [Parameter(Mandatory = $true)]
-        [bool]$Mergeable,
-
-        [Parameter(Mandatory = $true)]
-        [int]$BehindBy,
-
-        [Parameter(Mandatory = $true)]
-        [bool]$WorkflowActive,
-
-        [Parameter(Mandatory = $true)]
-        [ValidateSet('missing', 'pending', 'success', 'failure')]
-        [string]$ValidationState,
-
-        [Parameter(Mandatory = $true)]
-        [ValidateSet('missing', 'pending', 'success', 'failure')]
-        [string]$ReviewState
-    )
-
-    $Step = { param($Action, $Detail) [PSCustomObject]@{ Action = $Action; Detail = $Detail } }
-
-    if (-not $Mergeable) {
-        return (& $Step 'Blocked' 'the branch conflicts with main. Dependabot rebases its own pull requests; if it no longer does, comment "@dependabot recreate".')
-    }
-    if ($WorkflowActive) {
-        return (& $Step 'Wait' 'a validation, review or lock-sync run is still queued or running')
-    }
-    if ($NeedsLockSync) {
-        return (& $Step 'SyncLock' 'refresh the pinned hash in the lock file')
-    }
-    if ($BehindBy -gt 0) {
-        return (& $Step 'UpdateBranch' ('bring the branch up to date with main ({0} commit(s) behind)' -f $BehindBy))
-    }
-    if ('failure' -in @($ValidationState, $ReviewState)) {
-        return (& $Step 'Blocked' ('a required check failed (PR Validation: {0}, Dependency Review: {1})' -f $ValidationState, $ReviewState))
-    }
-    $Missing = @()
-    if ($ValidationState -eq 'missing') { $Missing += 'Validation' }
-    if ($ReviewState -eq 'missing') { $Missing += 'Review' }
-    if ($Missing.Count -gt 0) {
-        return (& $Step 'DispatchChecks' ($Missing -join ','))
-    }
-    if ('pending' -in @($ValidationState, $ReviewState)) {
-        return (& $Step 'Wait' 'required checks are still running')
-    }
-    return (& $Step 'Merge' 'every required check passed')
-}
-
-function Get-CommitStatusState {
-    <#
-    .SYNOPSIS
-        The state of one commit status context on a commit, mapped to missing/pending/success/failure.
-    #>
-    [CmdletBinding()]
-    [OutputType([string])]
-    param(
-        [Parameter(Mandatory = $true)]
-        [string]$Repository,
-
-        [Parameter(Mandatory = $true)]
-        [string]$Sha,
-
-        [Parameter(Mandatory = $true)]
-        [string]$Context
-    )
-
-    $Response = Invoke-AutoMergeApi -Uri ('https://api.github.com/repos/{0}/commits/{1}/status?per_page=100' -f $Repository, $Sha)
-    # The combined status endpoint already reduces each context to its latest status.
-    $Status = @($Response.Content.statuses | Where-Object { $_.context -eq $Context }) | Select-Object -First 1
-    if ($null -eq $Status) {
-        return 'missing'
-    }
-    switch ($Status.state) {
-        'success' { return 'success' }
-        'pending' { return 'pending' }
-        default { return 'failure' }
-    }
-}
-
-function Get-CheckRunState {
-    <#
-    .SYNOPSIS
-        The state of the latest check run with a given name on a commit, mapped to
-        missing/pending/success/failure. A cancelled run counts as missing, so it is dispatched again.
-    #>
-    [CmdletBinding()]
-    [OutputType([string])]
-    param(
-        [Parameter(Mandatory = $true)]
-        [string]$Repository,
-
-        [Parameter(Mandatory = $true)]
-        [string]$Sha,
-
-        [Parameter(Mandatory = $true)]
-        [string]$Name
-    )
-
-    $Uri = 'https://api.github.com/repos/{0}/commits/{1}/check-runs?check_name={2}&filter=latest' -f $Repository, $Sha, [uri]::EscapeDataString($Name)
-    $Response = Invoke-AutoMergeApi -Uri $Uri
-    $Run = @($Response.Content.check_runs) | Where-Object { $null -ne $_ } | Sort-Object -Property id -Descending | Select-Object -First 1
-    if ($null -eq $Run) {
-        return 'missing'
-    }
-    if ($Run.status -ne 'completed') {
-        return 'pending'
-    }
-    switch ($Run.conclusion) {
-        'success' { return 'success' }
-        'cancelled' { return 'missing' }
-        default { return 'failure' }
-    }
-}
-
-function Test-AutoMergeWorkflowActive {
-    <#
-    .SYNOPSIS
-        Whether any run of the given workflows is queued or in progress. Dispatching again while one
-        is would only cancel it through its concurrency group and start over.
-    #>
-    [CmdletBinding()]
-    [OutputType([bool])]
-    param(
-        [Parameter(Mandatory = $true)]
-        [string]$Repository,
-
-        [Parameter(Mandatory = $true)]
-        [string[]]$WorkflowFile
-    )
-
-    $Paths = @($WorkflowFile | ForEach-Object { '.github/workflows/{0}' -f $_ })
-    foreach ($Status in @('queued', 'in_progress')) {
-        $Response = Invoke-AutoMergeApi -Uri ('https://api.github.com/repos/{0}/actions/runs?status={1}&per_page=100' -f $Repository, $Status)
-        if (@($Response.Content.workflow_runs | Where-Object { $_.path -in $Paths }).Count -gt 0) {
-            return $true
-        }
-    }
-    return $false
-}
-
-function Invoke-WorkflowDispatch {
-    <#
-    .SYNOPSIS
-        Starts a workflow_dispatch run - the one kind of run a GITHUB_TOKEN is allowed to start.
-    #>
-    [CmdletBinding(SupportsShouldProcess = $true)]
-    param(
-        [Parameter(Mandatory = $true)]
-        [string]$Repository,
-
-        [Parameter(Mandatory = $true)]
-        [string]$WorkflowFile,
-
-        [Parameter(Mandatory = $true)]
-        [string]$Ref,
-
-        [hashtable]$Inputs = @{}
-    )
-
-    if (-not $PSCmdlet.ShouldProcess(('{0} on {1}' -f $WorkflowFile, $Ref), 'Dispatch workflow')) {
-        return
-    }
-    $Response = Invoke-AutoMergeApi -Method Post -Uri ('https://api.github.com/repos/{0}/actions/workflows/{1}/dispatches' -f $Repository, $WorkflowFile) -Body @{ ref = $Ref; inputs = $Inputs }
-    if ($Response.StatusCode -notin 200, 204) {
-        throw ('Dispatching {0} on {1} failed with HTTP {2}: {3}' -f $WorkflowFile, $Ref, $Response.StatusCode, ($Response.Content | ConvertTo-Json -Compress -Depth 5))
-    }
-}
-
 function Format-AutoMergeReport {
     <#
     .SYNOPSIS
@@ -709,7 +474,7 @@ function Format-AutoMergeReport {
     $Lines.Add('### Dependabot auto-merge')
     $Lines.Add('')
     if ($Evaluation.Eligible) {
-        $Lines.Add(('**Eligible for auto-merge.** Next step: **{0}** - {1}.' -f $Evaluation.Step.Action, $Evaluation.Step.Detail))
+        $Lines.Add('**Auto-merge enabled.** PR Validation was started for this head; GitHub merges the pull request once every check the ruleset requires is green, and not before.')
     }
     else {
         $Lines.Add('**Manual review required.** This pull request does not meet the auto-merge policy; a maintainer reviews it and comments `/validate` as usual.')
@@ -827,152 +592,13 @@ function Get-DependabotPullRequestEvaluation {
         }
     }
 
-    $EcosystemSetting = if ($Ecosystem) { $Setting.Ecosystems[$Ecosystem] } else { $null }
-    $LockFile = if ($EcosystemSetting) { $EcosystemSetting.LockFile } else { $null }
     return [PSCustomObject]@{
-        Number        = $Number
-        Branch        = [string]$PullRequest.head.ref
-        HeadSha       = [string]$PullRequest.head.sha
-        Ecosystem     = $Ecosystem
-        Eligible      = ($Reasons.Count -eq 0)
-        Reasons       = $Reasons.ToArray()
-        Dependencies  = $Dependencies
-        Files         = @($Files | ForEach-Object { $_.filename })
-        NeedsLockSync = [bool]($EcosystemSetting -and $EcosystemSetting.NeedsLockSync -and $LockFile -notin @($Files | ForEach-Object { $_.filename }))
-        Step          = $null
+        Number       = $Number
+        Branch       = [string]$PullRequest.head.ref
+        HeadSha      = [string]$PullRequest.head.sha
+        Ecosystem    = $Ecosystem
+        Eligible     = ($Reasons.Count -eq 0)
+        Reasons      = $Reasons.ToArray()
+        Dependencies = $Dependencies
     }
-}
-
-function Invoke-AutoMergeStep {
-    <#
-    .SYNOPSIS
-        Works out and takes the next step for one eligible pull request. Returns the step taken.
-    #>
-    [CmdletBinding(SupportsShouldProcess = $true)]
-    [OutputType([pscustomobject])]
-    param(
-        [Parameter(Mandatory = $true)]
-        [string]$Repository,
-
-        [Parameter(Mandatory = $true)]
-        [string]$DefaultBranch,
-
-        [Parameter(Mandatory = $true)]
-        [pscustomobject]$Evaluation,
-
-        [Parameter(Mandatory = $true)]
-        [hashtable]$Setting
-    )
-
-    $Number = $Evaluation.Number
-    $Sha = $Evaluation.HeadSha
-    # mergeable is computed asynchronously and is null until GitHub has done so; only an explicit
-    # false is a conflict.
-    $PullRequest = (Invoke-AutoMergeApi -Uri ('https://api.github.com/repos/{0}/pulls/{1}' -f $Repository, $Number)).Content
-    $Compare = (Invoke-AutoMergeApi -Uri ('https://api.github.com/repos/{0}/compare/{1}...{2}' -f $Repository, $DefaultBranch, $Sha)).Content
-
-    $Step = Get-AutoMergeStep `
-        -NeedsLockSync $Evaluation.NeedsLockSync `
-        -Mergeable ($PullRequest.mergeable -ne $false) `
-        -BehindBy ([int]$Compare.behind_by) `
-        -WorkflowActive (Test-AutoMergeWorkflowActive -Repository $Repository -WorkflowFile @($Setting.Workflows.Validation, $Setting.Workflows.Review, $Setting.Workflows.LockSync)) `
-        -ValidationState (Get-CommitStatusState -Repository $Repository -Sha $Sha -Context $Setting.Checks.ValidationStatus) `
-        -ReviewState (Get-CheckRunState -Repository $Repository -Sha $Sha -Name $Setting.Checks.ReviewCheckRun)
-
-    if (-not $PSCmdlet.ShouldProcess(('#{0}' -f $Number), $Step.Action)) {
-        return $Step
-    }
-
-    switch ($Step.Action) {
-        'SyncLock' {
-            Invoke-WorkflowDispatch -Repository $Repository -WorkflowFile $Setting.Workflows.LockSync -Ref $DefaultBranch -Inputs @{ branch = $Evaluation.Branch }
-        }
-        'UpdateBranch' {
-            # Creates a merge commit through the API as github-actions[bot], signed by GitHub.
-            $Response = Invoke-AutoMergeApi -Method Put -Uri ('https://api.github.com/repos/{0}/pulls/{1}/update-branch' -f $Repository, $Number) -Body @{ expected_head_sha = $Sha }
-            if ($Response.StatusCode -ne 202) {
-                $Step = [PSCustomObject]@{ Action = 'Blocked'; Detail = ('updating the branch failed with HTTP {0}: {1}' -f $Response.StatusCode, $Response.Content.message) }
-            }
-        }
-        'DispatchChecks' {
-            if ($Step.Detail -match 'Validation') {
-                # Dispatched on the default branch, so the workflow definition that runs is the reviewed
-                # one on main - it checks out the pull request head itself.
-                Invoke-WorkflowDispatch -Repository $Repository -WorkflowFile $Setting.Workflows.Validation -Ref $DefaultBranch -Inputs @{ pr_number = [string]$Number }
-            }
-            if ($Step.Detail -match 'Review') {
-                # Dispatched on the pull request branch, so the check run lands on its head commit -
-                # the commit the ruleset looks for it on. That runs the branch's copy of
-                # dependency-review.yml, exactly as the pull_request trigger does.
-                Invoke-WorkflowDispatch -Repository $Repository -WorkflowFile $Setting.Workflows.Review -Ref $Evaluation.Branch
-            }
-        }
-        'Merge' {
-            # sha pins the merge to the exact head that was validated: if anything was pushed since,
-            # GitHub refuses with 409 instead of merging unvalidated code.
-            $Response = Invoke-AutoMergeApi -Method Put -Uri ('https://api.github.com/repos/{0}/pulls/{1}/merge' -f $Repository, $Number) -Body @{ merge_method = 'squash'; sha = $Sha }
-            if ($Response.StatusCode -ne 200 -or -not $Response.Content.merged) {
-                $Step = [PSCustomObject]@{ Action = 'Blocked'; Detail = ('GitHub refused the merge (HTTP {0}): {1}' -f $Response.StatusCode, $Response.Content.message) }
-            }
-            elseif (@($Evaluation.Files | Where-Object { $_ -like 'src/*' }).Count -gt 0) {
-                # A merge made with the GITHUB_TOKEN starts no push-triggered run, so release.yml - which
-                # a human merge touching src/ would have started - is dispatched explicitly.
-                Invoke-WorkflowDispatch -Repository $Repository -WorkflowFile $Setting.Workflows.Release -Ref $DefaultBranch
-                $Step = [PSCustomObject]@{ Action = 'Merged'; Detail = 'merged, and the release workflow was started because src/ changed' }
-            }
-            else {
-                $Step = [PSCustomObject]@{ Action = 'Merged'; Detail = 'merged' }
-            }
-        }
-    }
-    return $Step
-}
-
-function Invoke-DependabotAutoMerge {
-    <#
-    .SYNOPSIS
-        One reconciliation pass over every open Dependabot pull request.
-    .DESCRIPTION
-        Every pull request is evaluated and gets its comment. Only the oldest eligible one that is not
-        blocked is advanced - one pull request at a time, because merging one puts every other one
-        behind main and would only waste the validation runs started for them in the meantime.
-    #>
-    [CmdletBinding(SupportsShouldProcess = $true)]
-    [OutputType([pscustomobject[]])]
-    param(
-        [Parameter(Mandatory = $true)]
-        [string]$Repository,
-
-        [Parameter(Mandatory = $true)]
-        [string]$DefaultBranch,
-
-        [Parameter(Mandatory = $true)]
-        [hashtable]$Setting,
-
-        [datetime]$Now = [datetime]::UtcNow
-    )
-
-    $PullRequests = @((Invoke-AutoMergeApi -Uri ('https://api.github.com/repos/{0}/pulls?state=open&base={1}&per_page=100' -f $Repository, $DefaultBranch)).Content |
-            Where-Object { $_.user.login -eq 'dependabot[bot]' -and -not $_.draft } |
-            Sort-Object -Property number)
-
-    $Advanced = $false
-    $Results = foreach ($PullRequest in $PullRequests) {
-        $Evaluation = Get-DependabotPullRequestEvaluation -Repository $Repository -PullRequest $PullRequest -Setting $Setting -Now $Now
-        if ($Evaluation.Eligible) {
-            if ($Advanced) {
-                $Evaluation.Step = [PSCustomObject]@{ Action = 'Queued'; Detail = 'another Dependabot pull request is being merged first' }
-            }
-            else {
-                $Evaluation.Step = Invoke-AutoMergeStep -Repository $Repository -DefaultBranch $DefaultBranch -Evaluation $Evaluation -Setting $Setting
-                $Advanced = $Evaluation.Step.Action -ne 'Blocked'
-            }
-        }
-
-        if ($Evaluation.Step.Action -ne 'Merged') {
-            Set-AutoMergeComment -Repository $Repository -Number $Evaluation.Number -Body (Format-AutoMergeReport -Evaluation $Evaluation)
-        }
-        $Evaluation
-    }
-    return @($Results)
 }

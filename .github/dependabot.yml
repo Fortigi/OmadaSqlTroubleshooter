@@ -26,10 +26,11 @@
 # Given the Monday-weekly schedule, the practical cost is that a routine new version lands one
 # cycle later than it otherwise would.
 #
-# Auto-merge. .github/workflows/dependabot-auto-merge.yml merges a pull request opened from here
-# without a human only when every update in it is patch or minor, at least 3 days old, from a source
-# repository with a sufficient OpenSSF Scorecard, and PR Validation and Dependency Review pass on it.
-# Everything else waits for a maintainer. Policy: build/DependabotAutoMerge.psd1.
+# Auto-merge. .github/workflows/dependabot-auto-merge.yml enables auto-merge on a github-actions pull
+# request from here only when every update in it is patch or minor, at least 3 days old, and from an
+# action repository with a sufficient OpenSSF Scorecard; GitHub then merges it once PR Validation and
+# Dependency Review pass. NuGet and everything else waits for a maintainer.
+# Policy: build/DependabotAutoMerge.psd1.
 version: 2
 updates:
   - package-ecosystem: "github-actions"

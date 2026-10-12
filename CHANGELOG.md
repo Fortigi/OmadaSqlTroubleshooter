@@ -25,16 +25,15 @@ semantic version.
 
 ### Added
 
-- Dependabot auto-merge gated on reputation. A Dependabot pull request now merges without a
-  maintainer when every update in it is a semver patch or minor update, the new version was
-  published at least 3 days ago, the source repository's OpenSSF Scorecard (via deps.dev) is at
-  least 7.0 with a perfect `Dangerous-Workflow` score, the pull request holds only Dependabot's and
-  this repository's own signed commits, and `PR Validation` and `Dependency Review` pass on its head.
-  Everything else gets a comment explaining which condition failed and waits for review as before.
-  For a NuGet bump the lock-file refresh is dispatched automatically as well. Policy in
-  `build/DependabotAutoMerge.psd1`; see [Dependabot auto-merge](SECURITY.md#dependabot-auto-merge).
-  `PR Validation` can now be dispatched for a pull request (`pr_number`), and `Dependency Review`
-  dispatched on a branch, which is how the auto-merge workflow starts them.
+- Auto-merge for Dependabot's GitHub Actions updates, gated on reputation. Auto-merge is enabled on
+  such a pull request when every update in it is a semver patch or minor update, its GitHub release
+  is at least 3 days old, the action repository's OpenSSF Scorecard (via deps.dev) is at least 7.0
+  with a perfect `Dangerous-Workflow` score, and it holds nothing but verified Dependabot commits to
+  workflow files. The workflow then starts `PR Validation` itself, and GitHub merges once that and
+  `Dependency Review` pass. Everything else - NuGet bumps included - gets a comment explaining why
+  and waits for review as before. Policy in `build/DependabotAutoMerge.psd1`; see
+  [Dependabot auto-merge](SECURITY.md#dependabot-auto-merge). `PR Validation` can now be dispatched
+  for a pull request through its `pr_number` input.
 
 - Complexity and test-strength gates in the build (#109). Pull request validation now measures the
   changed `src/Lib` files with PSComplexity (at most 15 cyclomatic / 15 cognitive per unit, with the

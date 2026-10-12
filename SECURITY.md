@@ -84,7 +84,7 @@ Out of scope:
 | Private vulnerability reporting | Repository settings — *Settings > Advanced Security > Private vulnerability reporting* |
 | Secret scanning and push protection | Repository settings — *Settings > Advanced Security* |
 | Dependabot version and security updates, with a cooldown | [.github/dependabot.yml](.github/dependabot.yml) |
-| Dependabot auto-merge gated on update type, release age and the OpenSSF Scorecard of the source repository | [.github/workflows/dependabot-auto-merge.yml](.github/workflows/dependabot-auto-merge.yml), policy in [build/DependabotAutoMerge.psd1](build/DependabotAutoMerge.psd1), see below |
+| Auto-merge of Dependabot's GitHub Actions updates, gated on update type, release age and the OpenSSF Scorecard of the action's repository | [.github/workflows/dependabot-auto-merge.yml](.github/workflows/dependabot-auto-merge.yml), policy in [build/DependabotAutoMerge.psd1](build/DependabotAutoMerge.psd1), see below |
 | Dependabot malware alerts (npm, PyPI, Maven, RubyGems, **NuGet**, Go, crates.io, Composer) | Repository settings — *Settings > Advanced Security > Dependabot alerts* |
 | Pre-merge vulnerability and licence gate on the dependency graph diff | [.github/workflows/dependency-review.yml](.github/workflows/dependency-review.yml) |
 | Every external GitHub Actions `uses:` (one with an `@ref`) pinned to a full commit SHA | every workflow in [.github/workflows](.github/workflows), enforced by [tests/WorkflowActionPins.Tests.ps1](tests/WorkflowActionPins.Tests.ps1) and *Settings > Actions > General > Allowed actions* |
@@ -103,18 +103,16 @@ request merges - `dependency-review.yml` did not exist for the ruleset to refere
 - **`PR Validation` as a required check is a deliberate human gate, not an oversight.** It reports
   a commit status from the comment-triggered `/validate` workflow (see
   [Pull requests](CONTRIBUTING.md#pull-requests)), so every pull request stays blocked until a
-  maintainer comments `/validate`. The one exception is a Dependabot pull request that passes the
-  auto-merge policy below: for that one, the auto-merge workflow dispatches the same validation
-  itself. The check stays required either way, and is never bypassed.
+  maintainer comments `/validate`. The one exception is a Dependabot GitHub Actions update that
+  passes the auto-merge policy below: for that one, the auto-merge workflow starts the same
+  validation itself. The check stays required either way and is never bypassed.
 - **`E2E Suite` is deliberately not a required check.** It is `paths`-filtered (see
   [.github/workflows/e2e.yml](.github/workflows/e2e.yml)), so it never reports on most pull
   requests — a required check that never reports blocks a merge forever.
-- **Signed commits are not required by the ruleset.** The workflows that commit to a Dependabot
-  branch — the lock-file refresh in
-  [.github/workflows/dependency-lock-sync.yml](.github/workflows/dependency-lock-sync.yml) and the
-  branch update by Dependabot auto-merge — now commit through the API, so their commits are signed
-  by GitHub; Dependabot auto-merge itself only accepts verified commits. Requiring signatures
-  repository-wide is a separate decision about contributors' commits and is not made here.
+- **Signed commits are deliberately not required.**
+  [.github/workflows/dependency-lock-sync.yml](.github/workflows/dependency-lock-sync.yml) pushes
+  its lock-file refresh unsigned; requiring signatures would break the one workflow that makes a
+  Dependabot pull request mergeable.
 
 Three caveats worth stating plainly rather than letting the table above overstate what these controls
 do:
@@ -137,41 +135,40 @@ do:
 
 ### Dependabot auto-merge
 
-A Dependabot pull request merges without a human only when **all** of these hold. Anything else
-gets a comment explaining which condition failed and waits for a maintainer, as every pull request
-did before.
+[.github/workflows/dependabot-auto-merge.yml](.github/workflows/dependabot-auto-merge.yml) enables
+GitHub auto-merge on a Dependabot pull request only when **all** of these hold. Anything else gets a
+comment explaining which condition failed and waits for a maintainer, as every pull request did
+before.
 
+- **Ecosystem.** Only `github-actions` updates. The NuGet bumps in `build/Dependencies` also need the
+  lock-file refresh and start a release on merge, and stay a maintainer's decision.
 - **Update type.** Every dependency in it is a semver patch or minor update. A grouped pull request
   with one major update in it waits as a whole.
-- **Release age.** The new version was published at least 3 days ago — the GitHub release's
-  `published_at` for an action, the registry's publication date via deps.dev for a NuGet package.
+- **Release age.** The GitHub release of the new version was published at least 3 days ago.
   Cooldown already holds version updates back longer; this exists for *security* updates, which
   bypass cooldown, so they never merge unattended inside the window in which a compromised release
   is typically caught and yanked. A maintainer can still merge one by hand at once.
-- **Reputation.** The source repository's [OpenSSF Scorecard](https://scorecard.dev), as published by
+- **Reputation.** The action repository's [OpenSSF Scorecard](https://scorecard.dev), as published by
   [deps.dev](https://deps.dev), scores at least 7.0 overall, is at most 45 days old, and scores 10 on
   `Dangerous-Workflow` — no CI pattern by which an outsider can get code executed with the project's
-  release credentials. No Scorecard, or no source repository deps.dev can link a package to, means no
-  reputation and a human decision.
-- **Provenance.** Every commit on the pull request is authored by `dependabot[bot]` or by this
-  repository's own workflows (`github-actions[bot]`), *with a signature GitHub verified* — the
-  author account alone is derived from an e-mail address anyone can set. The first commit is
-  Dependabot's, since its metadata is what the update type and version are read from. The pull
-  request modifies only the files its ecosystem may change: workflow files for `github-actions`;
-  `build/Dependencies/Dependencies.csproj` and `src/DependencyLock.psd1` for `nuget`. A commit pushed
-  by anyone else takes it out of auto-merge for good.
-- **Validation.** `PR Validation` and `Dependency Review` are green on its head. The merge names that
-  exact head commit, so GitHub refuses it if anything was pushed in between, and it goes through the
-  "Protect Main" ruleset like any other merge — the workflow's token cannot bypass it.
+  release credentials. No Scorecard means no reputation and a human decision.
+- **Provenance.** Every commit on the pull request is authored by `dependabot[bot]` *with a signature
+  GitHub verified* — the author account alone is derived from an e-mail address anyone can set — and
+  it modifies nothing but workflow files. When anyone else pushes to a Dependabot branch, auto-merge
+  is withdrawn.
 
-The workflow runs as a reconciler: hourly, and whenever validation, review or lock sync completes,
-it takes the next step for the oldest eligible pull request — refresh the lock file, update the
-branch from `main`, dispatch validation and review, merge. It works this way because anything done
-with the `GITHUB_TOKEN` starts no further workflow run except a dispatch, so every follow-up is
-dispatched explicitly, including `release.yml` after a merge that changed `src/`. It runs on `main`'s
-definition and never checks out the pull request: a `github-actions` bump changes the pull request's
-own copy of the workflows to the new action versions, which must not run with write permissions
-before they have been vetted.
+GitHub then still merges only once `PR Validation` and `Dependency Review`, both required by the
+ruleset, are green on the pull request's head; a red one is never merged. Because `PR Validation`
+normally waits for `/validate`, the workflow starts it for an eligible pull request through its
+`pr_number` input. When the branch falls behind `main`, the ruleset's up-to-date requirement holds
+the merge until someone comments `@dependabot rebase`.
+
+The workflow runs on `pull_request_target`, so the definition that runs is the one on `main`, and it
+checks out the base commit only. On a `github-actions` bump, the pull request's own copy of the
+workflows already references the new action versions; running that copy with write permissions
+would execute exactly the release the policy exists to vet. The pattern follows
+[Fortigi/IdentityAtlas](https://github.com/Fortigi/IdentityAtlas)'s `dependabot-auto-merge.yml`, with
+the reputation gate added.
 
 What this does and does not buy:
 
@@ -179,13 +176,8 @@ What this does and does not buy:
   less likely and says nothing about whether this particular version is clean. The release-age
   window and the cooldown are what address a bad release; the Scorecard decides how much a project
   is trusted to have none.
-- **A Scorecard can be gamed** by a project optimising for the checks rather than the practices, and
-  is computed for the source repository deps.dev links a package to — a link it takes from package
-  metadata that is not verified. For this repository's two NuGet packages, both published by
-  Microsoft, that is a small risk; it would be a larger one for an ecosystem with arbitrary
-  publishers.
-- **Kill switch.** Setting the repository variable `DEPENDABOT_AUTO_MERGE` to `off` turns every run
-  into a report-only run without a code change.
+- **A Scorecard can be gamed** by a project optimising for the checks rather than the practices.
+  Combined with the age window and SHA pinning it raises the bar; it is not a guarantee.
 
 ## Runtime dependency verification
 
@@ -258,11 +250,11 @@ pull requests possible for a component that is never restored from a package man
 The flow after a bump — whether Dependabot proposes it or a maintainer does — is:
 
 1. the version changes in `build/Dependencies/Dependencies.csproj`;
-2. the pinned hash is refreshed on that branch by
-   [`.github/workflows/dependency-lock-sync.yml`](.github/workflows/dependency-lock-sync.yml) —
-   dispatched by Dependabot auto-merge when the bump passes its policy, otherwise run from the
-   Actions tab against the branch — or locally with the command below. It is never triggered by the
-   pull request itself: that would hand a write-scoped token to code from the branch being reviewed;
+2. the pinned hash is refreshed on that branch, either by running
+   [`.github/workflows/dependency-lock-sync.yml`](.github/workflows/dependency-lock-sync.yml) from
+   the Actions tab against it, or locally with the command below. It is not automatic: workflows
+   triggered by Dependabot get a read-only token, and the alternative that works around that would
+   hand a write-scoped token to code from the branch being reviewed;
 3. PR validation, release and nightly all run `build/Update-DependencyLock.ps1 -Check`, which fails
    while the lock file and the manifest disagree, or while the pinned hash no longer matches what the
    URL serves.

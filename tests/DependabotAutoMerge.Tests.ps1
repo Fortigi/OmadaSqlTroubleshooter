@@ -133,10 +133,9 @@ Describe 'Test-PullRequestProvenance' {
         $Result.Eligible | Should -BeTrue
     }
 
-    It 'accepts the signed lock-file commit of this repository''s own workflow on a NuGet bump' {
+    It 'rejects even a verified commit by this repository''s own workflows' {
         $Commits = @((New-Commit), (New-Commit -Login 'github-actions[bot]' -Sha '1234567abcdef'))
-        $Files = @((New-PrFile 'build/Dependencies/Dependencies.csproj'), (New-PrFile 'src/DependencyLock.psd1'))
-        (Test-PullRequestProvenance -Commit $Commits -File $Files -Ecosystem 'nuget' -Setting $Script:Setting).Eligible | Should -BeTrue
+        (Test-PullRequestProvenance -Commit $Commits -File @(New-PrFile '.github/workflows/e2e.yml') -Ecosystem 'github_actions' -Setting $Script:Setting).Eligible | Should -BeFalse
     }
 
     It 'rejects a commit pushed by a person' {
@@ -159,14 +158,15 @@ Describe 'Test-PullRequestProvenance' {
     It 'rejects <Name> (<Status>) on a <Ecosystem> update' -ForEach @(
         @{ Name = 'src/OmadaSqlTroubleshooter.psm1'; Status = 'modified'; Ecosystem = 'github_actions' }
         @{ Name = '.github/workflows/new.yml'; Status = 'added'; Ecosystem = 'github_actions' }
-        @{ Name = 'build/Update-DependencyLock.ps1'; Status = 'modified'; Ecosystem = 'nuget' }
-        @{ Name = '.github/workflows/pr-validation.yml'; Status = 'modified'; Ecosystem = 'nuget' }
     ) {
         (Test-PullRequestProvenance -Commit @(New-Commit) -File @(New-PrFile -Name $Name -Status $Status) -Ecosystem $Ecosystem -Setting $Script:Setting).Eligible | Should -BeFalse
     }
 
-    It 'rejects an ecosystem that has no auto-merge configuration' {
-        (Test-PullRequestProvenance -Commit @(New-Commit) -File @() -Ecosystem 'npm_and_yarn' -Setting $Script:Setting).Eligible | Should -BeFalse
+    It 'rejects <Ecosystem>, which has no auto-merge configuration' -ForEach @(
+        @{ Ecosystem = 'nuget' }
+        @{ Ecosystem = '' }
+    ) {
+        (Test-PullRequestProvenance -Commit @(New-Commit) -File @(New-PrFile 'build/Dependencies/Dependencies.csproj') -Ecosystem $Ecosystem -Setting $Script:Setting).Eligible | Should -BeFalse
     }
 }
 
@@ -252,105 +252,6 @@ Describe 'Test-DependencyReputation' {
             (Test-DependencyReputation -Dependency (New-Dependency) -Ecosystem 'github_actions' -Setting $Script:Setting -Now $Script:Now).Eligible | Should -BeFalse
         }
     }
-
-    Context 'a NuGet package' {
-        It 'passes a package deps.dev links to a source repository with a good Scorecard, trying the lower-cased id' {
-            Mock Invoke-AutoMergeApi -ParameterFilter { $Uri -eq 'https://api.deps.dev/v3/systems/nuget/packages/microsoft.sqlserver.transactsql.scriptdom/versions/180.103.0' } {
-                New-ApiResponse -Content ([PSCustomObject]@{
-                        publishedAt     = $Script:Now.AddDays(-12).ToString('o')
-                        relatedProjects = @(
-                            [PSCustomObject]@{ relationType = 'ISSUE_TRACKER'; projectKey = [PSCustomObject]@{ id = 'github.com/elsewhere/tracker' } }
-                            [PSCustomObject]@{ relationType = 'SOURCE_REPO'; projectKey = [PSCustomObject]@{ id = 'github.com/microsoft/sqlscriptdom' } }
-                        )
-                    })
-            }
-            Mock Invoke-AutoMergeApi -ParameterFilter { $Uri -eq 'https://api.deps.dev/v3/projects/github.com%2Fmicrosoft%2Fsqlscriptdom' } { New-ApiResponse -Content ([PSCustomObject]@{ scorecard = (New-Scorecard) }) }
-
-            $Result = Test-DependencyReputation -Dependency (New-Dependency -Name 'Microsoft.SqlServer.TransactSql.ScriptDom' -Version '180.103.0') -Ecosystem 'nuget' -Setting $Script:Setting -Now $Script:Now
-            $Result.Reasons | Should -BeNullOrEmpty
-            $Result.Eligible | Should -BeTrue
-        }
-
-        It 'fails a package deps.dev links to no source repository' {
-            Mock Invoke-AutoMergeApi -ParameterFilter { $Uri -like 'https://api.deps.dev/v3/systems/nuget/*' } { New-ApiResponse -Content ([PSCustomObject]@{ publishedAt = $Script:Now.AddDays(-12).ToString('o'); relatedProjects = @() }) }
-            $Result = Test-DependencyReputation -Dependency (New-Dependency -Name 'Microsoft.Web.WebView2' -Version '1.0.4200.10') -Ecosystem 'nuget' -Setting $Script:Setting -Now $Script:Now
-            $Result.Eligible | Should -BeFalse
-            $Result.Reasons -join ' ' | Should -Match 'no source repository'
-        }
-
-        It 'fails a version deps.dev does not know' {
-            (Test-DependencyReputation -Dependency (New-Dependency -Name 'Unknown.Package' -Version '1.0.0') -Ecosystem 'nuget' -Setting $Script:Setting -Now $Script:Now).Eligible | Should -BeFalse
-        }
-    }
-}
-
-Describe 'Get-AutoMergeStep' {
-    BeforeAll {
-        $Script:Ready = @{
-            NeedsLockSync   = $false
-            Mergeable       = $true
-            BehindBy        = 0
-            WorkflowActive  = $false
-            ValidationState = 'success'
-            ReviewState     = 'success'
-        }
-    }
-
-    It 'returns <Expected> when <Case>' -ForEach @(
-        @{ Case = 'everything is green'; Change = @{}; Expected = 'Merge' }
-        @{ Case = 'the branch conflicts'; Change = @{ Mergeable = $false }; Expected = 'Blocked' }
-        @{ Case = 'a run is still active'; Change = @{ WorkflowActive = $true; NeedsLockSync = $true }; Expected = 'Wait' }
-        @{ Case = 'the lock file is not refreshed yet'; Change = @{ NeedsLockSync = $true; BehindBy = 2; ValidationState = 'missing' }; Expected = 'SyncLock' }
-        @{ Case = 'the branch is behind main'; Change = @{ BehindBy = 1; ValidationState = 'failure' }; Expected = 'UpdateBranch' }
-        @{ Case = 'validation failed'; Change = @{ ValidationState = 'failure'; ReviewState = 'missing' }; Expected = 'Blocked' }
-        @{ Case = 'the review failed'; Change = @{ ReviewState = 'failure' }; Expected = 'Blocked' }
-        @{ Case = 'validation never ran'; Change = @{ ValidationState = 'missing'; ReviewState = 'pending' }; Expected = 'DispatchChecks' }
-        @{ Case = 'checks are still running'; Change = @{ ValidationState = 'pending' }; Expected = 'Wait' }
-    ) {
-        $Arguments = $Script:Ready.Clone()
-        foreach ($Key in $Change.Keys) { $Arguments[$Key] = $Change[$Key] }
-        (Get-AutoMergeStep @Arguments).Action | Should -Be $Expected
-    }
-
-    It 'names every check that has to be dispatched' {
-        $Arguments = $Script:Ready.Clone()
-        $Arguments.ValidationState = 'missing'
-        $Arguments.ReviewState = 'missing'
-        (Get-AutoMergeStep @Arguments).Detail | Should -Be 'Validation,Review'
-    }
-}
-
-Describe 'Get-CommitStatusState and Get-CheckRunState' {
-    It 'maps commit status <State> to <Expected>' -ForEach @(
-        @{ State = 'success'; Expected = 'success' }
-        @{ State = 'pending'; Expected = 'pending' }
-        @{ State = 'failure'; Expected = 'failure' }
-        @{ State = 'error'; Expected = 'failure' }
-    ) {
-        Mock Invoke-AutoMergeApi { New-ApiResponse -Content ([PSCustomObject]@{ statuses = @([PSCustomObject]@{ context = 'PR Validation'; state = $State }, [PSCustomObject]@{ context = 'other'; state = 'success' }) }) }
-        Get-CommitStatusState -Repository 'o/r' -Sha 'abc' -Context 'PR Validation' | Should -Be $Expected
-    }
-
-    It 'reports a commit status context that never reported as missing' {
-        Mock Invoke-AutoMergeApi { New-ApiResponse -Content ([PSCustomObject]@{ statuses = @() }) }
-        Get-CommitStatusState -Repository 'o/r' -Sha 'abc' -Context 'PR Validation' | Should -Be 'missing'
-    }
-
-    It 'maps the latest check run (<Status>/<Conclusion>) to <Expected>' -ForEach @(
-        @{ Status = 'in_progress'; Conclusion = $null; Expected = 'pending' }
-        @{ Status = 'completed'; Conclusion = 'success'; Expected = 'success' }
-        @{ Status = 'completed'; Conclusion = 'failure'; Expected = 'failure' }
-        @{ Status = 'completed'; Conclusion = 'neutral'; Expected = 'failure' }
-        @{ Status = 'completed'; Conclusion = 'cancelled'; Expected = 'missing' }
-    ) {
-        Mock Invoke-AutoMergeApi {
-            New-ApiResponse -Content ([PSCustomObject]@{ check_runs = @(
-                        [PSCustomObject]@{ id = 1; status = 'completed'; conclusion = 'success' }
-                        [PSCustomObject]@{ id = 2; status = $Status; conclusion = $Conclusion }
-                    ) })
-        }
-        Get-CheckRunState -Repository 'o/r' -Sha 'abc' -Name 'Dependency Review' | Should -Be $Expected
-    }
 }
 
 Describe 'Invoke-AutoMergeApi' {
@@ -390,123 +291,35 @@ Describe 'Format-AutoMergeReport' {
         $First | Should -Match '\| `x` \| 1.2.0 \| semver-minor \| github.com/a/b \| 5.0 \| 2026-10-12 \| fail \|'
         Format-AutoMergeReport -Evaluation $Evaluation | Should -BeExactly $First
     }
-}
 
-Describe 'Invoke-AutoMergeStep' {
-    BeforeEach {
-        Mock Invoke-WorkflowDispatch { }
-        Mock Test-AutoMergeWorkflowActive { $false }
-        Mock Get-CommitStatusState { 'success' }
-        Mock Get-CheckRunState { 'success' }
-        Mock Invoke-AutoMergeApi -ParameterFilter { $Uri -like '*/pulls/7' } { New-ApiResponse -Content ([PSCustomObject]@{ mergeable = $true }) }
-        Mock Invoke-AutoMergeApi -ParameterFilter { $Uri -like '*/compare/*' } { New-ApiResponse -Content ([PSCustomObject]@{ behind_by = 0 }) }
-        $Script:Evaluation = [PSCustomObject]@{
-            Number        = 7
-            Branch        = 'dependabot/nuget/build/Dependencies/Microsoft.SqlServer.TransactSql.ScriptDom-180.103.0'
-            HeadSha       = 'headsha'
-            NeedsLockSync = $false
-            Files         = @('build/Dependencies/Dependencies.csproj', 'src/DependencyLock.psd1')
-        }
-    }
-
-    It 'merges exactly the validated head and starts the release when src/ changed' {
-        Mock Invoke-AutoMergeApi -ParameterFilter { $Uri -like '*/pulls/7/merge' } { New-ApiResponse -Content ([PSCustomObject]@{ merged = $true }) }
-        $Step = Invoke-AutoMergeStep -Repository 'o/r' -DefaultBranch 'main' -Evaluation $Script:Evaluation -Setting $Script:Setting
-        $Step.Action | Should -Be 'Merged'
-        Should -Invoke Invoke-AutoMergeApi -Times 1 -ParameterFilter { $Uri -like '*/pulls/7/merge' -and $Method -eq 'Put' -and $Body.sha -eq 'headsha' -and $Body.merge_method -eq 'squash' }
-        Should -Invoke Invoke-WorkflowDispatch -Times 1 -ParameterFilter { $WorkflowFile -eq 'release.yml' -and $Ref -eq 'main' }
-    }
-
-    It 'does not start a release for a merge outside src/' {
-        Mock Invoke-AutoMergeApi -ParameterFilter { $Uri -like '*/pulls/7/merge' } { New-ApiResponse -Content ([PSCustomObject]@{ merged = $true }) }
-        $Script:Evaluation.Files = @('.github/workflows/e2e.yml')
-        (Invoke-AutoMergeStep -Repository 'o/r' -DefaultBranch 'main' -Evaluation $Script:Evaluation -Setting $Script:Setting).Action | Should -Be 'Merged'
-        Should -Invoke Invoke-WorkflowDispatch -Times 0
-    }
-
-    It 'reports a merge GitHub refuses as blocked' {
-        Mock Invoke-AutoMergeApi -ParameterFilter { $Uri -like '*/pulls/7/merge' } { New-ApiResponse -StatusCode 405 -Content ([PSCustomObject]@{ message = 'Repository rule violations found' }) }
-        $Step = Invoke-AutoMergeStep -Repository 'o/r' -DefaultBranch 'main' -Evaluation $Script:Evaluation -Setting $Script:Setting
-        $Step.Action | Should -Be 'Blocked'
-        $Step.Detail | Should -Match 'Repository rule violations'
-    }
-
-    It 'dispatches validation on main for the pull request and the review on its branch' {
-        Mock Get-CommitStatusState { 'missing' }
-        Mock Get-CheckRunState { 'missing' }
-        (Invoke-AutoMergeStep -Repository 'o/r' -DefaultBranch 'main' -Evaluation $Script:Evaluation -Setting $Script:Setting).Action | Should -Be 'DispatchChecks'
-        Should -Invoke Invoke-WorkflowDispatch -Times 1 -ParameterFilter { $WorkflowFile -eq 'pr-validation.yml' -and $Ref -eq 'main' -and $Inputs.pr_number -eq '7' }
-        Should -Invoke Invoke-WorkflowDispatch -Times 1 -ParameterFilter { $WorkflowFile -eq 'dependency-review.yml' -and $Ref -eq $Script:Evaluation.Branch }
-    }
-
-    It 'dispatches the lock sync for the branch while the lock file is not refreshed' {
-        $Script:Evaluation.NeedsLockSync = $true
-        (Invoke-AutoMergeStep -Repository 'o/r' -DefaultBranch 'main' -Evaluation $Script:Evaluation -Setting $Script:Setting).Action | Should -Be 'SyncLock'
-        Should -Invoke Invoke-WorkflowDispatch -Times 1 -ParameterFilter { $WorkflowFile -eq 'dependency-lock-sync.yml' -and $Ref -eq 'main' -and $Inputs.branch -eq $Script:Evaluation.Branch }
-    }
-
-    It 'changes nothing under -WhatIf' {
-        Mock Invoke-AutoMergeApi -ParameterFilter { $Uri -like '*/pulls/7/merge' } { New-ApiResponse -Content ([PSCustomObject]@{ merged = $true }) }
-        (Invoke-AutoMergeStep -Repository 'o/r' -DefaultBranch 'main' -Evaluation $Script:Evaluation -Setting $Script:Setting -WhatIf).Action | Should -Be 'Merge'
-        Should -Invoke Invoke-AutoMergeApi -Times 0 -ParameterFilter { $Method -in 'Post', 'Put', 'Patch' }
-        Should -Invoke Invoke-WorkflowDispatch -Times 0
-    }
-}
-
-Describe 'Invoke-DependabotAutoMerge' {
-    BeforeEach {
-        Mock Set-AutoMergeComment { }
-        Mock Invoke-AutoMergeStep { [PSCustomObject]@{ Action = 'Wait'; Detail = 'checks running' } }
-        Mock Invoke-AutoMergeApi -ParameterFilter { $Uri -like '*/pulls?state=open*' } {
-            New-ApiResponse -Content @(
-                [PSCustomObject]@{ number = 12; draft = $false; user = [PSCustomObject]@{ login = 'dependabot[bot]' }; head = [PSCustomObject]@{ ref = 'dependabot/github_actions/b'; sha = 's12' } }
-                [PSCustomObject]@{ number = 10; draft = $false; user = [PSCustomObject]@{ login = 'dependabot[bot]' }; head = [PSCustomObject]@{ ref = 'dependabot/github_actions/a'; sha = 's10' } }
-                [PSCustomObject]@{ number = 11; draft = $false; user = [PSCustomObject]@{ login = 'someone' }; head = [PSCustomObject]@{ ref = 'feature/x'; sha = 's11' } }
-            )
-        }
-        Mock Get-DependabotPullRequestEvaluation {
-            [PSCustomObject]@{ Number = [int]$PullRequest.number; Branch = $PullRequest.head.ref; HeadSha = $PullRequest.head.sha; Ecosystem = 'github_actions'; Eligible = $true; Reasons = @(); Dependencies = @(); Files = @(); NeedsLockSync = $false; Step = $null }
-        }
-    }
-
-    It 'evaluates only Dependabot''s pull requests and advances only the oldest eligible one' {
-        $Results = Invoke-DependabotAutoMerge -Repository 'o/r' -DefaultBranch 'main' -Setting $Script:Setting -Now $Script:Now
-        $Results.Number | Should -Be @(10, 12)
-        $Results[0].Step.Action | Should -Be 'Wait'
-        $Results[1].Step.Action | Should -Be 'Queued'
-        Should -Invoke Invoke-AutoMergeStep -Times 1 -ParameterFilter { $Evaluation.Number -eq 10 }
-        Should -Invoke Set-AutoMergeComment -Times 2
-    }
-
-    It 'moves on to the next eligible pull request when the oldest is blocked' {
-        Mock Invoke-AutoMergeStep { [PSCustomObject]@{ Action = 'Blocked'; Detail = 'validation failed' } } -ParameterFilter { $Evaluation.Number -eq 10 }
-        $Results = Invoke-DependabotAutoMerge -Repository 'o/r' -DefaultBranch 'main' -Setting $Script:Setting -Now $Script:Now
-        $Results[1].Step.Action | Should -Be 'Wait'
-        Should -Invoke Invoke-AutoMergeStep -Times 2
-    }
-
-    It 'takes no step for a pull request that is not eligible' {
-        Mock Get-DependabotPullRequestEvaluation {
-            [PSCustomObject]@{ Number = [int]$PullRequest.number; Branch = $PullRequest.head.ref; HeadSha = $PullRequest.head.sha; Ecosystem = 'github_actions'; Eligible = $false; Reasons = @('major'); Dependencies = @(); Files = @(); NeedsLockSync = $false; Step = $null }
-        }
-        $null = Invoke-DependabotAutoMerge -Repository 'o/r' -DefaultBranch 'main' -Setting $Script:Setting -Now $Script:Now
-        Should -Invoke Invoke-AutoMergeStep -Times 0
-        Should -Invoke Set-AutoMergeComment -Times 2
+    It 'says auto-merge is enabled for an eligible pull request' {
+        $Evaluation = [PSCustomObject]@{ Eligible = $true; HeadSha = 'abc123'; Reasons = @(); Dependencies = @() }
+        Format-AutoMergeReport -Evaluation $Evaluation | Should -Match 'Auto-merge enabled'
     }
 }
 
 Describe 'Get-DependabotPullRequestEvaluation' {
-    It 'marks a NuGet pull request without the refreshed lock file as needing a lock sync' {
-        $Message = $Script:GroupedMessage -replace 'actions/checkout', 'Microsoft.SqlServer.TransactSql.ScriptDom'
-        Mock Invoke-AutoMergeApi -ParameterFilter { $Uri -like '*/pulls/5/commits*' } { New-ApiResponse -Content @(New-Commit -Message $Message) }
-        Mock Invoke-AutoMergeApi -ParameterFilter { $Uri -like '*/pulls/5/files*' } { New-ApiResponse -Content @(New-PrFile 'build/Dependencies/Dependencies.csproj') }
+    It 'judges every dependency of an untouched Dependabot pull request and passes when all pass' {
+        Mock Invoke-AutoMergeApi -ParameterFilter { $Uri -like '*/pulls/5/commits*' } { New-ApiResponse -Content @(New-Commit -Message $Script:GroupedMessage) }
+        Mock Invoke-AutoMergeApi -ParameterFilter { $Uri -like '*/pulls/5/files*' } { New-ApiResponse -Content @((New-PrFile '.github/workflows/pr-validation.yml'), (New-PrFile '.github/workflows/e2e.yml')) }
         Mock Test-DependencyReputation { [PSCustomObject]@{ Name = $Dependency.Name; Eligible = $true; Reasons = @() } }
 
-        $PullRequest = [PSCustomObject]@{ number = 5; head = [PSCustomObject]@{ ref = 'dependabot/nuget/build/Dependencies/x-1.0.1'; sha = 'h5' } }
+        $PullRequest = [PSCustomObject]@{ number = 5; head = [PSCustomObject]@{ ref = 'dependabot/github_actions/github-actions-1a2b'; sha = 'h5' } }
         $Evaluation = Get-DependabotPullRequestEvaluation -Repository 'o/r' -PullRequest $PullRequest -Setting $Script:Setting -Now $Script:Now
         $Evaluation.Eligible | Should -BeTrue
-        $Evaluation.Ecosystem | Should -Be 'nuget'
-        $Evaluation.NeedsLockSync | Should -BeTrue
+        $Evaluation.HeadSha | Should -Be 'h5'
+        Should -Invoke Test-DependencyReputation -Times 2
+    }
+
+    It 'fails the pull request when one dependency fails' {
+        Mock Invoke-AutoMergeApi -ParameterFilter { $Uri -like '*/pulls/8/commits*' } { New-ApiResponse -Content @(New-Commit -Message $Script:GroupedMessage) }
+        Mock Invoke-AutoMergeApi -ParameterFilter { $Uri -like '*/pulls/8/files*' } { New-ApiResponse -Content @(New-PrFile '.github/workflows/e2e.yml') }
+        Mock Test-DependencyReputation { [PSCustomObject]@{ Name = $Dependency.Name; Eligible = ($Dependency.Name -eq 'actions/checkout'); Reasons = @(if ($Dependency.Name -ne 'actions/checkout') { 'low score' }) } }
+
+        $PullRequest = [PSCustomObject]@{ number = 8; head = [PSCustomObject]@{ ref = 'dependabot/github_actions/github-actions-1a2b'; sha = 'h8' } }
+        $Evaluation = Get-DependabotPullRequestEvaluation -Repository 'o/r' -PullRequest $PullRequest -Setting $Script:Setting -Now $Script:Now
+        $Evaluation.Eligible | Should -BeFalse
+        $Evaluation.Reasons | Should -Contain '`github/codeql-action/init`: low score'
     }
 
     It 'does not judge reputation for a pull request whose provenance already failed' {

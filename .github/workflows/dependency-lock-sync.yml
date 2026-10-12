@@ -12,16 +12,12 @@ name: Dependency Lock Sync
 #
 #   ./build/Update-DependencyLock.ps1 -Refresh
 #
-# Not triggered by Dependabot's pull requests themselves: that would mean pull_request_target with a
-# checkout of the pull request head, handing a write-scoped token to code from the branch under
-# review. Instead .github/workflows/dependabot-auto-merge.yml dispatches it - on main, with the branch
-# as input - for a NuGet bump that passed its reputation policy; any other bump still needs it run by
-# hand. The -Check gate in PR Validation blocks an unsynced bump from merging either way.
-#
-# The refreshed lock file is committed through the REST contents API rather than with git push. A
-# commit created that way is authored by github-actions[bot] and signed by GitHub, which is what lets
-# dependabot-auto-merge.yml tell this repository's own commit from one pushed by anybody else, and
-# what keeps it attributed to an account under the ruleset.
+# Deliberately NOT triggered automatically on Dependabot's pull requests. Workflows triggered by
+# Dependabot run with a read-only GITHUB_TOKEN that the permissions key cannot elevate, so an
+# automatic push would fail with 403 on exactly the pull requests it is meant to serve. Making it
+# work anyway would mean pull_request_target with a checkout of the pull request head, which hands a
+# write-scoped token to code from the branch under review - not a trade this module should make to
+# save one click. The -Check gate in PR Validation still blocks an unsynced bump from merging.
 
 on:
   workflow_dispatch:
@@ -62,32 +58,16 @@ jobs:
 
       - name: Commit the refreshed lock
         shell: pwsh
-        env:
-          GITHUB_TOKEN: ${{ github.token }}
-          BRANCH: ${{ inputs.branch }}
         run: |
-          $Path = 'src/DependencyLock.psd1'
-          $changed = git status --porcelain -- $Path
+          git config user.email "devops@fortigi.nl"
+          git config user.name "GitHub Actions"
+
+          $changed = git status --porcelain -- src/DependencyLock.psd1
           if ([string]::IsNullOrWhiteSpace($changed)) {
             Write-Host "Lock file already matches the manifest; nothing to commit."
             exit 0
           }
 
-          # The repository stores the file with LF line endings; the Windows checkout may hand it to
-          # the refresh with CRLF. The API commits bytes as given, so normalise before uploading.
-          $Text = [System.IO.File]::ReadAllText((Resolve-Path $Path)) -replace "`r`n", "`n"
-          $Headers = @{
-            Authorization          = "Bearer $env:GITHUB_TOKEN"
-            Accept                 = 'application/vnd.github+json'
-            'X-GitHub-Api-Version' = '2022-11-28'
-          }
-          $Uri = 'https://api.github.com/repos/${{ github.repository }}/contents/{0}' -f $Path
-          $Current = Invoke-RestMethod -Uri ('{0}?ref={1}' -f $Uri, [uri]::EscapeDataString($env:BRANCH)) -Headers $Headers
-          $Body = @{
-            message = 'deps: refresh pinned SHA-256 hash for the bumped package'
-            content = [Convert]::ToBase64String([System.Text.Encoding]::UTF8.GetBytes($Text))
-            sha     = $Current.sha
-            branch  = $env:BRANCH
-          } | ConvertTo-Json
-          $Result = Invoke-RestMethod -Method Put -Uri $Uri -Headers $Headers -Body $Body -ContentType 'application/json'
-          Write-Host ("Committed {0} to {1}." -f $Result.commit.sha, $env:BRANCH)
+          git add src/DependencyLock.psd1
+          git commit -m "deps: refresh pinned SHA-256 hash for the bumped package"
+          git push origin HEAD:${{ inputs.branch }}
