@@ -18,8 +18,16 @@ name: Dependency Review
 # that workflow). dependency-review-action needs an actual `pull_request` (or `merge_group`) event
 # to diff base against head through the Dependency Review API, so it cannot live there - e2e.yml
 # already establishes the `pull_request` trigger precedent in this repository.
+#
+# workflow_dispatch exists for .github/workflows/dependabot-auto-merge.yml. When that workflow refreshes
+# a lock file or brings a Dependabot branch up to date, it does so with the GITHUB_TOKEN, and a push
+# made with the GITHUB_TOKEN starts no pull_request run - so the new head would never get the required
+# "Dependency Review" check. It dispatches this workflow on the pull request branch instead: the check
+# run then lands on that branch's head commit, which is where the ruleset looks for it. That runs the
+# branch's copy of this file, exactly as the pull_request trigger does.
 on:
   pull_request:
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -44,6 +52,11 @@ jobs:
         uses: actions/dependency-review-action@2031cfc080254a8a887f58cffee85186f0e49e48 # v4.9.0
         with:
           fail-on-severity: moderate
+          # Only read on events other than pull_request (the README: "only used for event types
+          # other than pull_request and pull_request_target"), i.e. on a dispatch: compare the
+          # dispatched branch against the default branch, as a pull request into it would be.
+          base-ref: ${{ github.event.repository.default_branch }}
+          head-ref: ${{ github.sha }}
           comment-summary-in-pr: never
           # `deny-licenses` is deprecated for possible removal
           # (actions/dependency-review-action#938); `allow-licenses` is the supported replacement

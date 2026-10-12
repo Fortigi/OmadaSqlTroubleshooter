@@ -1,0 +1,99 @@
+name: Dependabot Auto-Merge
+
+# Merges a Dependabot pull request without a human when - and only when - every dependency in it is a
+# patch or minor update, old enough, from a source repository whose OpenSSF Scorecard (via deps.dev)
+# meets the policy, the pull request still holds nothing but Dependabot's commit and this repository's
+# own signed workflow commits, and PR Validation and Dependency Review are green on its head. The
+# policy and every threshold live in build/DependabotAutoMerge.psd1; the logic in
+# build/DependabotAutoMerge.ps1, unit tested by tests/DependabotAutoMerge.Tests.ps1.
+#
+# Anything that falls short gets a comment saying why and stays a normal pull request: a maintainer
+# reviews it and comments /validate, exactly as before.
+#
+# Why a reconciler on a schedule instead of auto-merge on a pull_request event: whatever a workflow
+# does with the GITHUB_TOKEN - push, merge, comment - starts no further workflow run, workflow_dispatch
+# being the only exception. GitHub's own auto-merge, enabled with the GITHUB_TOKEN, would therefore
+# merge a WebView2 bump without ever running release.yml on it, and a lock-file refresh would never be
+# validated on its new head. So each run takes the next step for one pull request - refresh the lock,
+# update the branch, dispatch PR Validation and Dependency Review, merge - and dispatches whatever has
+# to run next itself. The schedule is what guarantees progress; the workflow_run trigger only makes it
+# quicker when GitHub delivers it.
+#
+# Why no pull_request / pull_request_target trigger: on a github-actions bump, the pull request's own
+# copy of a workflow already references the NEW action versions. Running that copy in a job holding
+# write permissions would execute the very release this workflow is meant to vet before it was vetted.
+# Every trigger used here runs the definition on main, and the job checks out main only - never the
+# pull request.
+#
+# Kill switch: set the repository variable DEPENDABOT_AUTO_MERGE to "off" (Settings > Secrets and
+# variables > Actions > Variables) and every run only reports. "Run workflow" with dry_run does the same
+# for one run.
+
+on:
+  schedule:
+    # Hourly at :37 - clear of the nightly (01:17), E2E (03:41) and weekly quality (04:23) runs.
+    - cron: '37 * * * *'
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: 'Evaluate and report only: no comment, dispatch, branch update or merge'
+        type: boolean
+        default: false
+  workflow_run:
+    workflows:
+      - PR Validation
+      - Dependency Review
+      - Dependency Lock Sync
+    types: [completed]
+
+permissions: {}
+
+# One pass at a time. A newer trigger waits for the running pass instead of cancelling it halfway
+# through a merge; GitHub keeps at most one waiting, which is all a reconciler needs.
+concurrency:
+  group: dependabot-auto-merge
+  cancel-in-progress: false
+
+jobs:
+  reconcile:
+    name: Reconcile Dependabot pull requests
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    # A workflow_run for an unrelated pull request has nothing to advance; the schedule still covers
+    # any Dependabot run whose completion event this filter would skip.
+    if: >-
+      github.event_name != 'workflow_run'
+      || startsWith(github.event.workflow_run.head_branch, 'dependabot/')
+      || github.event.workflow_run.event == 'workflow_dispatch'
+    permissions:
+      # Merge the pull request, and update its branch from main through the API.
+      contents: write
+      # Write the one status comment per pull request.
+      pull-requests: write
+      # Dispatch PR Validation, Dependency Review, Dependency Lock Sync and Release.
+      actions: write
+      # Read the PR Validation commit status and the Dependency Review check run.
+      statuses: read
+      checks: read
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+      - name: Harden the runner (audit all outgoing network calls)
+        uses: step-security/harden-runner@e14015d583714f6e62063499dc959a02595150a1 # v2.21.1
+        with:
+          egress-policy: audit
+
+      - name: Checkout main
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          persist-credentials: false
+
+      - name: Reconcile
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+          DRY_RUN: ${{ (github.event_name == 'workflow_dispatch' && inputs.dry_run) || vars.DEPENDABOT_AUTO_MERGE == 'off' }}
+        run: |
+          ./build/Invoke-DependabotAutoMerge.ps1 -DefaultBranch $env:DEFAULT_BRANCH -DryRun:($env:DRY_RUN -eq 'true')
