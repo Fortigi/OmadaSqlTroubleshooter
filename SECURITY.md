@@ -192,7 +192,7 @@ They reach the machine one of two ways, and both are verified:
 - **Bundled (normal).** `build/Get-BundledDependency.ps1` fetches the pinned package during the
   build, checks its SHA-256 **before** opening it, extracts each pinned file, re-hashes every
   extracted file against its own pin, and writes the result into the package at
-  `Bin\WebView2Dlls\win-x64` (0.94 MB). Importing the module then makes **no network call at all**,
+  `Bin\WebView2Dlls\win-x64` (0.97 MB). Importing the module then makes **no network call at all**,
   which is what lets the application start on a machine with no route to nuget.org.
 - **Downloaded (fallback).** Where the bundle is missing, incomplete or fails its hash check — and on
   32-bit processes, which are not bundled — `Install-WebView2` downloads the same pinned package to

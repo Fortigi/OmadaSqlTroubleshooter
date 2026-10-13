@@ -110,17 +110,17 @@ Attribution, as CC BY 4.0 requires: *Codicons* © Microsoft Corporation, license
 | Field | Value |
 |---|---|
 | Component | `Microsoft.Web.WebView2` |
-| Version | **1.0.4129.50** — pinned in `src/DependencyLock.psd1` |
+| Version | **1.0.4258.31** — pinned in `src/DependencyLock.psd1` |
 | Publisher | Microsoft Corporation |
 | Licence | See the licence text and the **redistribution review** below |
-| Licence text | Reproduced below, from `LICENSE.txt` in the pinned package · <https://www.nuget.org/packages/Microsoft.Web.WebView2/1.0.4129.50/license> |
+| Licence text | Reproduced below, from `LICENSE.txt` in the pinned package · <https://www.nuget.org/packages/Microsoft.Web.WebView2/1.0.4258.31/license> |
 | Project | <https://aka.ms/webview> |
 | Fetched by | `build/Get-BundledDependency.ps1`, during the build |
-| Fetched from | `https://api.nuget.org/v3-flatcontainer/microsoft.web.webview2/1.0.4129.50/microsoft.web.webview2.1.0.4129.50.nupkg` |
-| Verified against | SHA-256 `d3934f482d484b89fb4825df720c710664e1143a1e90f7b3a60794ef33f473d2` for the package, plus a per-file SHA-256 for each assembly, all pinned in `src/DependencyLock.psd1` |
+| Fetched from | `https://api.nuget.org/v3-flatcontainer/microsoft.web.webview2/1.0.4258.31/microsoft.web.webview2.1.0.4258.31.nupkg` |
+| Verified against | SHA-256 `56f7f4b8bf9aee4b8efefbbdd4f67d5f74ebd1b100ed0806da71bf76af481aa9` for the package, plus a per-file SHA-256 for each assembly, all pinned in `src/DependencyLock.psd1` |
 | Location in repository | *Not committed.* Fetched at build time |
 | Location in package | `Bin/WebView2Dlls/win-x64/` |
-| Size in package | 0.94 MB (986,496 bytes of assemblies, plus a `WebView2.pin` stamp) |
+| Size in package | 0.97 MB (1,019,776 bytes of assemblies, plus a `WebView2.pin` stamp) |
 
 Four assemblies are taken from the package and shipped in the module:
 `Microsoft.Web.WebView2.Core.dll`, `Microsoft.Web.WebView2.WinForms.dll`,
