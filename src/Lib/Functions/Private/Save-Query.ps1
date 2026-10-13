@@ -54,14 +54,15 @@ function Save-Query {
         $Private:SaveRequest = $null
         if (-not $NewQuery) {
             $Private:SaveContext = @{
-                BaseUrl            = $Script:AppConfig.BaseUrl
-                QueryDoId          = $Script:AppConfig.CurrentSqlQuery.DoId
-                QueryText          = $Script:RunTimeData.QueryText
-                CurrentQueryText   = $Script:RunTimeData.CurrentQueryText
-                SavedQueryText     = $private:Result.C_QUERY
-                DisplayName        = $Script:MainForm.Elements.TextBoxDisplayName.Text
-                CurrentDisplayName = $Script:RunTimeData.CurrentSqlQuery.DisplayName
-                DataConnectionDoId = $Script:AppConfig.CurrentDataConnection.DoId
+                BaseUrl                 = $Script:AppConfig.BaseUrl
+                QueryDoId               = $Script:AppConfig.CurrentSqlQuery.DoId
+                QueryText               = $Script:RunTimeData.QueryText
+                CurrentQueryText        = $Script:RunTimeData.CurrentQueryText
+                SavedQueryText          = $private:Result.C_QUERY
+                SavedDataConnectionDoId = $private:Result.C_SQLTROUBLESHOOTING_DATACONNECTION.Id
+                DisplayName             = $Script:MainForm.Elements.TextBoxDisplayName.Text
+                CurrentDisplayName      = $Script:RunTimeData.CurrentSqlQuery.DisplayName
+                DataConnectionDoId      = $Script:AppConfig.CurrentDataConnection.DoId
             }
             $Private:SaveRequest = New-OmadaQueryRequest -Kind "SaveExistingQuery" -Context $Private:SaveContext
         }

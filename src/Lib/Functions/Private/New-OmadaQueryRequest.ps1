@@ -40,6 +40,8 @@ function New-OmadaQueryRequest {
       DisplayName          SaveExistingQuery  (what the Display name box holds now)
       CurrentDisplayName   SaveExistingQuery  (the name last known to be saved)
       DataConnectionDoId   SaveExistingQuery, TempQueryUpsert
+      SavedDataConnectionDoId SaveExistingQuery (C_SQLTROUBLESHOOTING_DATACONNECTION.Id from the
+                           freshly fetched object)
       TargetQueryDoId      ExecuteQuery
       TempName             TempQueryProbe, TempQueryUpsert
       TempQueryDoId        TempQueryUndelete, TempQueryUpsert (reuse), DeleteQuery
@@ -64,22 +66,8 @@ function New-OmadaQueryRequest {
     switch ($Kind) {
 
         "SaveExistingQuery" {
-            # The diff rules, preserved exactly as Save-Query has always applied them: the query text
-            # is sent when it differs from either what this session last saved OR what the server
-            # actually holds, and the name is sent when the Display name box no longer matches the
-            # name last saved. An empty body means nothing changed.
-            $Private:Body = @{}
-
-            if ($Context.QueryText -ne $Context.CurrentQueryText -or $Context.QueryText -ne $Context.SavedQueryText) {
-                $Private:Body.Add("C_QUERY", $Context.QueryText)
-                if (![string]::IsNullOrWhiteSpace($Context.DataConnectionDoId)) {
-                    $Private:Body.Add("C_SQLTROUBLESHOOTING_DATACONNECTION", @{ Id = $Context.DataConnectionDoId })
-                }
-            }
-
-            if ($Context.CurrentDisplayName -ne $Context.DisplayName) {
-                $Private:Body.Add("NAME", $Context.DisplayName)
-            }
+            # The diff rules live in Get-SaveExistingQueryBody. An empty body means nothing changed.
+            $Private:Body = Get-SaveExistingQueryBody -Context $Context
 
             if (($Private:Body.Keys | Measure-Object).Count -le 0) {
                 return $null
@@ -169,4 +157,56 @@ function New-OmadaQueryRequest {
             }
         }
     }
+}
+
+function Get-SaveExistingQueryBody {
+    <#
+    .SYNOPSIS
+    The PUT body for saving an existing query: only what changed, empty when nothing did.
+
+    .DESCRIPTION
+    The query text is sent when it differs from either what this session last saved OR what the
+    server actually holds, and the name is sent when the Display name box no longer matches the name
+    last saved.
+
+    The data connection is a change in its own right (issue #179). A single unprefixed statement
+    executes the SAVED object, so the connection it runs against is the one stored on it - switching
+    the dropdown without editing the text must still reach the tenant, or the query keeps running
+    against the previous connection. Compared as strings: OData answers the reference's Id as a
+    number, the dropdown holds a string. No selected connection never clears the stored one.
+
+    In the same file as New-OmadaQueryRequest, not a file of its own, because a background worker
+    dot-sources exactly the files Get-OmadaPipelineWorkerFunction lists for its chain.
+
+    .PARAMETER Context
+    The SaveExistingQuery keys documented on New-OmadaQueryRequest.
+
+    .OUTPUTS
+    [hashtable] the body; empty when there is nothing to save.
+    #>
+    [CmdletBinding()]
+    [OutputType([hashtable])]
+    param(
+        [Parameter(Mandatory = $true)]
+        [hashtable]$Context
+    )
+
+    $Private:Body = @{}
+
+    $Private:TextChanged = $Context.QueryText -ne $Context.CurrentQueryText -or $Context.QueryText -ne $Context.SavedQueryText
+    $Private:ConnectionChanged = [string]$Context.DataConnectionDoId -ne [string]$Context.SavedDataConnectionDoId
+
+    if ($Private:TextChanged) {
+        $Private:Body.Add("C_QUERY", $Context.QueryText)
+    }
+
+    if (![string]::IsNullOrWhiteSpace($Context.DataConnectionDoId) -and ($Private:TextChanged -or $Private:ConnectionChanged)) {
+        $Private:Body.Add("C_SQLTROUBLESHOOTING_DATACONNECTION", @{ Id = $Context.DataConnectionDoId })
+    }
+
+    if ($Context.CurrentDisplayName -ne $Context.DisplayName) {
+        $Private:Body.Add("NAME", $Context.DisplayName)
+    }
+
+    return $Private:Body
 }

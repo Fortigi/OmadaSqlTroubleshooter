@@ -54,7 +54,8 @@ BeforeAll {
             $SelectionText = $null,
             $CurrentQueryText = "SELECT 1",
             $DisplayName = "TestQuery",
-            $CurrentDisplayName = "TestQuery"
+            $CurrentDisplayName = "TestQuery",
+            $DataConnectionDoId = "42"
         )
         return @{
             BaseUrl            = "https://tenant.omada.cloud"
@@ -63,7 +64,7 @@ BeforeAll {
             CurrentQueryText   = $CurrentQueryText
             DisplayName        = $DisplayName
             CurrentDisplayName = $CurrentDisplayName
-            DataConnectionDoId = "42"
+            DataConnectionDoId = $DataConnectionDoId
             SelectionText      = $SelectionText
             TempName           = "TMP_abc"
             SkipSave           = $false
@@ -80,7 +81,8 @@ BeforeAll {
         $script:Failures = @{}
         $script:Responses = @{
             # The stored query, fetched first so the save decision can compare against it.
-            "get"       = [pscustomobject]@{ Id = 100; C_QUERY = "SELECT 1"; DisplayName = "TestQuery" }
+            # C_SQLTROUBLESHOOTING_DATACONNECTION.Id as a number, as OData answers it.
+            "get"       = [pscustomobject]@{ Id = 100; C_QUERY = "SELECT 1"; DisplayName = "TestQuery"; C_SQLTROUBLESHOOTING_DATACONNECTION = [pscustomobject]@{ Id = 42; DisplayName = "OISES" } }
             "save"      = [pscustomobject]@{ Id = 100; DisplayName = "TestQuery" }
             "probe"     = [pscustomobject]@{ Value = @() }
             "temp-post" = [pscustomobject]@{ Id = 777 }
@@ -108,6 +110,20 @@ Describe "Invoke-OmadaExecutePipeline - the ordinary run" {
         Get-CallSequence | Should -Be @("get", "save", "execute")
         $Outcome.SaveSkipped | Should -BeFalse
         $Outcome.SaveResult.Id | Should -Be 100
+    }
+
+    It "saves the new connection before executing when only the connection changed (issue #179)" {
+        # A single unprefixed statement executes the SAVED object, so the connection it runs against
+        # is the one stored on it. Without this save the dropdown change had no effect.
+        $Outcome = Invoke-OmadaExecutePipeline -Context (New-PipelineContext -DataConnectionDoId "43")
+
+        Get-CallSequence | Should -Be @("get", "save", "execute")
+        $Outcome.SaveSkipped | Should -BeFalse
+        $Save = $script:Calls | Where-Object { $_.Key -eq "save" } | Select-Object -First 1
+        $Save.Body["C_SQLTROUBLESHOOTING_DATACONNECTION"]["Id"] | Should -Be "43"
+        $Save.Body.ContainsKey("C_QUERY") | Should -BeFalse
+        $Execute = $script:Calls | Where-Object { $_.Key -eq "execute" } | Select-Object -First 1
+        $Execute.Body["dataTypeArgs"]["targetId"] | Should -Be 100
     }
 
     It "still reports the fetched object when the save was skipped" {

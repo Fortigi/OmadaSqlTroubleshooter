@@ -160,6 +160,7 @@ function Invoke-OmadaExecutePipeline {
 
             $Private:SaveContext = $Context.Clone()
             $Private:SaveContext.SavedQueryText = $Private:Fetch.Result.C_QUERY
+            $Private:SaveContext.SavedDataConnectionDoId = $Private:Fetch.Result.C_SQLTROUBLESHOOTING_DATACONNECTION.Id
             $Private:SaveRequest = New-OmadaQueryRequest -Kind "SaveExistingQuery" -Context $Private:SaveContext
 
             if ($null -eq $Private:SaveRequest) {
