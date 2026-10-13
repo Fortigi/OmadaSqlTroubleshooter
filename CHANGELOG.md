@@ -90,6 +90,13 @@ semantic version.
 
 ### Fixed
 
+- Changing the data connection of an existing query now takes effect (#179). Selecting another
+  connection without editing the query text left the query executing against the previous one: the
+  connection was only written to the saved query object together with a changed text, so an unchanged
+  text meant no save at all, and a single statement executes the saved object with the connection
+  stored on it. The connection is now compared with the one the server holds and saved whenever it
+  differs, on Execute as well as on Save. With no connection selected, the stored one is left as is.
+
 - <kbd>Ctrl</kbd>+<kbd>C</kbd> and the other three copy shortcuts in a result grid (#166). Pressing
   them with cells or rows selected logged `You cannot call a method on a null-valued expression` and
   copied nothing, while the same copy from the context menu worked. The shortcuts re-raised the shared

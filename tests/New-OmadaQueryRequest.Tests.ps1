@@ -20,17 +20,19 @@ BeforeAll {
             $SavedQueryText = "SELECT 1",
             $DisplayName = "TestQuery",
             $CurrentDisplayName = "TestQuery",
-            $DataConnectionDoId = "42"
+            $DataConnectionDoId = "42",
+            $SavedDataConnectionDoId = "42"
         )
         return @{
-            BaseUrl            = $script:Base
-            QueryDoId          = 100
-            QueryText          = $QueryText
-            CurrentQueryText   = $CurrentQueryText
-            SavedQueryText     = $SavedQueryText
-            DisplayName        = $DisplayName
-            CurrentDisplayName = $CurrentDisplayName
-            DataConnectionDoId = $DataConnectionDoId
+            BaseUrl                 = $script:Base
+            QueryDoId               = 100
+            QueryText               = $QueryText
+            CurrentQueryText        = $CurrentQueryText
+            SavedQueryText          = $SavedQueryText
+            DisplayName             = $DisplayName
+            CurrentDisplayName      = $CurrentDisplayName
+            DataConnectionDoId      = $DataConnectionDoId
+            SavedDataConnectionDoId = $SavedDataConnectionDoId
         }
     }
 }
@@ -68,6 +70,34 @@ Describe "New-OmadaQueryRequest -Kind SaveExistingQuery" {
         $Request = New-OmadaQueryRequest -Kind "SaveExistingQuery" -Context (New-SaveContext -QueryText "SELECT 2" -SavedQueryText "SELECT 2" -DataConnectionDoId $null)
 
         $Request.Body.ContainsKey("C_SQLTROUBLESHOOTING_DATACONNECTION") | Should -BeFalse
+    }
+
+    It "sends the data connection when only the connection changed (issue #179)" {
+        # The query that is executed is the saved object, so the connection it runs against is the
+        # one stored on it. Switching the dropdown without editing the text used to produce an empty
+        # body - no save - and the query kept running against the previous connection.
+        $Request = New-OmadaQueryRequest -Kind "SaveExistingQuery" -Context (New-SaveContext -DataConnectionDoId "43")
+
+        $Request.Method | Should -Be "PUT"
+        $Request.Uri | Should -Be "$script:Base/odata/dataobjects/C_P_SQLTROUBLESHOOTING(100)"
+        $Request.Body["C_SQLTROUBLESHOOTING_DATACONNECTION"].Id | Should -Be "43"
+        $Request.Body.ContainsKey("C_QUERY") | Should -BeFalse
+        $Request.Body.ContainsKey("NAME") | Should -BeFalse
+    }
+
+    It "sends the data connection when the server holds none" {
+        $Request = New-OmadaQueryRequest -Kind "SaveExistingQuery" -Context (New-SaveContext -SavedDataConnectionDoId $null)
+
+        $Request.Body["C_SQLTROUBLESHOOTING_DATACONNECTION"].Id | Should -Be "42"
+    }
+
+    It "compares the connection by value, not by type" {
+        # OData answers the reference's Id as a number; the dropdown's DoId is a string.
+        New-OmadaQueryRequest -Kind "SaveExistingQuery" -Context (New-SaveContext -SavedDataConnectionDoId 42) | Should -BeNullOrEmpty
+    }
+
+    It "never clears the stored connection when none is selected" {
+        New-OmadaQueryRequest -Kind "SaveExistingQuery" -Context (New-SaveContext -DataConnectionDoId $null -SavedDataConnectionDoId "43") | Should -BeNullOrEmpty
     }
 
     It "sends only the name when just the Display name changed" {
