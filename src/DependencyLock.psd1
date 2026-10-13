@@ -53,9 +53,9 @@
             Id           = "Microsoft.Web.WebView2"
             PackageId    = "Microsoft.Web.WebView2"
             Manifest     = "build/Dependencies/Dependencies.csproj"
-            Version      = "1.0.4129.50"
-            Url          = "https://api.nuget.org/v3-flatcontainer/microsoft.web.webview2/1.0.4129.50/microsoft.web.webview2.1.0.4129.50.nupkg"
-            Sha256       = "d3934f482d484b89fb4825df720c710664e1143a1e90f7b3a60794ef33f473d2"
+            Version      = "1.0.4258.31"
+            Url          = "https://api.nuget.org/v3-flatcontainer/microsoft.web.webview2/1.0.4258.31/microsoft.web.webview2.1.0.4258.31.nupkg"
+            Sha256       = "56f7f4b8bf9aee4b8efefbbdd4f67d5f74ebd1b100ed0806da71bf76af481aa9"
             Verification = "Sha256"
             InstalledBy  = "Install-WebView2"
             PinReason    = ""
@@ -64,22 +64,22 @@
                 @{
                     Source = "lib_manual/netcoreapp3.0/Microsoft.Web.WebView2.Core.dll"
                     Target = "Microsoft.Web.WebView2.Core.dll"
-                    Sha256 = "958efdb7f13a6d1f3079756c96956cc96cf713ae46fa085c8b1e7f44316a4f7e"
+                    Sha256 = "d60e6e94245078cb56e44ebd5f360dc04bf18e460136be93bfc4cfca43b98505"
                 }
                 @{
                     Source = "lib_manual/netcoreapp3.0/Microsoft.Web.WebView2.WinForms.dll"
                     Target = "Microsoft.Web.WebView2.WinForms.dll"
-                    Sha256 = "ba823b3de79297389a9aad662e389d4d229bf3a6a0056f9ede4ee64cc49dc19c"
+                    Sha256 = "84b5772260dbdfe95591197edc9315dcd2cc86ad610e4b14ddd5e4291e31a381"
                 }
                 @{
                     Source = "lib_manual/netcoreapp3.0/Microsoft.Web.WebView2.Wpf.dll"
                     Target = "Microsoft.Web.WebView2.Wpf.dll"
-                    Sha256 = "85f62dc8c6d36759212fae31bdac27ac6f9096f9d84563db765340cf58fa4744"
+                    Sha256 = "78a08b271412d2f98a5fa3f4472be22d4fcb62f951c6c347234de05bc93eb99e"
                 }
                 @{
                     Source = "runtimes/win-x64/native/WebView2Loader.dll"
                     Target = "WebView2Loader.dll"
-                    Sha256 = "a9a09232c25805323d4cfb3fc8f545a190a9c8a99c93262ea99d0b88df99ec90"
+                    Sha256 = "3426dcc55fdfb8b5e7ac623cf33b4ccf283fbf68a0c5a65bddfdb4d749a8abee"
                 }
             )
         }

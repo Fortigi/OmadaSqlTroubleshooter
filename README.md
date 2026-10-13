@@ -371,7 +371,7 @@ tenant name, no user name and no query data. No other host is contacted by this 
 
 **A normal import contacts `nuget.org` not at all.** The four WebView2 assemblies are fetched
 and hash-verified when the module is *built*, and ship inside the package in
-`Bin\WebView2Dlls\win-x64` (0.94 MB). They are loaded from there, and each one is re-checked
+`Bin\WebView2Dlls\win-x64` (0.97 MB). They are loaded from there, and each one is re-checked
 against its pinned SHA-256 immediately before it is loaded. The application therefore starts on
 a machine with no route to nuget.org at all.
 
