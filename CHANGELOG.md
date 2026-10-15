@@ -12,6 +12,9 @@ semantic version.
 
 ### Changed
 
+- The `Release` workflow now creates the GitHub Release as a draft. The generated release notes can
+  be reviewed and edited before the release is published by hand. The tag and the PowerShell Gallery
+  package are still created during the run; only the GitHub Release page waits for review.
 - The session log file now follows the application log level (#157). The log viewer, the console and
   the file filter on one and the same level and never differ: a line is written to the file exactly
   when the viewer shows it, and changing the level in the log viewer applies to the file from the next

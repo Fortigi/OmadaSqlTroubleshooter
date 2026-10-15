@@ -152,6 +152,10 @@ jobs:
         with:
           tag_name: v${{ env.BUILD_VERSION }}
           name: Release v${{ env.BUILD_VERSION }}
+          # Always created as a draft: the release (and its generated notes) stays invisible to the
+          # public until someone reviews and edits the notes and clicks Publish release. The tag and
+          # the PSGallery package already exist at that point; only the GitHub Release waits.
+          draft: true
           files: staging/*.nupkg
           generate_release_notes: true
           previous_tag: ${{ steps.prev_tag.outputs.previous_tag }}
