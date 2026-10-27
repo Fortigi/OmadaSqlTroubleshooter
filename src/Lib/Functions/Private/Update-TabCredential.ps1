@@ -41,11 +41,11 @@ function Update-TabCredential {
             if (!$Script:RunTimeData.RestMethodParam.ContainsKey("Credential")) {
                 $Script:RunTimeData.RestMethodParam.Add("Credential", $null)
             }
-            $Script:RunTimeData.RestMethodParam.Credential = $Resolved.Credential
-
-            if ($Resolved.Mode -eq "Passwordless") {
-                "No password entered: signing in as {0} without a password. A password is only needed for password based authentication; complete the sign-in in the sign-in window with a passwordless method or by typing the password there." -f $Resolved.Credential.UserName | Write-LogOutput -LogType INFO -SkipDialog
+            # Said once per change into passwordless, not on every focus change or tab restore.
+            if (Test-NewPasswordlessCredential -Previous $Script:RunTimeData.RestMethodParam.Credential -Current $Resolved.Credential) {
+                "No password entered: {0} will sign in without a password. A password is only needed for password based authentication; at sign-in, complete it in the sign-in window with a passwordless method or by typing the password there." -f $Resolved.Credential.UserName | Write-LogOutput -LogType INFO -SkipDialog
             }
+            $Script:RunTimeData.RestMethodParam.Credential = $Resolved.Credential
             return $Resolved
         }
 
