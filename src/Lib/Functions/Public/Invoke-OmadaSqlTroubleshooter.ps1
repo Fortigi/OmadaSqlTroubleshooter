@@ -1,4 +1,4 @@
-#requires -Modules @{ ModuleName="OmadaWeb.PS"; ModuleVersion="2026.07.09.9" }
+#requires -Modules @{ ModuleName="OmadaWeb.PS"; ModuleVersion="2026.09.23.47" }
 #requires -Version 7.0
 
 <#

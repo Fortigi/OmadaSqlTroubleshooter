@@ -24,9 +24,10 @@ function Add-OmadaNonInteractiveAuthentication {
 
     The switch is only added when the installed OmadaWeb.PS actually has it. PowerShell REJECTS an
     unknown parameter rather than ignoring it, so passing it to an older module would break every
-    background request instead of degrading. The application's minimum is 2026.07.09.9, which predates
-    the switch, so this is a real case and not a theoretical one. Same shape as the SkipBodyRedaction
-    capability check in Build-OmadaRequestParameter.
+    background request instead of degrading. The application's minimum (2026.09.23.47) has the switch,
+    so this is now defensive - it still covers a development build loaded as version 0.0, which the
+    minimum version check lets through. Same shape as the SkipBodyRedaction capability check in
+    Build-OmadaRequestParameter.
 
     On an older module the caller simply gets the splat back unchanged: the worker behaves exactly as
     it did before, including the WebView2 failure, which Resolve-ExecuteFallbackAction still

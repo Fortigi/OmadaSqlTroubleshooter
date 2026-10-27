@@ -24,10 +24,10 @@ function Resolve-TabCredential {
     Passwordless is refused, and no credential is created, when:
     - the authentication option needs the secret itself (OAuth client secret, Basic, Windows);
     - the sign-in runs on the Selenium engine ("Browser" without -UseWebView2Auth), which submits the
-      password field with whatever the credential holds and would post an empty password;
-    - the installed OmadaWeb.PS predates passwordless sign-in. That is detected by the -UserName
-      parameter, which was introduced in the same change (OmadaWeb.PS 2026.9.23.47); an older WebView2
-      sign-in fills the password field unconditionally.
+      password field with whatever the credential holds and would post an empty password.
+
+    Passwordless sign-in needs OmadaWeb.PS 2026.9.23.47 or higher, which is the application's
+    minimum, so it is not checked here.
 
     .PARAMETER UserName
     The username as entered.
@@ -43,9 +43,6 @@ function Resolve-TabCredential {
     .PARAMETER UseWebView2Auth
     Whether "Browser" runs on WebView2 ($Script:RunTimeConfig.UseWebView2Auth).
 
-    .PARAMETER PasswordlessSupported
-    Whether the installed OmadaWeb.PS supports a sign-in without a password.
-
     .OUTPUTS
     [PSCustomObject] with Mode, Credential ([PSCredential] or $null) and Reason.
     #>
@@ -57,8 +54,7 @@ function Resolve-TabCredential {
         [string]$Password,
         [AllowNull()][AllowEmptyString()]
         [string]$AuthenticationOption,
-        [bool]$UseWebView2Auth,
-        [bool]$PasswordlessSupported
+        [bool]$UseWebView2Auth
     )
 
     $Result = [PSCustomObject]@{
@@ -91,11 +87,6 @@ function Resolve-TabCredential {
 
     if ($Engine -notin @("Browser", "WebView2")) {
         $Result.Reason = "Authentication option '{0}' does not support signing in without a password" -f $AuthenticationOption
-        return $Result
-    }
-
-    if (-not $PasswordlessSupported) {
-        $Result.Reason = "The installed OmadaWeb.PS does not support signing in without a password; version 2026.9.23.47 or higher is required"
         return $Result
     }
 

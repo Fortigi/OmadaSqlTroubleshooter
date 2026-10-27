@@ -27,8 +27,7 @@ function Update-TabCredential {
             -UserName $Script:MainForm.Elements.TextBoxUserName.Text `
             -Password $Script:MainForm.Elements.TextBoxPassword.Password `
             -AuthenticationOption $AuthenticationOption `
-            -UseWebView2Auth ([bool]$Script:RunTimeConfig.UseWebView2Auth) `
-            -PasswordlessSupported (Test-OmadaRestMethodParameter -Name "UserName")
+            -UseWebView2Auth ([bool]$Script:RunTimeConfig.UseWebView2Auth)
 
         if ($null -ne $Resolved.Credential) {
             "Create/Update {0} credential with username {1}" -f $Resolved.Mode.ToLowerInvariant(), $Resolved.Credential.UserName | Write-LogOutput -LogType DEBUG

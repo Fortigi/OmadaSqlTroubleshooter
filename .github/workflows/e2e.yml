@@ -53,7 +53,7 @@ jobs:
       # The minimum version is the one the module itself enforces on import.
       - name: Install the OmadaWeb.PS runtime dependency
         run: |
-          $MinimumVersion = '2026.07.09.9'
+          $MinimumVersion = '2026.09.23.47'
           if (-not (Get-Module -ListAvailable -Name OmadaWeb.PS | Where-Object { $_.Version -ge [version]$MinimumVersion })) {
             "Installing OmadaWeb.PS >= $MinimumVersion" | Write-Host
             Install-Module -Name OmadaWeb.PS -MinimumVersion $MinimumVersion -Scope CurrentUser -Force -AllowClobber

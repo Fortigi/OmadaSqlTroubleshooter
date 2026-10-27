@@ -85,10 +85,10 @@ function Resolve-ExecuteFallbackAction {
     # cannot perform.
     #
     # These should no longer be reachable - a worker now carries -NoInteractiveAuthentication, so it
-    # never reaches a sign-in to fail at. They are kept for the case that switch is not available:
-    # the application's minimum OmadaWeb.PS is 2026.07.09.9, which predates it, and on that version
-    # Add-OmadaNonInteractiveAuthentication deliberately leaves the splat alone. There, this text is
-    # still the only signal there is.
+    # never reaches a sign-in to fail at. The application's minimum OmadaWeb.PS (2026.09.23.47) has
+    # that switch; they are kept as a defensive fallback for the case it is still not available (a
+    # development build loaded as version 0.0), where Add-OmadaNonInteractiveAuthentication leaves the
+    # splat alone and this text is the only signal there is.
     #
     # Matched on text because the exception arrives flattened across the runspace boundary - which is
     # exactly the brittleness the typed check above replaces wherever the switch is available.
