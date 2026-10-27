@@ -1,3 +1,4 @@
+#Requires -Version 7.0
 BeforeAll {
     $ParentPath = Split-Path -Path $PSScriptRoot -Parent
     . (Join-Path $ParentPath -ChildPath "src\lib\functions\Private\Resolve-TabCredential.ps1")
