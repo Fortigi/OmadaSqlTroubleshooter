@@ -66,14 +66,14 @@
     {
       "file": "src/Lib/Events/MainFormTabContent.Elements.TextBoxPassword.ps1",
       "unit": "<script-body>",
-      "cyclomatic": 16,
-      "cognitive": 42
+      "cyclomatic": 11,
+      "cognitive": 23
     },
     {
       "file": "src/Lib/Events/MainFormTabContent.Elements.TextBoxUserName.ps1",
       "unit": "<script-body>",
-      "cyclomatic": 15,
-      "cognitive": 37
+      "cyclomatic": 9,
+      "cognitive": 18
     },
     {
       "file": "src/Lib/Events/SqlHistoryForm.Elements.ButtonExportHistory.ps1",
@@ -396,8 +396,8 @@
     {
       "file": "src/Lib/Functions/Private/New-TabSession.ps1",
       "unit": "New-TabSession",
-      "cyclomatic": 41,
-      "cognitive": 68
+      "cyclomatic": 39,
+      "cognitive": 66
     },
     {
       "file": "src/Lib/Functions/Private/Open-LogForm.ps1",

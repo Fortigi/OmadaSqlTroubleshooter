@@ -23,6 +23,12 @@ Describe 'Resolve-TabCredential' {
             $Result.Credential.GetNetworkCredential().Password | Should -BeExactly "P@ssw0rd!"
         }
 
+        It 'treats a single-character password as a password' {
+            $Result = Resolve-TabCredential -UserName "jdoe" -Password (New-TestSecureString "x") -AuthenticationOption "OAuth"
+            $Result.Mode | Should -Be "Password"
+            $Result.Credential.GetNetworkCredential().Password | Should -BeExactly "x"
+        }
+
         It 'creates a password credential for Browser on the Selenium engine' {
             $Result = Resolve-TabCredential -UserName "jdoe" -Password (New-TestSecureString "secret") -AuthenticationOption "Browser" -UseWebView2Auth $false
             $Result.Mode | Should -Be "Password"
