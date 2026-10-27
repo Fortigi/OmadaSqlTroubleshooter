@@ -43,6 +43,10 @@ $Script:MainForm.Elements.ComboBoxSelectAuthenticationOption.Add_SelectionChange
                 }
             }
 
+            # Whether an empty password is allowed depends on the authentication option, so a
+            # passwordless credential must not survive a switch to one that needs the password.
+            $null = Update-TabCredential
+
             if ($Script:RunTimeConfig.AuthenticationSet -and ![string]::IsNullOrWhiteSpace($Script:MainForm.Elements.TextBoxURL.Text)) {
                 Set-OmadaUrl
             }

@@ -12,6 +12,9 @@ semantic version.
 
 ### Changed
 
+- **Requires OmadaWeb.PS 2026.09.23.47 or higher** (was 2026.07.09.9). That release is the first with
+  sign-in without a password, which the passwordless credential below depends on. Update with
+  `Update-Module OmadaWeb.PS`; older versions are no longer supported.
 - The session log file now follows the application log level (#157). The log viewer, the console and
   the file filter on one and the same level and never differ: a line is written to the file exactly
   when the viewer shows it, and changing the level in the log viewer applies to the file from the next
@@ -24,6 +27,15 @@ semantic version.
   ignored. Redaction is unchanged: the file stays behind the same single gate as the window.
 
 ### Added
+
+- A credential without a password. Enter only a username to sign in with that account and complete
+  the sign-in passwordless (Windows Hello, FIDO2 security key, Authenticator) or by typing the password
+  in the sign-in window. The password field is labelled *Password (optional)* with a tooltip explaining
+  that it is only needed for password based authentication. Applies to WebView2, and to Browser when it
+  runs on WebView2 (`-UseWebView2Auth`); OAuth keeps requiring the client secret, and Browser on Selenium
+  keeps requiring the password, because it would submit an empty one. Clearing the password field also
+  clears the saved password. The credential is now built in one place (`Update-TabCredential`) for the username and password
+  fields, a switch of authentication option and a restored tab, so they can no longer disagree.
 
 - Auto-merge for Dependabot's GitHub Actions updates, gated on reputation. Auto-merge is enabled on
   such a pull request when every update in it is a semver patch or minor update, its GitHub release

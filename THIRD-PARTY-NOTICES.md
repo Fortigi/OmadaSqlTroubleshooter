@@ -318,7 +318,7 @@ Microsoft's guidance on the two modes:
 
 | Field | Value |
 |---|---|
-| Component | OmadaWeb.PS (version 2026.07.09.9 or higher) |
+| Component | OmadaWeb.PS (version 2026.09.23.47 or higher) |
 | Publisher | Fortigi |
 | Licence | MIT — Copyright (c) 2024 Fortigi |
 | Licence text | <https://github.com/Fortigi/OmadaWeb.PS/blob/main/LICENSE> |

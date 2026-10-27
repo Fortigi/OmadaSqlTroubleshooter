@@ -7,9 +7,10 @@
 # -NoInteractiveAuthentication (Fortigi/OmadaWeb.PS#85) makes it impossible, and turns an expired
 # session from an explosion into a typed, catchable answer.
 #
-# The capability check is not optional. PowerShell REJECTS an unknown parameter rather than ignoring
-# it, and this application's minimum OmadaWeb.PS is 2026.07.09.9 - which predates the switch. Adding
-# it unconditionally would break every background request on that version.
+# The capability check stays even though the application's minimum OmadaWeb.PS (2026.09.23.47) has
+# the switch. PowerShell REJECTS an unknown parameter rather than ignoring it, and a development build
+# loaded as version 0.0 passes the minimum version check - adding it unconditionally would break every
+# background request on such a build.
 
 BeforeAll {
     $ParentPath = Split-Path -Path $PSScriptRoot -Parent

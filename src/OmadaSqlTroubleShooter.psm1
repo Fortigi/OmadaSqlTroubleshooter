@@ -39,7 +39,7 @@ try {
 
     #endregion
 
-    $MinimumOmadaWebPSVersion = "2026.07.09.9"
+    $MinimumOmadaWebPSVersion = "2026.09.23.47"
     if ($MinimumOmadaWebPSVersion -ne "0.0") {
         Import-OmadaWebPSModule -MinimumVersion $MinimumOmadaWebPSVersion
     }

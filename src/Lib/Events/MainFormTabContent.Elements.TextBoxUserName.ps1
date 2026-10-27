@@ -2,37 +2,18 @@ $Script:MainForm.Elements.TextBoxUserName.Add_LostFocus({
         try {
             $_ | Show-EventInfo
             if (![string]::IsNullOrWhiteSpace($Script:MainForm.Elements.TextBoxUserName.Text)) {
-
                 $Script:MainForm.Elements.TextBoxUserName.Text | Set-ConfigProperty -Property "UserName"
                 "Username set to: {0}" -f $Script:AppConfig.UserName | Write-LogOutput -LogType DEBUG
-                #if ($Script:RunTimeData.RestMethodParam.ContainsKey("Credential")) {
-                if (![string]::IsNullOrWhiteSpace($Script:MainForm.Elements.TextBoxUserName.Text) -and ![string]::IsNullOrWhiteSpace($Script:MainForm.Elements.TextBoxPassword.Password)) {
-                    "Create/Update credential with username {0}" -f $Script:MainForm.Elements.TextBoxUserName.Text | Write-LogOutput -LogType DEBUG
-                    $Script:MainForm.Elements.TextBoxUserName.Text | Set-ConfigProperty -Property "UserName"
-                    if (!$Script:RunTimeData.RestMethodParam.ContainsKey("Credential")) {
-                        $Script:RunTimeData.RestMethodParam.Add("Credential", $null)
-                    }
-                    $Script:RunTimeData.RestMethodParam.Credential = [System.Management.Automation.PSCredential]::new($Script:AppConfig.UserName, ($Script:MainForm.Elements.TextBoxPassword.Password | ConvertTo-SecureString -AsPlainText -Force))
-                }
-                #}
-                "Username set!" | Write-LogOutput
-                Test-ConnectionButton
             }
-            if ([string]::IsNullOrWhiteSpace($Script:MainForm.Elements.TextBoxUserName.Text)) {
-                if ($Script:RunTimeData.RestMethodParam.ContainsKey("Credential")) {
-                    "Clear credential because username is empty" | Write-LogOutput -LogType DEBUG
-                    $Script:RunTimeData.RestMethodParam.Credential = $null
-                    if ($Script:MainForm.Elements.ComboBoxSelectAuthenticationOption.SelectedItem.Content -ne "OAuth") {
-                        $Script:RunTimeData.RestMethodParam.Remove("Credential")
-                    }
-                }
-                if ($Script:MainForm.Elements.ComboBoxSelectAuthenticationOption.SelectedItem.Content -ne "OAuth") {
-                    "Username cannot be empty!" | Write-LogOutput -LogType VERBOSE
-                }
-                else {
-                    "Username is empty, so it is not used for authentication" | Write-LogOutput -LogType VERBOSE
-                }
+            elseif ($Script:MainForm.Elements.ComboBoxSelectAuthenticationOption.SelectedItem.Content -ne "OAuth") {
+                "Username is empty, so no account is preselected for the sign-in" | Write-LogOutput -LogType VERBOSE
             }
+            else {
+                "Username cannot be empty!" | Write-LogOutput -LogType VERBOSE
+            }
+
+            $null = Update-TabCredential
+            Test-ConnectionButton
         }
         catch {
             $_.Exception.Message | Write-LogOutput -LogType ERROR -ErrorObject $_
