@@ -33,8 +33,9 @@ function Resolve-TabCredential {
     The username as entered.
 
     .PARAMETER Password
-    The password as entered. Null, empty or whitespace means "no password", matching how the rest of
-    the application tests the password box.
+    The password as a SecureString (the password box's SecurePassword), so the plaintext never passes
+    through here. Null or empty means "no password". The caller passes $null for a whitespace-only
+    password, matching how the rest of the application tests the password box.
 
     .PARAMETER AuthenticationOption
     The authentication option as shown in the combo box (Browser, WebView2, OAuth, Browser-InPrivate,
@@ -50,8 +51,8 @@ function Resolve-TabCredential {
     param(
         [AllowNull()][AllowEmptyString()]
         [string]$UserName,
-        [AllowNull()][AllowEmptyString()]
-        [string]$Password,
+        [AllowNull()]
+        [securestring]$Password,
         [AllowNull()][AllowEmptyString()]
         [string]$AuthenticationOption,
         [bool]$UseWebView2Auth
@@ -68,9 +69,9 @@ function Resolve-TabCredential {
         return $Result
     }
 
-    if (![string]::IsNullOrWhiteSpace($Password)) {
+    if ($null -ne $Password -and $Password.Length -gt 0) {
         $Result.Mode = "Password"
-        $Result.Credential = [System.Management.Automation.PSCredential]::new($UserName, ($Password | ConvertTo-SecureString -AsPlainText -Force))
+        $Result.Credential = [System.Management.Automation.PSCredential]::new($UserName, $Password)
         return $Result
     }
 

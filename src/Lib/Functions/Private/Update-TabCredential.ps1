@@ -23,9 +23,16 @@ function Update-TabCredential {
         $SelectedAuthentication = $Script:MainForm.Elements.ComboBoxSelectAuthenticationOption.SelectedItem
         $AuthenticationOption = if ($null -ne $SelectedAuthentication) { [string]$SelectedAuthentication.Content } else { $null }
 
+        # SecurePassword hands over a copy of the password without a plaintext string. A whitespace-only
+        # password counts as no password, as everywhere else the password box is tested.
+        $Password = $null
+        if (![string]::IsNullOrWhiteSpace($Script:MainForm.Elements.TextBoxPassword.Password)) {
+            $Password = $Script:MainForm.Elements.TextBoxPassword.SecurePassword
+        }
+
         $Resolved = Resolve-TabCredential `
             -UserName $Script:MainForm.Elements.TextBoxUserName.Text `
-            -Password $Script:MainForm.Elements.TextBoxPassword.Password `
+            -Password $Password `
             -AuthenticationOption $AuthenticationOption `
             -UseWebView2Auth ([bool]$Script:RunTimeConfig.UseWebView2Auth)
 
