@@ -1,44 +1,28 @@
 $Script:MainForm.Elements.TextBoxPassword.Add_LostFocus({
         try {
             $_ | Show-EventInfo
-            if (![string]::IsNullOrWhiteSpace($Script:MainForm.Elements.TextBoxUserName.Text)) {
-
-                "Password set to: {0}" -f "***********" | Write-LogOutput -LogType DEBUG
-                #if ($Script:RunTimeData.RestMethodParam.ContainsKey("Credential")) {
-                if (![string]::IsNullOrWhiteSpace($Script:MainForm.Elements.TextBoxUserName.Text) -and ![string]::IsNullOrWhiteSpace($Script:MainForm.Elements.TextBoxPassword.Password)) {
-                    "Create/Update credential with username {0}" -f $Script:MainForm.Elements.TextBoxUserName.Text | Write-LogOutput -LogType DEBUG
-                    $Script:MainForm.Elements.TextBoxUserName.Text | Set-ConfigProperty -Property "UserName"
-                    if ($Script:AppConfig.SavePassword) {
-                        $Script:MainForm.Elements.TextBoxPassword.Password | Set-ConfigProperty -Property "Password"
-                    }
-                    else {
-                        $null | Set-ConfigProperty -Property "Password"
-                    }
-
-                    if (!$Script:RunTimeData.RestMethodParam.ContainsKey("Credential")) {
-                        $Script:RunTimeData.RestMethodParam.Add("Credential", $null)
-                    }
-                    $Script:RunTimeData.RestMethodParam.Credential = [System.Management.Automation.PSCredential]::new($Script:AppConfig.UserName, ($Script:MainForm.Elements.TextBoxPassword.Password | ConvertTo-SecureString -AsPlainText -Force))
-                }
-                #}
-                "Password set" | Write-LogOutput -LogType VERBOSE
-                Test-ConnectionButton
-            }
+            # An empty password is allowed: a password is only needed for password based
+            # authentication. With only a username, Update-TabCredential creates a credential that
+            # names the account and leaves the sign-in to complete passwordless.
             if ([string]::IsNullOrWhiteSpace($Script:MainForm.Elements.TextBoxPassword.Password)) {
-                if ($Script:RunTimeData.RestMethodParam.ContainsKey("Credential")) {
-                    "Clear credential because password is empty" | Write-LogOutput -LogType DEBUG
-                    $Script:RunTimeData.RestMethodParam.Credential = $null
-                    if ($Script:MainForm.Elements.ComboBoxSelectAuthenticationOption.SelectedItem.Content -ne "OAuth") {
-                        $Script:RunTimeData.RestMethodParam.Remove("Credential")
-                    }
-                }
-                if ($Script:MainForm.Elements.ComboBoxSelectAuthenticationOption.SelectedItem.Content -ne "OAuth") {
-                    "Password cannot be empty!" | Write-LogOutput -LogType VERBOSE
-                }
-                else {
-                    "Password is empty, so it is not used for authentication" | Write-LogOutput -LogType VERBOSE
-                }
+                "Password is empty" | Write-LogOutput -LogType DEBUG
             }
+            else {
+                "Password set to: {0}" -f "***********" | Write-LogOutput -LogType DEBUG
+            }
+
+            if (![string]::IsNullOrWhiteSpace($Script:MainForm.Elements.TextBoxUserName.Text)) {
+                $Script:MainForm.Elements.TextBoxUserName.Text | Set-ConfigProperty -Property "UserName"
+            }
+            if ($Script:AppConfig.SavePassword -and ![string]::IsNullOrWhiteSpace($Script:MainForm.Elements.TextBoxPassword.Password)) {
+                $Script:MainForm.Elements.TextBoxPassword.Password | Set-ConfigProperty -Property "Password"
+            }
+            else {
+                $null | Set-ConfigProperty -Property "Password"
+            }
+
+            $null = Update-TabCredential
+            Test-ConnectionButton
         }
         catch {
             $_.Exception.Message | Write-LogOutput -LogType ERROR -ErrorObject $_

@@ -11,11 +11,15 @@ function Set-AuthenticationOption {
                     if ($_ -eq "OAuth") {
                         $Script:MainForm.Elements.TextBlockUserName | Set-TextBlockContent -Content "Client ID:"
                         $Script:MainForm.Elements.TextBlockPassword | Set-TextBlockContent -Content "Client Secret:"
+                        $PasswordToolTip = "Required: the client secret of the app registration."
                     }
                     else {
                         $Script:MainForm.Elements.TextBlockUserName | Set-TextBlockContent -Content "Username:"
                         $Script:MainForm.Elements.TextBlockPassword | Set-TextBlockContent -Content "Password:"
+                        $PasswordToolTip = "Required for {0} authentication." -f $_
                     }
+                    $Script:MainForm.Elements.TextBlockPassword.ToolTip = $PasswordToolTip
+                    $Script:MainForm.Elements.TextBoxPassword.ToolTip = $PasswordToolTip
                     $Script:MainForm.Elements.TextBlockUserName.Visibility = "Visible"
                     $Script:MainForm.Elements.TextBlockPassword.Visibility = "Visible"
                     $Script:MainForm.Elements.TextBlockAppIdUri.Visibility = "Visible"
@@ -47,7 +51,12 @@ function Set-AuthenticationOption {
                     $Script:MainForm.Elements.TextBoxAppIdUri.IsEnabled = $false
                     $Script:MainForm.Elements.TextBoxEntraIdTenantId.IsEnabled = $false
                     $Script:MainForm.Elements.TextBlockUserName | Set-TextBlockContent -Content "Username:"
-                    $Script:MainForm.Elements.TextBlockPassword | Set-TextBlockContent -Content "Password:"
+                    # The password is optional here: with only a username the sign-in uses that
+                    # account and can be completed passwordless (see Resolve-TabCredential).
+                    $Script:MainForm.Elements.TextBlockPassword | Set-TextBlockContent -Content "Password (optional):"
+                    $PasswordToolTip = "Optional. Only needed for password based authentication.`nLeave empty to sign in as the entered username with a passwordless method (Windows Hello, FIDO2 security key, Authenticator), or to type the password in the sign-in window.`nSigning in without a password requires WebView2."
+                    $Script:MainForm.Elements.TextBlockPassword.ToolTip = $PasswordToolTip
+                    $Script:MainForm.Elements.TextBoxPassword.ToolTip = $PasswordToolTip
                     $Script:MainForm.Elements.TextBlockUserName.Visibility = "Visible"
                     $Script:MainForm.Elements.TextBlockPassword.Visibility = "Visible"
                     $Script:MainForm.Elements.TextBoxUserName.Visibility = "Visible"

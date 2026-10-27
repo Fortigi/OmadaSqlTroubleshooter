@@ -98,6 +98,13 @@ table.)
 - **Browser** — browser-based via Selenium
 - **OAuth** — OAuth2 / Entra ID
 
+The password is only needed for password based authentication. For **WebView2** (and **Browser** started
+with `-UseWebView2Auth`) you can enter just a username and leave the password empty: the sign-in then
+uses that account and waits in the sign-in window for you to complete it with a passwordless method
+(Windows Hello, a FIDO2 security key, Microsoft Authenticator) or by typing the password there. This
+requires OmadaWeb.PS 2026.9.23.47 or higher. **OAuth** always needs the client secret, and **Browser**
+on Selenium needs the password, because it would otherwise submit an empty one.
+
 #### Tabs & Multiple Connections
 - Work with multiple queries and connections side by side, each in its own tab
 - Every tab is an independent workspace with its own connection settings, query editor and results

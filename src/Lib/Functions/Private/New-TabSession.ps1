@@ -332,9 +332,9 @@ function New-TabSession {
             $Script:MainForm.Elements.CheckboxSavePassword.IsChecked = $true
         }
 
-        if ($null -ne $Script:AppConfig.UserName -and $null -ne $Script:AppConfig.Password) {
-            $Script:RunTimeData.RestMethodParam.Credential = [System.Management.Automation.PSCredential]::new($Script:AppConfig.UserName, ($Script:AppConfig.Password | ConvertTo-SecureString))
-        }
+        # Same rules as the username/password LostFocus handlers, so a restored tab with a username
+        # and no saved password gets the passwordless credential it had before it was closed.
+        $null = Update-TabCredential
 
         if (![string]::IsNullOrWhiteSpace($Script:AppConfig.EntraApplicationIdUri)) {
             $Script:MainForm.Elements.TextBoxAppIdUri.Text = $Script:AppConfig.EntraApplicationIdUri

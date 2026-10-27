@@ -25,6 +25,16 @@ semantic version.
 
 ### Added
 
+- A credential without a password. Enter only a username to sign in with that account and complete
+  the sign-in passwordless (Windows Hello, FIDO2 security key, Authenticator) or by typing the password
+  in the sign-in window. The password field is labelled *Password (optional)* with a tooltip explaining
+  that it is only needed for password based authentication. Applies to WebView2, and to Browser when it
+  runs on WebView2 (`-UseWebView2Auth`); OAuth keeps requiring the client secret, and Browser on Selenium
+  keeps requiring the password, because it would submit an empty one. Needs OmadaWeb.PS 2026.9.23.47 or
+  higher, detected by its `-UserName` parameter; with an older module the username is not used on its
+  own. The credential is now built in one place (`Update-TabCredential`) for the username and password
+  fields, a switch of authentication option and a restored tab, so they can no longer disagree.
+
 - Auto-merge for Dependabot's GitHub Actions updates, gated on reputation. Auto-merge is enabled on
   such a pull request when every update in it is a semver patch or minor update, its GitHub release
   is at least 3 days old, the action repository's OpenSSF Scorecard (via deps.dev) is at least 7.0
