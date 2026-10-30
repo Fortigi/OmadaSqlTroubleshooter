@@ -17,8 +17,9 @@ $Script:SqlValidationInFlight = @{}
 $Script:SqlDiagnosticWorkerScript = {
     param($PrivateFolder, $WorkerFile, $SqlText, $Setting, $SchemaModel, $DatabaseSchemaModel)
 
+    # No param block: a simple function takes any arguments and pipeline input it is given and drops
+    # them, which is all this stand-in has to do.
     function Write-LogOutput {
-        param([Parameter(ValueFromPipeline = $true)]$Message, $LogType, $ErrorObject, [switch]$SkipDialog, [switch]$TabScoped)
         process { }
     }
 
