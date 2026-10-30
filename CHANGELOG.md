@@ -102,6 +102,18 @@ semantic version.
 
 ### Fixed
 
+- The query editor no longer freezes while typing (#185). After every pause in typing, the client-side
+  validation (#61) - the T-SQL parse, the schema check and the Omada compatibility rules - ran on the
+  UI thread, which held the window for half a second to a second on an ordinary query, and longer on a
+  large one. It now runs on a background worker, and only the markers are applied on the UI thread; a
+  result for text that has changed since, or for a tab that has closed, is discarded. The first
+  validation of a session runs on the UI thread while the worker starts, as does validation when no
+  worker can be started. The validation itself is also several times faster: the syntax tree is walked
+  once per pass instead of dozens of times, and only the properties that can hold a child are read.
+  Typing itself does less on the UI thread as well: no log lines per keystroke, the tab title is only
+  rebuilt when the unsaved-changes marker appears, and the validation defaults are read once. The
+  markers shown are unchanged.
+
 - Changing the data connection of an existing query now takes effect (#179). Selecting another
   connection without editing the query text left the query executing against the previous one: the
   connection was only written to the saved query object together with a changed text, so an unchanged

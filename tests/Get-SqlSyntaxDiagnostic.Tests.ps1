@@ -420,15 +420,50 @@ Describe 'Update-SqlSyntaxDiagnostic' -Tag 'Unit' {
         # through Get-SqlDiagnostic from a single parse. What it does with the RESULT - push it, clear
         # on a check that could not run, stay away from the editor when everything is off - is what
         # this block is about, and stubbing here keeps it about that.
+        $script:InlineValidations = 0
         function Get-SqlDiagnostic {
             param([string]$SqlText, $Setting, $SchemaModel)
+            $script:InlineValidations++
             return $script:SyntaxResult
         }
+
+        # The worker seam (issue #185). Start returns whatever $script:WorkerPending says - a pending
+        # item when a worker took the job, $null when none was available - and records what it was
+        # handed, so the tests can tell "dispatched" from "validated inline".
+        $script:ActiveTab = [PSCustomObject]@{ Id = "tab-1" }
+        function Get-ActiveTabSession { return $script:ActiveTab }
+
+        # The real Start-SqlDiagnosticForTab, so the model resolution it does is what is tested; only
+        # the worker itself is stubbed.
+        . (Join-Path (Join-Path (Split-Path -Path $PSScriptRoot -Parent) "src\Lib\Functions\Private") "Start-SqlDiagnosticBackground.ps1")
+
+        $script:WorkerPending = $null
+        $script:WorkerStarts = [System.Collections.Generic.List[object]]::new()
+        function Start-SqlDiagnosticBackground {
+            param($TabSession, $SqlText, $Setting, $SchemaModel, $DatabaseSchemaModel)
+            $script:WorkerStarts.Add([PSCustomObject]@{ TabSession = $TabSession; SqlText = $SqlText; SchemaModel = $SchemaModel; DatabaseSchemaModel = $DatabaseSchemaModel })
+            return $script:WorkerPending
+        }
+
+        $script:WorkerStops = [System.Collections.Generic.List[object]]::new()
+        function Stop-SqlDiagnosticBackground {
+            param($TabSession)
+            $script:WorkerStops.Add($TabSession)
+        }
+
+        $script:ActiveModel = [PSCustomObject]@{ Name = "active model" }
+        $script:OtherModels = @{ other = [PSCustomObject]@{ Name = "other model" } }
+        function Get-ActiveSqlSchemaModel { return $script:ActiveModel }
+        function Get-CachedSqlSchemaModelByDatabase { return $script:OtherModels }
     }
 
     BeforeEach {
         $script:PushedEditorScripts.Clear()
         $script:EditorReadTask = $null
+        $script:InlineValidations = 0
+        $script:WorkerPending = $null
+        $script:WorkerStarts.Clear()
+        $script:WorkerStops.Clear()
         $script:ValidationSetting = [PSCustomObject]@{
             Enabled                 = $true
             SchemaEnabled           = $true
@@ -525,6 +560,90 @@ Describe 'Update-SqlSyntaxDiagnostic' -Tag 'Unit' {
 
             @($script:PushedEditorScripts).Count | Should -Be 1
             $script:PushedEditorScripts[0] | Should -Match 'setDiagnostics\(\[\{'
+        }
+    }
+
+    Context 'Off the UI thread (issue #185)' {
+        # The debounced path used to run the parse and both passes inside the completion poll timer's
+        # Tick - on the dispatcher - after every pause in typing. It now hands the text to a worker.
+
+        It 'Should hand the debounced read to a worker and not validate inline' {
+            $script:EditorReadTask = [PSCustomObject]@{ Status = "RanToCompletion"; Result = ('"SELECT a FROM dbo.Person"') }
+            $script:WorkerPending = [PSCustomObject]@{ Description = "SQL validation" }
+
+            Update-SqlSyntaxDiagnostic
+
+            $script:WorkerStarts.Count | Should -Be 1
+            $script:WorkerStarts[0].SqlText | Should -Be "SELECT a FROM dbo.Person"
+            $script:WorkerStarts[0].TabSession | Should -Be $script:ActiveTab
+            $script:InlineValidations | Should -Be 0 -Because "the analysis is the part that froze the window"
+            @($script:PushedEditorScripts).Count | Should -Be 0 -Because "the markers arrive when the worker finishes"
+        }
+
+        It 'Should hand the worker the schema models, resolved on the UI thread' {
+            # Finding them reads the active tab and the data connection dropdown, which only the UI
+            # thread may touch.
+            $script:EditorReadTask = [PSCustomObject]@{ Status = "RanToCompletion"; Result = ('"SELECT 1"') }
+            $script:WorkerPending = [PSCustomObject]@{ Description = "SQL validation" }
+
+            Update-SqlSyntaxDiagnostic
+
+            $script:WorkerStarts[0].SchemaModel | Should -Be $script:ActiveModel
+            $script:WorkerStarts[0].DatabaseSchemaModel | Should -Be $script:OtherModels
+        }
+
+        It 'Should not resolve schema models when the schema pass is off' {
+            $script:ValidationSetting.SchemaEnabled = $false
+            $script:EditorReadTask = [PSCustomObject]@{ Status = "RanToCompletion"; Result = ('"SELECT 1"') }
+            $script:WorkerPending = [PSCustomObject]@{ Description = "SQL validation" }
+
+            Update-SqlSyntaxDiagnostic
+
+            $script:WorkerStarts[0].SchemaModel | Should -BeNullOrEmpty
+            @($script:WorkerStarts[0].DatabaseSchemaModel.Keys).Count | Should -Be 0
+        }
+
+        It 'Should validate inline, as before, when no worker is available' {
+            $script:EditorReadTask = [PSCustomObject]@{ Status = "RanToCompletion"; Result = ('"SELECT a, FROM dbo.Person"') }
+            $script:WorkerPending = $null
+            $script:SyntaxResult = [PSCustomObject]@{
+                Status        = "Ok"
+                ParserVersion = "TSql180Parser"
+                Diagnostic    = @([PSCustomObject]@{ Line = 1; Column = 11; EndLine = 1; EndColumn = 15; Severity = "Error"; Message = "Incorrect syntax near 'FROM'."; Source = "T-SQL syntax" })
+            }
+
+            Update-SqlSyntaxDiagnostic
+
+            $script:WorkerStarts.Count | Should -Be 1 -Because "the worker is always tried first"
+            $script:InlineValidations | Should -Be 1
+            $script:PushedEditorScripts[0] | Should -Match 'setDiagnostics\(\[\{'
+        }
+
+        It 'Should keep the execute path inline, because it needs the answer before it can ask' {
+            $script:SyntaxResult = [PSCustomObject]@{ Status = "Ok"; ParserVersion = "TSql180Parser"; Diagnostic = @() }
+
+            Update-SqlSyntaxDiagnostic -SqlText "SELECT 1"
+
+            $script:WorkerStarts.Count | Should -Be 0
+            $script:InlineValidations | Should -Be 1
+        }
+
+        It 'Should stop the tab''s worker before pushing inline markers, so an older result cannot land on top' {
+            $script:SyntaxResult = [PSCustomObject]@{ Status = "Ok"; ParserVersion = "TSql180Parser"; Diagnostic = @() }
+
+            Update-SqlSyntaxDiagnostic -SqlText "SELECT 1"
+
+            $script:WorkerStops.Count | Should -Be 1
+            $script:WorkerStops[0] | Should -Be $script:ActiveTab
+        }
+
+        It 'Should not stop the worker it has just started' {
+            $script:EditorReadTask = [PSCustomObject]@{ Status = "RanToCompletion"; Result = ('"SELECT 1"') }
+            $script:WorkerPending = [PSCustomObject]@{ Description = "SQL validation" }
+
+            Update-SqlSyntaxDiagnostic
+
+            $script:WorkerStops.Count | Should -Be 0
         }
     }
 }

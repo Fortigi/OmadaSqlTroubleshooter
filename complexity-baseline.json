@@ -240,8 +240,8 @@
     {
       "file": "src/Lib/Functions/Private/Get-SqlFragmentDescendant.ps1",
       "unit": "Get-SqlFragmentDescendant",
-      "cyclomatic": 23,
-      "cognitive": 42
+      "cyclomatic": 16,
+      "cognitive": 34
     },
     {
       "file": "src/Lib/Functions/Private/Get-SqlHistory.ps1",
@@ -306,8 +306,8 @@
     {
       "file": "src/Lib/Functions/Private/Initialize-WebViewForTab.ps1",
       "unit": "Initialize-WebViewForTab",
-      "cyclomatic": 53,
-      "cognitive": 94
+      "cyclomatic": 44,
+      "cognitive": 80
     },
     {
       "file": "src/Lib/Functions/Private/Install-WebView2.ps1",

@@ -45,11 +45,26 @@ function Get-SqlParserType {
         return $null
     }
 
-    try {
-        $ParserType = @($ParserAssembly.GetExportedTypes() | Where-Object { $_.Name -match '^TSql\d+Parser$' })
+    # The assembly's exported types are enumerated once per loaded assembly, not per parse (issue
+    # #185): GetExportedTypes() over ScriptDom's thousand-odd types was a large share of every
+    # debounced validation, and a loaded assembly's types cannot change. Keyed by the assembly
+    # itself, so a different ScriptDom loaded later is enumerated afresh rather than served from the
+    # first one's list.
+    if ($null -ne $Script:SqlParserTypeCache -and [object]::ReferenceEquals($Script:SqlParserTypeCache.Assembly, $ParserAssembly)) {
+        $ParserType = $Script:SqlParserTypeCache.ParserType
     }
-    catch {
-        return $null
+    else {
+        try {
+            $ParserType = @($ParserAssembly.GetExportedTypes() | Where-Object { $_.Name -match '^TSql\d+Parser$' })
+        }
+        catch {
+            return $null
+        }
+
+        $Script:SqlParserTypeCache = [PSCustomObject]@{
+            Assembly   = $ParserAssembly
+            ParserType = $ParserType
+        }
     }
 
     if ($ParserType.Count -eq 0) {

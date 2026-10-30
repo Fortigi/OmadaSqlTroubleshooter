@@ -106,13 +106,15 @@ function Get-SqlDiagnostic {
             $DatabaseSchemaModel = Get-CachedSqlSchemaModelByDatabase
         }
 
-        foreach ($Item in @(Get-SqlSchemaDiagnostic -Fragment $Parsed.Fragment -SchemaModel $SchemaModel -DatabaseSchemaModel $DatabaseSchemaModel)) {
+        # Each pass walks the tree dozens of times; inside Use-SqlFragmentWalkCache each node is walked
+        # once (issue #185).
+        foreach ($Item in @(Use-SqlFragmentWalkCache { Get-SqlSchemaDiagnostic -Fragment $Parsed.Fragment -SchemaModel $SchemaModel -DatabaseSchemaModel $DatabaseSchemaModel })) {
             $Diagnostic.Add($Item)
         }
     }
 
     if ($Setting.OmadaEnabled -and $ParsedCleanly) {
-        foreach ($Item in @(Get-OmadaCompatibilityDiagnostic -Fragment $Parsed.Fragment -RuleSeverity $Setting.RuleSeverity)) {
+        foreach ($Item in @(Use-SqlFragmentWalkCache { Get-OmadaCompatibilityDiagnostic -Fragment $Parsed.Fragment -RuleSeverity $Setting.RuleSeverity })) {
             $Diagnostic.Add($Item)
         }
     }

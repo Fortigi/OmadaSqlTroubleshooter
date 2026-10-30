@@ -290,3 +290,66 @@ Describe 'Get-SqlValidationSetting' -Tag 'Unit' {
         }
     }
 }
+
+Describe 'Get-SqlValidationSchemaDefault' -Tag 'Unit' {
+    # Get-SqlValidationSetting runs on every keystroke, through Request-SqlSyntaxValidation. Its five
+    # schema defaults cannot change while the module runs, so they are looked up once (issue #185) -
+    # while what the user configured is still read fresh on every call.
+
+    BeforeAll {
+        $script:SchemaLookups = [System.Collections.Generic.List[string]]::new()
+        function Get-ConfigSchemaDefault {
+            param([string]$Property, [string]$SchemaPath)
+            $script:SchemaLookups.Add($Property)
+            return ($Script:SchemaProperty | Where-Object { $_.Name -eq $Property } | Select-Object -First 1).DefaultValue
+        }
+    }
+
+    BeforeEach {
+        $script:SchemaLookups.Clear()
+        $Script:SqlValidationSchemaDefault = $null
+        $Script:SqlSyntaxValidationAvailable = $true
+        $Script:AppGlobalConfig = $null
+    }
+
+    AfterAll {
+        $Script:SqlValidationSchemaDefault = $null
+    }
+
+    It 'Should look each default up once, however often the setting is read' {
+        $null = Get-SqlValidationSetting
+        $First = $script:SchemaLookups.Count
+        1..5 | ForEach-Object { $null = Get-SqlValidationSetting }
+
+        $First | Should -BeGreaterThan 0
+        $script:SchemaLookups.Count | Should -Be $First -Because "the schema the module shipped with cannot change while it runs"
+        @($script:SchemaLookups | Select-Object -Unique).Count | Should -Be $First
+    }
+
+    It 'Should return the same setting as an uncached lookup' {
+        $Cached = 1..2 | ForEach-Object { Get-SqlValidationSetting } | Select-Object -Last 1
+        $Script:SqlValidationSchemaDefault = $null
+        $Fresh = Get-SqlValidationSetting
+
+        ($Cached | ConvertTo-Json -Compress) | Should -Be ($Fresh | ConvertTo-Json -Compress)
+    }
+
+    It 'Should still read what the user configured on every call' {
+        $Script:AppGlobalConfig = [PSCustomObject]@{ EnableSchemaValidation = $true; ValidationDebounceMilliseconds = 400 }
+        (Get-SqlValidationSetting).SchemaEnabled | Should -BeTrue
+
+        $Script:AppGlobalConfig.EnableSchemaValidation = $false
+        $Script:AppGlobalConfig.ValidationDebounceMilliseconds = 900
+        $Setting = Get-SqlValidationSetting
+
+        $Setting.SchemaEnabled | Should -BeFalse
+        $Setting.DebounceMilliseconds | Should -Be 900
+    }
+
+    It 'Should remember a default the schema does not declare, rather than ask again' {
+        Get-SqlValidationSchemaDefault -Property "NotInTheSchema" | Should -BeNullOrEmpty
+        Get-SqlValidationSchemaDefault -Property "NotInTheSchema" | Should -BeNullOrEmpty
+
+        @($script:SchemaLookups | Where-Object { $_ -eq "NotInTheSchema" }).Count | Should -Be 1
+    }
+}
