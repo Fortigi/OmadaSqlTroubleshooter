@@ -37,6 +37,11 @@ function Invoke-ExecuteQuery {
 
                     $Private:ValidationSetting = Get-SqlValidationSetting
                     if ($Private:ValidationSetting.Enabled -or $Private:ValidationSetting.SchemaEnabled -or $Private:ValidationSetting.OmadaEnabled) {
+                        # A debounced validation still running on a worker (issue #185) is about the
+                        # text as it was before this execute, and would land on top of the markers
+                        # pushed below. Stopped first.
+                        Stop-SqlDiagnosticBackground -TabSession (Get-ActiveTabSession)
+
                         $Private:ValidationResult = Get-SqlDiagnostic -SqlText $Private:TextToValidate -Setting $Private:ValidationSetting
 
                         # EditorDiagnostic, not SyntaxDiagnostic: this holds what ALL THREE passes

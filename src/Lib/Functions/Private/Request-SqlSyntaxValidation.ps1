@@ -37,6 +37,11 @@ function Request-SqlSyntaxValidation {
 
         if ($null -ne $TabSession) {
             $Script:SqlValidationPendingTabId = $TabSession.Id
+
+            # The text just changed, so a validation still running on a worker for this tab (issue
+            # #185) is checking text that is no longer there. Its markers must not appear; the
+            # validation this timer schedules will bring the right ones.
+            Stop-SqlDiagnosticBackground -TabSession $TabSession
         }
 
         $Script:SqlValidationDebounceTimer.Stop()

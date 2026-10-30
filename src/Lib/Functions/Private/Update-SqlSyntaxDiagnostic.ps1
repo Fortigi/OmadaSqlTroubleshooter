@@ -17,12 +17,23 @@ function Update-SqlSyntaxDiagnostic {
         three files to say the same thing.
 
         The read and the push are both asynchronous and go through the WebView2 completion poll
-        timer, so the WPF dispatcher is never blocked and the WebView2 suspend/resume rules
-        Invoke-OmadaPSWebRequestWrapper documents are respected by construction.
+        timer, and the WebView2 suspend/resume rules Invoke-OmadaPSWebRequestWrapper documents are
+        respected by construction.
+
+        The CHECK runs on a worker (issue #185). The read's completion block runs on the dispatcher,
+        and the parse plus the schema and Omada passes used to run right there with it - hundreds of
+        milliseconds to seconds of a frozen window after every pause in typing. The debounced path
+        now hands the text to Start-SqlDiagnosticBackground and returns; the markers arrive through
+        the same completion queue once the worker is done. When no worker is available it validates
+        inline, exactly as it used to.
 
     .PARAMETER SqlText
         Check this text instead of reading the editor. Used by the execute path, which already has
         the script in hand and must not pay for a second round trip to the WebView.
+
+    .PARAMETER Background
+        Check the text on a worker rather than inline. Only the debounced path sets it; the execute
+        path needs its answer before it can decide whether to ask the user, so it stays inline.
 
     .OUTPUTS
         None. Markers are pushed to the editor; nothing is returned or persisted.
@@ -32,7 +43,10 @@ function Update-SqlSyntaxDiagnostic {
         [Parameter(Mandatory = $false)]
         [AllowNull()]
         [AllowEmptyString()]
-        [string]$SqlText
+        [string]$SqlText,
+
+        [Parameter(Mandatory = $false)]
+        [switch]$Background
     )
 
     # No tracer preamble: $SqlText is the user's query (issue #61 section 5).
@@ -44,6 +58,17 @@ function Update-SqlSyntaxDiagnostic {
         }
 
         if ($PSBoundParameters.ContainsKey("SqlText")) {
+            $TabSession = Get-ActiveTabSession
+
+            # On a worker when asked and when one is available; otherwise inline, as it always was.
+            if ($Background -and $null -ne (Start-SqlDiagnosticForTab -TabSession $TabSession -SqlText $SqlText -Setting $Setting)) {
+                return
+            }
+
+            # Whatever this tab's worker is still computing is about text older than this, so it is
+            # stopped before these markers go on screen - otherwise it could land on top of them.
+            Stop-SqlDiagnosticBackground -TabSession $TabSession
+
             $Result = Get-SqlDiagnostic -SqlText $SqlText -Setting $Setting
 
             # A check that could not run clears the markers rather than leaving them. Anything still
@@ -75,7 +100,7 @@ function Update-SqlSyntaxDiagnostic {
                 }
 
                 $EditorText = $Script:Task.Result | ConvertFrom-Json
-                Update-SqlSyntaxDiagnostic -SqlText ([string]$EditorText)
+                Update-SqlSyntaxDiagnostic -SqlText ([string]$EditorText) -Background
             }
             catch {
                 # Never surfaced to the user: a failed background validation must not interrupt

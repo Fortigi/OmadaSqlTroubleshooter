@@ -27,6 +27,30 @@ $Script:OmadaWorkerChainFile = [ordered]@{
 # Omada.
 $Script:OmadaWorkerCoreFile = "Invoke-OmadaRequestCore.ps1"
 
+# The client-side SQL validation worker (issue #185). Not an Omada chain - it makes no request and
+# runs in a pool of its own (Start-SqlDiagnosticBackground) - but it has the same shipping problem:
+# its runspace has never loaded this module, so it dot-sources these by path, and the build has to
+# copy them as files. Declared here so Get-OmadaWorkerRuntimeFile, and therefore the build, cannot
+# miss them.
+#
+# Everything Get-SqlDiagnostic reaches when the setting and both schema models are handed to it. The
+# functions it would otherwise call to find those for itself - Get-SqlValidationSetting,
+# Get-ActiveSqlSchemaModel, Get-CachedSqlSchemaModelByDatabase - read UI-thread state and are
+# deliberately not here. Start-SqlDiagnosticBackground.Tests.ps1 derives this set from the source and
+# fails when a pass starts calling something new.
+$Script:SqlDiagnosticWorkerFile = @(
+    "Get-SqlParserType.ps1"
+    "Get-SqlScriptFragment.ps1"
+    "Get-SqlDiagnosticEndColumn.ps1"
+    "Get-SqlSyntaxDiagnostic.ps1"
+    "Get-SqlFragmentDescendant.ps1"
+    "Get-SqlFragmentMarker.ps1"
+    "Get-SqlSchemaDiagnostic.ps1"
+    "Get-OmadaCompatibilityRule.ps1"
+    "Get-OmadaCompatibilityDiagnostic.ps1"
+    "Get-SqlDiagnostic.ps1"
+)
+
 function Get-OmadaWorkerRuntimeFile {
     <#
     .SYNOPSIS
@@ -52,6 +76,12 @@ function Get-OmadaWorkerRuntimeFile {
             if (-not $Private:Files.Contains($Private:File)) {
                 $Private:Files.Add($Private:File)
             }
+        }
+    }
+
+    foreach ($Private:File in $Script:SqlDiagnosticWorkerFile) {
+        if (-not $Private:Files.Contains($Private:File)) {
+            $Private:Files.Add($Private:File)
         }
     }
 

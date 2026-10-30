@@ -231,6 +231,7 @@ $Script:MainForm.Definition.Add_Closing({
             # after the window has gone (issue #40). Best-effort, and last, so a failure here cannot
             # cost the user their saved tab sessions or window measurements above.
             Close-OmadaRequestPool
+            Close-SqlDiagnosticPool
         }
         catch {
             # Contained, like every other cleanup path in this change (Complete-TabClose,

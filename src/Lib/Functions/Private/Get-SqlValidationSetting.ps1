@@ -41,7 +41,7 @@ function Get-SqlValidationSetting {
         $OmadaEnabled = $false
     }
 
-    $DebounceDefault = Get-ConfigSchemaDefault -Property "ValidationDebounceMilliseconds"
+    $DebounceDefault = Get-SqlValidationSchemaDefault -Property "ValidationDebounceMilliseconds"
     if ($null -eq $DebounceDefault -or [int]$DebounceDefault -lt 1) {
         $DebounceDefault = 400
     }
@@ -120,7 +120,7 @@ function Resolve-SqlValidationSwitch {
 
     # No tracer preamble: called from the debounced validation path on every idle tick.
 
-    $Default = Get-ConfigSchemaDefault -Property $Property
+    $Default = Get-SqlValidationSchemaDefault -Property $Property
     $Value = if ($null -eq $Default) { $true } else { [bool]$Default }
 
     if ($null -eq $Script:AppGlobalConfig) {
@@ -154,4 +154,44 @@ function Resolve-SqlValidationSwitch {
     }
 
     return $Value
+}
+
+function Get-SqlValidationSchemaDefault {
+    <#
+    .SYNOPSIS
+        Returns a validation setting's default from the configuration schema, looked up once per
+        process.
+
+    .DESCRIPTION
+        Get-SqlValidationSetting runs on every keystroke (through Request-SqlSyntaxValidation, for the
+        debounce interval) and needs five schema defaults each time. Get-ConfigSchemaDefault is a
+        general-purpose lookup with a tracer line and a pipeline filter, which made those five a
+        couple of dozen milliseconds of UI-thread time per keystroke (issue #185).
+
+        The defaults are the schema file that shipped with the module, which cannot change while it
+        runs, so each is asked for once and remembered - including a $null, so a property the schema
+        does not declare is not looked up again on every keystroke either. What the USER configured
+        is read fresh on every call by the callers, as before; only the defaults are remembered.
+
+    .PARAMETER Property
+        The configuration property whose default to return.
+
+    .OUTPUTS
+        The schema default, or $null when the schema does not declare one.
+    #>
+    [CmdLetBinding()]
+    param(
+        [Parameter(Mandatory = $true, Position = 0)]
+        [string]$Property
+    )
+
+    if ($null -eq $Script:SqlValidationSchemaDefault) {
+        $Script:SqlValidationSchemaDefault = @{}
+    }
+
+    if (-not $Script:SqlValidationSchemaDefault.ContainsKey($Property)) {
+        $Script:SqlValidationSchemaDefault[$Property] = Get-ConfigSchemaDefault -Property $Property
+    }
+
+    return $Script:SqlValidationSchemaDefault[$Property]
 }

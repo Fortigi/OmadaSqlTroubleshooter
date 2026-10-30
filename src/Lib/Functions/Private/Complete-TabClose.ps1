@@ -29,6 +29,10 @@ function Complete-TabClose {
         # dead tab and writes into disposed elements - see Remove-PendingBackgroundRequest.
         Remove-PendingBackgroundRequest -TabSession $TabToClose
 
+        # And its validation worker (issue #185), which Remove-PendingBackgroundRequest does not select:
+        # a validation carries no StartedUtc, because it is not a request the status bar times.
+        Stop-SqlDiagnosticBackground -TabSession $TabToClose
+
         if ($null -ne $TabToClose.WebView.Object) {
             try {
                 $TabToClose.WebView.Object.Dispose()

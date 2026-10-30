@@ -136,6 +136,18 @@ Describe "Get-OmadaWorkerRuntimeFile" {
         Get-OmadaWorkerRuntimeFile | Should -Contain "New-OmadaPagingRequest.ps1"
     }
 
+    It "includes every file the validation worker dot-sources" {
+        # Issue #185. Not an Omada chain, but the same shipping problem: its runspace has never loaded
+        # this module either. Missing here, every validation in the released module would quietly run
+        # on the UI thread again.
+        $Private:Shipped = Get-OmadaWorkerRuntimeFile
+
+        $Script:SqlDiagnosticWorkerFile.Count | Should -BeGreaterThan 0
+        foreach ($Private:File in $Script:SqlDiagnosticWorkerFile) {
+            $Private:Shipped | Should -Contain $Private:File
+        }
+    }
+
     It "lists each file once, however many chains name it" {
         $Private:Shipped = @(Get-OmadaWorkerRuntimeFile)
 

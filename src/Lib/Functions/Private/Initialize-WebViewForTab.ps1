@@ -207,56 +207,13 @@ function Initialize-WebViewForTab {
                     $TabSession.WebView.Object.CoreWebView2.add_WebMessageReceived({
                             param($WebMessageSender, $WebMessageEventArgs)
                             try {
-                                $_ | Show-EventInfo
+                                $WebMessageEventInfo = $_
                                 $HandlerTab = Get-TabSessionByWebViewSender -Sender $WebMessageSender
                                 if ($null -eq $HandlerTab) {
                                     return
                                 }
-                                "CoreWebView2.add_WebMessageReceived on {0} for tab '{1}'" -f $WebMessageSender.GetType().Name, $HandlerTab.DisplayName | Write-LogOutput -LogType DEBUG
 
-                                $Message = Get-WebViewMessageString -MessageEventArgs $WebMessageEventArgs
-                                "WebView2 message received: {0}" -f $Message | Write-LogOutput -LogType DEBUG
-
-                                if ($Message) {
-                                    $MessageObj = $Message | ConvertFrom-Json -ErrorAction SilentlyContinue
-                                    if ($MessageObj -and $MessageObj.type -eq 'executeQuery') {
-                                        "Execute Query requested from Monaco Editor via {0}" -f $MessageObj.key | Write-LogOutput -LogType DEBUG
-                                        $Script:MainForm.Definition.Dispatcher.Invoke([System.Action] {
-                                                Set-ActiveTabContext -TabSession $HandlerTab
-                                                $Script:MainForm.Elements.ButtonExecuteQuery.RaiseEvent([System.Windows.RoutedEventArgs]::new([System.Windows.Controls.Primitives.ButtonBase]::ClickEvent))
-                                            })
-                                    }
-                                    elseif ($MessageObj -and $MessageObj.type -eq 'saveQuery') {
-                                        "Save Query requested from Monaco Editor via {0}" -f $MessageObj.key | Write-LogOutput -LogType DEBUG
-                                        $Script:MainForm.Definition.Dispatcher.Invoke([System.Action] {
-                                                Set-ActiveTabContext -TabSession $HandlerTab
-                                                $Script:MainForm.Elements.ButtonSaveQuery.RaiseEvent([System.Windows.RoutedEventArgs]::new([System.Windows.Controls.Primitives.ButtonBase]::ClickEvent))
-                                            })
-                                    }
-                                    elseif ($MessageObj -and $MessageObj.type -eq 'requestSchema') {
-                                        # Issue #158: the editor hit "[SomeDatabase]." and has no
-                                        # model for it. Set-ActiveTabContext first, like every other
-                                        # branch here - the schema is fetched and cached per
-                                        # connection pool, and the pool belongs to the tab that asked.
-                                        "SQL schema for another database requested from Monaco Editor" | Write-LogOutput -LogType DEBUG
-                                        $Script:MainForm.Definition.Dispatcher.Invoke([System.Action] {
-                                                Set-ActiveTabContext -TabSession $HandlerTab
-                                                Request-SqlSchemaForDatabase -DatabaseName $MessageObj.database
-                                            })
-                                    }
-                                    elseif ($MessageObj -and $MessageObj.type -eq 'contentChanged') {
-                                        $Script:MainForm.Definition.Dispatcher.Invoke([System.Action] {
-                                                $HandlerTab.IsDirty = $true
-                                                Update-TabHeaderTitle -TabSession $HandlerTab
-
-                                                # Push the syntax-validation debounce timer forward.
-                                                # This only restarts a timer - the parse itself
-                                                # happens once the user stops typing, off this
-                                                # handler and off the dispatcher.
-                                                Request-SqlSyntaxValidation -TabSession $HandlerTab
-                                            })
-                                    }
-                                }
+                                Invoke-WebViewMessage -TabSession $HandlerTab -WebViewSender $WebMessageSender -MessageEventArgs $WebMessageEventArgs -EventInfo $WebMessageEventInfo
                             }
                             catch {
                                 $_.Exception.Message | Write-LogOutput -LogType ERROR -ErrorObject $_
