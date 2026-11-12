@@ -37,6 +37,7 @@ BeforeAll {
     . (Join-Path $PrivatePath -ChildPath "Get-OmadaHttpStatusCode.ps1")
     . (Join-Path $PrivatePath -ChildPath "Test-OmadaSessionExpiredError.ps1")
     . (Join-Path $PrivatePath -ChildPath "Resolve-ExecuteFallbackAction.ps1")
+    . (Join-Path $PrivatePath -ChildPath "Get-OmadaWritePermissionMessage.ps1")
     # The real pane and status-bar writers, not stubs: "what the user is told when a query ends"
     # IS the behaviour these suites assert, and a stub would assert nothing.
     . (Join-Path $PrivatePath -ChildPath "Write-TabMessage.ps1")
@@ -88,7 +89,9 @@ BeforeAll {
             $ErrorRecord = $null,
             [int]$CompletedSteps = 1,
             $SaveResult = ([pscustomobject]@{ Id = 100; DisplayName = "TestQuery" }),
-            $Log = @()
+            $Log = @(),
+            [string]$FailedStep = "GetQueryObject",
+            $Steps = @(@{ Name = "GetQueryObject"; Method = "GET"; Uri = "https://tenant/x" })
         )
         return @{
             Log            = $Log
@@ -97,8 +100,8 @@ BeforeAll {
             TempQueryDoId  = $null
             QueryResult    = $QueryResult
             ErrorRecord    = $ErrorRecord
-            FailedStep     = $(if ($null -ne $ErrorRecord) { "GetQueryObject" } else { $null })
-            Steps          = @(@{ Name = "GetQueryObject"; Method = "GET"; Uri = "https://tenant/x" })
+            FailedStep     = $(if ($null -ne $ErrorRecord) { $FailedStep } else { $null })
+            Steps          = $Steps
             CompletedSteps = $CompletedSteps
         }
     }
@@ -1020,6 +1023,32 @@ Describe "Complete-ExecuteQueryPipeline reports a tenant failure once" {
 
         @($script:ReplayedLines) | Should -Contain "QueryUrl: https://tenant.omada.cloud/api/x"
         @($script:ReplayedLines) | Should -Contain "Retrieve query output, please wait..."
+    }
+
+    It "reports a refused OData write as a missing permission, not as an expired session" {
+        # Found on a live tenant: a selection failed with "sign in again" because the account lacked
+        # the OData Update right, which Omada answers with a 401 that OmadaWeb.PS calls a session
+        # expiry. Three requests had just succeeded, so the session itself was demonstrably fine.
+        # The shape OmadaWeb.PS raises it in: an AuthenticationException, which is what
+        # Test-OmadaSessionExpiredError keys on.
+        $Private:Expired = [System.Management.Automation.ErrorRecord]::new(
+            [System.Security.Authentication.AuthenticationException]::new("The Omada session for 'https://tenant.omada.cloud' has expired or was rejected (HTTP 401) and -NoInteractiveAuthentication was specified, so no sign-in was attempted."),
+            "OmadaSessionExpired,Invoke-OmadaRestMethod",
+            [System.Management.Automation.ErrorCategory]::AuthenticationError, $null)
+        $Private:Steps = @(
+            @{ Name = "GetQueryObject"; Method = "GET"; Uri = "https://tenant.omada.cloud/odata/dataobjects/C_P_SQLTROUBLESHOOTING(100)" }
+            @{ Name = "TempQueryProbe"; Method = "GET"; Uri = "https://tenant.omada.cloud/odata/dataobjects/C_P_SQLTROUBLESHOOTING" }
+            @{ Name = "TempQueryUndelete"; Method = "POST"; Uri = "https://tenant.omada.cloud/WebService/DataObjectWebService.asmx/UndeleteDataObject" }
+            @{ Name = "TempQueryUpsert"; Method = "PUT"; Uri = "https://tenant.omada.cloud/odata/dataobjects/C_P_SQLTROUBLESHOOTING(200)" }
+        )
+        $Failed = New-PipelineOutcome -ErrorRecord $Private:Expired -CompletedSteps 3 -FailedStep "TempQueryUpsert" -Steps $Private:Steps
+
+        Complete-ExecuteQueryPipeline -Outcome $Failed -PipelineContext @{ BaseUrl = "https://tenant.omada.cloud"; QueryDoId = 100 }
+
+        @($script:ErrorLines).Count | Should -Be 1
+        $script:ErrorLines[0] | Should -Match "'Update' permission on the 'OData' auth element"
+        $script:ErrorLines[0] | Should -Match "has expired or was rejected \(HTTP 401\)"
+        @($script:InlinePipelineRuns).Count | Should -Be 0
     }
 
     It "replays the worker's log on a successful run too" {

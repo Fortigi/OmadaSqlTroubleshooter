@@ -547,7 +547,18 @@ function Complete-ExecuteQueryPipeline {
                 return
             }
 
-            "The query pipeline failed at step '{0}': {1}" -f $Outcome.FailedStep, $Outcome.ErrorRecord.Exception.Message | Write-ContainedErrorLog -ErrorObject $Outcome.ErrorRecord -TabScoped
+            # A write the tenant refused with 401 right after it served this run's reads is a missing
+            # OData permission, not an expired session - but OmadaWeb.PS words it as the latter, which
+            # sent users off to sign in again for a problem only an administrator can fix. Said
+            # plainly when that is the case; the original message is kept for the log either way.
+            $Private:PermissionMessage = Get-OmadaWritePermissionMessage -Outcome $Outcome
+            if ($null -ne $Private:PermissionMessage) {
+                "{0} Details: step '{1}': {2}" -f $Private:PermissionMessage, $Outcome.FailedStep, $Outcome.ErrorRecord.Exception.Message | Write-ContainedErrorLog -ErrorObject $Outcome.ErrorRecord -TabScoped
+            }
+            else {
+                "The query pipeline failed at step '{0}': {1}" -f $Outcome.FailedStep, $Outcome.ErrorRecord.Exception.Message | Write-ContainedErrorLog -ErrorObject $Outcome.ErrorRecord -TabScoped
+            }
+
             # -StatementOutcome on the FAILURE path too, and that asymmetry was a real bug: the
             # pipeline mirrors only the FIRST statement into $Outcome.ErrorRecord, so a run where
             # statement 1 fails and 2..N succeed lands here (Resolve-ExecuteFallbackAction returns
