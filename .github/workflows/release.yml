@@ -80,16 +80,15 @@ jobs:
           path: buildoutput/
 
   release:
-    name: Package and Release
+    name: Package and Draft Release
     runs-on: windows-latest
     needs: build
-    # Requires the "release" GitHub Environment with required reviewers configured
-    # (Settings > Environments) for the approval gate to take effect. Until that
-    # is set up, this job-level condition is the actual gate: it only runs when
-    # someone manually triggers this workflow (Run workflow), never on a plain
-    # push to main, so publishing always needs a deliberate human action.
+    # Only runs when someone manually triggers this workflow (Run workflow), never on a plain push
+    # to main. It pushes the tag and creates a DRAFT release with the package attached; nothing is
+    # public until a maintainer publishes that draft, which notifies followers and starts
+    # publish-psgallery.yml. The "release" environment (and its approval gate) sits on that publish
+    # job, the one that uses the PowerShell Gallery key.
     if: github.event_name == 'workflow_dispatch'
-    environment: release
 
     permissions:
       contents: write
@@ -131,14 +130,6 @@ jobs:
           echo "Previous non-nightly tag: ${PREV_TAG:-<none>}"
           echo "previous_tag=$PREV_TAG" >> "$GITHUB_OUTPUT"
 
-      - name: Publish to PSGallery
-        shell: pwsh
-        run: |
-          ./build/PushToPsGallery.ps1 `
-            -SystemDefaultWorkingDirectory '${{ github.workspace }}' `
-            -PsGalleryKey '${{ secrets.PSGALLERY_API_KEY }}' `
-            -BuildPath 'OmadaSqlTroubleshooter'
-
       - name: Create Git tag
         shell: pwsh
         run: |
@@ -149,9 +140,10 @@ jobs:
 
       # Created as a draft so the generated release notes can be reviewed and edited before the
       # release goes public. A draft is only visible to users with write access and sends no
-      # notifications; watchers are notified when a maintainer publishes it from the Releases page.
-      # The tag is pushed by the previous step, so it exists independently of the draft, and the
-      # package is already on the PowerShell Gallery at this point.
+      # notifications; watchers are notified when a maintainer publishes it from the Releases page,
+      # and publishing it starts publish-psgallery.yml, which pushes this exact .nupkg to the
+      # PowerShell Gallery. The tag is pushed by the previous step, so it exists independently of
+      # the draft.
       - name: Create GitHub Release (draft)
         id: gh_release
         uses: softprops/action-gh-release@efb35369e0ad2afab669f228072c1b0d510eae64 # v3.0.3
@@ -173,5 +165,5 @@ jobs:
             ''
             "Review and edit the release notes, then publish the draft: $env:RELEASE_URL"
             ''
-            'Watchers are notified only once the draft is published.'
+            'Publishing the draft notifies watchers and starts the PowerShell Gallery publish (Publish to PSGallery workflow).'
           ) | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append

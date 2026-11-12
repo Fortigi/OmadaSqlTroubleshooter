@@ -123,7 +123,7 @@ do:
   over, a malicious version is published, and it is caught and yanked within days. Waiting means
   this repository simply never consumed the bad release during that window. It is not, and is not
   sold here as, protection against a same-day advisory.
-- **Harden-Runner is audit-only on Windows.** `build`, `validate`, `release`, `sync` and `e2e` all
+- **Harden-Runner is audit-only on Windows.** `build`, `validate`, `release`, `publish`, `sync` and `e2e` all
   run on `windows-latest`, where Harden-Runner has no block mode, no file integrity monitoring and
   no process monitoring — those are Linux (and self-hosted, Enterprise) features only. On these jobs
   it gives detection and forensics — an unexplained egress is visible after the fact — not

@@ -1,0 +1,100 @@
+name: Publish to PSGallery
+
+# Publishes the module to the PowerShell Gallery when a maintainer publishes the draft GitHub release
+# that release.yml creates - the same moment followers are notified, so the Gallery version, the
+# release notes and the notifications go out together.
+#
+# Nothing is rebuilt here. The job publishes the exact .nupkg the release workflow built, tested and
+# attached to the release, after checking (build/ReleasePackage.ps1, all fail-closed):
+#   - the tag is a stable release tag (v<yyyy>.<MM>.<dd>.<run>), never a nightly;
+#   - the release is published and not a pre-release;
+#   - it has exactly one .nupkg, uploaded by the release workflow (github-actions[bot]), not by hand;
+#   - the downloaded bytes match the SHA-256 digest GitHub records for that asset;
+#   - the module manifest in it carries exactly the tag's version and no pre-release label.
+# The dependency lock was verified by the build that produced the package, so it is not re-run here.
+#
+# Releases created with GITHUB_TOKEN (the draft itself, nightly pre-releases) do not trigger
+# workflows; only a person publishing the release does. The job-level condition is a second guard.
+
+on:
+  release:
+    types: [published]
+
+permissions: {}
+
+concurrency:
+  group: publish-psgallery
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    name: Publish to PSGallery
+    runs-on: windows-latest
+    if: github.event.release.prerelease == false && !endsWith(github.event.release.tag_name, '-nightly')
+    # Required reviewers configured on the "release" environment (Settings > Environments) gate this
+    # job. If the environment restricts deployment branches, it must allow the release tags (v*).
+    environment: release
+
+    permissions:
+      contents: read
+
+    env:
+      RELEASE_TAG: ${{ github.event.release.tag_name }}
+
+    steps:
+      - name: Harden the runner (audit all outgoing network calls)
+        uses: step-security/harden-runner@ccd8616d44fd3846e67624a50d5aad6d37bf2d25 # v2.22.1
+        with:
+          egress-policy: audit
+
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Download and verify release package
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          . ./build/ReleasePackage.ps1
+
+          $Version = ConvertFrom-ReleaseTag -Tag $env:RELEASE_TAG
+
+          $ReleaseJson = gh api "repos/$env:REPOSITORY/releases/tags/$env:RELEASE_TAG"
+          if ($LASTEXITCODE -ne 0) { throw "Could not read release '$env:RELEASE_TAG'." }
+          $Asset = Select-ReleasePackageAsset -Release ($ReleaseJson | Out-String | ConvertFrom-Json)
+
+          $Staging = Join-Path -Path $env:RUNNER_TEMP -ChildPath 'release-package'
+          New-Item -Path $Staging -ItemType Directory -Force | Out-Null
+          gh release download $env:RELEASE_TAG --repo $env:REPOSITORY --pattern $Asset.name --dir $Staging
+          if ($LASTEXITCODE -ne 0) { throw "Could not download '$($Asset.name)'." }
+
+          $PackagePath = Join-Path -Path $Staging -ChildPath $Asset.name
+          Assert-ReleaseAssetDigest -Path $PackagePath -Digest $Asset.digest
+
+          $Manifest = Expand-ReleasePackage `
+            -PackagePath $PackagePath `
+            -DestinationPath (Join-Path -Path $env:GITHUB_WORKSPACE -ChildPath 'buildoutput/OmadaSqlTroubleShooter') `
+            -ModuleName 'OmadaSqlTroubleShooter' `
+            -ExpectedVersion $Version
+          Write-Host "Verified $($Manifest.FullName) at version $Version"
+
+      - name: Publish to PSGallery
+        shell: pwsh
+        run: |
+          ./build/PushToPsGallery.ps1 `
+            -SystemDefaultWorkingDirectory '${{ github.workspace }}' `
+            -PsGalleryKey '${{ secrets.PSGALLERY_API_KEY }}' `
+            -BuildPath 'OmadaSqlTroubleShooter'
+
+      - name: Report publication
+        shell: pwsh
+        run: |
+          @(
+            "## Published $env:RELEASE_TAG to the PowerShell Gallery"
+            ''
+            'https://www.powershellgallery.com/packages/OmadaSqlTroubleshooter'
+          ) | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append
