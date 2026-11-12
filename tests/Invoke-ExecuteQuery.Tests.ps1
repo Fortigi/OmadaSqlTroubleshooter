@@ -38,6 +38,7 @@ BeforeAll {
     . (Join-Path $PrivatePath -ChildPath "Test-OmadaSessionExpiredError.ps1")
     . (Join-Path $PrivatePath -ChildPath "Resolve-ExecuteFallbackAction.ps1")
     . (Join-Path $PrivatePath -ChildPath "Get-OmadaWritePermissionMessage.ps1")
+    . (Join-Path $PrivatePath -ChildPath "Get-ExecutePipelineFailureMessage.ps1")
     # The real pane and status-bar writers, not stubs: "what the user is told when a query ends"
     # IS the behaviour these suites assert, and a stub would assert nothing.
     . (Join-Path $PrivatePath -ChildPath "Write-TabMessage.ps1")
