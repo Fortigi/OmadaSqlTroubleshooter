@@ -83,6 +83,10 @@ Describe "Get-OmadaWritePermissionMessage" {
             Get-OmadaWritePermissionMessage -Outcome (New-Outcome -ErrorRecord $Expired) | Should -Not -BeNullOrEmpty
         }
 
+        It "needs only one completed request as evidence that the session works" {
+            Get-OmadaWritePermissionMessage -Outcome (New-Outcome -CompletedSteps 1) | Should -Not -BeNullOrEmpty
+        }
+
         It "matches the failed step's FIRST request when a step name repeats" {
             # A multi-statement run repeats TempQueryUpsert; the first one is the one that failed.
             $Outcome = New-Outcome -Method "POST" -Uri $script:ODataUri

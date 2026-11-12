@@ -37,7 +37,9 @@ function Get-OmadaWritePermissionMessage {
         $Outcome
     )
 
-    if ($null -eq $Outcome -or $null -eq $Outcome.ErrorRecord -or [string]::IsNullOrWhiteSpace([string]$Outcome.FailedStep)) {
+    # A missing ErrorRecord or FailedStep needs no guard of its own: no recorded step matches an empty
+    # name, and a missing error is neither a session expiry nor a 401.
+    if ($null -eq $Outcome) {
         return $null
     }
 
