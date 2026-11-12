@@ -147,11 +147,31 @@ jobs:
           git tag -a "v${{ env.BUILD_VERSION }}" -m "Release version ${{ env.BUILD_VERSION }}"
           git push origin "refs/tags/v${{ env.BUILD_VERSION }}"
 
-      - name: Create GitHub Release
+      # Created as a draft so the generated release notes can be reviewed and edited before the
+      # release goes public. A draft is only visible to users with write access and sends no
+      # notifications; watchers are notified when a maintainer publishes it from the Releases page.
+      # The tag is pushed by the previous step, so it exists independently of the draft, and the
+      # package is already on the PowerShell Gallery at this point.
+      - name: Create GitHub Release (draft)
+        id: gh_release
         uses: softprops/action-gh-release@efb35369e0ad2afab669f228072c1b0d510eae64 # v3.0.3
         with:
           tag_name: v${{ env.BUILD_VERSION }}
           name: Release v${{ env.BUILD_VERSION }}
           files: staging/*.nupkg
+          draft: true
           generate_release_notes: true
           previous_tag: ${{ steps.prev_tag.outputs.previous_tag }}
+
+      - name: Report draft release
+        shell: pwsh
+        env:
+          RELEASE_URL: ${{ steps.gh_release.outputs.url }}
+        run: |
+          @(
+            "## Draft release v$env:BUILD_VERSION created"
+            ''
+            "Review and edit the release notes, then publish the draft: $env:RELEASE_URL"
+            ''
+            'Watchers are notified only once the draft is published.'
+          ) | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append

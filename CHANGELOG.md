@@ -12,6 +12,11 @@ semantic version.
 
 ### Changed
 
+- The release workflow now creates the GitHub release as a **draft** instead of publishing it. The
+  generated release notes can be reviewed and edited first; followers are notified only when a
+  maintainer publishes the draft from the Releases page. The workflow run summary links to the draft.
+  The tag and the PowerShell Gallery package are still published by the workflow itself. Nightly
+  pre-releases are unchanged.
 - **Requires OmadaWeb.PS 2026.09.23.47 or higher** (was 2026.07.09.9). That release is the first with
   sign-in without a password, which the passwordless credential below depends on. Update with
   `Update-Module OmadaWeb.PS`; older versions are no longer supported.
