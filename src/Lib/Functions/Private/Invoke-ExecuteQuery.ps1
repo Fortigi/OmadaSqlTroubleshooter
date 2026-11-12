@@ -547,7 +547,10 @@ function Complete-ExecuteQueryPipeline {
                 return
             }
 
-            "The query pipeline failed at step '{0}': {1}" -f $Outcome.FailedStep, $Outcome.ErrorRecord.Exception.Message | Write-ContainedErrorLog -ErrorObject $Outcome.ErrorRecord -TabScoped
+            # Worded by Get-ExecutePipelineFailureMessage, which says a refused OData write is a missing
+            # permission rather than the expired session OmadaWeb.PS calls it.
+            Get-ExecutePipelineFailureMessage -Outcome $Outcome | Write-ContainedErrorLog -ErrorObject $Outcome.ErrorRecord -TabScoped
+
             # -StatementOutcome on the FAILURE path too, and that asymmetry was a real bug: the
             # pipeline mirrors only the FIRST statement into $Outcome.ErrorRecord, so a run where
             # statement 1 fails and 2..N succeed lands here (Resolve-ExecuteFallbackAction returns
