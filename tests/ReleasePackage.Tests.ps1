@@ -129,7 +129,7 @@ Describe 'Assert-ReleaseAssetDigest' -Tag 'Unit' {
     }
 
     It 'Should refuse a different digest' {
-        { Assert-ReleaseAssetDigest -Path $Script:File -Digest ('sha256:{0}' -f ('0' * 64)) } | Should -Throw '*does not*' -Because 'only a byte-identical download may be published'
+        { Assert-ReleaseAssetDigest -Path $Script:File -Digest ('sha256:{0}' -f ('0' * 64)) } | Should -Throw '*but the release asset digest is*' -Because 'only a byte-identical download may be published'
     }
 
     It 'Should refuse a digest that is not SHA-256' {
