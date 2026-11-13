@@ -162,6 +162,10 @@ Task Test -Depends Analyze {
             # mapping below would associate it with DependabotAutoMerge.ps1 only, so a policy change -
             # the one change most likely to make it merge something it should not - would skip it.
             'DependabotAutoMerge.Tests.ps1'
+            # Guards release.yml and publish-psgallery.yml: the release workflow only drafts, and the
+            # Gallery publish waits for the draft to be published. Neither is a <Name>.ps1 the mapping
+            # below could associate with this suite.
+            'ReleaseWorkflow.Tests.ps1'
         )
 
         if ($ChangedFiles.Count -gt 0) {

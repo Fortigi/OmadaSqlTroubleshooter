@@ -12,6 +12,15 @@ semantic version.
 
 ### Changed
 
+- Releases are now drafted first and published by a maintainer. The release workflow builds the
+  package, pushes the tag and creates the GitHub release as a **draft** with the package attached,
+  so the generated release notes can be reviewed and edited before anything is public; the run
+  summary links to the draft. Publishing the draft notifies followers and starts the new
+  `Publish to PSGallery` workflow, which publishes that exact package to the PowerShell Gallery -
+  nothing is rebuilt. Before publishing it checks that the tag is a stable release tag, that the
+  package was uploaded by the release workflow and matches GitHub's SHA-256 digest of it, and that
+  its manifest carries the tag's version (`build/ReleasePackage.ps1`). Nightly pre-releases are
+  unchanged.
 - **Requires OmadaWeb.PS 2026.09.23.47 or higher** (was 2026.07.09.9). That release is the first with
   sign-in without a password, which the passwordless credential below depends on. Update with
   `Update-Module OmadaWeb.PS`; older versions are no longer supported.
