@@ -33,13 +33,18 @@ function Set-TabQueryResult {
     .PARAMETER StatementOutcome
     The ordered per-statement outcomes from Invoke-OmadaExecutePipeline.
 
+    .PARAMETER QueryName
+    The display name of the saved query the run belongs to. Kept with the results for the text output
+    (Format-QueryResultText), so switching to text later still names the query the results came from.
+
     .OUTPUTS
     The number of rows across every bound result - what the status bar reports for the run.
     #>
     [CmdLetBinding()]
     param(
         $TabSession,
-        $StatementOutcome
+        $StatementOutcome,
+        [string]$QueryName
     )
 
     try {
@@ -49,12 +54,17 @@ function Set-TabQueryResult {
         }
 
         $Private:Result = [System.Collections.Generic.List[object]]::new()
+        # Every statement that ran, the ones that found nothing included: the text output reports
+        # "(0 row(s) affected)" for those, where the grid stack shows nothing at all.
+        $Private:StatementResult = [System.Collections.Generic.List[object]]::new()
         $Private:TotalRows = 0
 
         foreach ($Private:Outcome in @($StatementOutcome)) {
             if ($null -eq $Private:Outcome -or $null -ne $Private:Outcome.ErrorRecord -or $null -eq $Private:Outcome.QueryResult) {
                 continue
             }
+
+            $Private:DisplaySource = Get-StatementDisplayText -Outcome $Private:Outcome
 
             # Read inside the try, not before it. Omada can answer with JSON keys that are invalid as
             # property names, and it is THIS read that throws when it does - so a read above the try
@@ -69,6 +79,13 @@ function Set-TabQueryResult {
             }
 
             if (($Private:Rows | Measure-Object).Count -le 0) {
+                $Private:StatementResult.Add([PSCustomObject]@{
+                        Ordinal     = $Private:Outcome.Ordinal
+                        DisplayText = $Private:DisplaySource
+                        Rows        = @()
+                        RowCount    = 0
+                    })
+
                 # A statement that ran and found nothing contributes NO grid, which is exactly what an
                 # empty result did before this issue: the pane is cleared rather than filled with an
                 # empty box.
@@ -88,12 +105,16 @@ function Set-TabQueryResult {
             $Private:RowCount = [int]$Private:Outcome.QueryResult.d.Records
             $Private:TotalRows = $Private:TotalRows + $Private:RowCount
 
+            $Private:StatementResult.Add([PSCustomObject]@{
+                    Ordinal     = $Private:Outcome.Ordinal
+                    DisplayText = $Private:DisplaySource
+                    Rows        = $Private:Rows
+                    RowCount    = $Private:RowCount
+                })
+
             $Private:Result.Add([PSCustomObject]@{
                     Ordinal     = $Private:Outcome.Ordinal
-                    # Parenthesised deliberately: inside a hashtable literal the comma of a -f
-                    # argument list is read as the separator between hashtable entries, which leaves
-                    # the format call dangling and mis-nests every brace after it.
-                    Header      = ("Statement {0}  -  {1:n0} row(s)" -f $Private:Outcome.Ordinal, $Private:RowCount)
+                    Header      = Get-QueryResultHeader -Ordinal $Private:Outcome.Ordinal -RowCount $Private:RowCount -DisplayText $Private:DisplaySource
                     Rows        = $Private:Rows
                     RowCount    = $Private:RowCount
                     # The "d.rows" wrapper the export and Out-GridView paths already consume unchanged.
@@ -102,6 +123,8 @@ function Set-TabQueryResult {
         }
 
         $Private:Target.QueryResults = $Private:Result
+        $Private:Target.StatementResults = $Private:StatementResult
+        $Private:Target.StatementResultQueryName = $QueryName
         # First result, per the agreed default: the menu and the toolbar buttons always have a target,
         # which is what keeps a single-statement execute behaving as it did before this issue - where
         # there was never an "I have not clicked anything yet" state to be in.
@@ -125,6 +148,77 @@ function Set-TabQueryResult {
         $_.Exception.Message | Write-LogOutput -LogType DEBUG
         return 0
     }
+}
+
+function Get-StatementDisplayText {
+    <#
+    .SYNOPSIS
+    The text the Results header and the text output show for one statement outcome.
+
+    .DESCRIPTION
+    The statement as the user wrote it (DisplayText, leading comment included). An outcome from a
+    caller that predates DisplayText has none, and the executed text stands in.
+
+    .PARAMETER Outcome
+    One statement outcome from Invoke-OmadaExecutePipeline.
+
+    .OUTPUTS
+    [string]
+    #>
+    [CmdLetBinding()]
+    [OutputType([string])]
+    param(
+        $Outcome
+    )
+
+    if ($null -ne $Outcome.DisplayText) {
+        return [string]$Outcome.DisplayText
+    }
+
+    return [string]$Outcome.Text
+}
+
+function Get-QueryResultHeader {
+    <#
+    .SYNOPSIS
+    The header above one result grid: "Statement 2 - 49 row(s) - --Active users SELECT ...".
+
+    .DESCRIPTION
+    The query on one line is what lets the user tell the grids apart without counting statements in
+    the editor. It keeps the comment directly above the statement, which is often the name the user
+    gave it. The header TextBlock cuts the line off at the window edge, and its tooltip shows the whole
+    line. With no statement text the trailing " - " is left out.
+
+    .PARAMETER Ordinal
+    The statement's position in editor order.
+
+    .PARAMETER RowCount
+    The rows the statement returned.
+
+    .PARAMETER DisplayText
+    The statement as the user wrote it.
+
+    .OUTPUTS
+    [string]
+    #>
+    [CmdLetBinding()]
+    [OutputType([string])]
+    param(
+        $Ordinal,
+        [int]$RowCount,
+        [AllowNull()]
+        [AllowEmptyString()]
+        [string]$DisplayText
+    )
+
+    $Private:Header = "Statement {0} - {1:n0} row(s)" -f $Ordinal, $RowCount
+    $Private:SingleLine = ConvertTo-SingleLineSqlText -Text $DisplayText
+
+    if ([string]::IsNullOrWhiteSpace($Private:SingleLine)) {
+        return $Private:Header
+    }
+
+    return "{0} - {1}" -f $Private:Header, $Private:SingleLine
 }
 
 function Clear-TabQueryResult {
@@ -154,9 +248,15 @@ function Clear-TabQueryResult {
 
         $Private:Target.QueryResults = [System.Collections.Generic.List[object]]::new()
         $Private:Target.FocusedQueryResultIndex = 0
+        $Private:Target.StatementResults = [System.Collections.Generic.List[object]]::new()
+        $Private:Target.StatementResultQueryName = $null
 
         if ($null -ne $Private:Target.Elements -and $null -ne $Private:Target.Elements.ItemsControlQueryResults) {
             $Private:Target.Elements.ItemsControlQueryResults.ItemsSource = $null
+        }
+
+        if ($null -ne $Private:Target.Elements -and $null -ne $Private:Target.Elements.TextBoxQueryResultText) {
+            $Private:Target.Elements.TextBoxQueryResultText.Text = ""
         }
     }
     catch {

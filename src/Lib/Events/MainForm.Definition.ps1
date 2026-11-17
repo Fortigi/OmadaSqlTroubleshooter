@@ -343,6 +343,13 @@ $Script:MainForm.Definition.Add_PreviewKeyDown({
         }
     })
 
+# Results to Grid (Ctrl+Shift+D) / Results to Text (Ctrl+Shift+T). A handler of its own, with the
+# decision in Invoke-ResultOutputModeShortcut: the handler above is already over the complexity
+# ceiling and on the baseline, which only ratchets down.
+$Script:MainForm.Definition.Add_PreviewKeyDown({
+        Invoke-ResultOutputModeShortcut -KeyEventArgs $_
+    })
+
 # Log key releases (Show-EventInfo -> "Key released: ...") so a held key is traced as one press and
 # one release instead of a flood of auto-repeat PreviewKeyDown lines. Logging only - no shortcut
 # logic lives here, so it cannot affect any existing key handling.

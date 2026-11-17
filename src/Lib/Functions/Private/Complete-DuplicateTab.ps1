@@ -50,6 +50,7 @@ function Complete-DuplicateTab {
             SavePassword          = [bool]$Source.Elements.CheckboxSavePassword.IsChecked
             IdentityUserName      = $Source.AppConfig.IdentityUserName
             CurrentDataConnection = $Source.AppConfig.CurrentDataConnection
+            ResultOutputMode      = $Source.AppConfig.ResultOutputMode
         }
 
         $NewTab = New-TabSession -RestoreFrom $DuplicateConfig -AutoConnect:$SourceConnected

@@ -88,6 +88,8 @@ data-definition row above whatever the target is called; only the `#t` form is f
 table.)
 
 #### Results & Export
+- Results to grid or to text (**Ctrl+Shift+D** / **Ctrl+Shift+T**, or the Grid/Text toolbar button), per tab
+- Each result grid is headed by its statement on one line, leading comment included
 - View results in a PowerShell GridView
 - Context menu for quick copy, select all and save
 - Select cells, columns, rows and copy to clipboard

@@ -157,5 +157,10 @@
     "Name": "SessionLogFileMaxSizeMegabytes",
     "Type": "Int",
     "DefaultValue": 5
+  },
+  {
+    "Name": "DefaultResultOutputMode",
+    "Type": "String",
+    "DefaultValue": "Grid"
   }
 ]

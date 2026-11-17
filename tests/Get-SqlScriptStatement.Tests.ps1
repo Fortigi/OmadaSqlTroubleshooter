@@ -241,4 +241,63 @@ Describe 'Get-SqlScriptStatement' -Tag 'Unit' {
             }
         }
     }
+
+    Context 'The display text shown in the Results headers' {
+
+        It 'includes a single-line comment directly above the first statement' {
+            $Private:Sql = "--Test query 1`r`nSELECT *`r`nFROM Test`r`nWHERE Id = 1"
+            $Private:Statement = @(Get-SqlScriptStatement -SqlText $Private:Sql)
+
+            $Private:Statement.Count | Should -Be 1
+            $Private:Statement[0].DisplayText | Should -Be $Private:Sql
+            $Private:Statement[0].Text | Should -Be "SELECT *`r`nFROM Test`r`nWHERE Id = 1"
+        }
+
+        It 'includes the comment above each later statement, not the one above the earlier statement' {
+            $Private:Sql = "-- first`r`nSELECT 1;`r`n`r`n-- second`r`nSELECT 2;"
+            $Private:Statement = @(Get-SqlScriptStatement -SqlText $Private:Sql)
+
+            $Private:Statement.Count | Should -Be 2
+            $Private:Statement[0].DisplayText | Should -Be "-- first`r`nSELECT 1;"
+            $Private:Statement[1].DisplayText | Should -Be "-- second`r`nSELECT 2;"
+        }
+
+        It 'includes a block comment and every comment line of a leading comment block' {
+            $Private:Sql = "SELECT 1;`r`n/* block */`r`n-- line`r`nSELECT 2;"
+            $Private:Statement = @(Get-SqlScriptStatement -SqlText $Private:Sql)
+
+            $Private:Statement[1].DisplayText | Should -Be "/* block */`r`n-- line`r`nSELECT 2;"
+        }
+
+        It 'leaves a trailing comment on the line of the previous statement with that statement' {
+            $Private:Sql = "SELECT 1; -- belongs to one`r`nSELECT 2;"
+            $Private:Statement = @(Get-SqlScriptStatement -SqlText $Private:Sql)
+
+            $Private:Statement[1].DisplayText | Should -Be "SELECT 2;"
+        }
+
+        It 'does not take a comment across a GO' {
+            $Private:Sql = "SELECT 1`r`n-- before go`r`nGO`r`nSELECT 2"
+            $Private:Statement = @(Get-SqlScriptStatement -SqlText $Private:Sql)
+
+            $Private:Statement.Count | Should -Be 2
+            $Private:Statement[1].DisplayText | Should -Be "SELECT 2"
+        }
+
+        It 'equals the statement text when no comment sits above it' {
+            $Private:Statement = @(Get-SqlScriptStatement -SqlText "SELECT 1;`r`nSELECT 2;")
+
+            foreach ($Private:Item in $Private:Statement) {
+                $Private:Item.DisplayText | Should -Be $Private:Item.Text
+            }
+        }
+
+        It 'carries the whole text when the script cannot be split' {
+            $Private:Sql = "-- broken`r`nSELECT FROM WHERE"
+            $Private:Statement = @(Get-SqlScriptStatement -SqlText $Private:Sql)
+
+            $Private:Statement.Count | Should -Be 1
+            $Private:Statement[0].DisplayText | Should -Be $Private:Sql
+        }
+    }
 }

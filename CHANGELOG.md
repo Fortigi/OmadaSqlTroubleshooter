@@ -37,6 +37,16 @@ semantic version.
 
 ### Added
 
+- Results to Text, as in SQL Server Management Studio. A new **Grid/Text** toolbar button, or
+  **Ctrl+Shift+D** (grid) and **Ctrl+Shift+T** (text), switches the Results pane between the grid
+  stack and one text panel holding every statement's result. Each result in the text has a header
+  block (statement number, row count, query name and the query on one line), then the columns
+  underlined with dashes and `(N row(s) affected)`. The mode is kept per tab and saved with it; the
+  mode chosen last is the default for new tabs. Switching does not run the query again.
+- The header above each result grid now shows the statement's query on one line, after the row count:
+  `Statement 1 - 3 row(s) - --Test query 1 SELECT * FROM Test WHERE Id = 1`. A comment directly above
+  the statement is included, so a statement can be recognised by the name the comment gives it. The
+  line is cut off at the window edge; hovering shows all of it.
 - A credential without a password. Enter only a username to sign in with that account and complete
   the sign-in passwordless (Windows Hello, FIDO2 security key, Authenticator) or by typing the password
   in the sign-in window. The password field is labelled *Password (optional)* with a tooltip explaining

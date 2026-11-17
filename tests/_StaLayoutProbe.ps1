@@ -39,6 +39,7 @@ try {
 
     $PrivatePath = Join-Path $RepositoryRoot "src\Lib\Functions\Private"
     . (Join-Path $PrivatePath "Set-TabQueryResult.ps1")
+    . (Join-Path $PrivatePath "ConvertTo-SingleLineSqlText.ps1")
     . (Join-Path $PrivatePath "Update-QueryResultStackLayout.ps1")
     # Registration is measured too, because nothing else can measure it. Its handlers read the grid's
     # index from the sender's Tag (issue #169), and whether a real focus change reaches the right index
@@ -101,8 +102,10 @@ try {
             ItemsControlQueryResults = $ItemsControl
             ScrollViewerQueryResults = $ScrollViewer
         }
-        QueryResults            = $null
-        FocusedQueryResultIndex = 0
+        QueryResults             = $null
+        FocusedQueryResultIndex  = 0
+        StatementResults         = $null
+        StatementResultQueryName = $null
     }
     function Get-ActiveTabSession { return $Session }
 

@@ -80,6 +80,13 @@ Describe 'Resolve-SqlStatementTarget' {
             $Result.Statement[1].DataConnectionDoId | Should -BeNullOrEmpty
         }
 
+        It 'keeps the display text as the user wrote it, prefix and leading comment included' {
+            $Private:Sql = "-- people`r`nSELECT * FROM [ODW].[dbo].[Person]"
+            $Result = Resolve-Text -SqlText $Private:Sql -OptionList $Script:OptionList
+            $Result.Statement[0].Text | Should -Be "SELECT * FROM [dbo].[Person]"
+            $Result.Statement[0].DisplayText | Should -Be $Private:Sql
+        }
+
         It 'does not switch the dropdown, because an inline prefix is not sticky' {
             (Resolve-Text -SqlText "SELECT * FROM [ODW].[dbo].[Person]" -OptionList $Script:OptionList).UseFullName |
                 Should -BeNullOrEmpty

@@ -15,6 +15,7 @@ BeforeAll {
     $PrivatePath = Join-Path $ParentPath -ChildPath "src\Lib\Functions\Private"
 
     . (Join-Path $PrivatePath -ChildPath "Set-TabQueryResult.ps1")
+    . (Join-Path $PrivatePath -ChildPath "ConvertTo-SingleLineSqlText.ps1")
 
     function Write-LogOutput {
         param(
@@ -42,8 +43,10 @@ BeforeAll {
             Elements                = @{
                 ItemsControlQueryResults = [pscustomobject]@{ ItemsSource = "previous" }
             }
-            QueryResults            = $null
-            FocusedQueryResultIndex = 0
+            QueryResults             = $null
+            FocusedQueryResultIndex  = 0
+            StatementResults         = $null
+            StatementResultQueryName = $null
         }
     }
 
@@ -52,6 +55,7 @@ BeforeAll {
         param(
             [int]$Ordinal,
             [string]$Text = "SELECT 1",
+            $DisplayText = $null,
             [int]$RowCount = 2,
             $ErrorRecord = $null,
             [switch]$NoResult
@@ -67,6 +71,7 @@ BeforeAll {
         return @{
             Ordinal     = $Ordinal
             Text        = $Text
+            DisplayText = $DisplayText
             QueryResult = $Private:Result
             ErrorRecord = $ErrorRecord
             FailedStep  = $(if ($null -ne $ErrorRecord) { "ExecuteQuery" } else { $null })
@@ -118,6 +123,44 @@ Describe 'Set-TabQueryResult' -Tag 'Unit' {
 
             $Script:TestTabSession.QueryResults[0].Header | Should -Match 'Statement 1'
             $Script:TestTabSession.QueryResults[0].Header | Should -Match '3'
+        }
+
+        It 'puts the statement on one line in the header, leading comment included' {
+            Set-TabQueryResult -TabSession $Script:TestTabSession -StatementOutcome @(
+                (New-StatementOutcome -Ordinal 1 -RowCount 3 -Text "SELECT *`r`nFROM Test`r`nWHERE Id = 1" -DisplayText "--Test query 1`r`nSELECT *`r`n   FROM Test`r`n`r`nWHERE Id = 1")
+            ) | Out-Null
+
+            $Script:TestTabSession.QueryResults[0].Header | Should -BeExactly "Statement 1 - 3 row(s) - --Test query 1 SELECT * FROM Test WHERE Id = 1"
+        }
+
+        It 'falls back to the executed text when an outcome carries no display text' {
+            Set-TabQueryResult -TabSession $Script:TestTabSession -StatementOutcome @(
+                (New-StatementOutcome -Ordinal 2 -RowCount 1 -Text "SELECT 1")
+            ) | Out-Null
+
+            $Script:TestTabSession.QueryResults[0].Header | Should -BeExactly "Statement 2 - 1 row(s) - SELECT 1"
+        }
+
+        It 'leaves out the trailing separator when there is no statement text' {
+            Set-TabQueryResult -TabSession $Script:TestTabSession -StatementOutcome @(
+                (New-StatementOutcome -Ordinal 1 -RowCount 1234 -Text "")
+            ) | Out-Null
+
+            $Script:TestTabSession.QueryResults[0].Header | Should -BeExactly ("Statement 1 - {0:n0} row(s)" -f 1234)
+        }
+
+        It 'keeps every statement that ran for the text output, the empty ones included' {
+            Set-TabQueryResult -TabSession $Script:TestTabSession -QueryName "My query" -StatementOutcome @(
+                (New-StatementOutcome -Ordinal 1 -RowCount 2 -DisplayText "-- one`r`nSELECT 1"),
+                (New-StatementOutcome -Ordinal 2 -RowCount 0),
+                (New-StatementOutcome -Ordinal 3 -ErrorRecord (New-TestErrorRecord) -NoResult)
+            ) | Out-Null
+
+            @($Script:TestTabSession.StatementResults | ForEach-Object { $_.Ordinal }) | Should -Be @(1, 2)
+            @($Script:TestTabSession.StatementResults | ForEach-Object { $_.RowCount }) | Should -Be @(2, 0)
+            $Script:TestTabSession.StatementResults[0].DisplayText | Should -Be "-- one`r`nSELECT 1"
+            $Script:TestTabSession.StatementResultQueryName | Should -Be "My query"
+            @($Script:TestTabSession.QueryResults).Count | Should -Be 1
         }
 
         It 'carries the d.rows wrapper through unchanged, for the export paths' {

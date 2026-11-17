@@ -38,6 +38,7 @@ function Save-TabSessions {
                 SavePassword          = $SavePassword
                 IdentityUserName      = $Tab.AppConfig.IdentityUserName
                 CurrentDataConnection = $Tab.AppConfig.CurrentDataConnection
+                ResultOutputMode      = $Tab.AppConfig.ResultOutputMode
             }
         }
         $Snapshot = @($Snapshot)

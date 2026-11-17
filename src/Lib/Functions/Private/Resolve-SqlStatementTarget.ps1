@@ -179,6 +179,9 @@ function Resolve-SqlStatementTarget {
                 Text               = $Private:Rewritten
                 StartOffset        = $Private:Source.StartOffset
                 Length             = $Private:Source.Length
+                # Not rewritten: the header and the text output show what the user wrote, USE
+                # prefixes and leading comment included, never the text that is sent to Omada.
+                DisplayText        = $Private:Source.DisplayText
                 DatabaseName       = $Private:StatementName
                 DataConnectionDoId = $Private:StatementDoId
             })

@@ -585,6 +585,40 @@ function Complete-ExecuteQueryPipeline {
     }
 }
 
+function Get-ExecuteQueryResultName {
+    <#
+    .SYNOPSIS
+    The saved query name the text output shows for a run.
+
+    .DESCRIPTION
+    The save result carries the name the query was saved under. A run without one - every failure
+    path - falls back to the name the tab knows.
+
+    .PARAMETER SaveResult
+    The object Save-Query returned for this execution, or $null.
+
+    .PARAMETER FallbackName
+    The name to use when the save result has none.
+
+    .OUTPUTS
+    [string]
+    #>
+    [CmdLetBinding()]
+    [OutputType([string])]
+    param(
+        $SaveResult,
+        [AllowNull()]
+        [AllowEmptyString()]
+        [string]$FallbackName
+    )
+
+    if ([string]::IsNullOrWhiteSpace($SaveResult.DisplayName)) {
+        return $FallbackName
+    }
+
+    return [string]$SaveResult.DisplayName
+}
+
 function Complete-ExecuteQueryResult {
     <#
     .SYNOPSIS
@@ -664,6 +698,7 @@ function Complete-ExecuteQueryResult {
             $Private:Statement = @(@{
                     Ordinal     = 1
                     Text        = $null
+                    DisplayText = $Script:RunTimeData.QueryText
                     QueryResult = $Script:RunTimeData.QueryResult
                     ErrorRecord = $null
                     FailedStep  = $null
@@ -673,8 +708,12 @@ function Complete-ExecuteQueryResult {
         # Set-TabQueryResult returns the rows across every bound result, which is what the status bar
         # reports for the run. Counting them here from a single response would be wrong the moment
         # there is more than one statement.
-        $Private:TotalRows = Set-TabQueryResult -TabSession (Get-ActiveTabSession) -StatementOutcome $Private:Statement
+        $Private:TotalRows = Set-TabQueryResult -TabSession (Get-ActiveTabSession) -StatementOutcome $Private:Statement -QueryName (Get-ExecuteQueryResultName -SaveResult $SaveResult -FallbackName $Script:RunTimeData.CurrentSqlQuery.DisplayName)
         $Private:ReturnedRows = $Private:TotalRows -gt 0
+
+        # Results to Text renders here, from what Set-TabQueryResult just stored. In grid mode this
+        # only keeps the text box empty and collapsed; the grids are laid out further down.
+        Update-TabResultOutputView -TabSession (Get-ActiveTabSession) -NoLayoutPass
 
         # Handed to Reset-ExecuteQueryUiState, which writes the Messages summary. That teardown is the
         # single funnel every path uses and cannot see the outcomes itself, so they travel on
