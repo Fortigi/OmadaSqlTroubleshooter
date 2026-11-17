@@ -319,9 +319,9 @@ function Invoke-OmadaExecutePipeline {
                     Ordinal     = $Private:Current.Ordinal
                     Text        = $Private:Current.Text
                     # The statement as the user wrote it, for the Results header and the text
-                    # output. A caller that predates it passes statements without one, so the
-                    # executed text stands in.
-                    DisplayText = $(if ($null -ne $Private:Current.DisplayText) { $Private:Current.DisplayText } else { $Private:Current.Text })
+                    # output. Null from a caller that predates it; Set-TabQueryResult then shows the
+                    # executed text instead.
+                    DisplayText = $Private:Current.DisplayText
                     QueryResult = $Private:StatementResult
                     ErrorRecord = $Private:StatementError
                     FailedStep  = $Private:StatementFailedStep

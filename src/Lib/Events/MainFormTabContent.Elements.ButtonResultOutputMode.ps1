@@ -5,6 +5,8 @@ $Script:MainForm.Elements.ButtonResultOutputMode.Add_Click({
             Set-TabResultOutputMode -TabSession (Get-ActiveTabSession) -Toggle
         }
         catch {
-            $_.Exception.Message | Write-LogOutput -LogType ERROR -ErrorObject $_
+            # Write-ContainedErrorLog, not Write-LogOutput -LogType ERROR: the latter ends in a
+            # terminating Write-Error, which would rethrow out of this click handler.
+            $_.Exception.Message | Write-ContainedErrorLog -ErrorObject $_
         }
     })

@@ -384,6 +384,19 @@ Describe "Reset-ExecuteQueryUiState" {
     }
 }
 
+Describe "Get-ExecuteQueryResultName" {
+    It "takes the name the query was saved under" {
+        Get-ExecuteQueryResultName -SaveResult ([PSCustomObject]@{ DisplayName = "Saved name" }) -FallbackName "Tab name" | Should -BeExactly "Saved name"
+    }
+
+    It "falls back to the tab's name for <Case>" -ForEach @(
+        @{ Case = "no save result"; SaveResult = $null },
+        @{ Case = "a save result without a name"; SaveResult = [PSCustomObject]@{ DisplayName = " " } }
+    ) {
+        Get-ExecuteQueryResultName -SaveResult $SaveResult -FallbackName "Tab name" | Should -BeExactly "Tab name"
+    }
+}
+
 Describe "Complete-ExecuteQueryResult" {
     BeforeEach { Initialize-ExecuteQueryTestState }
 

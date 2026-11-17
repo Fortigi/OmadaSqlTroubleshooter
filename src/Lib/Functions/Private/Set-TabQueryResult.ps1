@@ -64,7 +64,7 @@ function Set-TabQueryResult {
                 continue
             }
 
-            $Private:DisplaySource = if ($null -ne $Private:Outcome.DisplayText) { $Private:Outcome.DisplayText } else { $Private:Outcome.Text }
+            $Private:DisplaySource = Get-StatementDisplayText -Outcome $Private:Outcome
 
             # Read inside the try, not before it. Omada can answer with JSON keys that are invalid as
             # property names, and it is THIS read that throws when it does - so a read above the try
@@ -148,6 +148,34 @@ function Set-TabQueryResult {
         $_.Exception.Message | Write-LogOutput -LogType DEBUG
         return 0
     }
+}
+
+function Get-StatementDisplayText {
+    <#
+    .SYNOPSIS
+    The text the Results header and the text output show for one statement outcome.
+
+    .DESCRIPTION
+    The statement as the user wrote it (DisplayText, leading comment included). An outcome from a
+    caller that predates DisplayText has none, and the executed text stands in.
+
+    .PARAMETER Outcome
+    One statement outcome from Invoke-OmadaExecutePipeline.
+
+    .OUTPUTS
+    [string]
+    #>
+    [CmdLetBinding()]
+    [OutputType([string])]
+    param(
+        $Outcome
+    )
+
+    if ($null -ne $Outcome.DisplayText) {
+        return [string]$Outcome.DisplayText
+    }
+
+    return [string]$Outcome.Text
 }
 
 function Get-QueryResultHeader {

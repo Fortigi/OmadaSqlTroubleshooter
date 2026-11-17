@@ -321,20 +321,6 @@ $Script:MainForm.Definition.Add_PreviewKeyDown({
                     Invoke-DuplicateTab -TabId $ActiveTab.Id
                 }
             }
-            elseif ($ControlPressed -and $ShiftPressed -and ($EventArgs.Key -eq [System.Windows.Input.Key]::D -or $EventArgs.Key -eq [System.Windows.Input.Key]::T)) {
-                # Results to Grid / Results to Text. While the editor has focus Monaco handles these
-                # itself and posts setResultOutputMode, so they are only taken here outside it - the
-                # same split as F5.
-                if ($null -ne $Script:Webview.Object -and $Script:Webview.Object.IsKeyboardFocusWithin) {
-                    "Ctrl+Shift+{0} at MainForm level - WebView2 has focus, deferring to Monaco" -f $EventArgs.Key | Write-LogOutput -LogType VERBOSE
-                }
-                else {
-                    $EventArgs.Handled = $true
-                    $ResultOutputMode = if ($EventArgs.Key -eq [System.Windows.Input.Key]::T) { "Text" } else { "Grid" }
-                    "Ctrl+Shift+{0} intercepted at MainForm level - results to {1}" -f $EventArgs.Key, $ResultOutputMode | Write-LogOutput -LogType VERBOSE
-                    Set-TabResultOutputMode -TabSession (Get-ActiveTabSession) -Mode $ResultOutputMode
-                }
-            }
             elseif ($ControlPressed -and -not $ShiftPressed -and $EventArgs.Key -eq [System.Windows.Input.Key]::T) {
                 "Ctrl+T intercepted at MainForm level - duplicate active tab without query" | Write-LogOutput -LogType VERBOSE
                 $EventArgs.Handled = $true
@@ -355,6 +341,13 @@ $Script:MainForm.Definition.Add_PreviewKeyDown({
         catch {
             $_.Exception.Message | Write-LogOutput -LogType ERROR -ErrorObject $_
         }
+    })
+
+# Results to Grid (Ctrl+Shift+D) / Results to Text (Ctrl+Shift+T). A handler of its own, with the
+# decision in Invoke-ResultOutputModeShortcut: the handler above is already over the complexity
+# ceiling and on the baseline, which only ratchets down.
+$Script:MainForm.Definition.Add_PreviewKeyDown({
+        Invoke-ResultOutputModeShortcut -KeyEventArgs $_
     })
 
 # Log key releases (Show-EventInfo -> "Key released: ...") so a held key is traced as one press and

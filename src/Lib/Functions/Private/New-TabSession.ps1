@@ -63,15 +63,6 @@ function New-TabSession {
             ResultOutputMode      = $null
         }
 
-        # Grid or Text. A new tab starts in the mode chosen last, on any tab. A restored tab keeps its
-        # own, and a tab saved before this setting existed has none, so it gets the default too.
-        if ($null -ne $RestoreFrom -and $null -eq $RestoreFrom.PSObject.Properties["ResultOutputMode"]) {
-            $RestoreFrom | Add-Member -NotePropertyName "ResultOutputMode" -NotePropertyValue $null
-        }
-
-        $TabConfig = if ($null -ne $RestoreFrom) { $RestoreFrom } else { $DefaultTabConfig }
-        $TabConfig.ResultOutputMode = Get-ResultOutputMode -Mode $TabConfig.ResultOutputMode
-
         $NewTab = [PSCustomObject]@{
             Id                      = $TabId
             DisplayName             = $DisplayName
@@ -125,7 +116,7 @@ function New-TabSession {
             StatementResults         = [System.Collections.Generic.List[object]]::new()
             StatementResultQueryName = $null
             CurrentUrl              = $null
-            AppConfig               = $TabConfig
+            AppConfig               = $(if ($null -ne $RestoreFrom) { $RestoreFrom } else { $DefaultTabConfig })
             RunTimeData             = [PSCustomObject]@{
                 RestMethodParam                = @{
                     Uri                   = $null
@@ -312,6 +303,9 @@ function New-TabSession {
         Import-EventObjects -ClassName "MainFormTabContent"
 
         "Pre-set tab components from config" | Write-LogOutput -LogType DEBUG
+        # Grid or Text. A new tab starts in the mode chosen last, on any tab; a restored tab keeps its
+        # own, and one saved before this setting existed gets the default too.
+        Initialize-TabResultOutputMode -TabConfig $NewTab.AppConfig
         Update-TabResultOutputView -TabSession $NewTab
         $Script:MainForm.Elements.TextBoxURL.Text = $Script:AppConfig.BaseUrl
         $Script:MainForm.Elements.TextBoxURL.IsEnabled = $true

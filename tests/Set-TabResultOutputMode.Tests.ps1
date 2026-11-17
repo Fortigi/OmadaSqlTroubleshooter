@@ -22,6 +22,11 @@ BeforeAll {
         process { }
     }
 
+    function Write-ContainedErrorLog {
+        param([Parameter(ValueFromPipeline = $true)]$InputObject, $ErrorObject)
+        process { }
+    }
+
     function Get-ConfigSchemaDefault {
         param([string]$Property)
         return "Grid"
@@ -128,6 +133,69 @@ Describe 'Set-TabResultOutputMode' -Tag 'Unit' {
         $Private:ValidValues = ($Private:Parameter.Attributes | Where-Object { $_ -is [System.Management.Automation.ValidateSetAttribute] }).ValidValues
 
         @($Private:ValidValues) | Should -Be @("Grid", "Text")
+    }
+}
+
+Describe 'Initialize-TabResultOutputMode' -Tag 'Unit' {
+
+    BeforeEach {
+        $Script:AppGlobalConfig = [pscustomobject]@{ DefaultResultOutputMode = "Text" }
+    }
+
+    It 'gives a config saved before the setting existed the default for new tabs' {
+        $Private:Config = [pscustomobject]@{ BaseUrl = "https://example.invalid" }
+
+        Initialize-TabResultOutputMode -TabConfig $Private:Config
+
+        $Private:Config.ResultOutputMode | Should -BeExactly "Text"
+    }
+
+    It 'keeps a tab its own valid mode' {
+        $Private:Config = [pscustomobject]@{ ResultOutputMode = "grid" }
+
+        Initialize-TabResultOutputMode -TabConfig $Private:Config
+
+        $Private:Config.ResultOutputMode | Should -BeExactly "Grid"
+    }
+
+    It 'does nothing for a missing config' {
+        { Initialize-TabResultOutputMode -TabConfig $null } | Should -Not -Throw
+    }
+}
+
+Describe 'Invoke-ResultOutputModeShortcut' -Tag 'Unit' {
+
+    BeforeEach {
+        $Script:AppGlobalConfig = [pscustomobject]@{ DefaultResultOutputMode = "Grid" }
+        $script:GlobalWrite = [System.Collections.Generic.List[string]]::new()
+        $script:TestTabSession = New-TestTabSession -Mode "Grid"
+    }
+
+    It 'sets <Mode> for Ctrl+Shift+<Key> and marks the key handled' -ForEach @(
+        @{ Key = "T"; Mode = "Text" },
+        @{ Key = "D"; Mode = "Grid" }
+    ) {
+        $script:TestTabSession.AppConfig.ResultOutputMode = $(if ($Mode -eq "Text") { "Grid" } else { "Text" })
+        $Private:KeyEvent = [pscustomobject]@{ Key = $Key; Handled = $false }
+
+        Invoke-ResultOutputModeShortcut -KeyEventArgs $Private:KeyEvent -Modifiers 6 -EditorHasFocus $false
+
+        $Private:KeyEvent.Handled | Should -BeTrue
+        $script:TestTabSession.AppConfig.ResultOutputMode | Should -BeExactly $Mode
+    }
+
+    It 'leaves <Case> alone' -ForEach @(
+        @{ Case = "Ctrl+T without Shift"; Key = "T"; Modifiers = 2; EditorHasFocus = $false },
+        @{ Case = "Ctrl+Shift+Alt+T"; Key = "T"; Modifiers = 7; EditorHasFocus = $false },
+        @{ Case = "another key"; Key = "K"; Modifiers = 6; EditorHasFocus = $false },
+        @{ Case = "a key while the editor has focus"; Key = "T"; Modifiers = 6; EditorHasFocus = $true }
+    ) {
+        $Private:KeyEvent = [pscustomobject]@{ Key = $Key; Handled = $false }
+
+        Invoke-ResultOutputModeShortcut -KeyEventArgs $Private:KeyEvent -Modifiers $Modifiers -EditorHasFocus $EditorHasFocus
+
+        $Private:KeyEvent.Handled | Should -BeFalse
+        $script:TestTabSession.AppConfig.ResultOutputMode | Should -BeExactly "Grid"
     }
 }
 
