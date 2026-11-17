@@ -58,6 +58,8 @@ function Get-SqlScriptStatement {
             Text         the statement's own source text
             StartOffset  where it starts in $SqlText
             Length       how long it is
+            DisplayText  the statement's source text including the comment lines directly above
+                         it; what the Results header and the text output show. Never executed
     #>
     [CmdletBinding()]
     param(
@@ -82,6 +84,7 @@ function Get-SqlScriptStatement {
             Text        = $SqlText
             StartOffset = 0
             Length      = if ($null -eq $SqlText) { 0 } else { $SqlText.Length }
+            DisplayText = $SqlText
         }
     )
 
@@ -121,11 +124,17 @@ function Get-SqlScriptStatement {
                 }
 
                 $Ordinal++
+                $DisplayOffset = Get-SqlStatementLeadingCommentOffset -Fragment $Fragment
                 $Statement.Add([PSCustomObject][Ordered]@{
                         Ordinal     = $Ordinal
                         Text        = $SqlText.Substring($StartOffset, $Length)
                         StartOffset = $StartOffset
                         Length      = $Length
+                        # What the Results header and the text output show for this statement: the
+                        # statement as the user wrote it, WITH the comment lines directly above it. A
+                        # fragment starts at its first real token, so Text never carries that comment,
+                        # and the comment is usually how the user names the query they are looking for.
+                        DisplayText = $SqlText.Substring($DisplayOffset, ($StartOffset + $Length) - $DisplayOffset)
                     })
             }
         }
@@ -145,4 +154,81 @@ function Get-SqlScriptStatement {
 
         return $Fallback
     }
+}
+
+function Get-SqlStatementLeadingCommentOffset {
+    <#
+    .SYNOPSIS
+        The offset where a statement's leading comment starts, or the statement's own start offset
+        when no comment sits directly above it.
+
+    .DESCRIPTION
+        Walks the script's token stream back from the statement's first token over whitespace and
+        comments. The walk stops at the first significant token: the previous statement, its
+        semicolon, or a GO. A comment is never taken across one of those.
+
+        A comment on the same line as the previous statement belongs to that statement
+        ("SELECT 1 -- the ones"), so it is skipped. Only a comment that starts after a line break
+        counts as leading. A single-line comment always runs to the end of its line, so the next
+        comment after it starts on a new line.
+
+    .PARAMETER Fragment
+        The statement fragment, which carries the whole script's ScriptTokenStream.
+
+    .OUTPUTS
+        [int] an offset into the parsed script text.
+
+    .NOTES
+        No tracer preamble: called once per statement, and the fragment carries the user's query text.
+    #>
+    [CmdletBinding()]
+    [OutputType([int])]
+    param(
+        [Parameter(Mandatory = $true)]
+        $Fragment
+    )
+
+    $StartOffset = [int]$Fragment.StartOffset
+    $Token = $Fragment.ScriptTokenStream
+    $FirstTokenIndex = [int]$Fragment.FirstTokenIndex
+
+    if ($null -eq $Token -or $FirstTokenIndex -le 0 -or $FirstTokenIndex -gt $Token.Count) {
+        return $StartOffset
+    }
+
+    $Trivia = @("WhiteSpace", "SingleLineComment", "MultilineComment")
+
+    $Index = $FirstTokenIndex - 1
+    while ($Index -ge 0 -and [string]$Token[$Index].TokenType -in $Trivia) {
+        $Index--
+    }
+
+    # Nothing significant in front of the statement: the start of the script counts as a line break.
+    $SeenLineBreak = $Index -lt 0
+
+    for ($Position = $Index + 1; $Position -lt $FirstTokenIndex; $Position++) {
+        $Current = $Token[$Position]
+        $TokenType = [string]$Current.TokenType
+        $TokenText = [string]$Current.Text
+
+        if ($TokenType -eq "WhiteSpace") {
+            if ($TokenText.Contains("`n")) {
+                $SeenLineBreak = $true
+            }
+
+            continue
+        }
+
+        if ($SeenLineBreak) {
+            return [int]$Current.Offset
+        }
+
+        # A trailing comment of the previous statement. Whatever follows it is on a new line when it
+        # is a single-line comment, or when the comment itself spans lines.
+        if ($TokenType -eq "SingleLineComment" -or $TokenText.Contains("`n")) {
+            $SeenLineBreak = $true
+        }
+    }
+
+    return $StartOffset
 }

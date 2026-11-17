@@ -189,7 +189,7 @@ function Invoke-OmadaExecutePipeline {
         # fallback and every pre-existing test of this function behaving as before.
         $Private:Statement = @($Context.Statements)
         if ($Private:Statement.Count -eq 0) {
-            $Private:Statement = @([PSCustomObject]@{ Ordinal = 1; Text = $Context.SelectionText })
+            $Private:Statement = @([PSCustomObject]@{ Ordinal = 1; Text = $Context.SelectionText; DisplayText = $Context.SelectionText })
         }
 
         # The temporary object carries the text that actually runs, so it is needed whenever that text
@@ -318,6 +318,10 @@ function Invoke-OmadaExecutePipeline {
             $Outcome.StatementOutcome.Add(@{
                     Ordinal     = $Private:Current.Ordinal
                     Text        = $Private:Current.Text
+                    # The statement as the user wrote it, for the Results header and the text
+                    # output. A caller that predates it passes statements without one, so the
+                    # executed text stands in.
+                    DisplayText = $(if ($null -ne $Private:Current.DisplayText) { $Private:Current.DisplayText } else { $Private:Current.Text })
                     QueryResult = $Private:StatementResult
                     ErrorRecord = $Private:StatementError
                     FailedStep  = $Private:StatementFailedStep

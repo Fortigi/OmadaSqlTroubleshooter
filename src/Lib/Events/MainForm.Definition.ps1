@@ -321,6 +321,20 @@ $Script:MainForm.Definition.Add_PreviewKeyDown({
                     Invoke-DuplicateTab -TabId $ActiveTab.Id
                 }
             }
+            elseif ($ControlPressed -and $ShiftPressed -and ($EventArgs.Key -eq [System.Windows.Input.Key]::D -or $EventArgs.Key -eq [System.Windows.Input.Key]::T)) {
+                # Results to Grid / Results to Text. While the editor has focus Monaco handles these
+                # itself and posts setResultOutputMode, so they are only taken here outside it - the
+                # same split as F5.
+                if ($null -ne $Script:Webview.Object -and $Script:Webview.Object.IsKeyboardFocusWithin) {
+                    "Ctrl+Shift+{0} at MainForm level - WebView2 has focus, deferring to Monaco" -f $EventArgs.Key | Write-LogOutput -LogType VERBOSE
+                }
+                else {
+                    $EventArgs.Handled = $true
+                    $ResultOutputMode = if ($EventArgs.Key -eq [System.Windows.Input.Key]::T) { "Text" } else { "Grid" }
+                    "Ctrl+Shift+{0} intercepted at MainForm level - results to {1}" -f $EventArgs.Key, $ResultOutputMode | Write-LogOutput -LogType VERBOSE
+                    Set-TabResultOutputMode -TabSession (Get-ActiveTabSession) -Mode $ResultOutputMode
+                }
+            }
             elseif ($ControlPressed -and -not $ShiftPressed -and $EventArgs.Key -eq [System.Windows.Input.Key]::T) {
                 "Ctrl+T intercepted at MainForm level - duplicate active tab without query" | Write-LogOutput -LogType VERBOSE
                 $EventArgs.Handled = $true

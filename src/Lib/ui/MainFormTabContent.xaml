@@ -306,6 +306,9 @@
                         <Setter Property="Padding" Value="4,2" />
                         <Setter Property="FontWeight" Value="SemiBold" />
                         <Setter Property="TextTrimming" Value="CharacterEllipsis" />
+                        <!-- One line, cut off at the window edge: the header carries the statement's
+                             query on one line, and the tooltip shows all of it. -->
+                        <Setter Property="TextWrapping" Value="NoWrap" />
                         <Setter Property="Background" Value="#F1F5F9" />
                 </Style>
         </UserControl.Resources>
@@ -524,6 +527,25 @@
                                                 </Button>
 
                                                 <Separator Style="{StaticResource DefaultButtonWidthSeparatorStyle}" />
+                                                <!-- Results to Grid / Results to Text. The glyph, label and tooltip show the
+                                                     tab's current mode and are set by Update-TabResultOutputView; the values
+                                                     here are the Grid mode a tab starts in. -->
+                                                <Button x:Name="ButtonResultOutputMode" TabIndex="17" ToolTip="Results to grid (Ctrl+Shift+D). Click for results to text (Ctrl+Shift+T).">
+                                                        <Border Background="Transparent" IsHitTestVisible="False">
+                                                                <Grid HorizontalAlignment="Center" VerticalAlignment="Center" Background="Transparent" IsHitTestVisible="False">
+                                                                        <Grid.ColumnDefinitions>
+                                                                                <ColumnDefinition Width="4" />
+                                                                                <ColumnDefinition Width="Auto" />
+                                                                                <ColumnDefinition Width="4" />
+                                                                                <ColumnDefinition Width="40" />
+                                                                        </Grid.ColumnDefinitions>
+                                                                        <TextBlock Grid.Column="1" x:Name="ButtonResultOutputModeImage" Style="{StaticResource ToolbarGlyphStyle}" Text="&#xE80A;" />
+                                                                        <AccessText Grid.Column="3" IsHitTestVisible="False" x:Name="ButtonResultOutputModeText" Text="Grid" Style="{StaticResource ButtonAccessTextStyle}" />
+                                                                </Grid>
+                                                        </Border>
+                                                </Button>
+
+                                                <Separator Style="{StaticResource DefaultButtonWidthSeparatorStyle}" />
                                                 <Button x:Name="ButtonShowHistory" TabIndex="18" IsEnabled="True" ToolTip="Show history window">
                                                         <Border Background="Transparent" IsHitTestVisible="False">
                                                                 <Grid HorizontalAlignment="Center" VerticalAlignment="Center" Background="Transparent" IsHitTestVisible="False">
@@ -696,6 +718,7 @@
                                                      DataTemplate do not reach FindName, so a name here would resolve to nothing and
                                                      read as if it should. Consumers reach the focused result through the tab
                                                      session instead. -->
+                                                <Grid>
                                                 <ScrollViewer x:Name="ScrollViewerQueryResults" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" HorizontalAlignment="Stretch" VerticalAlignment="Stretch" Background="{DynamicResource {x:Static SystemColors.WindowBrushKey}}">
                                                         <ItemsControl x:Name="ItemsControlQueryResults" HorizontalAlignment="Stretch" VerticalAlignment="Stretch">
                                                                 <ItemsControl.ItemsPanel>
@@ -714,7 +737,7 @@
                                                                                                 <RowDefinition Height="Auto" />
                                                                                                 <RowDefinition Height="Auto" />
                                                                                         </Grid.RowDefinitions>
-                                                                                        <TextBlock Grid.Row="0" Style="{StaticResource QueryResultHeaderStyle}" Text="{Binding Header}" />
+                                                                                        <TextBlock Grid.Row="0" Style="{StaticResource QueryResultHeaderStyle}" Text="{Binding Header}" ToolTip="{Binding Header}" />
                                                                                         <DataGrid Grid.Row="1" ItemsSource="{Binding Rows}" ContextMenu="{StaticResource DataGridQueryResultContextMenu}" AutoGenerateColumns="True" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Auto" FontFamily="Consolas" IsReadOnly="True" HorizontalAlignment="Stretch" VerticalAlignment="Stretch" Background="{DynamicResource {x:Static SystemColors.WindowBrushKey}}" ScrollViewer.CanContentScroll="True" ScrollViewer.VerticalScrollBarVisibility="Auto" ScrollViewer.HorizontalScrollBarVisibility="Auto" CanUserResizeColumns="True" CanUserReorderColumns="True" CanUserSortColumns="False" Focusable="True" IsTabStop="True" SelectionMode="Extended" SelectionUnit="CellOrRowHeader" ClipboardCopyMode="IncludeHeader">
                                                                                                 <DataGrid.Resources>
                                                                                                         <Style TargetType="TextBlock">
@@ -734,6 +757,17 @@
                                                                 </ItemsControl.ItemTemplate>
                                                         </ItemsControl>
                                                 </ScrollViewer>
+                                                <!-- Results to Text: every statement's result in one text, rendered by
+                                                     Format-QueryResultText. Shown instead of the grid stack when the tab's mode
+                                                     is Text. No wrapping, so the columns stay aligned; it scrolls both ways
+                                                     instead. FillingTextBoxStyle keeps the implicit TextBox style's fixed
+                                                     Width and Height off it, as for the Messages pane. -->
+                                                <TextBox x:Name="TextBoxQueryResultText" Style="{StaticResource FillingTextBoxStyle}" Visibility="Collapsed"
+                                                         IsReadOnly="True" IsReadOnlyCaretVisible="True" IsUndoEnabled="False"
+                                                         FontFamily="Consolas" TextWrapping="NoWrap" AcceptsReturn="True"
+                                                         BorderThickness="0" HorizontalAlignment="Stretch" VerticalAlignment="Stretch"
+                                                         VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Auto" />
+                                                </Grid>
                                                         </TabItem>
                                                         <TabItem Header="Messages">
                                                                 <!-- A read-only TextBox rather than a TextBlock: issue #93 requires the error

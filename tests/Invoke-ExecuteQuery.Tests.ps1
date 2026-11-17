@@ -49,6 +49,9 @@ BeforeAll {
     # bar, the dropdown, the output-tab selection and the teardown that follow it. A stub would hide
     # exactly the cascade these suites exist to catch.
     . (Join-Path $PrivatePath -ChildPath "Set-TabQueryResult.ps1")
+    . (Join-Path $PrivatePath -ChildPath "ConvertTo-SingleLineSqlText.ps1")
+    . (Join-Path $PrivatePath -ChildPath "Format-QueryResultText.ps1")
+    . (Join-Path $PrivatePath -ChildPath "Set-TabResultOutputMode.ps1")
     . (Join-Path $PrivatePath -ChildPath "Update-QueryResultStackLayout.ps1")
     . (Join-Path $PrivatePath -ChildPath "Invoke-ExecuteQuery.ps1")
     # An execute forgets a reused fetch of the selected query (Get-RecentSqlQueryObject.ps1).
@@ -209,8 +212,10 @@ BeforeAll {
             # Declared here rather than left to be added on first use: assigning a property a
             # [PSCustomObject] does not already have throws, and that exception would be swallowed by
             # Complete-ExecuteQueryResult's own catch - skipping everything after the binding.
-            QueryResults            = $null
-            FocusedQueryResultIndex = 0
+            QueryResults             = $null
+            FocusedQueryResultIndex  = 0
+            StatementResults         = $null
+            StatementResultQueryName = $null
         }
         $Script:Tabs = @($Script:TestTabSession)
         # DisplayName as well as FullName: the status bar names the query in all three outcomes

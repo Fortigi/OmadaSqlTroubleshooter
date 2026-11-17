@@ -792,6 +792,25 @@
                 return false;
             });
 
+            // Results to Grid (Ctrl+Shift+D) and Results to Text (Ctrl+Shift+T), as in SSMS but with
+            // Shift added: Ctrl+T already opens a new tab. Each names the mode it wants rather than
+            // toggling, so a key that also reaches the window handler gives the same result.
+            editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyMod.Shift | monaco.KeyCode.KeyD, function() {
+                if (window.chrome && window.chrome.webview) {
+                    window.chrome.webview.postMessage({ type: 'setResultOutputMode', mode: 'Grid', key: 'Ctrl+Shift+D' });
+                }
+
+                return false;
+            });
+
+            editor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyMod.Shift | monaco.KeyCode.KeyT, function() {
+                if (window.chrome && window.chrome.webview) {
+                    window.chrome.webview.postMessage({ type: 'setResultOutputMode', mode: 'Text', key: 'Ctrl+Shift+T' });
+                }
+
+                return false;
+            });
+
             // Also add a global keydown event listener as backup
             document.addEventListener('keydown', function(event) {
                 if (event.key === 'F5') {

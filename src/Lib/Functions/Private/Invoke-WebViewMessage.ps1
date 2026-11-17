@@ -82,6 +82,18 @@ function Invoke-WebViewMessage {
                     $Script:MainForm.Elements.ButtonSaveQuery.RaiseEvent([System.Windows.RoutedEventArgs]::new([System.Windows.Controls.Primitives.ButtonBase]::ClickEvent))
                 })
         }
+        'setResultOutputMode' {
+            # Ctrl+Shift+D / Ctrl+Shift+T pressed in the editor. The mode is checked here rather than
+            # passed through: the message comes from the page, and only Grid and Text are modes.
+            $RequestedMode = [string]$MessageObj.mode
+            if ($RequestedMode -in @("Grid", "Text")) {
+                "Results to {0} requested from Monaco Editor via {1}" -f $RequestedMode, $MessageObj.key | Write-LogOutput -LogType DEBUG
+                $Script:MainForm.Definition.Dispatcher.Invoke([System.Action] {
+                        Set-ActiveTabContext -TabSession $TabSession
+                        Set-TabResultOutputMode -TabSession $TabSession -Mode $RequestedMode
+                    })
+            }
+        }
         'requestSchema' {
             # Issue #158: the editor hit "[SomeDatabase]." and has no model for it. Set-ActiveTabContext
             # first, like every other branch here - the schema is fetched and cached per connection

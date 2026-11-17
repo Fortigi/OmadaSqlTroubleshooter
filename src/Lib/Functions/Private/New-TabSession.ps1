@@ -60,7 +60,17 @@ function New-TabSession {
             SavePassword          = $false
             IdentityUserName      = $null
             CurrentDataConnection = [PSCustomObject]@{ DoId = $null; DisplayName = $null; FullName = $null }
+            ResultOutputMode      = $null
         }
+
+        # Grid or Text. A new tab starts in the mode chosen last, on any tab. A restored tab keeps its
+        # own, and a tab saved before this setting existed has none, so it gets the default too.
+        if ($null -ne $RestoreFrom -and $null -eq $RestoreFrom.PSObject.Properties["ResultOutputMode"]) {
+            $RestoreFrom | Add-Member -NotePropertyName "ResultOutputMode" -NotePropertyValue $null
+        }
+
+        $TabConfig = if ($null -ne $RestoreFrom) { $RestoreFrom } else { $DefaultTabConfig }
+        $TabConfig.ResultOutputMode = Get-ResultOutputMode -Mode $TabConfig.ResultOutputMode
 
         $NewTab = [PSCustomObject]@{
             Id                      = $TabId
@@ -110,8 +120,12 @@ function New-TabSession {
             # passed because the fixtures declared them; only the real constructor did not.
             QueryResults            = [System.Collections.Generic.List[object]]::new()
             FocusedQueryResultIndex = 0
+            # Every statement that ran, empty ones included, and the saved query's name for the run:
+            # what the text output renders (Format-QueryResultText). Declared for the reason above.
+            StatementResults         = [System.Collections.Generic.List[object]]::new()
+            StatementResultQueryName = $null
             CurrentUrl              = $null
-            AppConfig               = $(if ($null -ne $RestoreFrom) { $RestoreFrom } else { $DefaultTabConfig })
+            AppConfig               = $TabConfig
             RunTimeData             = [PSCustomObject]@{
                 RestMethodParam                = @{
                     Uri                   = $null
@@ -298,6 +312,7 @@ function New-TabSession {
         Import-EventObjects -ClassName "MainFormTabContent"
 
         "Pre-set tab components from config" | Write-LogOutput -LogType DEBUG
+        Update-TabResultOutputView -TabSession $NewTab
         $Script:MainForm.Elements.TextBoxURL.Text = $Script:AppConfig.BaseUrl
         $Script:MainForm.Elements.TextBoxURL.IsEnabled = $true
 

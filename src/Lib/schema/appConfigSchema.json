@@ -75,5 +75,9 @@
         "Type": "String"
       }
     ]
+  },
+  {
+    "Name": "ResultOutputMode",
+    "Type": "String"
   }
 ]
