@@ -529,8 +529,11 @@
                                                 <Separator Style="{StaticResource DefaultButtonWidthSeparatorStyle}" />
                                                 <!-- Results to Grid / Results to Text. The glyph, label and tooltip show the
                                                      tab's current mode and are set by Update-TabResultOutputView; the values
-                                                     here are the Grid mode a tab starts in. -->
-                                                <Button x:Name="ButtonResultOutputMode" TabIndex="17" ToolTip="Results to grid (Ctrl+Shift+D). Click for results to text (Ctrl+Shift+T).">
+                                                     here are the Grid mode a tab starts in.
+
+                                                     IsEnabled="True" because the implicit Button style disables every button,
+                                                     and switching modes needs no connection, so nothing else would enable it. -->
+                                                <Button x:Name="ButtonResultOutputMode" TabIndex="17" IsEnabled="True" ToolTip="Results to grid (Ctrl+Shift+D). Click for results to text (Ctrl+Shift+T).">
                                                         <Border Background="Transparent" IsHitTestVisible="False">
                                                                 <Grid HorizontalAlignment="Center" VerticalAlignment="Center" Background="Transparent" IsHitTestVisible="False">
                                                                         <Grid.ColumnDefinitions>

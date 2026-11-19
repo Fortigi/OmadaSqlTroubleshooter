@@ -433,9 +433,63 @@ try {
         ExtentHeight          = $OneScenario.ExtentHeight
     }
 
+    # The pane resized AFTER the sizing pass: a window restore or resize, the editor/output splitter
+    # dragged. Measured on its own, with nothing dragged by hand, because a grid the user has sized is
+    # deliberately left alone. One wide, long result: the case where a stale height pushes the grid's
+    # own horizontal scrollbar below the pane, with an outer scrollbar the user has to scroll first.
+    $Script:Tabs = @($Session)
+    $ResizeHandlerRegistered = $null -ne (Get-Command Register-QueryResultPaneResizeHandler -ErrorAction SilentlyContinue)
+    if ($ResizeHandlerRegistered) {
+        Register-QueryResultPaneResizeHandler -TabSession $Session
+        # A second call must not add a second subscription.
+        Register-QueryResultPaneResizeHandler -TabSession $Session
+    }
+
+    $WideRows = @(1..200 | ForEach-Object {
+            $WideRow = [ordered]@{ Id = $_ }
+            for ($Column = 1; $Column -le 30; $Column++) { $WideRow["Column$Column"] = "value-$Column-" + ("x" * 20) }
+            [pscustomobject]$WideRow
+        })
+    $WideOutcome = @{ Ordinal = 1; Text = "SELECT 1"; QueryResult = [pscustomobject]@{ d = [pscustomobject]@{ Records = 200; Rows = $WideRows } }; ErrorRecord = $null; FailedStep = $null }
+
+    function Measure-PaneAfterResize {
+        param([double]$WindowHeight)
+        $Window.Height = $WindowHeight
+        # The window's resize reaches WPF as window messages, and SizeChanged follows from them, so the
+        # dispatcher is drained the way the running application would drain it - UpdateLayout alone
+        # measured the pane before the handler had run, one step behind. Then one more layout pass for
+        # the heights the handler set.
+        for ($Pump = 0; $Pump -lt 3; $Pump++) {
+            $Window.Dispatcher.Invoke([System.Action] { }, [System.Windows.Threading.DispatcherPriority]::ApplicationIdle)
+            $Window.UpdateLayout()
+        }
+        $WideGrid = Find-VisualChildDataGrid -Parent ($ItemsControl.ItemContainerGenerator.ContainerFromIndex(0))
+        return @{
+            ViewportHeight        = [math]::Round($ScrollViewer.ViewportHeight, 2)
+            ExtentHeight          = [math]::Round($ScrollViewer.ExtentHeight, 2)
+            OuterScrollBarVisible = ($ScrollViewer.ComputedVerticalScrollBarVisibility -eq [System.Windows.Visibility]::Visible)
+            GridHeight            = [math]::Round($WideGrid.ActualHeight, 2)
+        }
+    }
+
+    $Window.Height = 1300
+    $Window.UpdateLayout()
+    [void](Set-TabQueryResult -TabSession $Session -StatementOutcome @($WideOutcome))
+    $Window.UpdateLayout()
+    Update-QueryResultStackLayout -TabSession $Session
+    $Window.UpdateLayout()
+
+    $PaneResize = @{
+        HandlerRegistered = $ResizeHandlerRegistered
+        Sized             = Measure-PaneAfterResize -WindowHeight 1300
+        Shrunk            = Measure-PaneAfterResize -WindowHeight 1000
+        Grown             = Measure-PaneAfterResize -WindowHeight 1300
+    }
+
     $Window.Close()
 
     @{
+        PaneResize        = $PaneResize
         Ok                = $true
         ControlLoaded     = $true
         FoundItemsControl = $true

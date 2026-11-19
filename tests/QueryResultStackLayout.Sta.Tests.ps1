@@ -217,6 +217,38 @@ Describe "The Results pane's stacked layout, measured in an STA host" -Tag 'Sta'
         }
     }
 
+    Context 'AC 8 still holds after the pane is resized' {
+        # The sizing pass used to run once, after an execute. A pane that got smaller afterwards - a
+        # window restore, the editor/output splitter dragged - left the grid at its old height: an outer
+        # scrollbar appeared, and the grid's own horizontal scrollbar sat below the visible pane until
+        # the user scrolled down. The resize handler sizes the stack again whenever the pane's height
+        # changes.
+
+        It 'registers the resize handler' {
+            $Script:Measured.PaneResize.HandlerRegistered | Should -BeTrue
+        }
+
+        It 'fills the pane without an outer scrollbar once sized' {
+            $Private:Sized = $Script:Measured.PaneResize.Sized
+            $Private:Sized.OuterScrollBarVisible | Should -BeFalse
+            $Private:Sized.ExtentHeight | Should -BeLessOrEqual ($Private:Sized.ViewportHeight + 1)
+        }
+
+        It 'shrinks the grid with the pane, so no outer scrollbar appears' {
+            $Private:Resize = $Script:Measured.PaneResize
+            $Private:Resize.Shrunk.ViewportHeight | Should -BeLessThan $Private:Resize.Sized.ViewportHeight
+            $Private:Resize.Shrunk.OuterScrollBarVisible | Should -BeFalse
+            $Private:Resize.Shrunk.ExtentHeight | Should -BeLessOrEqual ($Private:Resize.Shrunk.ViewportHeight + 1)
+            $Private:Resize.Shrunk.GridHeight | Should -BeLessThan $Private:Resize.Sized.GridHeight
+        }
+
+        It 'grows the grid back when the pane grows' {
+            $Private:Resize = $Script:Measured.PaneResize
+            [math]::Abs($Private:Resize.Grown.GridHeight - $Private:Resize.Sized.GridHeight) | Should -BeLessThan 2
+            $Private:Resize.Grown.OuterScrollBarVisible | Should -BeFalse
+        }
+    }
+
     Context 'AC 6 - the five-row floor, and the pane scrolling because of it' {
 
         It 'keeps every result at the measured floor rather than shrinking further' {
