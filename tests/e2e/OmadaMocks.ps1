@@ -220,9 +220,15 @@ function script:Open-ChoiceForm {
         $LeftButtonText = "Yes",
         $RightButtonText = "No",
         $LeftButtonReturnValue = $true,
-        $RightButtonReturnValue = $false
+        $RightButtonReturnValue = $false,
+        $ExtraButtonText,
+        $ExtraButtonReturnValue = $null,
+        [switch]$ShowInput,
+        [string]$InputText
     )
     $script:E2EChoices.Add([PSCustomObject]@{ Title = [string]$Title; Message = [string]$Message })
+    # A name prompt is answered with the name it suggests, as if the user had accepted it.
+    $Script:ChoiceFormInputText = $InputText
     if ($null -ne $script:E2EChoiceReturn) {
         return $script:E2EChoiceReturn
     }

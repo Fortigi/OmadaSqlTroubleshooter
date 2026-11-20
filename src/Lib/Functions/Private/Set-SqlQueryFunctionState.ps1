@@ -47,8 +47,18 @@ function Set-SqlQueryFunctionState {
             "ButtonOpenOutputFile"         = @{
                 AllowedStatusChange = "Disable"
             }
+            # Enabled on connect, with or without a selected query: without one, Save saves the
+            # ad-hoc query as a new query (it asks for a name).
             "ButtonSaveQuery"              = @{
-                AllowedStatusChange = "Disable"
+                AllowedStatusChange = "Both"
+            }
+            # Act on the selected saved query, so they are skipped below when none is selected;
+            # Update-SavedQueryCommandState keeps them in step when the selection changes.
+            "ButtonRenameQuery"            = @{
+                AllowedStatusChange = "Both"
+            }
+            "ButtonDeleteQuery"            = @{
+                AllowedStatusChange = "Both"
             }
             # DataGridQueryResult is deliberately absent. Issue #151 retired that name when the single
             # result grid became one grid per statement, so this list would resolve it to $null - and
@@ -66,7 +76,7 @@ function Set-SqlQueryFunctionState {
                     "DataGrid" {}
                     default {
 
-                        if ($null -eq $Script:MainForm.Elements.ComboBoxSelectQuery.SelectedItem.Content -and $Item -in ("ButtonShowSqlSchema", "ButtonSaveOutputFile", "ButtonShowOutput", "ButtonOpenOutputFile", "ButtonSaveQuery", "ButtonHistory", "ButtonRefreshQueries", "ButtonExecuteQuery")) {
+                        if ($null -eq $Script:MainForm.Elements.ComboBoxSelectQuery.SelectedItem.Content -and $Item -in ("ButtonShowSqlSchema", "ButtonSaveOutputFile", "ButtonShowOutput", "ButtonOpenOutputFile", "ButtonHistory", "ButtonRefreshQueries", "ButtonRenameQuery", "ButtonDeleteQuery")) {
                             continue
                         }
                         $Script:MainForm.Elements.$Item.IsEnabled = $true

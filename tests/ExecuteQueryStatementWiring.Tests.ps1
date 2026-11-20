@@ -48,6 +48,8 @@ BeforeAll {
     . (Join-Path $PrivatePath -ChildPath "Resolve-DataConnectionReference.ps1")
     . (Join-Path $PrivatePath -ChildPath "Resolve-SqlStatementTarget.ps1")
 
+    . (Join-Path $PrivatePath -ChildPath "Test-AdHocQuery.ps1")
+    . (Join-Path $PrivatePath -ChildPath "Resolve-ExecuteQueryScope.ps1")
     . (Join-Path $PrivatePath -ChildPath "Invoke-ExecuteQuery.ps1")
     # An execute forgets a reused fetch of the selected query (Get-RecentSqlQueryObject.ps1).
     . (Join-Path $PrivatePath -ChildPath "Get-RecentSqlQueryObject.ps1")
@@ -281,5 +283,35 @@ Describe "Invoke-ExecuteQuery hands the pipeline one statement per statement (#1
         $script:DispatchedContext.TempName | Should -Be "TMP_abc"
         $script:DispatchedContext.DisplayName | Should -Be "TestQuery"
         $script:DispatchedContext.SkipSave | Should -BeFalse
+    }
+
+    It "runs an ad-hoc query through the temporary object without saving anything (no query selected)" {
+        # No New first: with no saved query selected, the whole editor is executed as if it were
+        # selected, so the pipeline creates (and later deletes) the temporary object - and the save
+        # step, which needs a query object, is skipped.
+        $Script:AppConfig.CurrentSqlQuery = [PSCustomObject]@{ DoId = $null; DisplayName = $null; FullName = $null }
+
+        Invoke-EditorRead -FullText "SELECT 1;`r`nSELECT 2;"
+
+        $script:DispatchedContext.SkipSave | Should -BeTrue
+        $script:DispatchedContext.SelectionText | Should -Be "SELECT 1;`r`nSELECT 2;"
+        $script:DispatchedContext.QueryDoId | Should -BeNullOrEmpty
+        @($script:DispatchedContext.Statements).Count | Should -Be 2
+    }
+
+    It "runs only the selection of an ad-hoc query" {
+        $Script:AppConfig.CurrentSqlQuery = [PSCustomObject]@{ DoId = $null; DisplayName = $null; FullName = $null }
+
+        Invoke-EditorRead -FullText "SELECT 1;`r`nSELECT 2;" -SelectedText "SELECT 2;" -SelectionStartLine 2
+
+        $script:DispatchedContext.SkipSave | Should -BeTrue
+        $script:DispatchedContext.SelectionText | Should -Be "SELECT 2;"
+    }
+
+    It "still leaves a saved query's single statement to run as the saved object" {
+        Invoke-EditorRead -FullText "SELECT 1"
+
+        $script:DispatchedContext.SkipSave | Should -BeFalse
+        $script:DispatchedContext.SelectionText | Should -BeNullOrEmpty
     }
 }

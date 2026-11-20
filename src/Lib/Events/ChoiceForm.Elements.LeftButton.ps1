@@ -9,6 +9,8 @@ $Script:ChoiceForm.Elements.LeftButton.Add_Click({
             $_ | Show-EventInfo
 
             $Script:DialogResult = $Script:ChoiceForm.LeftButtonReturnValue
+            # Read for a -ShowInput dialog; the collapsed box of any other dialog just holds "".
+            $Script:ChoiceFormInputText = $Script:ChoiceForm.Elements.InputTextBox.Text
             $Script:ChoiceForm.Definition.Close()
         }
         catch {

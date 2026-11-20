@@ -87,6 +87,11 @@ function New-TabSession {
             IsMaterialized          = $false
             PendingAutoConnect      = $false
             IsDirty                 = $false
+            # What the editor holds (EditorText) and held at the last user edit (DraftText), as Monaco
+            # reports them; DraftPending queues the ad-hoc draft cache write. See Set-TabEditorText.
+            EditorText              = $null
+            DraftText               = $null
+            DraftPending            = $false
             Form                    = $Form
             Elements                = $Form.Elements
             TabItem                 = $null

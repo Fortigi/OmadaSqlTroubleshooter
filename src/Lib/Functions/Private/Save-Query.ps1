@@ -12,7 +12,9 @@ function Save-Query {
         if ($NewQuery) {
             "Create new query" | Write-LogOutput -LogType DEBUG
 
-            $Script:RunTimeData.RestMethodParam.Uri = '{0}/odata/dataobjects/C_P_SQLTROUBLESHOOTING?$filter=Deleted ne true and NAME eq ''{1}''' -f $Script:AppConfig.BaseUrl, $Script:MainForm.Elements.TextBoxDisplayName.Text
+            # Built by New-OmadaQueryRequest so the name - user input, inside an OData $filter - has its
+            # quotes escaped. "Bob's query" used to end the string literal early and fail the save.
+            $Script:RunTimeData.RestMethodParam.Uri = (New-OmadaQueryRequest -Kind "QueryNameProbe" -Context @{ BaseUrl = $Script:AppConfig.BaseUrl; QueryName = $Script:MainForm.Elements.TextBoxDisplayName.Text }).Uri
             "QueryUrl: {0}" -f $Script:RunTimeData.RestMethodParam.Uri | Write-LogOutput -LogType DEBUG
             "Check if a query with this name already exists" | Write-LogOutput -LogType DEBUG
             $Script:RunTimeData.RestMethodParam.Body = $null

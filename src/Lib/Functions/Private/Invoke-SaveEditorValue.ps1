@@ -25,6 +25,9 @@ function Invoke-SaveEditorValue {
                         if ($null -ne $TabSession) {
                             $TabSession.IsDirty = $false
                             Update-TabHeaderTitle -TabSession $TabSession
+
+                            # Saved, so whatever ad-hoc draft the tab had is no longer unsaved work.
+                            Sync-AdHocQueryDraft -TabSession $TabSession
                         }
                     }
                 }

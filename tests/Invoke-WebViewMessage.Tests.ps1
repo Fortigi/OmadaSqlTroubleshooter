@@ -31,7 +31,19 @@ Describe 'Invoke-WebViewMessage' -Tag 'Unit' {
             param([Parameter(ValueFromPipeline = $true)]$Item)
             process { $script:EventsShown++ }
         }
-        function Invoke-EditorContentChanged { param($TabSession) $script:ContentChanges.Add($TabSession) }
+        $script:ContentTexts = [System.Collections.Generic.List[object]]::new()
+        $script:TextSets = [System.Collections.Generic.List[object]]::new()
+        function Invoke-EditorContentChanged {
+            [CmdletBinding()]
+            param($TabSession, [AllowNull()][AllowEmptyString()][string]$Text)
+            $script:ContentChanges.Add($TabSession)
+            $script:ContentTexts.Add($Text)
+        }
+        function Set-TabEditorText {
+            [CmdletBinding()]
+            param($TabSession, [AllowNull()][AllowEmptyString()][string]$Text, [switch]$UserEdit)
+            $script:TextSets.Add([PSCustomObject]@{ TabSession = $TabSession; Text = $Text; UserEdit = [bool]$UserEdit })
+        }
         function Set-ActiveTabContext { param($TabSession) $script:Actions.Add("active:{0}" -f $TabSession.Id) }
         function Request-SqlSchemaForDatabase { param($DatabaseName) $script:Actions.Add("schema:$DatabaseName") }
 
@@ -60,6 +72,8 @@ Describe 'Invoke-WebViewMessage' -Tag 'Unit' {
         $script:Logged.Clear()
         $script:EventsShown = 0
         $script:ContentChanges.Clear()
+        $script:ContentTexts.Clear()
+        $script:TextSets.Clear()
         $script:Actions.Clear()
     }
 
@@ -69,6 +83,25 @@ Describe 'Invoke-WebViewMessage' -Tag 'Unit' {
         $script:ContentChanges.Count | Should -Be 1
         $script:ContentChanges[0] | Should -Be $script:Tab
         $script:Logged.Count | Should -Be 0 -Because "a line per keystroke costs UI-thread time even when DEBUG is filtered out"
+        $script:EventsShown | Should -Be 0
+    }
+
+    It 'Should pass the text a contentChanged message carries' {
+        Invoke-WebViewMessage -TabSession $script:Tab -WebViewSender $script:WebView -MessageEventArgs (New-Message '{"type":"contentChanged","text":"SELECT 1"}') -EventInfo ([System.EventArgs]::Empty)
+
+        $script:ContentTexts[0] | Should -Be "SELECT 1"
+        $script:TextSets.Count | Should -Be 0 -Because "a user edit is recorded by Invoke-EditorContentChanged, which also marks the tab dirty"
+    }
+
+    It 'Should record editorTextSet as a programmatic load, without marking the tab dirty or logging' {
+        Invoke-WebViewMessage -TabSession $script:Tab -WebViewSender $script:WebView -MessageEventArgs (New-Message '{"type":"editorTextSet","text":"SELECT 2"}') -EventInfo ([System.EventArgs]::Empty)
+
+        $script:TextSets.Count | Should -Be 1
+        $script:TextSets[0].TabSession | Should -Be $script:Tab
+        $script:TextSets[0].Text | Should -Be "SELECT 2"
+        $script:TextSets[0].UserEdit | Should -BeFalse
+        $script:ContentChanges.Count | Should -Be 0
+        $script:Logged.Count | Should -Be 0 -Because "the text is query content and must not reach the log"
         $script:EventsShown | Should -Be 0
     }
 

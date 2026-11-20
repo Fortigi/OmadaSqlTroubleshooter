@@ -12,6 +12,13 @@ semantic version.
 
 ### Changed
 
+- Selecting a saved query marks the tab clean. The unsaved-changes flag used to be cleared only by a
+  save, so typing in a tab and then picking a query left that freshly loaded query flagged as changed.
+- The Monaco editor reports its text to the host with every change, so the host knows what the editor
+  holds without an asynchronous round-trip. The text is never logged.
+- The query-name check on "save as new" escapes quotes in the name as OData requires; a name such as
+  `Bob's query` used to break the check.
+
 - Releases are now drafted first and published by a maintainer. The release workflow builds the
   package, pushes the tag and creates the GitHub release as a **draft** with the package attached,
   so the generated release notes can be reviewed and edited before anything is public; the run
@@ -36,6 +43,28 @@ semantic version.
   ignored. Redaction is unchanged: the file stays behind the same single gate as the window.
 
 ### Added
+
+- **Ad-hoc queries.** Type SQL and execute it without pressing New first. With no saved query
+  selected, the editor runs through the temporary `TMP_<InstanceGuid>` object an executed selection
+  already used (created, executed, deleted), and no save is attempted, so nothing the user owns is
+  created or changed on the tenant. Execute refuses only an ad-hoc query with an empty editor. Save /
+  `Ctrl+S` on an ad-hoc query saves it as a new query and asks for its name.
+- **Rename and delete a saved query**, from two new toolbar buttons. Rename PUTs the name only - the
+  editor text and unsaved edits are untouched - after checking the name locally and with the tenant.
+  Delete asks first and keeps the text in the editor as an unsaved ad-hoc query. Both are applied to
+  every connected tab of the connection pool. Both buttons are enabled only for a selected saved query
+  on a connected tab.
+- **Save prompts on close.** Closing a tab or the application offers Save / Don't save / Cancel for
+  every tab with unsaved changes to a selected query or an unsaved ad-hoc query; an empty editor is
+  never offered. Saving while closing is now synchronous, from the text the editor last reported, so a
+  tab is torn down only after its save succeeded (a failed save asks whether to close anyway). Closing
+  the application previously never asked at all.
+- **Ad-hoc query drafts.** An unsaved ad-hoc query is kept in
+  `%APPDATA%\OmadaSqlTroubleshooter\config\adhoc-query-drafts.json` while typing and when executed,
+  and offered back at the next start - after a normal close and after a crash. Drafts carry the tab's
+  connection settings but never a password; `-Reset` discards them.
+- The choice dialog can take a text input and a third button, used by the name prompts and the
+  Save / Don't save / Cancel question.
 
 - Results to Text, as in SQL Server Management Studio. A new **Grid/Text** toolbar button, or
   **Ctrl+Shift+D** (grid) and **Ctrl+Shift+T** (text), switches the Results pane between the grid

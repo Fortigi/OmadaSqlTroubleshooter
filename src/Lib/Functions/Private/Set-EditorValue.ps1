@@ -73,6 +73,9 @@ function Set-EditorValue {
 "@
                     Push-ToEditor -ScriptToExecute $ScriptToExecute
                     $Script:RunTimeData.CurrentQueryText = $Private:Result.C_QUERY
+
+                    # The editor now holds exactly the saved query, so nothing is unsaved any more.
+                    Set-TabQueryClean -TabSession (Get-ActiveTabSession)
                     "Query {0} retrieved!" -f $Script:AppConfig.CurrentSqlQuery.DoId | Write-LogOutput
                 }
             }

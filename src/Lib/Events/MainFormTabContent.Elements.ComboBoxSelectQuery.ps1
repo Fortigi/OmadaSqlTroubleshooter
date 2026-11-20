@@ -49,10 +49,17 @@ $Script:MainForm.Elements.ComboBoxSelectQuery.Add_SelectionChanged({
                 #Set-EditorBackground
             }
 
+            # Rename and Delete act on the selected saved query, so they follow the selection.
+            Update-SavedQueryCommandState
+
             # Selecting a query changes the tab's base name (rule 1 in Get-TabName).
             $ActiveTab = Get-ActiveTabSession
             if ($null -ne $ActiveTab) {
                 Update-TabHeaderTitle -TabSession $ActiveTab
+
+                # A tab holding a saved query has no ad-hoc draft; one whose query was just cleared
+                # (deleted) may now have one. Sync-AdHocQueryDraft decides which.
+                Sync-AdHocQueryDraft -TabSession $ActiveTab
             }
         }
         catch {

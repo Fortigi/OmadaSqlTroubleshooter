@@ -59,16 +59,22 @@ Describe "The window's Closing handler never logs a terminating ERROR" {
         # Just the Closing handler. The file holds other handlers where a terminating ERROR is the
         # right answer, so matching the whole file would assert something untrue.
         $script:ClosingHandler = ([regex]::Match($script:ClosingSource, '(?s)Add_Closing\(\{.*?\n    \}\)')).Value
+
+        # The handler delegates its body to Invoke-MainFormClosing, so that function is held to the
+        # same rule: it IS the Closing handler, one call deeper.
+        $script:ClosingFunction = Get-Content -Path (Join-Path (Split-Path -Path $PSScriptRoot -Parent) "src\Lib\Functions\Private\Invoke-MainFormClosing.ps1") -Raw
     }
 
     It "finds the Closing handler to check" {
         # Without this the two assertions below pass vacuously on an empty string.
         $script:ClosingHandler | Should -Not -BeNullOrEmpty
-        $script:ClosingHandler | Should -Match 'Close-OmadaRequestPool'
+        $script:ClosingHandler | Should -Match 'Invoke-MainFormClosing'
+        $script:ClosingFunction | Should -Match 'Close-OmadaRequestPool'
     }
 
     It "does not raise a terminating ERROR while the window is closing" {
         $script:ClosingHandler | Should -Not -Match '\-LogType\s+ERROR'
+        $script:ClosingFunction | Should -Not -Match '\-LogType\s+ERROR'
     }
 
     It "still reports a failed shutdown rather than swallowing it" {

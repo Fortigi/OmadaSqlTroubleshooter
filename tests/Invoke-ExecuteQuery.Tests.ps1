@@ -53,6 +53,8 @@ BeforeAll {
     . (Join-Path $PrivatePath -ChildPath "Format-QueryResultText.ps1")
     . (Join-Path $PrivatePath -ChildPath "Set-TabResultOutputMode.ps1")
     . (Join-Path $PrivatePath -ChildPath "Update-QueryResultStackLayout.ps1")
+    . (Join-Path $PrivatePath -ChildPath "Test-AdHocQuery.ps1")
+    . (Join-Path $PrivatePath -ChildPath "Resolve-ExecuteQueryScope.ps1")
     . (Join-Path $PrivatePath -ChildPath "Invoke-ExecuteQuery.ps1")
     # An execute forgets a reused fetch of the selected query (Get-RecentSqlQueryObject.ps1).
     . (Join-Path $PrivatePath -ChildPath "Get-RecentSqlQueryObject.ps1")

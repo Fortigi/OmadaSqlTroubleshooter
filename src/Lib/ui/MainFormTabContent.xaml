@@ -447,7 +447,7 @@
                                         <Separator Style="{StaticResource DefaultHeightSeparator}" Grid.Row="1" />
                                         <StackPanel Orientation="Horizontal" Grid.Row="2">
                                                 <Separator Style="{StaticResource ButtontBorderWidthSeparatorStyle}" />
-                                                <Button x:Name="ButtonNewQuery" TabIndex="13" ToolTip="Creates a new query object in Omada">
+                                                <Button x:Name="ButtonNewQuery" TabIndex="13" ToolTip="Save the editor as a new query object in Omada, under the Display name">
                                                         <Border Background="Transparent" IsHitTestVisible="False">
                                                                 <Grid HorizontalAlignment="Center" VerticalAlignment="Center" Background="Transparent" IsHitTestVisible="False">
                                                                         <Grid.ColumnDefinitions>
@@ -458,6 +458,38 @@
                                                                         </Grid.ColumnDefinitions>
                                                                         <TextBlock Grid.Column="1" x:Name="ButtonNewQueryImage" Style="{StaticResource ToolbarGlyphStyle}" Text="&#xE8E5;" />
                                                                         <AccessText Grid.Column="3" IsHitTestVisible="False" x:Name="ButtonNewQueryText" Text="_New" Style="{StaticResource ButtonAccessTextStyle}" />
+                                                                </Grid>
+                                                        </Border>
+                                                </Button>
+
+                                                <Separator Style="{StaticResource DefaultButtonWidthSeparatorStyle}" />
+                                                <Button x:Name="ButtonRenameQuery" TabIndex="13" ToolTip="Rename the selected query in Omada">
+                                                        <Border Background="Transparent" IsHitTestVisible="False">
+                                                                <Grid HorizontalAlignment="Center" VerticalAlignment="Center" Background="Transparent" IsHitTestVisible="False">
+                                                                        <Grid.ColumnDefinitions>
+                                                                                <ColumnDefinition Width="4" />
+                                                                                <ColumnDefinition Width="Auto" />
+                                                                                <ColumnDefinition Width="4" />
+                                                                                <ColumnDefinition Width="40" />
+                                                                        </Grid.ColumnDefinitions>
+                                                                        <TextBlock Grid.Column="1" x:Name="ButtonRenameQueryImage" Style="{StaticResource ToolbarGlyphStyle}" Text="&#xE8AC;" />
+                                                                        <AccessText Grid.Column="3" IsHitTestVisible="False" x:Name="ButtonRenameQueryText" Text="Ren_ame" Style="{StaticResource ButtonAccessTextStyle}" />
+                                                                </Grid>
+                                                        </Border>
+                                                </Button>
+
+                                                <Separator Style="{StaticResource DefaultButtonWidthSeparatorStyle}" />
+                                                <Button x:Name="ButtonDeleteQuery" TabIndex="13" ToolTip="Delete the selected query from Omada; its text stays in the editor as an ad-hoc query">
+                                                        <Border Background="Transparent" IsHitTestVisible="False">
+                                                                <Grid HorizontalAlignment="Center" VerticalAlignment="Center" Background="Transparent" IsHitTestVisible="False">
+                                                                        <Grid.ColumnDefinitions>
+                                                                                <ColumnDefinition Width="4" />
+                                                                                <ColumnDefinition Width="Auto" />
+                                                                                <ColumnDefinition Width="4" />
+                                                                                <ColumnDefinition Width="40" />
+                                                                        </Grid.ColumnDefinitions>
+                                                                        <TextBlock Grid.Column="1" x:Name="ButtonDeleteQueryImage" Style="{StaticResource ToolbarGlyphStyle}" Text="&#xE74D;" />
+                                                                        <AccessText Grid.Column="3" IsHitTestVisible="False" x:Name="ButtonDeleteQueryText" Text="_Delete" Style="{StaticResource ButtonAccessTextStyle}" />
                                                                 </Grid>
                                                         </Border>
                                                 </Button>

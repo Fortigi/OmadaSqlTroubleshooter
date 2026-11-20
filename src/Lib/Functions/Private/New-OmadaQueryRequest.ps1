@@ -29,6 +29,9 @@ function New-OmadaQueryRequest {
       TempQueryUndelete  POST UndeleteDataObject for a soft-deleted temporary object.
       TempQueryUpsert    PUT (reuse) or POST (create) the temporary object carrying the selection.
       DeleteQuery        DELETE a query object by id.
+      RenameQuery        PUT only the NAME of a saved query.
+      QueryNameProbe     GET the non-deleted query objects carrying a given NAME, to refuse a
+                         rename or a save-as-new that would create a second query with that name.
 
     .PARAMETER Context
     Plain values gathered on the UI thread. Keys used, by Kind:
@@ -46,6 +49,8 @@ function New-OmadaQueryRequest {
       TempName             TempQueryProbe, TempQueryUpsert
       TempQueryDoId        TempQueryUndelete, TempQueryUpsert (reuse), DeleteQuery
       SelectionText        TempQueryUpsert
+      QueryDoId            RenameQuery
+      QueryName            RenameQuery, QueryNameProbe
 
     .OUTPUTS
     Hashtable @{ Method; Uri; Body }, or $null when no request is needed.
@@ -53,7 +58,7 @@ function New-OmadaQueryRequest {
     [CmdletBinding()]
     param(
         [Parameter(Mandatory = $true)]
-        [ValidateSet("SaveExistingQuery", "ExecuteQuery", "TempQueryProbe", "TempQueryUndelete", "TempQueryUpsert", "DeleteQuery")]
+        [ValidateSet("SaveExistingQuery", "ExecuteQuery", "TempQueryProbe", "TempQueryUndelete", "TempQueryUpsert", "DeleteQuery", "RenameQuery", "QueryNameProbe")]
         [string]$Kind,
 
         [Parameter(Mandatory = $true)]
@@ -153,6 +158,28 @@ function New-OmadaQueryRequest {
             return @{
                 Method = "DELETE"
                 Uri    = "{0}({1})" -f $Private:EntityUrl, $Context.TempQueryDoId
+                Body   = $null
+            }
+        }
+
+        "RenameQuery" {
+            # NAME only. Sending the text or the connection as well would turn a rename into a save of
+            # whatever the editor holds, which the user did not ask for.
+            return @{
+                Method = "PUT"
+                Uri    = "{0}({1})" -f $Private:EntityUrl, $Context.QueryDoId
+                Body   = @{ "NAME" = $Context.QueryName }
+            }
+        }
+
+        "QueryNameProbe" {
+            # The name is user input and the only free text that reaches a $filter, so the OData
+            # string literal is escaped by doubling its quotes (OData v4 ABNF): "Bob's" would
+            # otherwise end the literal early and the request would fail or mean something else.
+            $Private:NameLiteral = ([string]$Context.QueryName).Replace("'", "''")
+            return @{
+                Method = "GET"
+                Uri    = "{0}?`$filter=Deleted ne true and NAME eq '{1}'" -f $Private:EntityUrl, $Private:NameLiteral
                 Body   = $null
             }
         }

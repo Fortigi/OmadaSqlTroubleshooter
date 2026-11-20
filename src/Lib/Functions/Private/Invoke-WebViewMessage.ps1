@@ -7,7 +7,7 @@ function Invoke-WebViewMessage {
         The body of the tab's WebMessageReceived handler (Initialize-WebViewForTab), moved here so it
         can be tested without WPF and WebView2. The handler only finds the owning tab and calls this.
 
-        'contentChanged' is handled first and returns before any logging (issue #185). The editor
+        'contentChanged' and 'editorTextSet' are handled first and return before any logging (issue #185). The editor
         posts it on EVERY keystroke, and the event line plus two DEBUG lines that every other message
         writes cost UI-thread time per keystroke even when DEBUG is filtered out - Write-LogOutput
         resolves its call stack and tab context before it applies the level - while saying the same
@@ -54,9 +54,19 @@ function Invoke-WebViewMessage {
     }
     $Type = if ($MessageObj) { [string]$MessageObj.type } else { $null }
 
+    # Both carry the editor's text (Monaco's postEditorText). contentChanged is a user edit and arrives
+    # on every keystroke; editorTextSet is a programmatic load and must not mark the tab dirty. Neither
+    # logs, for the reason above - and logging the text would put query content in the log.
     if ($Type -eq 'contentChanged') {
         $Script:MainForm.Definition.Dispatcher.Invoke([System.Action] {
-                Invoke-EditorContentChanged -TabSession $TabSession
+                Invoke-EditorContentChanged -TabSession $TabSession -Text $MessageObj.text
+            })
+        return
+    }
+
+    if ($Type -eq 'editorTextSet') {
+        $Script:MainForm.Definition.Dispatcher.Invoke([System.Action] {
+                Set-TabEditorText -TabSession $TabSession -Text $MessageObj.text
             })
         return
     }

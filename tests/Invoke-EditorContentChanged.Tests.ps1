@@ -7,6 +7,7 @@ BeforeAll {
 
     . (Join-Path $Script:PrivatePath "Invoke-EditorContentChanged.ps1")
     . (Join-Path $Script:PrivatePath "Request-SqlSyntaxValidation.ps1")
+    . (Join-Path $Script:PrivatePath "Set-TabEditorText.ps1")
 
     function Write-LogOutput {
         param([Parameter(ValueFromPipeline = $true)]$Message, [string]$LogType = "INFO", $ErrorObject, [switch]$SkipDialog, [switch]$TabScoped)
@@ -88,5 +89,33 @@ Describe 'Invoke-EditorContentChanged' -Tag 'Unit' {
     It 'Should do nothing for a message without a tab' {
         { Invoke-EditorContentChanged -TabSession $null } | Should -Not -Throw
         $script:HeaderRefreshes | Should -Be 0
+    }
+
+    It 'Should record the text a user edit carries, as what is on screen and as the draft' {
+        $Tab = [PSCustomObject]@{ Id = "a"; IsDirty = $false }
+
+        Invoke-EditorContentChanged -TabSession $Tab -Text "SELECT 1"
+
+        $Tab.EditorText | Should -Be "SELECT 1"
+        $Tab.DraftText | Should -Be "SELECT 1"
+        $Tab.DraftPending | Should -BeTrue
+    }
+
+    It 'Should record an edit that emptied the editor' {
+        $Tab = [PSCustomObject]@{ Id = "a"; IsDirty = $true; EditorText = "SELECT 1"; DraftText = "SELECT 1" }
+
+        Invoke-EditorContentChanged -TabSession $Tab -Text ""
+
+        $Tab.EditorText | Should -Be ""
+        $Tab.DraftText | Should -Be ""
+    }
+
+    It 'Should leave the recorded text alone when the message carried none' {
+        $Tab = [PSCustomObject]@{ Id = "a"; IsDirty = $false; EditorText = "kept" }
+
+        Invoke-EditorContentChanged -TabSession $Tab
+
+        $Tab.EditorText | Should -Be "kept"
+        $Tab.IsDirty | Should -BeTrue
     }
 }
