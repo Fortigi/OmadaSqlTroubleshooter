@@ -186,13 +186,103 @@ function Find-VisualChildColumnHeadersPresenter {
     return $null
 }
 
+function Register-QueryResultPaneResizeHandler {
+    <#
+    .SYNOPSIS
+    Sizes the result grids again whenever the Results pane's height changes.
+
+    .DESCRIPTION
+    The sizing pass gives every grid a fixed height from the pane's viewport. Run only after an
+    execute, that height went stale as soon as the pane changed size - a window restore or resize, the
+    editor/output splitter dragged - and one result no longer fitted: an outer scrollbar appeared and
+    the grid's own horizontal scrollbar sat below the visible pane.
+
+    Subscribes to the pane's SizeChanged once per pane; a second call does nothing, marked by the
+    ScrollViewer's Tag, which nothing else uses. Only a HEIGHT change re-sizes: a width change cannot
+    alter a grid's share, and the sizing pass itself never changes the pane's height (it changes the
+    extent, and through the vertical scrollbar the viewport width), so the handler cannot feed itself.
+
+    The pass is deferred to the dispatcher at Background priority, not run inside SizeChanged. The
+    ScrollViewer updates ViewportHeight in its LayoutUpdated callback, which runs AFTER SizeChanged, so
+    a pass run in the handler read the viewport from before the resize and was always one resize
+    behind - measured in the STA probe. By Background priority layout has finished.
+
+    Bare scriptblocks rather than closures, for the reason Complete-ExecuteQueryResult gives:
+    GetNewClosure loses the module's commands. The resized pane travels as the dispatcher operation's
+    argument, and the tab is resolved from it.
+
+    .PARAMETER TabSession
+    The tab whose pane to watch.
+    #>
+    [CmdLetBinding()]
+    param(
+        $TabSession
+    )
+
+    $Private:Scroll = $TabSession.Elements.ScrollViewerQueryResults
+    if ($null -eq $Private:Scroll -or $Private:Scroll.Tag -eq "QueryResultPaneResize") {
+        return
+    }
+
+    $Private:Scroll.Tag = "QueryResultPaneResize"
+    $Private:Scroll.Add_SizeChanged({
+            param($EventSender, $SizeChangedEventArgs)
+
+            if ($SizeChangedEventArgs.HeightChanged) {
+                [void]$EventSender.Dispatcher.BeginInvoke(
+                    [System.Windows.Threading.DispatcherPriority]::Background,
+                    [System.Action[object]] {
+                        param($ResizedPane)
+                        Invoke-QueryResultPaneResize -ScrollViewer $ResizedPane
+                    },
+                    $EventSender)
+            }
+        })
+}
+
+function Invoke-QueryResultPaneResize {
+    <#
+    .SYNOPSIS
+    Re-sizes the result grids of the tab whose Results pane changed height.
+
+    .DESCRIPTION
+    The tab is the one whose ScrollViewerQueryResults IS the resized control, not whichever tab is
+    active: a tab's pane is laid out, and so resized, as it is being shown, which can be before the
+    active tab has been switched to it.
+
+    Best effort, like the sizing pass itself: a pane that could not be re-sized still shows its
+    results, so a failure is logged rather than reported. This runs on every height change while a
+    window is being dragged.
+
+    .PARAMETER ScrollViewer
+    The resized pane.
+    #>
+    [CmdLetBinding()]
+    param(
+        $ScrollViewer
+    )
+
+    try {
+        $Private:Owner = @($Script:Tabs | Where-Object { [object]::ReferenceEquals($_.Elements.ScrollViewerQueryResults, $ScrollViewer) }) | Select-Object -First 1
+        if ($null -ne $Private:Owner) {
+            Update-QueryResultStackLayout -TabSession $Private:Owner
+        }
+    }
+    catch {
+        $_.Exception.Message | Write-LogOutput -LogType DEBUG
+    }
+}
+
 function Update-QueryResultStackLayout {
     <#
     .SYNOPSIS
     Give every result grid an explicit height, so the stack shares the pane and never collapses.
 
     .DESCRIPTION
-    Runs after the results are bound and again whenever the pane is resized. Sets an explicit Height on
+    Runs after the results are bound (Complete-ExecuteQueryResult) and again whenever the pane's height
+    changes (the SizeChanged handler Register-QueryResultPaneResizeHandler adds). Without the second, a
+    pane that got smaller after an execute kept the grid at its old height, which brought in an outer
+    scrollbar and put the grid's own horizontal scrollbar below the visible pane. Sets an explicit Height on
     each grid, which is the only way the stack behaves: inside a StackPanel a grid with
     VerticalAlignment="Stretch" has nothing to stretch to, because the panel offers its children
     infinite height along the stack axis and then takes their desired size.
