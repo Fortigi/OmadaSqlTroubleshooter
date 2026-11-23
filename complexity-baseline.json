@@ -1,13 +1,13 @@
 {
   "schemaVersion": 1,
   "metricVersion": 1,
-  "generatedAt": "2026-10-10T09:38:32Z",
+  "generatedAt": "2026-11-23T11:34:01Z",
   "units": [
     {
       "file": "src/Lib/Events/MainForm.Definition.ps1",
       "unit": "<script-body>",
-      "cyclomatic": 74,
-      "cognitive": 128
+      "cyclomatic": 71,
+      "cognitive": 122
     },
     {
       "file": "src/Lib/Events/MainForm.Elements.TabControlSessions.ps1",
@@ -330,8 +330,8 @@
     {
       "file": "src/Lib/Functions/Private/Invoke-ExecuteQuery.ps1",
       "unit": "Complete-ExecuteQueryResult",
-      "cyclomatic": 22,
-      "cognitive": 34
+      "cyclomatic": 19,
+      "cognitive": 26
     },
     {
       "file": "src/Lib/Functions/Private/Invoke-ExecuteQuery.ps1",
