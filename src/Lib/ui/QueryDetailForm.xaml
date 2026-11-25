@@ -1,0 +1,104 @@
+<Window xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Query details"
+        Width="900"
+        Height="580"
+        MinWidth="820"
+        MinHeight="350"
+        WindowStartupLocation="CenterOwner"
+        ShowInTaskbar="False"
+        Background="{DynamicResource {x:Static SystemColors.ScrollBarBrushKey}}"
+        BorderBrush="{DynamicResource {x:Static SystemColors.ActiveBorderBrushKey}}"
+        Name="QueryDetailForm">
+
+    <!-- One query object: every field OData returns plus created / last changed from its history,
+         its SQL (read-only; it is edited in a tab), and its change history. -->
+    <Window.Resources>
+        <!-- Everything here comes from ui\Theme.xaml (docs/UI-THEME.md): the log and schema windows'
+             buttons, and grids that select as the result grid does. -->
+        <Style TargetType="Button" BasedOn="{StaticResource Theme.DialogButtonStyle}"/>
+        <Style TargetType="DataGrid" BasedOn="{StaticResource Theme.DataGridStyle}"/>
+    </Window.Resources>
+
+    <Grid Margin="10">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
+        <TextBlock Grid.Row="0" x:Name="TextBlockQueryTitle" FontFamily="Segoe UI" FontSize="16" FontWeight="SemiBold" Margin="0,0,0,8" TextTrimming="CharacterEllipsis"/>
+
+        <!-- Tabs as in the main window's Results / Messages (the theme's TabItem style). -->
+        <TabControl Grid.Row="1" x:Name="TabControlQueryDetail">
+            <TabItem Header="Properties">
+                <!-- Auto-sized columns and a horizontal scrollbar: a long value scrolls rather than
+                     being cut off at the window edge. -->
+                <DataGrid x:Name="DataGridQueryProperties" AutoGenerateColumns="False"
+                          HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Auto">
+                    <DataGrid.Columns>
+                        <DataGridTextColumn Header="Property" Binding="{Binding Property}" Width="Auto"/>
+                        <DataGridTextColumn Header="Value" Binding="{Binding Value}" Width="Auto" MinWidth="300"/>
+                    </DataGrid.Columns>
+                </DataGrid>
+            </TabItem>
+            <TabItem Header="SQL">
+                <TextBox x:Name="TextBoxQueryText" IsReadOnly="True" AcceptsReturn="True" TextWrapping="NoWrap"
+                         Background="{DynamicResource {x:Static SystemColors.WindowBrushKey}}"
+                         VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Auto" FontFamily="Consolas" FontSize="13"/>
+            </TabItem>
+            <TabItem Header="History">
+                <!-- Every column sizes to its content (no star column, which would pin the grid to the
+                     window's width) so a wide change scrolls horizontally instead of being cut off. -->
+                <DataGrid x:Name="DataGridQueryHistory" AutoGenerateColumns="False"
+                          HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Auto">
+                    <DataGrid.Columns>
+                        <DataGridTextColumn Header="When" Binding="{Binding When, StringFormat=yyyy-MM-dd HH:mm:ss}" Width="Auto"/>
+                        <DataGridTextColumn Header="Who" Binding="{Binding Who}" Width="Auto"/>
+                        <DataGridTextColumn Header="What" Binding="{Binding What}" Width="Auto"/>
+                        <DataGridTextColumn Header="Changed fields" Binding="{Binding Fields}" Width="Auto" MinWidth="200"/>
+                    </DataGrid.Columns>
+                </DataGrid>
+            </TabItem>
+        </TabControl>
+
+        <DockPanel Grid.Row="2" Margin="0,8,0,0" LastChildFill="False">
+            <Button x:Name="ButtonOpenQueryDetail" ToolTip="Open this query in the active tab, in place of its query (offers to save unsaved changes first)">
+                <StackPanel Orientation="Horizontal" IsHitTestVisible="False">
+                    <TextBlock Style="{StaticResource Theme.GlyphStyle}" Text="&#xE8E5;"/>
+                    <AccessText Style="{StaticResource Theme.ButtonTextStyle}" Text="_Open"/>
+                </StackPanel>
+            </Button>
+            <Button x:Name="ButtonOpenQueryDetailInTab" ToolTip="Open this query in a new tab">
+                <StackPanel Orientation="Horizontal" IsHitTestVisible="False">
+                    <TextBlock Style="{StaticResource Theme.GlyphStyle}" Text="&#xE8A7;"/>
+                    <AccessText Style="{StaticResource Theme.ButtonTextStyle}" Text="Open in new _tab"/>
+                </StackPanel>
+            </Button>
+            <Button x:Name="ButtonRenameQueryDetail" ToolTip="Rename this query">
+                <StackPanel Orientation="Horizontal" IsHitTestVisible="False">
+                    <TextBlock Style="{StaticResource Theme.GlyphStyle}" Text="&#xE8AC;"/>
+                    <AccessText Style="{StaticResource Theme.ButtonTextStyle}" Text="Ren_ame..."/>
+                </StackPanel>
+            </Button>
+            <Button x:Name="ButtonShowQueryDetailHistory" ToolTip="The history window for this query: compare versions, restore one, export">
+                <StackPanel Orientation="Horizontal" IsHitTestVisible="False">
+                    <TextBlock Style="{StaticResource Theme.GlyphStyle}" Text="&#xE81C;"/>
+                    <AccessText Style="{StaticResource Theme.ButtonTextStyle}" Text="_Compare / restore..."/>
+                </StackPanel>
+            </Button>
+            <Button x:Name="ButtonOpenQueryDetailInOmada" ToolTip="Open this query's page in Omada, in your browser">
+                <StackPanel Orientation="Horizontal" IsHitTestVisible="False">
+                    <TextBlock Style="{StaticResource Theme.GlyphStyle}" Text="&#xE774;"/>
+                    <AccessText Style="{StaticResource Theme.ButtonTextStyle}" Text="Open in O_mada"/>
+                </StackPanel>
+            </Button>
+            <Button x:Name="ButtonCloseQueryDetail" ToolTip="Close" DockPanel.Dock="Right" Margin="0" IsCancel="True">
+                <StackPanel Orientation="Horizontal" IsHitTestVisible="False">
+                    <TextBlock Style="{StaticResource Theme.GlyphStyle}" Text="&#xE711;"/>
+                    <AccessText Style="{StaticResource Theme.ButtonTextStyle}" Text="C_lose"/>
+                </StackPanel>
+            </Button>
+        </DockPanel>
+    </Grid>
+</Window>

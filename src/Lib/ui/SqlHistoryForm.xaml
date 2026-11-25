@@ -54,8 +54,6 @@
                     Value="98"/>
             <Setter Property="Padding"
                     Value="2,3"/>
-            <Setter Property="Background"
-                    Value="Transparent"/>
         </Style>
         <Style x:Key="ButtonAccessTextStyle"
                TargetType="AccessText">
@@ -72,38 +70,14 @@
             <Setter Property="FontSize"
                     Value="11"/>
         </Style>
-        <Style TargetType="DataGrid">
-            <Setter Property="Background"
-                    Value="{DynamicResource {x:Static SystemColors.WindowBrushKey}}"/>
-            <Setter Property="AlternatingRowBackground"
-                    Value="{DynamicResource {x:Static SystemColors.ControlLightBrushKey}}"/>
-            <Setter Property="GridLinesVisibility"
-                    Value="Horizontal"/>
-            <Setter Property="HorizontalGridLinesBrush"
-                    Value="{DynamicResource {x:Static SystemColors.ControlLightBrushKey}}"/>
-            <Setter Property="HeadersVisibility"
-                    Value="Column"/>
-            <Setter Property="CanUserReorderColumns"
-                    Value="True"/>
+        <!-- The theme's grid (ui\Theme.xaml): selects as the result grid does. Sorting stays on for the
+             version list. -->
+        <Style TargetType="DataGrid" BasedOn="{StaticResource Theme.DataGridStyle}">
             <Setter Property="CanUserSortColumns"
                     Value="True"/>
-            <Setter Property="CanUserResizeColumns"
-                    Value="True"/>
-            <Setter Property="SelectionMode"
-                    Value="Single"/>
-            <Setter Property="SelectionUnit"
-                    Value="FullRow"/>
         </Style>
-        <Style TargetType="TabControl">
-            <Setter Property="Background"
-                    Value="{DynamicResource {x:Static SystemColors.ControlBrushKey}}"/>
-        </Style>
-        <Style TargetType="TabItem">
-            <Setter Property="Background"
-                    Value="{DynamicResource {x:Static SystemColors.ControlBrushKey}}"/>
-            <Setter Property="Padding"
-                    Value="8,4"/>
-        </Style>
+        <!-- No TabControl / TabItem styles of its own: the tabs take the theme's (ui\Theme.xaml), as
+             the main window's Results / Messages do. -->
         <Style x:Key="ToolbarGlyphStyle"
                TargetType="TextBlock">
             <Setter Property="FontFamily"
@@ -158,9 +132,11 @@
                     BorderBrush="Gray"
                     BorderThickness="1"
                     Background="{DynamicResource {x:Static SystemColors.WindowBrushKey}}">
+                <!-- Selects as the result grid does (Theme.DataGridStyle): rows, cells and ranges, Ctrl+C
+                     copies. One version is shown, compared and restorable at a time: the details
+                     follow the selection only while it is in a single row (Get-DataGridSelectedRow). -->
                 <DataGrid x:Name="DataGridHistory"
-                          AutoGenerateColumns="False"
-                          IsReadOnly="True">
+                          AutoGenerateColumns="False">
                     <DataGrid.Columns>
                         <DataGridTextColumn Header="Change Date"
                                             Binding="{Binding ChangeDate, StringFormat=yyyy-MM-dd HH:mm:ss, TargetNullValue='(unknown)'}"
@@ -317,72 +293,15 @@
                     </TabItem>
                     <TabItem Header="Details"
                              x:Name="TabDetails">
-                        <Border BorderBrush="Gray"
-                                BorderThickness="1"
-                                Background="{DynamicResource {x:Static SystemColors.WindowBrushKey}}">
-                            <ScrollViewer VerticalScrollBarVisibility="Auto">
-                                <StackPanel Margin="10">
-                                    <Grid>
-                                        <Grid.ColumnDefinitions>
-                                            <ColumnDefinition Width="120"/>
-                                            <ColumnDefinition Width="*"/>
-                                        </Grid.ColumnDefinitions>
-                                        <Grid.RowDefinitions>
-                                            <RowDefinition Height="Auto"/>
-                                            <RowDefinition Height="Auto"/>
-                                            <RowDefinition Height="Auto"/>
-                                            <RowDefinition Height="Auto"/>
-                                            <RowDefinition Height="Auto"/>
-                                            <RowDefinition Height="Auto"/>
-                                        </Grid.RowDefinitions>
-
-                                        <TextBlock Grid.Row="0"
-                                                   Grid.Column="0"
-                                                   Text="Query DoId:"
-                                                   FontWeight="Bold"
-                                                   Margin="0,0,0,5"/>
-                                        <TextBox Grid.Row="0"
-                                                 Grid.Column="1"
-                                                 x:Name="TextBoxDoId"
-                                                 IsReadOnly="True"
-                                                 Margin="0,0,0,5"/>
-
-                                        <TextBlock Grid.Row="1"
-                                                   Grid.Column="0"
-                                                   Text="Query Name:"
-                                                   FontWeight="Bold"
-                                                   Margin="0,0,0,5"/>
-                                        <TextBox Grid.Row="1"
-                                                 Grid.Column="1"
-                                                 x:Name="TextBoxObjectName"
-                                                 IsReadOnly="True"
-                                                 Margin="0,0,0,5"/>
-
-                                        <TextBlock Grid.Row="2"
-                                                   Grid.Column="0"
-                                                   Text="Changed By:"
-                                                   FontWeight="Bold"
-                                                   Margin="0,0,0,5"/>
-                                        <TextBox Grid.Row="2"
-                                                 Grid.Column="1"
-                                                 x:Name="TextBoxChangedBy"
-                                                 IsReadOnly="True"
-                                                 Margin="0,0,0,5"/>
-
-                                        <TextBlock Grid.Row="3"
-                                                   Grid.Column="0"
-                                                   Text="Change Date:"
-                                                   FontWeight="Bold"
-                                                   Margin="0,0,0,5"/>
-                                        <TextBox Grid.Row="3"
-                                                 Grid.Column="1"
-                                                 x:Name="TextBoxChangeDate"
-                                                 IsReadOnly="True"
-                                                 Margin="0,0,0,5"/>
-                                    </Grid>
-                                </StackPanel>
-                            </ScrollViewer>
-                        </Border>
+                        <!-- The selected version's fields, as the query details' Properties tab shows a
+                             query's: a Property / Value grid (ConvertTo-HistoryDetailList). -->
+                        <DataGrid x:Name="DataGridHistoryDetails"
+                                          AutoGenerateColumns="False">
+                            <DataGrid.Columns>
+                                <DataGridTextColumn Header="Property" Binding="{Binding Property}" Width="Auto"/>
+                                <DataGridTextColumn Header="Value" Binding="{Binding Value}" Width="Auto" MinWidth="300"/>
+                            </DataGrid.Columns>
+                        </DataGrid>
                     </TabItem>
                 </TabControl>
             </Border>

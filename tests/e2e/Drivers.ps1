@@ -188,6 +188,7 @@ function script:Reset-E2EScenario {
     $script:E2EConnectionProbeError = $null
     $script:E2EFixtureOverride = $null
     $script:E2EChoiceReturn = $null
+    $script:E2EInputText = $null
     $script:E2EChoices.Clear()
     # Background requests complete immediately again unless a scenario asks for a slow one.
     $script:E2ERequestDelayMs = 0

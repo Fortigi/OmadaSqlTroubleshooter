@@ -175,6 +175,9 @@ function Invoke-OmadaSqlTroubleshooter {
     Write-LoadedComponentLog
 
     #region wpf
+    # A previous run in this PowerShell session may have ended without its clean-up; its timers would
+    # otherwise keep ticking next to this run's (Stop-ApplicationTimer).
+    $null = Stop-ApplicationTimer
     $null  = Open-SplashScreenForm
     "Loading Main Form Object" | Write-LogOutput -LogType DEBUG
     $Script:MainForm = Initialize-FormObject -FormPath (Join-Path $Script:RunTimeConfig.ModuleFolder -ChildPath "lib\ui\MainForm.xaml") -AppendVersion
@@ -346,6 +349,9 @@ function Invoke-OmadaSqlTroubleshooter {
             Set-ConfigProperty
             "Close Main Form" | Write-LogOutput -LogType DEBUG
             $Script:MainForm.Definition.Close() | Out-Null
+            # The timers belong to the thread's Dispatcher, which outlives this run; see
+            # Stop-ApplicationTimer.
+            $null = Stop-ApplicationTimer
             foreach ($Tab in $Script:Tabs) {
                 try {
                     # A lazily-restored tab that was never viewed has no WebView2 yet (Object is $null) -

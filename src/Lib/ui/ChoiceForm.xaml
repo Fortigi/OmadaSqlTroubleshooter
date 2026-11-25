@@ -38,6 +38,7 @@
         <Grid.RowDefinitions>
             <RowDefinition Height="*"/>
             <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
         </Grid.RowDefinitions>
 
         <Border Grid.Row="0">
@@ -51,7 +52,17 @@
             </Label>
         </Border>
 
-        <StackPanel Grid.Row="1"
+        <!-- Only shown when Open-ChoiceForm is called with -ShowInput (a query name, for example). -->
+        <TextBox Grid.Row="1"
+                 x:Name="InputTextBox"
+                 Visibility="Collapsed"
+                 MinWidth="300"
+                 MaxWidth="600"
+                 Margin="0,0,0,10"
+                 FontFamily="Segoe UI"
+                 FontSize="12"/>
+
+        <StackPanel Grid.Row="2"
                    Orientation="Horizontal"
                    HorizontalAlignment="Center">
             <Button x:Name="LeftButton"
@@ -61,6 +72,13 @@
             <Button x:Name="RightButton"
                    Content="No"
                    IsCancel="True"
+                   Style="{StaticResource RightButtonStyle}"/>
+            <!-- Only shown when Open-ChoiceForm is called with -ExtraButtonText; it then takes over
+                 IsCancel, so Escape always means the most cautious answer. -->
+            <Button x:Name="ExtraButton"
+                   Content="Cancel"
+                   Visibility="Collapsed"
+                   Margin="15,0,0,0"
                    Style="{StaticResource RightButtonStyle}"/>
         </StackPanel>
     </Grid>

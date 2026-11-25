@@ -31,7 +31,6 @@ function Set-EditorValue {
                 $Script:RunTimeData.CurrentSqlQuery.DoId = $Private:Result.Id
                 $Script:RunTimeData.CurrentSqlQuery.DisplayName = $Private:Result.DisplayName
 
-                $Script:MainForm.Elements.TextBoxDisplayName.Text = $Private:Result.DisplayName
                 $Private:Result.C_SQLTROUBLESHOOTING_DATACONNECTION.Id, $Private:Result.C_SQLTROUBLESHOOTING_DATACONNECTION.DisplayName | Set-ConfigProperty -Property "CurrentDataConnection"
 
                 Set-DataConnection
@@ -41,7 +40,9 @@ function Set-EditorValue {
 
                 if ($null -ne $Script:Webview.Object.CoreWebView2) {
                     "Push query to editor!" | Write-LogOutput -LogType DEBUG
-                    $QueryLiteral = ConvertTo-JavaScriptLiteral -Value $Private:Result.C_QUERY
+                    # The saved text - or an older version waiting to be restored into this tab.
+                    $Private:Load = Resolve-EditorLoadText -TabSession (Get-ActiveTabSession) -SavedText $Private:Result.C_QUERY
+                    $QueryLiteral = ConvertTo-JavaScriptLiteral -Value $Private:Load.Text
                     $ScriptToExecute = @"
 (function() {
     let retryCount = 0;
@@ -73,6 +74,10 @@ function Set-EditorValue {
 "@
                     Push-ToEditor -ScriptToExecute $ScriptToExecute
                     $Script:RunTimeData.CurrentQueryText = $Private:Result.C_QUERY
+
+                    # The editor now holds exactly the saved query, so nothing is unsaved any more -
+                    # unless it holds a restored older version, which is an unsaved change.
+                    Set-TabQueryClean -TabSession (Get-ActiveTabSession) -Restored:$Private:Load.Restored
                     "Query {0} retrieved!" -f $Script:AppConfig.CurrentSqlQuery.DoId | Write-LogOutput
                 }
             }

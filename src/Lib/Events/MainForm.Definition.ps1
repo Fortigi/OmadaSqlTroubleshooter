@@ -41,6 +41,10 @@ $Script:WebViewCompletionPollTimer.Add_Tick({
                 Invoke-OmadaSessionKeepAlive
             }
 
+            # Unsaved ad-hoc queries reach the draft cache from here, every two seconds at most, so
+            # typing never waits on the disk. The function owns its own interval.
+            Invoke-AdHocQueryDraftTimerTick -TickCount $Script:WebViewCompletionTickCount
+
             $Completed = @($Script:PendingWebViewCompletions | Where-Object { $_.Task.IsCompleted })
             foreach ($Pending in $Completed) {
                 [void]$Script:PendingWebViewCompletions.Remove($Pending)
@@ -212,33 +216,22 @@ $Script:MainForm.Definition.Add_Closed({
     })
 
 $Script:MainForm.Definition.Add_Closing({
+        param(
+            $ClosingSender,
+            $ClosingEventArgs
+        )
         try {
             $_ | Show-EventInfo
-            $Script:MainForm.State = "Closing"
-            Save-TabSessions
-            Save-FormMeasurements
-            if (Test-LogFormIsVisible) {
-                $Script:LogForm.Definition.Close()
-            }
-            if (Test-SqlHistoryFormOpen) {
-                $Script:SqlHistoryForm.Definition.Close()
-            }
-            if (Test-SqlSchemaFormIsVisible) {
-                $Script:SqlSchemaForm.Definition.Close()
-            }
-
-            # Background request workers are real threads; left open they keep the process alive
-            # after the window has gone (issue #40). Best-effort, and last, so a failure here cannot
-            # cost the user their saved tab sessions or window measurements above.
-            Close-OmadaRequestPool
-            Close-SqlDiagnosticPool
+            # Offers to save unsaved queries first - Cancel keeps the window open - then persists the
+            # session and closes the background pools. See Invoke-MainFormClosing for the order.
+            Invoke-MainFormClosing -ClosingEventArgs $ClosingEventArgs
         }
         catch {
             # Contained, like every other cleanup path in this change (Complete-TabClose,
             # Restore-MainFormFocus). A terminating log here unwinds out of the Closing handler, and
-            # the comment above says what that costs: worker threads left open keep the PROCESS alive
-            # after the window has gone. Failing to shut down cleanly must not be compounded by
-            # failing to report it - least of all with a modal dialog on the way out.
+            # what that costs is worker threads left open, keeping the PROCESS alive after the window
+            # has gone. Failing to shut down cleanly must not be compounded by failing to report it -
+            # least of all with a modal dialog on the way out.
             $_.Exception.Message | Write-ContainedErrorLog -ErrorObject $_
         }
     })
@@ -396,6 +389,10 @@ $Script:MainForm.Definition.Add_Loaded({
             # creates the initial tab(s) - from persisted state, migrated legacy config, or a
             # single fresh tab on first-ever run.
             Restore-TabSessions
+
+            # Then, at the user's request, the ad-hoc queries that were not saved when the application
+            # last closed or crashed.
+            Restore-AdHocQueryDraft
         }
         catch {
             "Tab session restore failed: {0}" -f $_.Exception.Message | Write-LogOutput -LogType ERROR -ErrorObject $_

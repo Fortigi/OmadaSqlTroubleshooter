@@ -7,10 +7,11 @@ $Script:SqlHistoryForm.Elements.ButtonRestoreQuery.Add_Click({
         try {
             $_ | Show-EventInfo
 
-            $SelectedItem = $Script:SqlHistoryForm.Elements.DataGridHistory.SelectedItem
+            # The version the selection is in: cells as well as rows can be selected.
+            $SelectedItem = Get-SqlHistorySelectedItem
 
             if ($null -eq $SelectedItem) {
-                "No history item selected" | Write-LogOutput -LogType WARNING
+                "Select one version (a row, or cells in one row) to restore." | Write-LogOutput -LogType WARNING
                 return
             }
 
@@ -33,16 +34,11 @@ $Script:SqlHistoryForm.Elements.ButtonRestoreQuery.Add_Click({
             if ($Result -eq [System.Windows.MessageBoxResult]::Yes) {
                 try {
 
-                    if ($null -ne $Script:Webview.Object.CoreWebView2) {
-
-                        # window.setEditorValue (not editor.setValue directly) so Monaco's
-                        # __suppressDirty contract holds - restoring a history version is a
-                        # programmatic load, not a genuine user edit, and must not mark the tab dirty.
-                        $ScriptToExecute = "window.setEditorValue({0});" -f (ConvertTo-JavaScriptLiteral -Value $SelectedItem.OldValue)
-                        Push-ToEditor -ScriptToExecute $ScriptToExecute
-                        $Script:RunTimeData.CurrentQueryText = $SelectedItem.OldValue
-                        "Query restored to editor!" | Write-LogOutput
-                    }
+                    # Into the tab that holds this query: the active one for the toolbar's History,
+                    # possibly another - or a new - one when the history was opened from the query
+                    # manager. See Restore-SqlQueryVersion, which also explains why a restored version
+                    # now counts as an unsaved change.
+                    Restore-SqlQueryVersion -DoId $SelectedItem.DoId -QueryName $SelectedItem.SqlObjectName -Text $SelectedItem.OldValue
                     "Query restored from history: {0}" -f (Format-OmadaHistoryDate -Value $SelectedItem.ChangeDate) | Write-LogOutput
 
                     $Script:SqlHistoryForm.Definition.Close()

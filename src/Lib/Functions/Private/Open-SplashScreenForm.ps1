@@ -16,7 +16,7 @@ function Open-SplashScreenForm {
             "Failed to load application icon for splash screen: {0}" -f $_.Exception.Message | Write-LogOutput -LogType WARNING
         }
 
-        $Script:SplashScreenForm.Elements.TextboxSplashVersion.Content = "Version {0}`nFortigi (C) 2024-{1}" -f $Script:RunTimeConfig.ApplicationVersion, (Get-Date).ToString("yyyy")
+        $Script:SplashScreenForm.Elements.TextboxSplashVersion.Content = (Get-AboutText -Version $Script:RunTimeConfig.ApplicationVersion -Year (Get-Date).Year).Version
 
         "Show Splash Screen" | Write-LogOutput -LogType DEBUG
         [void]$Script:SplashScreenForm.Definition.Show()

@@ -41,9 +41,12 @@ Describe 'Results that would land on newer text are stopped first' -Tag 'Unit' {
 
     It 'Should close the validation pool when the window closes' {
         # Worker threads left open keep the process alive after the window has gone (issue #40).
+        # The Closing handler delegates to Invoke-MainFormClosing, which closes both pools last.
         $Source = Get-Content -Path (Join-Path $Script:EventsPath "MainForm.Definition.ps1") -Raw
         $Closing = ([regex]::Match($Source, '(?s)Add_Closing\(\{.*?\n    \}\)')).Value
+        $Closing | Should -Match 'Invoke-MainFormClosing'
 
-        $Closing | Should -Match 'Close-OmadaRequestPool\s+Close-SqlDiagnosticPool'
+        $Function = Get-Content -Path (Join-Path $Script:PrivatePath "Invoke-MainFormClosing.ps1") -Raw
+        $Function | Should -Match 'Close-OmadaRequestPool\s+Close-SqlDiagnosticPool'
     }
 }

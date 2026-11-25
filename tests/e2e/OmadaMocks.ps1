@@ -5,6 +5,7 @@
 
 $script:E2ECalls = [System.Collections.Generic.List[object]]::new()
 $script:E2EChoiceReturn = $null   # what a (mocked) reconnect dialog returns; set per scenario
+$script:E2EInputText = $null      # what a (mocked) name prompt answers; $null accepts its suggestion
 
 # --- The single backend seam ----------------------------------------------------------------------
 function script:Invoke-OmadaPSWebRequestWrapper {
@@ -220,9 +221,16 @@ function script:Open-ChoiceForm {
         $LeftButtonText = "Yes",
         $RightButtonText = "No",
         $LeftButtonReturnValue = $true,
-        $RightButtonReturnValue = $false
+        $RightButtonReturnValue = $false,
+        $ExtraButtonText,
+        $ExtraButtonReturnValue = $null,
+        [switch]$ShowInput,
+        [string]$InputText
     )
     $script:E2EChoices.Add([PSCustomObject]@{ Title = [string]$Title; Message = [string]$Message })
+    # A name prompt is answered with $script:E2EInputText when a scenario sets it, otherwise with the
+    # name it suggests, as if the user had accepted it.
+    $Script:ChoiceFormInputText = if ($null -ne $script:E2EInputText) { $script:E2EInputText } else { $InputText }
     if ($null -ne $script:E2EChoiceReturn) {
         return $script:E2EChoiceReturn
     }

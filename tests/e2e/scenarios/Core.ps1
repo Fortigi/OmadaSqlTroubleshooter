@@ -56,30 +56,59 @@ E2ESuite -Name "Execute" -Body {
 }
 
 E2ESuite -Name "SaveAsNew" -Body {
-    E2ECase -Name "saving a query as new posts it and adds it to the dropdown" -Body {
+    E2ECase -Name "saving an ad-hoc query asks a name, posts it and adds it to the dropdown" -Body {
         Reset-E2ETabsToOne
         Set-E2EConnectionFields
         Invoke-E2EConnect
 
-        $Elements = Get-E2EElements
-        $Elements.TextBoxDisplayName.Text = "MyBrandNewQuery"
-        Invoke-E2EClick -ElementName "ButtonNewQuery"
+        # No query selected: the editor is an ad-hoc query. Save asks for a name in a pop-up.
+        $script:E2EEditorText = "SELECT 1"
+        (Get-ActiveTabSession).EditorText = "SELECT 1"
+        $script:E2EInputText = "MyBrandNewQuery"
+        try {
+            $Elements = Get-E2EElements
+            Invoke-E2EClick -ElementName "ButtonSaveQuery"
+        }
+        finally {
+            $script:E2EInputText = $null
+        }
 
         E2EAssertTrue ((Get-E2ECallCount -MethodLike "POST" -UriLike "*odata/dataobjects/C_P_SQLTROUBLESHOOTING") -ge 1) "a create POST should have been issued"
         E2EAssertTrue (@($Elements.ComboBoxSelectQuery.Items | Where-Object { $_.Content -like "*200" }).Count -ge 1) "the new query should appear in the dropdown"
     }
 
-    E2ECase -Name "an empty display name is rejected (no create POST)" -Body {
+    E2ECase -Name "an empty editor is not offered to be saved (no create POST)" -Body {
         Reset-E2ETabsToOne
         Set-E2EConnectionFields
         Invoke-E2EConnect
 
-        $Elements = Get-E2EElements
-        $Elements.TextBoxDisplayName.Text = ""
+        $script:E2EEditorText = ""
+        (Get-ActiveTabSession).EditorText = ""
         $script:E2ECalls.Clear()
+        try {
+            Invoke-E2EClick -ElementName "ButtonSaveQuery"
+        }
+        finally {
+            $script:E2EEditorText = "SELECT 1"
+        }
+
+        E2EAssertEqual 0 (Get-E2ECallCount -MethodLike "POST" -UriLike "*odata/dataobjects/C_P_SQLTROUBLESHOOTING") "an empty editor should not create a query"
+    }
+
+    E2ECase -Name "New clears the selected query and leaves New enabled" -Body {
+        Reset-E2ETabsToOne
+        Set-E2EConnectionFields
+        Invoke-E2EConnect
+        Select-E2EQuery | Out-Null
+        $script:E2ECalls.Clear()
+
         Invoke-E2EClick -ElementName "ButtonNewQuery"
 
-        E2EAssertEqual 0 (Get-E2ECallCount -MethodLike "POST" -UriLike "*odata/dataobjects/C_P_SQLTROUBLESHOOTING") "an empty display name should not create a query"
+        $Elements = Get-E2EElements
+        E2EAssertTrue ($null -eq $Elements.ComboBoxSelectQuery.SelectedItem) "New should clear the query selection"
+        E2EAssertTrue ([string]::IsNullOrWhiteSpace([string]$Script:AppConfig.CurrentSqlQuery.DoId)) "New should leave an ad-hoc query"
+        E2EAssertTrue ([bool]$Elements.ButtonNewQuery.IsEnabled) "New must not be left disabled"
+        E2EAssertEqual 0 (Get-E2ECallCount -MethodLike "POST" -UriLike "*odata/dataobjects/C_P_SQLTROUBLESHOOTING") "New must not create anything on the tenant"
     }
 }
 

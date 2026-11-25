@@ -2,7 +2,20 @@ function Open-SqlHistoryForm {
     [CmdLetBinding()]
     [System.Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSAvoidAssignmentToAutomaticVariable', 'Sender', Justification = 'The use of the variable is on purpose')]
     [System.Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSAvoidAssignmentToAutomaticVariable', 'Args', Justification = 'The use of the variable is on purpose')]
-    param()
+    param(
+        # Open the history of this query instead of the active tab's (the query manager's detail
+        # view). Restore then puts the chosen version in the tab that holds the query, opening one
+        # when none does (Restore-SqlQueryVersion).
+        [Parameter(Mandatory = $false)]
+        [string]$DoId,
+
+        [Parameter(Mandatory = $false)]
+        [string]$QueryName,
+
+        # The window to open on top of, when that is not the main window (the query details).
+        [Parameter(Mandatory = $false)]
+        $Owner
+    )
     try {
 
         $Script:Tracer::WriteLine(("{0}: Function: {1} - Caller: {2}({3}) - Command: {4} - Parameters: {5}" -f $($Script:RunTimeConfig.ApplicationName), $($MyInvocation.MyCommand.Name), $($MyInvocation.ScriptName).Split("\")[-1], $($MyInvocation.ScriptLineNumber), $MyInvocation.Statement, (ConvertTo-RedactedLogString -InputObject $PSBoundParameters -MaxDepth 1)))
@@ -15,7 +28,17 @@ function Open-SqlHistoryForm {
 
         #Log form creation
         "Opening Sql History form" | Write-LogOutput -LogType DEBUG
+        $Script:SqlHistoryTarget = $null
+        if (![string]::IsNullOrWhiteSpace($DoId)) {
+            $Script:SqlHistoryTarget = [PSCustomObject]@{ DoId = $DoId; QueryName = $QueryName }
+        }
         $Script:SqlHistoryForm = Initialize-FormObject -FormPath (Join-Path $Script:RunTimeConfig.ModuleFolder -ChildPath "lib\ui\SqlHistoryForm.xaml") -ParentForm $Script:MainForm.Definition
+        if ($null -ne $Script:SqlHistoryTarget) {
+            $Script:SqlHistoryForm.Definition.Title = "{0} - {1}" -f $Script:SqlHistoryForm.Definition.Title, $QueryName
+        }
+        if ($null -ne $Owner) {
+            $Script:SqlHistoryForm.Definition.Owner = $Owner
+        }
         Import-EventObjects -ClassName "SqlHistoryForm"
         [Int]$Script:SqlHistoryForm.PositionManager.PositionOffSetRight = 405
 

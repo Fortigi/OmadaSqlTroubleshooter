@@ -1,6 +1,11 @@
 function Get-SqlHistory {
     [CmdLetBinding()]
-    param()
+    param(
+        # The query whose history to read. Defaults to the active tab's selected query; the query
+        # manager's detail view passes the query it shows.
+        [Parameter(Mandatory = $false)]
+        [string]$DoId = $Script:AppConfig.CurrentSqlQuery.DoId
+    )
     try {
         $Script:Tracer::WriteLine(("{0}: Function: {1} - Caller: {2}({3}) - Command: {4} - Parameters: {5}" -f $($Script:RunTimeConfig.ApplicationName), $($MyInvocation.MyCommand.Name), $($MyInvocation.ScriptName).Split("\")[-1], $($MyInvocation.ScriptLineNumber), $MyInvocation.Statement, (ConvertTo-RedactedLogString -InputObject $PSBoundParameters -MaxDepth 1)))
 
@@ -26,7 +31,7 @@ function Get-SqlHistory {
             $Script:RunTimeData.RestMethodParam.Body = @{
                 "dataType"     = "DataObjectHistory"
                 "dataTypeArgs" = @{
-                    "dataObjectId" = $Script:AppConfig.CurrentSqlQuery.DoId
+                    "dataObjectId" = $DoId
                     "propertyId"   = 0
                     "userId"       = 0
                 }
@@ -65,7 +70,7 @@ function Get-SqlHistory {
                     }
 
                     $SqlHistoryObject = [PSCustomObject]@{
-                        DoId          = $Script:AppConfig.CurrentSqlQuery.DoId
+                        DoId          = $DoId
                         SqlObjectName = $Row.Object
                         OldValue      = $null -ne $ChangedField.OldValue ? [System.Web.HttpUtility]::HtmlDecode($ChangedField.OldValue) : $null
                         NewValue      = $null -ne $ChangedField.NewValue ? [System.Web.HttpUtility]::HtmlDecode($ChangedField.NewValue) : $null

@@ -16,8 +16,17 @@ function Invoke-EditorContentChanged {
         even when the level filters it out (Write-LogOutput resolves its context before it applies
         the level), and buries everything else in the log.
 
+        The text arrives with the message (Monaco's postEditorText) and is recorded with
+        Set-TabEditorText as a user edit, which is also what queues the ad-hoc draft cache to be
+        written: the file itself is written later, from the completion poll timer, so typing never
+        waits on the disk.
+
     .PARAMETER TabSession
         The tab whose editor changed.
+
+    .PARAMETER Text
+        The editor's text after the change. Omitted by a sender that does not report it, in which
+        case nothing is recorded.
 
     .OUTPUTS
         None.
@@ -26,11 +35,20 @@ function Invoke-EditorContentChanged {
     param(
         [Parameter(Mandatory = $true)]
         [AllowNull()]
-        $TabSession
+        $TabSession,
+
+        [Parameter(Mandatory = $false)]
+        [AllowNull()]
+        [AllowEmptyString()]
+        [string]$Text
     )
 
     if ($null -eq $TabSession) {
         return
+    }
+
+    if ($PSBoundParameters.ContainsKey("Text")) {
+        Set-TabEditorText -TabSession $TabSession -Text $Text -UserEdit
     }
 
     if (-not $TabSession.IsDirty) {

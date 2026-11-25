@@ -38,7 +38,18 @@
             // reported as an unsaved change - only genuine user edits should. Callers set the
             // editor's content via window.setEditorValue(...) instead of editor.setValue(...)
             // directly so this distinction can be made.
+            //
+            // Both report the editor's text to the host. The host keeps it on the tab so it can
+            // decide synchronously - while the window is closing, when no WebView2 round-trip can be
+            // awaited - whether there is anything to save, and so it can keep an unsaved ad-hoc
+            // query in its draft cache. 'contentChanged' is a user edit (marks the tab dirty);
+            // 'editorTextSet' is a programmatic load (does not).
             window.__suppressDirty = false;
+            function postEditorText(type) {
+                if (window.chrome && window.chrome.webview) {
+                    window.chrome.webview.postMessage({ type: type, text: editor.getValue() });
+                }
+            }
             window.setEditorValue = function (value) {
                 window.__suppressDirty = true;
                 try {
@@ -47,10 +58,11 @@
                 finally {
                     window.__suppressDirty = false;
                 }
+                postEditorText('editorTextSet');
             };
             editor.onDidChangeModelContent(function () {
                 if (!window.__suppressDirty) {
-                    window.chrome.webview.postMessage({ type: 'contentChanged' });
+                    postEditorText('contentChanged');
                 }
             });
 

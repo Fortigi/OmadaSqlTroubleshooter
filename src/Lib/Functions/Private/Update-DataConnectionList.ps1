@@ -212,7 +212,6 @@ function Complete-DataConnectionListUpdate {
                 $Script:MainForm.Elements.ComboBoxSelectDataConnection.SelectedItem = $Script:MainForm.Elements.ComboBoxSelectDataConnection.Items | Where-Object { $_.Content -eq $ComboBoxDataConnectionSelectedItem.Content }
             }
 
-            $Script:MainForm.Elements.TextBoxDisplayName.IsEnabled = $true
             $Script:MainForm.Elements.ComboBoxSelectDataConnection.IsEnabled = $true
             $Script:MainForm.Elements.ButtonShowSqlSchema.IsEnabled = $true
 

@@ -56,8 +56,11 @@ $Script:MainForm.Elements.ButtonExecuteQuery.Add_Click({
                 Resume-WebViewCompletionPolling
             }
 
-            if (!(Test-ConnectionRequirements) -or [string]::IsNullOrWhiteSpace($Script:AppConfig.CurrentSqlQuery.DoId)) {
-                "Omada Url not set or Query not selected, cannot retrieve data!" | Write-LogOutput -LogType WARNING
+            # No selected query is not a refusal: that is an ad-hoc query, run through the temporary
+            # query object (Resolve-ExecuteQueryScope). Only an ad-hoc query with nothing in the editor
+            # has nothing to run.
+            if (!(Test-ConnectionRequirements) -or -not (Test-ExecuteQueryInput -QueryDoId $Script:AppConfig.CurrentSqlQuery.DoId -EditorText (Get-ActiveTabSession).EditorText)) {
+                "Not connected, or no query selected and nothing in the editor: there is nothing to execute." | Write-LogOutput -LogType WARNING
 
                 # The full teardown. This branch has already disabled Save, Execute and the output
                 # buttons above, and leaving them that way meant refusing to start an execute took the
@@ -65,11 +68,15 @@ $Script:MainForm.Elements.ButtonExecuteQuery.Add_Click({
                 # is exactly what it is for: no request was issued, so there is no elapsed time worth
                 # showing and no execute to summarise.
                 Reset-ExecuteQueryUiState -SkipStatusBarTime
-                Set-TabStatusMessage -Message "Cannot execute: no tenant URL or no query selected"
+                Set-TabStatusMessage -Message "Cannot execute: not connected, or the editor is empty"
                 Restore-MainFormFocus
             }
             else {
                 "Execute" | Write-LogOutput
+
+                # An executed ad-hoc query is kept in the draft cache straight away rather than on the
+                # next timer pass: running it is the moment the user shows it matters.
+                Sync-AdHocQueryDraft -TabSession (Get-ActiveTabSession)
                 Invoke-ExecuteQuery
             }
         }

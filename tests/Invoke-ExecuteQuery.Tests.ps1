@@ -53,6 +53,8 @@ BeforeAll {
     . (Join-Path $PrivatePath -ChildPath "Format-QueryResultText.ps1")
     . (Join-Path $PrivatePath -ChildPath "Set-TabResultOutputMode.ps1")
     . (Join-Path $PrivatePath -ChildPath "Update-QueryResultStackLayout.ps1")
+    . (Join-Path $PrivatePath -ChildPath "Test-AdHocQuery.ps1")
+    . (Join-Path $PrivatePath -ChildPath "Resolve-ExecuteQueryScope.ps1")
     . (Join-Path $PrivatePath -ChildPath "Invoke-ExecuteQuery.ps1")
     # An execute forgets a reused fetch of the selected query (Get-RecentSqlQueryObject.ps1).
     . (Join-Path $PrivatePath -ChildPath "Get-RecentSqlQueryObject.ps1")
@@ -1192,9 +1194,8 @@ Describe "Invoke-ExecuteQuery resolves the database before executing (issue #152
     BeforeEach {
         Initialize-ExecuteQueryTestState
 
-        # The pipeline context is gathered from these two, which the shared stub does not carry
-        # because nothing before #152 read them on this path.
-        $Script:MainForm.Elements.TextBoxDisplayName = [pscustomobject]@{ Text = "TestQuery" }
+        # The pipeline context reads the data connection, which the shared stub does not carry
+        # because nothing before #152 read it on this path.
         $Script:AppConfig | Add-Member -NotePropertyName CurrentDataConnection -NotePropertyValue ([pscustomobject]@{ DoId = "42"; DisplayName = "OISES"; FullName = "OISES - 42" }) -Force
 
         # The completion block stores the editor's text on RunTimeData before anything else. A

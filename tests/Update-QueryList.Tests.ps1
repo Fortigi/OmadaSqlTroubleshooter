@@ -135,7 +135,6 @@ BeforeAll {
                 CheckboxMyCreatedQueries           = New-QueryControlStub
                 CheckboxMyUpdatedQueries           = New-QueryControlStub
                 ButtonShowSqlSchema                = New-QueryControlStub
-                TextBoxDisplayName                 = New-QueryControlStub
             }
         }
         $Script:ConnectionStatus = $Connected

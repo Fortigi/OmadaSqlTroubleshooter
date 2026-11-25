@@ -1,0 +1,55 @@
+#Requires -Version 7.0
+
+BeforeAll {
+    $ParentPath = Split-Path -Path $PSScriptRoot -Parent
+    $PrivatePath = [System.IO.Path]::Combine($ParentPath, "src", "Lib", "Functions", "Private")
+    . (Join-Path $PrivatePath "Set-TabEditorText.ps1")
+    . (Join-Path $PrivatePath "Set-AdHocQueryDraftOnTab.ps1")
+
+    $script:Headers = 0
+    function Update-TabHeaderTitle { param($TabSession) $script:Headers++ }
+
+    function script:New-RestoredTab {
+        return [PSCustomObject]@{
+            Id                 = "tab-1"
+            IsDirty            = $false
+            PendingEditorText  = $null
+            ProposedQueryName  = $null
+        }
+    }
+}
+
+Describe 'Set-AdHocQueryDraftOnTab' -Tag 'Unit' {
+    BeforeEach {
+        $script:Headers = 0
+    }
+
+    It 'Should queue the text for the editor and record it as unsaved work' {
+        $Tab = New-RestoredTab
+
+        Set-AdHocQueryDraftOnTab -TabSession $Tab -Draft ([PSCustomObject]@{ TabId = "tab-1"; Text = "SELECT 1"; TabConfig = $null })
+
+        $Tab.PendingEditorText | Should -Be "SELECT 1"
+        $Tab.EditorText | Should -Be "SELECT 1"
+        $Tab.DraftText | Should -Be "SELECT 1"
+        $Tab.IsDirty | Should -BeTrue
+        $script:Headers | Should -Be 1
+    }
+
+    It 'Should restore the name the draft was kept with as the tab''s proposed name' {
+        $Tab = New-RestoredTab
+
+        Set-AdHocQueryDraftOnTab -TabSession $Tab -Draft ([PSCustomObject]@{ Text = "SELECT 1"; TabConfig = [PSCustomObject]@{ DisplayName = "Mine" } })
+
+        $Tab.ProposedQueryName | Should -Be "Mine"
+    }
+
+    It 'Should leave the proposed name alone when the draft has none' {
+        $Tab = New-RestoredTab
+        $Tab.ProposedQueryName = "Existing"
+
+        Set-AdHocQueryDraftOnTab -TabSession $Tab -Draft ([PSCustomObject]@{ Text = "SELECT 1"; TabConfig = [PSCustomObject]@{ DisplayName = " " } })
+
+        $Tab.ProposedQueryName | Should -Be "Existing"
+    }
+}

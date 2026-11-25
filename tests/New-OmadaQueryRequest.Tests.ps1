@@ -204,3 +204,34 @@ Describe "New-OmadaQueryRequest is runspace-safe" {
         }
     }
 }
+
+Describe "New-OmadaQueryRequest -Kind RenameQuery" {
+    It "PUTs only the new name onto the query object" {
+        $Request = New-OmadaQueryRequest -Kind "RenameQuery" -Context @{ BaseUrl = $script:Base; QueryDoId = 100; QueryName = "Renamed" }
+
+        $Request.Method | Should -Be "PUT"
+        $Request.Uri | Should -Be "$script:Base/odata/dataobjects/C_P_SQLTROUBLESHOOTING(100)"
+        $Request.Body["NAME"] | Should -Be "Renamed"
+        @($Request.Body.Keys) | Should -Be @("NAME") -Because "a rename must not save the editor's text or move the query to another connection"
+    }
+}
+
+Describe "New-OmadaQueryRequest -Kind QueryNameProbe" {
+    It "GETs the non-deleted queries with exactly that name" {
+        $Request = New-OmadaQueryRequest -Kind "QueryNameProbe" -Context @{ BaseUrl = $script:Base; QueryName = "Accounts" }
+
+        $Request.Method | Should -Be "GET"
+        $Request.Uri | Should -Be "$script:Base/odata/dataobjects/C_P_SQLTROUBLESHOOTING?`$filter=Deleted ne true and NAME eq 'Accounts'"
+        $Request.Body | Should -BeNullOrEmpty
+    }
+
+    It "escapes a quote in the name by doubling it, as OData string literals require" {
+        $Request = New-OmadaQueryRequest -Kind "QueryNameProbe" -Context @{ BaseUrl = $script:Base; QueryName = "Bob's 'best'" }
+
+        $Request.Uri | Should -BeLike "*NAME eq 'Bob''s ''best'''"
+    }
+
+    It "probes for an empty name rather than failing" {
+        (New-OmadaQueryRequest -Kind "QueryNameProbe" -Context @{ BaseUrl = $script:Base; QueryName = $null }).Uri | Should -BeLike "*NAME eq ''"
+    }
+}

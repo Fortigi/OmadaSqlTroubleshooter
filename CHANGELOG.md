@@ -12,6 +12,36 @@ semantic version.
 
 ### Changed
 
+- **Toolbar and menu bar, laid out like SQL Server Management Studio.** The row of wide buttons
+  that ran off-screen on lower resolutions is replaced by a grouped toolbar (Query, Queries, Run,
+  Results, Session) with separators and icon-only buttons except New query, Execute, Grid/Text and
+  Connect; it wraps on a narrow window. The *Only my queries* filters (Created / Last updated) moved
+  onto the toolbar and the connection selector moved up next to *Save password*. A new menu bar
+  (File, Query, Results, Window, Tools, Help) holds every toolbar command plus the result grid and tab
+  context menu commands, and acts on the active tab; Help > About shows the startup screen's logo,
+  version and copyright in a window. The toolbar is a lighter band with a line under and over it,
+  and its groups are packed to the left. The main window's minimum width went from 1461 to 1340
+  pixels.
+- The query manager, query details and history windows use the main window's background and the
+  log and schema windows' buttons (glyph and text).
+- **One shared look** (`src/Lib/ui/Theme.xaml`, documented in `docs/UI-THEME.md`): colours, fonts,
+  tabs, the toolbar band, dialog buttons and data grids are defined once and merged into every window
+  as it is loaded (`Merge-XamlTheme`), and a test resolves every `StaticResource` of every window
+  against it. The toolbar is now a band in the tabs' colours (`#E4E8EC`, border `#8A97A6`). The tabs
+  in the query details and the history window look like the main window's Results / Messages tabs.
+- The history window's version list selects as the result grid does (rows, cells, ranges; Ctrl+C
+  copies); the panes show the version the selection is in, and are cleared when it spans several.
+  Its Details tab is a Property / Value grid instead of labels and text boxes.
+- Restoring a version from the history now marks the tab as changed, so closing it offers to save
+  the restored version. It used to leave the tab clean on purpose (a programmatic load is not an
+  edit), which with the new close prompts would let a restored version be lost without a word.
+- Selecting a saved query marks the tab clean. The unsaved-changes flag used to be cleared only by a
+  save, so typing in a tab and then picking a query left that freshly loaded query flagged as changed.
+- The Monaco editor reports its text to the host with every change, so the host knows what the editor
+  holds without an asynchronous round-trip. The text is never logged.
+- The query-name check on "save as new" escapes quotes in the name as OData requires; a name such as
+  `Bob's query` used to break the check.
+
 - Releases are now drafted first and published by a maintainer. The release workflow builds the
   package, pushes the tag and creates the GitHub release as a **draft** with the package attached,
   so the generated release notes can be reviewed and edited before anything is public; the run
@@ -36,6 +66,54 @@ semantic version.
   ignored. Redaction is unchanged: the file stays behind the same single gate as the window.
 
 ### Added
+
+- **Ad-hoc queries.** Type SQL and execute it without pressing New first. With no saved query
+  selected, the editor runs through the temporary `TMP_<InstanceGuid>` object an executed selection
+  already used (created, executed, deleted), and no save is attempted, so nothing the user owns is
+  created or changed on the tenant. Execute refuses only an ad-hoc query with an empty editor. Save /
+  `Ctrl+S` on an ad-hoc query saves it as a new query and asks for its name.
+- **Query commands reworked: New, Save, Save as, Rename, Delete.** New clears the editor for a new
+  query (offering to save unsaved work first) and creates nothing on the tenant. Save as saves the
+  editor as another query. Names are asked for in a pop-up and the Display name field is removed.
+  This also fixes New being left disabled for good after a save under a name that already existed.
+- **Query manager** (toolbar: Queries). Lists every `C_P_SQLTROUBLESHOOTING` object on the tenant
+  with every field OData returns, filterable, with New (an empty query), Open (in place of the active
+  tab's query, offering to save its unsaved changes first), Open in new tab, Rename, Delete and
+  Details. Cells and rows are selected as in the result grid, and Ctrl+C copies them. Details shows all fields, created/last changed (from the history, which OData does not
+  return), the SQL read-only and the full change history, and opens the history window for that query
+  to compare and restore versions; a restored version goes into the query's own tab as an unsaved
+  change.
+- **Keyboard shortcuts** Ctrl+N (new query), Ctrl+Shift+N (new tab) and Ctrl+Shift+E (export the
+  results), from one list (`Get-KeyboardShortcut`) that also feeds the Help window and is held to the
+  menu bar's gestures by a test.
+- **Help window** (Help > Help and keyboard shortcuts): the shortcuts, links to the GitHub project,
+  the PowerShell Gallery and the issues, and Report a bug / Request a feature, which open the
+  repository's issue form with the version fields of a bug report filled in.
+- **Release notes link** on the Help menu and in the Help window, to the GitHub release of the
+  running version (release or nightly). Shown only when GitHub confirms that release exists: asked
+  of api.github.com when the Help menu or window opens - never at start-up, never for a development
+  build, at most once per session, waited for at most two seconds.
+- **Open query in Omada** on the toolbar and the Query menu, for the tab's selected query.
+- **Open in Omada** in the query manager and the query details: opens the query object's page in
+  Omada (`dataobjdlg.aspx?DOID=<id>`) in the default browser. The address is built only from an
+  absolute http(s) tenant URL and a numeric id.
+
+- **Rename and delete a saved query**, from two new toolbar buttons. Rename PUTs the name only - the
+  editor text and unsaved edits are untouched - after checking the name locally and with the tenant.
+  Delete asks first and keeps the text in the editor as an unsaved ad-hoc query. Both are applied to
+  every connected tab of the connection pool. Both buttons are enabled only for a selected saved query
+  on a connected tab.
+- **Save prompts on close.** Closing a tab or the application offers Save / Don't save / Cancel for
+  every tab with unsaved changes to a selected query or an unsaved ad-hoc query; an empty editor is
+  never offered. Saving while closing is now synchronous, from the text the editor last reported, so a
+  tab is torn down only after its save succeeded (a failed save asks whether to close anyway). Closing
+  the application previously never asked at all.
+- **Ad-hoc query drafts.** An unsaved ad-hoc query is kept in
+  `%APPDATA%\OmadaSqlTroubleshooter\config\adhoc-query-drafts.json` while typing and when executed,
+  and offered back at the next start - after a normal close and after a crash. Drafts carry the tab's
+  connection settings but never a password; `-Reset` discards them.
+- The choice dialog can take a text input and a third button, used by the name prompts and the
+  Save / Don't save / Cancel question.
 
 - Results to Text, as in SQL Server Management Studio. A new **Grid/Text** toolbar button, or
   **Ctrl+Shift+D** (grid) and **Ctrl+Shift+T** (text), switches the Results pane between the grid
@@ -121,6 +199,16 @@ semantic version.
 
 ### Fixed
 
+- Starting the application again in the same PowerShell session no longer leaves the previous run's
+  timers running. The 50 ms completion poll timer (which also drives the session keep-alive) and the
+  validation, schema-filter and E2E timers belong to the thread's dispatcher, which outlives a run,
+  and were never stopped, so each run added another set ticking against the newest run's state. They
+  are now stopped when a run ends and before a run starts (`Stop-ApplicationTimer`).
+- The "Password (optional):" label no longer runs under its box.
+- The query manager and the history window no longer close when a query cannot be opened in a tab
+  because all tabs are in use; the warning is shown and the window stays open.
+- The query details' History and Properties tabs scroll horizontally when a row is wider than the
+  window, instead of cutting it off.
 - The query editor no longer freezes while typing (#185). After every pause in typing, the client-side
   validation (#61) - the T-SQL parse, the schema check and the Omada compatibility rules - ran on the
   UI thread, which held the window for half a second to a second on an ordinary query, and longer on a

@@ -7,7 +7,8 @@ function Get-TabName {
     .DESCRIPTION
     Resolution order (first match wins):
       1. The selected value of ComboBoxSelectQuery, when a query is selected.
-      2. The TextBoxDisplayName value, when it is not empty.
+      2. The name proposed for the tab's unsaved query (ProposedQueryName: a duplicate's name, a
+         restored draft's name, or the name of a query that was deleted), when there is one.
       3. "Query{#}", where # is the order in which the tab was opened (first opened tab = Query1).
 
     Reads from the tab's own Elements so it is correct for any tab, not just the active one.
@@ -35,7 +36,7 @@ function Get-TabName {
             return (($SelectedQuery.ToString().Trim()) -replace "\s*-\s*\d+\s*$", "")
         }
 
-        $DisplayName = $Elements.TextBoxDisplayName.Text
+        $DisplayName = $TabSession.ProposedQueryName
         if (![string]::IsNullOrWhiteSpace($DisplayName)) {
             return $DisplayName.ToString().Trim()
         }

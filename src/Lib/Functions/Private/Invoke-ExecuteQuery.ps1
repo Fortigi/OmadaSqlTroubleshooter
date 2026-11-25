@@ -200,12 +200,18 @@ function Invoke-ExecuteQuery {
 
                     "Executing {0} statement(s)." -f @($Private:Statement).Count | Write-LogOutput -LogType DEBUG
 
+                    # Saved or ad-hoc. An ad-hoc query (no saved query selected) is not saved and runs
+                    # through the temporary object as if the whole editor were selected; see
+                    # Resolve-ExecuteQueryScope. A saved query is unaffected.
+                    $Private:Scope = Resolve-ExecuteQueryScope -QueryDoId $Script:AppConfig.CurrentSqlQuery.DoId -QueryText $Script:RunTimeData.QueryText -SelectionText $Private:SelectionText
+
                     $Private:PipelineContext = @{
                         BaseUrl            = $Script:AppConfig.BaseUrl
                         QueryDoId          = $Script:AppConfig.CurrentSqlQuery.DoId
                         QueryText          = $Script:RunTimeData.QueryText
                         CurrentQueryText   = $Script:RunTimeData.CurrentQueryText
-                        DisplayName        = $Script:MainForm.Elements.TextBoxDisplayName.Text
+                        # The saved name: executing saves the text, never a new name (that is Rename).
+                        DisplayName        = $Script:RunTimeData.CurrentSqlQuery.DisplayName
                         CurrentDisplayName = $Script:RunTimeData.CurrentSqlQuery.DisplayName
                         # Read AFTER the sticky USE above, deliberately: this is what the save writes
                         # onto the user's own query object, and a USE is the user changing the
@@ -218,10 +224,10 @@ function Invoke-ExecuteQuery {
                         # (see the pinning above), so nothing executes against this value on that
                         # path - it is the save's connection, not an execution fallback.
                         DataConnectionDoId = $Script:AppConfig.CurrentDataConnection.DoId
-                        SelectionText      = $Private:SelectionText
+                        SelectionText      = $Private:Scope.SelectionText
                         Statements         = $Private:Statement
                         TempName           = "TMP_$($Script:RunTimeConfig.InstanceGuid)"
-                        SkipSave           = $false
+                        SkipSave           = $Private:Scope.SkipSave
                     }
 
                     "Retrieve query output, please wait..." | Write-LogOutput
@@ -794,29 +800,9 @@ function Complete-ExecuteQueryResult {
                         }
                     })
             }
-            $SaveResult.Id, $SaveResult.DisplayName | Set-ConfigProperty -Property "CurrentSqlQuery"
-            if ($SaveResult.DisplayName -ne $Script:RunTimeData.CurrentSqlQuery.DisplayName) {
-                "New display name, Current: {0}, New: {1}" -f $Script:RunTimeData.CurrentSqlQuery.DisplayName, $SaveResult.DisplayName | Write-LogOutput -LogType DEBUG
-                "Force update query list" | Write-LogOutput -LogType DEBUG
-                Update-QueryList -ForceRefresh
-
-                # Find-or-create, then select - the pattern Save-Query and Complete-TabMaterialization
-                # already use. This block used to test "$null -ne $ComboBoxSelectQueryItem" against a
-                # variable that had never been assigned, so the body was unreachable and the line
-                # after it selected $null: executing a renamed query silently CLEARED the query
-                # dropdown instead of re-selecting the renamed entry.
-                $Private:ComboBoxSelectQueryItem = $Script:MainForm.Elements.ComboBoxSelectQuery.Items |
-                    Where-Object { $_.Content -like "*$($Script:AppConfig.CurrentSqlQuery.DoId)" } |
-                    Select-Object -First 1
-
-                if ($null -eq $Private:ComboBoxSelectQueryItem) {
-                    $Private:ComboBoxSelectQueryItem = New-Object System.Windows.Controls.ComboBoxItem
-                    $Private:ComboBoxSelectQueryItem.Content = $Script:AppConfig.CurrentSqlQuery.FullName
-                    $Script:MainForm.Elements.ComboBoxSelectQuery.Items.Add($Private:ComboBoxSelectQueryItem) | Out-Null
-                }
-
-                $Script:MainForm.Elements.ComboBoxSelectQuery.SelectedItem = $Private:ComboBoxSelectQueryItem
-            }
+            # A run that saved the query refreshes the selection from what was saved; an ad-hoc run
+            # saved nothing and leaves the selection - none - as it is.
+            Sync-SavedQuerySelection -SaveResult $SaveResult
         }
 
         # The selected output tab follows the outcome of the execute (issue #115). Rows land the user
@@ -908,5 +894,57 @@ function Complete-ExecuteQueryResult {
         # - so this only has to put the UI back.
         Reset-ExecuteQueryUiState
         $_.Exception.Message | Write-ContainedErrorLog -ErrorObject $_ -TabScoped
+    }
+}
+
+function Sync-SavedQuerySelection {
+    <#
+    .SYNOPSIS
+    After a run that saved the query, make the tab's selection and query list reflect what was saved.
+
+    .DESCRIPTION
+    Lifted out of Complete-ExecuteQueryResult unchanged, plus one guard: a run with no save result -
+    an ad-hoc query, which the pipeline does not save - leaves everything as it is. Without the guard
+    the null result was written into CurrentSqlQuery as "$null, $null", which Set-ConfigProperty turns
+    into DoId 0, and the tab would then be restored next time with a query " - 0" selected that does
+    not exist.
+
+    In this file, not one of its own, because every test of Complete-ExecuteQueryResult dot-sources
+    exactly this file.
+
+    .PARAMETER SaveResult
+    The object the pipeline's save (or its skipped save's fetch) returned, or $null.
+    #>
+    [CmdLetBinding()]
+    param(
+        $SaveResult
+    )
+
+    if ($null -eq $SaveResult) {
+        return
+    }
+
+    $SaveResult.Id, $SaveResult.DisplayName | Set-ConfigProperty -Property "CurrentSqlQuery"
+    if ($SaveResult.DisplayName -ne $Script:RunTimeData.CurrentSqlQuery.DisplayName) {
+        "New display name, Current: {0}, New: {1}" -f $Script:RunTimeData.CurrentSqlQuery.DisplayName, $SaveResult.DisplayName | Write-LogOutput -LogType DEBUG
+        "Force update query list" | Write-LogOutput -LogType DEBUG
+        Update-QueryList -ForceRefresh
+
+        # Find-or-create, then select - the pattern Save-Query and Complete-TabMaterialization
+        # already use. This block used to test "$null -ne $ComboBoxSelectQueryItem" against a
+        # variable that had never been assigned, so the body was unreachable and the line
+        # after it selected $null: executing a renamed query silently CLEARED the query
+        # dropdown instead of re-selecting the renamed entry.
+        $Private:ComboBoxSelectQueryItem = $Script:MainForm.Elements.ComboBoxSelectQuery.Items |
+            Where-Object { $_.Content -like "*$($Script:AppConfig.CurrentSqlQuery.DoId)" } |
+            Select-Object -First 1
+
+        if ($null -eq $Private:ComboBoxSelectQueryItem) {
+            $Private:ComboBoxSelectQueryItem = New-Object System.Windows.Controls.ComboBoxItem
+            $Private:ComboBoxSelectQueryItem.Content = $Script:AppConfig.CurrentSqlQuery.FullName
+            $Script:MainForm.Elements.ComboBoxSelectQuery.Items.Add($Private:ComboBoxSelectQueryItem) | Out-Null
+        }
+
+        $Script:MainForm.Elements.ComboBoxSelectQuery.SelectedItem = $Private:ComboBoxSelectQueryItem
     }
 }

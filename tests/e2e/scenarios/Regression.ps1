@@ -175,9 +175,16 @@ E2ESuite -Name "PoolQuerySharing" -Body {
         $TabB = New-E2EConnectedTab
         E2EAssertEqual $TabA.RunTimeData.RestMethodParam.SessionKey $TabB.RunTimeData.RestMethodParam.SessionKey "both tabs should share one connection-pool session key"
 
-        # Save a new query in tab B (the active tab); it must propagate to the connected tab A.
-        $TabB.Elements.TextBoxDisplayName.Text = "SharedNewQuery"
-        Invoke-E2EClick -ElementName "ButtonNewQuery"
+        # Save a new (ad-hoc) query in tab B (the active tab); it must propagate to the connected tab A.
+        $script:E2EEditorText = "SELECT 1"
+        $TabB.EditorText = "SELECT 1"
+        $script:E2EInputText = "SharedNewQuery"
+        try {
+            Invoke-E2EClick -ElementName "ButtonSaveQuery"
+        }
+        finally {
+            $script:E2EInputText = $null
+        }
 
         $InTabA = @($TabA.Elements.ComboBoxSelectQuery.Items | Where-Object { $_.Content -like "*200" }).Count
         E2EAssertTrue ($InTabA -ge 1) "the new query should appear in the other connected pool tab's dropdown"

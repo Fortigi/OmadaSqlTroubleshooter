@@ -5,7 +5,8 @@ function Invoke-LoadSqlHistoryData {
     try {
         "Loading SQL history data..." | Write-LogOutput -LogType DEBUG
 
-        $SqlHistoryObjects = Get-SqlHistory
+        # The query the window was opened for (Open-SqlHistoryForm -DoId), else the active tab's.
+        $SqlHistoryObjects = if ($null -ne $Script:SqlHistoryTarget) { Get-SqlHistory -DoId $Script:SqlHistoryTarget.DoId } else { Get-SqlHistory }
 
         if ($null -eq $SqlHistoryObjects -or $SqlHistoryObjects.Count -eq 0) {
             "No SQL history data found" | Write-LogOutput -LogType WARNING
