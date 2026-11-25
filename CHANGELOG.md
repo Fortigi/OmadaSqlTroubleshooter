@@ -199,6 +199,11 @@ semantic version.
 
 ### Fixed
 
+- Starting the application again in the same PowerShell session no longer leaves the previous run's
+  timers running. The 50 ms completion poll timer (which also drives the session keep-alive) and the
+  validation, schema-filter and E2E timers belong to the thread's dispatcher, which outlives a run,
+  and were never stopped, so each run added another set ticking against the newest run's state. They
+  are now stopped when a run ends and before a run starts (`Stop-ApplicationTimer`).
 - The "Password (optional):" label no longer runs under its box.
 - The query manager and the history window no longer close when a query cannot be opened in a tab
   because all tabs are in use; the warning is shown and the window stays open.
