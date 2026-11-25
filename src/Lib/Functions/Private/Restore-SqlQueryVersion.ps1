@@ -46,9 +46,12 @@ function Restore-SqlQueryVersion {
     )
 
     if (-not [string]::IsNullOrWhiteSpace($DoId) -and $DoId -ne [string]$Script:AppConfig.CurrentSqlQuery.DoId) {
-        $null = Open-SqlQueryInTab -DoId $DoId -DisplayName $QueryName -RestoreText $Text
-        Request-QueryManagerClose
-        "Query '{0}' restored in its tab; save it to keep it." -f $QueryName | Write-LogOutput
+        # Only when a tab holds it now: at the tab limit none could be opened, and the windows stay
+        # open so nothing the user was doing is lost.
+        if ($null -ne (Open-SqlQueryInTab -DoId $DoId -DisplayName $QueryName -RestoreText $Text)) {
+            Request-QueryManagerClose
+            "Query '{0}' restored in its tab; save it to keep it." -f $QueryName | Write-LogOutput
+        }
         return
     }
 

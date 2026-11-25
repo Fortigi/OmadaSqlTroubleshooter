@@ -6,7 +6,10 @@ function Invoke-QueryManagerAction {
     .DESCRIPTION
           Create   New-SqlQueryObject; the list is read again and the new query selected, and the user
                    is offered to open it in a tab.
-          Open     Open-SqlQueryInTab, then the manager closes so the tab can be seen and load.
+          Open     Open-SqlQueryInTab, then the manager closes so the tab can be seen and load - but
+                   only when a tab was opened. At the tab limit New-TabSession refuses with a
+                   warning, and closing the manager then would only lose the user's place.
+          Omada    Open-OmadaQueryObject: the query's own page in Omada, in the default browser.
           Details  Open-QueryDetailForm; afterwards the list is read again (it may have been renamed),
                    unless something there asked the manager to close.
           Rename   Rename-SqlQuery for that query; the list is read again.
@@ -21,7 +24,7 @@ function Invoke-QueryManagerAction {
     [CmdletBinding()]
     param(
         [Parameter(Mandatory = $true)]
-        [ValidateSet("Create", "Open", "Details", "Rename", "Delete")]
+        [ValidateSet("Create", "Open", "Details", "Rename", "Delete", "Omada")]
         [string]$Action
     )
 
@@ -37,8 +40,12 @@ function Invoke-QueryManagerAction {
 
     switch ($Action) {
         "Open" {
-            $null = Open-SqlQueryInTab -DoId $Private:Query.DoId -DisplayName $Private:Query.DisplayName
-            $Script:QueryManagerForm.Definition.Close()
+            if ($null -ne (Open-SqlQueryInTab -DoId $Private:Query.DoId -DisplayName $Private:Query.DisplayName)) {
+                $Script:QueryManagerForm.Definition.Close()
+            }
+        }
+        "Omada" {
+            Open-OmadaQueryObject -DoId $Private:Query.DoId
         }
         "Details" {
             Open-QueryDetailForm -DoId $Private:Query.DoId -DisplayName $Private:Query.DisplayName -Owner $Script:QueryManagerForm.Definition
@@ -79,8 +86,7 @@ function Invoke-QueryManagerCreate {
     Update-QueryManagerList -Refresh
 
     $Private:Open = Open-ChoiceForm -Title "Query created" -Message ("Query '{0}' was created. Open it in a tab?" -f $Private:Created.DisplayName) -LeftButtonText "Open" -RightButtonText "Not now"
-    if ($Private:Open -eq $true) {
-        $null = Open-SqlQueryInTab -DoId $Private:Created.DoId -DisplayName $Private:Created.DisplayName
+    if ($Private:Open -eq $true -and $null -ne (Open-SqlQueryInTab -DoId $Private:Created.DoId -DisplayName $Private:Created.DisplayName)) {
         $Script:QueryManagerForm.Definition.Close()
     }
 }

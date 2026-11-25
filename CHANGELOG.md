@@ -12,6 +12,16 @@ semantic version.
 
 ### Changed
 
+- **Toolbar and menu bar, laid out like SQL Server Management Studio.** The row of wide buttons
+  that ran off-screen on lower resolutions is replaced by a grouped toolbar (Query, Queries, Run,
+  Results, Session) with separators and icon-only buttons except New query, Execute, Grid/Text and
+  Connect; it wraps on a narrow window. The *Only my queries* filters (Created / Last updated) moved
+  onto the toolbar and the connection selector moved up next to *Save password*. A new menu bar
+  (File, Query, Results, Window, Tools) holds every toolbar command plus the result grid and tab
+  context menu commands, and acts on the active tab. The main window's minimum width went from 1461
+  to 1310 pixels.
+- The query manager, query details and history windows use the main window's look: its background,
+  flat buttons with Segoe icons, and the navy accent line.
 - Restoring a version from the history now marks the tab as changed, so closing it offers to save
   the restored version. It used to leave the tab clean on purpose (a programmatic load is not an
   edit), which with the new close prompts would let a restored version be lost without a word.
@@ -62,6 +72,10 @@ semantic version.
   return), the SQL read-only and the full change history, and opens the history window for that query
   to compare and restore versions; a restored version goes into the query's own tab as an unsaved
   change.
+- **Open in Omada** in the query manager and the query details: opens the query object's page in
+  Omada (`dataobjdlg.aspx?DOID=<id>`) in the default browser. The address is built only from an
+  absolute http(s) tenant URL and a numeric id.
+
 - **Rename and delete a saved query**, from two new toolbar buttons. Rename PUTs the name only - the
   editor text and unsaved edits are untouched - after checking the name locally and with the tenant.
   Delete asks first and keeps the text in the editor as an unsaved ad-hoc query. Both are applied to
@@ -163,6 +177,10 @@ semantic version.
 
 ### Fixed
 
+- The query manager and the history window no longer close when a query cannot be opened in a tab
+  because all tabs are in use; the warning is shown and the window stays open.
+- The query details' History and Properties tabs scroll horizontally when a row is wider than the
+  window, instead of cutting it off.
 - The query editor no longer freezes while typing (#185). After every pause in typing, the client-side
   validation (#61) - the T-SQL parse, the schema check and the Omada compatibility rules - ran on the
   UI thread, which held the window for half a second to a second on an ordinary query, and longer on a

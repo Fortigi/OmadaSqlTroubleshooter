@@ -5,7 +5,9 @@
 
         <Window.Style>
                 <Style TargetType="Window">
-                        <Setter Property="MinWidth" Value="1461" />
+                        <!-- The toolbar wraps, so it no longer sets the window's width; the connection
+                             rows do (three 100 + 300 label/field pairs). -->
+                        <Setter Property="MinWidth" Value="1310" />
                         <Setter Property="Width" Value="1461" />
                         <Setter Property="MinHeight" Value="800" />
                         <Setter Property="Height" Value="800" />
@@ -111,14 +113,135 @@
                 <ControlTemplate x:Key="TabMenuSeparatorTemplate" TargetType="Separator">
                         <Border Height="1" Margin="12,4" Background="#E5E7EB" />
                 </ControlTemplate>
+                <!-- The menu bar's icons: the same Segoe glyphs as the toolbar. -->
+                <Style x:Key="MainMenuGlyphStyle" TargetType="TextBlock">
+                        <Setter Property="FontFamily" Value="Segoe Fluent Icons, Segoe MDL2 Assets" />
+                        <Setter Property="FontSize" Value="13" />
+                        <Setter Property="VerticalAlignment" Value="Center" />
+                        <Setter Property="HorizontalAlignment" Value="Center" />
+                        <Setter Property="Foreground" Value="#1F1F1F" />
+                </Style>
         </Window.Resources>
 
         <Grid x:Name="MainWindowGrid">
+                <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="*" />
+                </Grid.RowDefinitions>
+                <!-- Menu bar: every toolbar command, and the result grid's and the tab header's context menus,
+                     acting on the active tab. Each item names what it runs in its Tag (Invoke-MainMenuAction);
+                     its enabled state, check mark and header are read from that tab when its menu opens
+                     (Update-MainMenuState), because the toolbar buttons belong to each tab, not to the window.
+                     The shortcuts shown are the existing ones; the menu only displays them. -->
+                <Menu x:Name="MenuMain" Grid.Row="0" Background="#FFF5F6F7" BorderBrush="#FFC8C8C8" BorderThickness="0,0,0,1" Padding="2,1" FontFamily="Segoe UI" FontSize="12">
+                        <MenuItem Header="_File">
+                                <MenuItem Header="_New query" Tag="Button:ButtonNewQuery">
+                                        <MenuItem.Icon><TextBlock Style="{StaticResource MainMenuGlyphStyle}" Text="&#xE8E5;" /></MenuItem.Icon>
+                                </MenuItem>
+                                <MenuItem Header="_Save" Tag="Button:ButtonSaveQuery" InputGestureText="Ctrl+S">
+                                        <MenuItem.Icon><TextBlock Style="{StaticResource MainMenuGlyphStyle}" Text="&#xE74E;" /></MenuItem.Icon>
+                                </MenuItem>
+                                <MenuItem Header="Save _as..." Tag="Button:ButtonSaveQueryAs">
+                                        <MenuItem.Icon><TextBlock Style="{StaticResource MainMenuGlyphStyle}" Text="&#xE792;" /></MenuItem.Icon>
+                                </MenuItem>
+                                <MenuItem Header="_Rename..." Tag="Button:ButtonRenameQuery">
+                                        <MenuItem.Icon><TextBlock Style="{StaticResource MainMenuGlyphStyle}" Text="&#xE8AC;" /></MenuItem.Icon>
+                                </MenuItem>
+                                <MenuItem Header="_Delete..." Tag="Button:ButtonDeleteQuery">
+                                        <MenuItem.Icon><TextBlock Style="{StaticResource MainMenuGlyphStyle}" Text="&#xE74D;" /></MenuItem.Icon>
+                                </MenuItem>
+                                <Separator />
+                                <MenuItem Header="_Connect" Tag="Button:ButtonConnect">
+                                        <MenuItem.Icon><TextBlock Style="{StaticResource MainMenuGlyphStyle}" Text="&#xE8FA;" /></MenuItem.Icon>
+                                </MenuItem>
+                                <MenuItem Header="Reset a_pplication" Tag="Button:ButtonReset">
+                                        <MenuItem.Icon><TextBlock Style="{StaticResource MainMenuGlyphStyle}" Text="&#xE777;" /></MenuItem.Icon>
+                                </MenuItem>
+                                <Separator />
+                                <MenuItem Header="E_xit" Tag="App:Exit" InputGestureText="Alt+F4" />
+                        </MenuItem>
+                        <MenuItem Header="_Query">
+                                <MenuItem Header="_Execute" Tag="Button:ButtonExecuteQuery" InputGestureText="F5">
+                                        <MenuItem.Icon><TextBlock Style="{StaticResource MainMenuGlyphStyle}" Text="&#xE768;" /></MenuItem.Icon>
+                                </MenuItem>
+                                <Separator />
+                                <MenuItem Header="Results to _grid" Tag="Action:ResultsToGrid" InputGestureText="Ctrl+Shift+D">
+                                        <MenuItem.Icon><TextBlock Style="{StaticResource MainMenuGlyphStyle}" Text="&#xE80A;" /></MenuItem.Icon>
+                                </MenuItem>
+                                <MenuItem Header="Results to _text" Tag="Action:ResultsToText" InputGestureText="Ctrl+Shift+T">
+                                        <MenuItem.Icon><TextBlock Style="{StaticResource MainMenuGlyphStyle}" Text="&#xE8A5;" /></MenuItem.Icon>
+                                </MenuItem>
+                                <Separator />
+                                <MenuItem Header="_Refresh query list" Tag="Button:ButtonRefreshQueries">
+                                        <MenuItem.Icon><TextBlock Style="{StaticResource MainMenuGlyphStyle}" Text="&#xE72C;" /></MenuItem.Icon>
+                                </MenuItem>
+                                <MenuItem Header="Query _manager..." Tag="Button:ButtonOpenQueryManager">
+                                        <MenuItem.Icon><TextBlock Style="{StaticResource MainMenuGlyphStyle}" Text="&#xE71D;" /></MenuItem.Icon>
+                                </MenuItem>
+                                <MenuItem Header="_History..." Tag="Button:ButtonShowHistory">
+                                        <MenuItem.Icon><TextBlock Style="{StaticResource MainMenuGlyphStyle}" Text="&#xE81C;" /></MenuItem.Icon>
+                                </MenuItem>
+                                <MenuItem Header="S_chema" Tag="Button:ButtonShowSqlSchema">
+                                        <MenuItem.Icon><TextBlock Style="{StaticResource MainMenuGlyphStyle}" Text="&#xE8FD;" /></MenuItem.Icon>
+                                </MenuItem>
+                                <Separator />
+                                <MenuItem Header="Only queries I _created" Tag="Check:CheckboxMyCreatedQueries" />
+                                <MenuItem Header="Only queries I _last updated" Tag="Check:CheckboxMyUpdatedQueries" />
+                        </MenuItem>
+                        <MenuItem Header="_Results">
+                                <MenuItem Header="_Copy" Tag="Result:Copy" InputGestureText="Ctrl+C">
+                                        <MenuItem.Icon><TextBlock Style="{StaticResource MainMenuGlyphStyle}" Text="&#xE8C8;" /></MenuItem.Icon>
+                                </MenuItem>
+                                <MenuItem Header="Copy with _headers" Tag="Result:CopyWithHeader" InputGestureText="Ctrl+Shift+C" />
+                                <MenuItem Header="Copy as _SQL array" Tag="Result:CopyAsSqlArray" InputGestureText="Ctrl+Shift+S" />
+                                <MenuItem Header="Copy as _PowerShell array" Tag="Result:CopyAsPowerShellArray" InputGestureText="Ctrl+Shift+P" />
+                                <MenuItem Header="Select _all" Tag="Result:SelectAll" InputGestureText="Ctrl+A" />
+                                <Separator />
+                                <MenuItem Header="_View selected" Tag="Result:ViewSelected" />
+                                <MenuItem Header="Save results _as..." Tag="Result:SaveAs">
+                                        <MenuItem.Icon><TextBlock Style="{StaticResource MainMenuGlyphStyle}" Text="&#xE74E;" /></MenuItem.Icon>
+                                </MenuItem>
+                                <MenuItem Header="Save selected a_s..." Tag="Result:SaveSelectedAs" />
+                                <Separator />
+                                <MenuItem Header="View in a _window" Tag="Button:ButtonShowOutput">
+                                        <MenuItem.Icon><TextBlock Style="{StaticResource MainMenuGlyphStyle}" Text="&#xE890;" /></MenuItem.Icon>
+                                </MenuItem>
+                                <MenuItem Header="_Export..." Tag="Button:ButtonSaveOutputFile">
+                                        <MenuItem.Icon><TextBlock Style="{StaticResource MainMenuGlyphStyle}" Text="&#xEDE1;" /></MenuItem.Icon>
+                                </MenuItem>
+                                <MenuItem Header="_Open export" Tag="Button:ButtonOpenOutputFile">
+                                        <MenuItem.Icon><TextBlock Style="{StaticResource MainMenuGlyphStyle}" Text="&#xE8A7;" /></MenuItem.Icon>
+                                </MenuItem>
+                        </MenuItem>
+                        <MenuItem Header="_Window">
+                                <MenuItem Header="_New tab" Tag="Tab:New">
+                                        <MenuItem.Icon><TextBlock Style="{StaticResource MainMenuGlyphStyle}" Text="&#xE710;" /></MenuItem.Icon>
+                                </MenuItem>
+                                <MenuItem Header="_Duplicate tab" Tag="Tab:Duplicate" InputGestureText="Ctrl+Shift+K">
+                                        <MenuItem.Icon><TextBlock Style="{StaticResource MainMenuGlyphStyle}" Text="&#xE8C8;" /></MenuItem.Icon>
+                                </MenuItem>
+                                <MenuItem Header="Duplicate tab _without query" Tag="Tab:DuplicateWithoutQuery" InputGestureText="Ctrl+T" />
+                                <Separator />
+                                <MenuItem Header="Ne_xt tab" Tag="Tab:Next" InputGestureText="Ctrl+Tab" />
+                                <MenuItem Header="_Previous tab" Tag="Tab:Previous" InputGestureText="Ctrl+Shift+Tab" />
+                                <Separator />
+                                <MenuItem Header="_Close tab" Tag="Tab:Close" InputGestureText="Ctrl+W">
+                                        <MenuItem.Icon><TextBlock Style="{StaticResource MainMenuGlyphStyle}" Text="&#xE711;" /></MenuItem.Icon>
+                                </MenuItem>
+                                <MenuItem Header="Close _other tabs" Tag="Tab:CloseOthers" />
+                                <MenuItem Header="Close _all tabs" Tag="Tab:CloseAll" />
+                        </MenuItem>
+                        <MenuItem Header="_Tools">
+                                <MenuItem Header="_Log window" Tag="Button:ButtonShowLog">
+                                        <MenuItem.Icon><TextBlock Style="{StaticResource MainMenuGlyphStyle}" Text="&#xE8A5;" /></MenuItem.Icon>
+                                </MenuItem>
+                        </MenuItem>
+                </Menu>
                 <!-- The navy (#FF293955) frame wraps the entire TabControl (tabs included): the top
                      border is the purple bar above the tabs and the left/right/bottom borders (all
                      6px, matching) frame the tabs and content together. This is the border moved out
                      of MainFormTabContent's MainGrid. -->
-                <Border BorderBrush="#FF293955" BorderThickness="6" Background="{DynamicResource {x:Static SystemColors.ScrollBarBrushKey}}">
+                <Border Grid.Row="1" BorderBrush="#FF293955" BorderThickness="6" Background="{DynamicResource {x:Static SystemColors.ScrollBarBrushKey}}">
                         <!-- SelectedIndex=-1 is required: with only TabItemAddNew present at load
                              time, a TabControl otherwise auto-selects it as soon as the control
                              materializes - well before MainForm.Definition's Add_Loaded/

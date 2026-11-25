@@ -12,6 +12,7 @@ BeforeAll {
     function Remove-SavedSqlQuery { param($DoId, $DisplayName) }
     function New-SqlQueryObject { param($ExistingNames) }
     function Open-ChoiceForm { param($Title, $Message, $LeftButtonText, $RightButtonText) }
+    function Open-OmadaQueryObject { param($DoId) }
 }
 
 Describe 'Invoke-QueryManagerAction' -Tag 'Unit' {
@@ -19,7 +20,8 @@ Describe 'Invoke-QueryManagerAction' -Tag 'Unit' {
         $Script:QueryManagerForm = [PSCustomObject]@{ Definition = [PSCustomObject]@{ Closed = 0 }; Queries = @([PSCustomObject]@{ DisplayName = "Accounts" }) }
         $Script:QueryManagerForm.Definition | Add-Member -MemberType ScriptMethod -Name Close -Value { $this.Closed++ }
         Mock Get-QueryManagerSelectedQuery { [PSCustomObject]@{ DoId = "42"; DisplayName = "Accounts" } }
-        Mock Open-SqlQueryInTab { }
+        Mock Open-SqlQueryInTab { [PSCustomObject]@{ TabId = "t1" } }
+        Mock Open-OmadaQueryObject { }
         Mock Open-QueryDetailForm { }
         Mock Complete-QueryManagerChildWindow { $false }
         Mock Update-QueryManagerList { }
@@ -29,7 +31,7 @@ Describe 'Invoke-QueryManagerAction' -Tag 'Unit' {
         Mock Open-ChoiceForm { $false }
     }
 
-    It 'Should do nothing without a selection (<Action>)' -ForEach @(@{ Action = "Open" }, @{ Action = "Details" }, @{ Action = "Rename" }, @{ Action = "Delete" }) {
+    It 'Should do nothing without a selection (<Action>)' -ForEach @(@{ Action = "Open" }, @{ Action = "Details" }, @{ Action = "Rename" }, @{ Action = "Delete" }, @{ Action = "Omada" }) {
         Mock Get-QueryManagerSelectedQuery { }
 
         Invoke-QueryManagerAction -Action $Action
@@ -38,6 +40,7 @@ Describe 'Invoke-QueryManagerAction' -Tag 'Unit' {
         Should -Invoke Rename-SqlQuery -Times 0 -Exactly
         Should -Invoke Remove-SavedSqlQuery -Times 0 -Exactly
         Should -Invoke Open-QueryDetailForm -Times 0 -Exactly
+        Should -Invoke Open-OmadaQueryObject -Times 0 -Exactly
     }
 
     It 'Should open the selected query in a tab and close the manager' {
@@ -45,6 +48,22 @@ Describe 'Invoke-QueryManagerAction' -Tag 'Unit' {
 
         Should -Invoke Open-SqlQueryInTab -Times 1 -Exactly -ParameterFilter { $DoId -eq "42" -and $DisplayName -eq "Accounts" }
         $Script:QueryManagerForm.Definition.Closed | Should -Be 1
+    }
+
+    It 'Should keep the manager open when no tab could be opened (e.g. all tabs in use)' {
+        Mock Open-SqlQueryInTab { }
+
+        Invoke-QueryManagerAction -Action Open
+
+        Should -Invoke Open-SqlQueryInTab -Times 1 -Exactly
+        $Script:QueryManagerForm.Definition.Closed | Should -Be 0
+    }
+
+    It 'Should open the selected query in Omada and keep the manager open' {
+        Invoke-QueryManagerAction -Action Omada
+
+        Should -Invoke Open-OmadaQueryObject -Times 1 -Exactly -ParameterFilter { $DoId -eq "42" }
+        $Script:QueryManagerForm.Definition.Closed | Should -Be 0
     }
 
     It 'Should show the details on top of the manager and read the list again afterwards' {
@@ -92,6 +111,15 @@ Describe 'Invoke-QueryManagerAction' -Tag 'Unit' {
 
         Should -Invoke Open-SqlQueryInTab -Times 1 -Exactly -ParameterFilter { $DoId -eq "200" -and $DisplayName -eq "Fresh" }
         $Script:QueryManagerForm.Definition.Closed | Should -Be 1
+    }
+
+    It 'Should keep the manager open when the created query could not be opened in a tab' {
+        Mock Open-ChoiceForm { $true }
+        Mock Open-SqlQueryInTab { }
+
+        Invoke-QueryManagerAction -Action Create
+
+        $Script:QueryManagerForm.Definition.Closed | Should -Be 0
     }
 
     It 'Should do nothing more when no query was created' {

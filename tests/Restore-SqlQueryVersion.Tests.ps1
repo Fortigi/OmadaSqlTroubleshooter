@@ -17,7 +17,7 @@ Describe 'Restore-SqlQueryVersion' -Tag 'Unit' {
         New-QueryTestState
         $Script:Webview = [PSCustomObject]@{ Object = [PSCustomObject]@{ CoreWebView2 = "ready" } }
         Mock Push-ToEditor { }
-        Mock Open-SqlQueryInTab { }
+        Mock Open-SqlQueryInTab { [PSCustomObject]@{ TabId = "t2" } }
         Mock Request-QueryManagerClose { }
     }
 
@@ -41,6 +41,15 @@ Describe 'Restore-SqlQueryVersion' -Tag 'Unit' {
         Should -Invoke Request-QueryManagerClose -Times 1 -Exactly
         Should -Invoke Push-ToEditor -Times 0 -Exactly
         $script:TestTab.IsDirty | Should -BeFalse
+    }
+
+    It 'Should keep the query manager open when no tab could be opened for the other query' {
+        Mock Open-SqlQueryInTab { }
+
+        Restore-SqlQueryVersion -DoId "55" -QueryName "Fresh" -Text "SELECT old"
+
+        Should -Invoke Request-QueryManagerClose -Times 0 -Exactly
+        Should -Invoke Push-ToEditor -Times 0 -Exactly
     }
 
     It 'Should restore nothing, with a warning, while the editor is not ready' {

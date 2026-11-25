@@ -17,9 +17,11 @@ $Script:QueryDetailForm.Elements.ButtonOpenQueryDetail.Add_Click({
         try {
             $_ | Show-EventInfo
             $Private:Query = $Script:QueryDetailForm.Query
-            $null = Open-SqlQueryInTab -DoId $Private:Query.DoId -DisplayName $Private:Query.DisplayName
-            Request-QueryManagerClose
-            $Script:QueryDetailForm.Definition.Close()
+            # Close only when a tab was opened; at the tab limit the windows stay as they were.
+            if ($null -ne (Open-SqlQueryInTab -DoId $Private:Query.DoId -DisplayName $Private:Query.DisplayName)) {
+                Request-QueryManagerClose
+                $Script:QueryDetailForm.Definition.Close()
+            }
         }
         catch {
             $_.Exception.Message | Write-ContainedErrorLog -ErrorObject $_
@@ -36,6 +38,16 @@ $Script:QueryDetailForm.Elements.ButtonShowQueryDetailHistory.Add_Click({
             if (-not (Complete-QueryManagerChildWindow -Window $Script:QueryDetailForm.Definition)) {
                 Update-QueryDetailForm
             }
+        }
+        catch {
+            $_.Exception.Message | Write-ContainedErrorLog -ErrorObject $_
+        }
+    })
+
+$Script:QueryDetailForm.Elements.ButtonOpenQueryDetailInOmada.Add_Click({
+        try {
+            $_ | Show-EventInfo
+            Open-OmadaQueryObject -DoId $Script:QueryDetailForm.Query.DoId
         }
         catch {
             $_.Exception.Message | Write-ContainedErrorLog -ErrorObject $_

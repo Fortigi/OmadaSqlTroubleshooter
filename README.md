@@ -9,6 +9,38 @@ OmadaSqlTroubleshooter is a PowerShell Module that contains an interactive deskt
 
 ### Features
 
+#### Window layout
+From top to bottom: the menu bar, the tab strip, and per tab the toolbar, the connection settings,
+the editor, the results and the status bar.
+
+- **Toolbar** — grouped like SQL Server Management Studio, with separators between the groups. Only
+  the most used commands show text next to their icon (New query, Execute, Grid/Text, Connect); the
+  others show their icon, with the name in the tooltip and on the menu. The toolbar wraps onto a
+  second row on a narrow window instead of running off-screen.
+
+  | Group | Commands |
+  |---|---|
+  | Query | New query, Save, Save as, Rename, Delete |
+  | Queries | Refresh, Query manager, History, Schema, *Only my queries:* Created / Last updated |
+  | Run | Execute, Grid/Text |
+  | Results | View in a window, Export, Open export |
+  | Session | Connect / Disconnect, Reset, Log |
+
+- **Menu bar** — every toolbar command plus the result grid's and the tab header's context menu
+  commands. It acts on the active tab and shows each command enabled exactly when the tab's own
+  button or context menu item is, as the menu opens.
+
+  | Menu | Items |
+  |---|---|
+  | **File** | New query, Save (`Ctrl+S`), Save as…, Rename…, Delete… · Connect, Reset application · Exit |
+  | **Query** | Execute (`F5`) · Results to grid (`Ctrl+Shift+D`), Results to text (`Ctrl+Shift+T`) · Refresh query list, Query manager…, History…, Schema · Only queries I created, Only queries I last updated |
+  | **Results** | Copy, Copy with headers, Copy as SQL array, Copy as PowerShell array, Select all · View selected, Save results as…, Save selected as… · View in a window, Export…, Open export |
+  | **Window** | New tab, Duplicate tab, Duplicate tab without query · Next tab, Previous tab · Close tab, Close other tabs, Close all tabs |
+  | **Tools** | Log window |
+
+  The menu bar sits above the tab strip rather than between the tabs and the toolbar: it belongs to
+  the window, while each tab has its own toolbar and state.
+
 #### Query Management
 - The query commands on the toolbar:
 
@@ -19,11 +51,11 @@ OmadaSqlTroubleshooter is a PowerShell Module that contains an interactive deskt
   | **Save as** | Saves the editor as another, new query and asks for its name (a saved query suggests its next free numbered variant, `Accounts` → `Accounts1`). The tab then holds the new query; the original is left as it was saved |
   | **Rename** | Renames the selected query on the tenant. Only the name changes: the editor and any unsaved edits stay exactly as they are |
   | **Delete** | Deletes the selected query, after confirmation. Its text stays in the editor as an unsaved ad-hoc query, so a mistaken delete costs one Save to undo |
-  | **Queries** | Opens the query manager (below) |
+  | **Query manager** | Opens the query manager (below) |
 
   Names are always asked for in a pop-up; the *Display name* field is gone. A name is checked locally
   (not empty, not `TMP_…`, not one of the queries the tab knows) and then with the tenant, which also
-  sees queries a *Filter my queries* view hides. A refused name is asked for again, with the reason
+  sees queries an *Only my queries* filter hides. A refused name is asked for again, with the reason
 - **Ad-hoc queries** — type SQL and press **Execute** (`F5`) without creating a query first. With no
   saved query selected, the editor runs through the same temporary `TMP_<InstanceGuid>` object an
   executed selection uses, which is deleted again after the run: nothing you own is created or
@@ -46,6 +78,10 @@ OmadaSqlTroubleshooter is a PowerShell Module that contains an interactive deskt
     you can rename it, open it in a tab, or open **Compare / restore…** — the history window for that
     query, where a restored version goes into the query's own tab (opened if needed) as an unsaved
     change
+  - **Open in Omada** (in the list and in the details) opens the query object's own page in Omada
+    (`dataobjdlg.aspx?DOID=<id>`) in your default browser, which has its own sign-in to Omada
+  - When no tab can be opened (all tabs in use), the warning is shown and the query manager stays
+    open
 - Rename, delete and create are applied at once to every connected tab sharing the connection pool.
   A tab that has a deleted query selected while it is in the background is turned into an ad-hoc
   query that keeps its text
@@ -141,7 +177,7 @@ data-definition row above whatever the target is called; only the `#t` form is f
 table.)
 
 #### Results & Export
-- Results to grid or to text (**Ctrl+Shift+D** / **Ctrl+Shift+T**, or the Grid/Text toolbar button), per tab
+- Results to grid or to text (**Ctrl+Shift+D** / **Ctrl+Shift+T**, the Grid/Text toolbar button or the Query menu), per tab
 - Each result grid is headed by its statement on one line, leading comment included
 - View results in a PowerShell GridView
 - Context menu for quick copy, select all and save
