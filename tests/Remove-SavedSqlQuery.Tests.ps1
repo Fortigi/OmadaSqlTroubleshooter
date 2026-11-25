@@ -176,4 +176,22 @@ Describe 'Remove-SavedSqlQuery' -Tag 'Unit' {
             Should -Invoke Open-ChoiceForm -Times 1 -Exactly
         }
     }
+
+    It 'Should report nothing deleted (<Case>)' -ForEach @(
+        @{ Case = 'without a saved query'; DoId = $null; Throws = $false }
+        @{ Case = 'when it fails'; DoId = 42; Throws = $true }
+    ) {
+        New-QueryTestState -DoId $DoId
+        Mock Open-ChoiceForm { if ($Throws) { throw "dialog failed" } else { $true } }
+
+        Remove-SavedSqlQuery | Should -BeFalse
+    }
+
+    It 'Should switch to the holding tab only when it is not already the active one' {
+        # The active tab holds the deleted query itself: no switching away and back.
+        Remove-SavedSqlQuery | Should -BeTrue
+
+        Should -Invoke Set-ActiveTabContext -Times 1 -Exactly
+        $Script:ActiveTabId | Should -Be "tab-1"
+    }
 }

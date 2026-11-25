@@ -57,7 +57,8 @@ Describe 'New-SqlQueryObject' -Tag 'Unit' {
 
     It 'Should report a refused create (<Case>)' -ForEach @(
         @{ Case = 'refused'; Response = [PSCustomObject]@{ Succeeded = $false; Result = $null; Message = "401" } }
-        @{ Case = 'no id in the answer'; Response = [PSCustomObject]@{ Succeeded = $true; Result = $null; Message = $null } }
+        @{ Case = 'no answer'; Response = [PSCustomObject]@{ Succeeded = $true; Result = $null; Message = $null } }
+        @{ Case = 'an answer without an id'; Response = [PSCustomObject]@{ Succeeded = $true; Result = [PSCustomObject]@{ DisplayName = "Fresh" }; Message = $null } }
     ) {
         Mock Invoke-SavedQueryRequest { $Response }
 

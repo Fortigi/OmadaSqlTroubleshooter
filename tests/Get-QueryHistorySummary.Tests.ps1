@@ -30,4 +30,18 @@ Describe 'Get-QueryHistorySummary' -Tag 'Unit' {
         $Summary.Created | Should -BeNullOrEmpty
         $Summary.Changed | Should -BeNullOrEmpty
     }
+
+    It 'Should take the earliest dated Create, ignoring one without a date' {
+        $Entry = @(
+            [PSCustomObject]@{ When = $null; Who = "undated"; What = "Create" }
+            [PSCustomObject]@{ When = [DateTime]"2024-06-01"; Who = "second"; What = "Create" }
+            [PSCustomObject]@{ When = [DateTime]"2024-01-01"; Who = "first"; What = "Create" }
+        )
+
+        $Summary = Get-QueryHistorySummary -Entry $Entry
+        $Summary.CreatedBy | Should -BeExactly "first"
+        $Summary.Created | Should -BeOfType [DateTime]
+        $Summary.Created | Should -Be ([DateTime]"2024-01-01")
+        $Summary.ChangedBy | Should -BeExactly "second"
+    }
 }

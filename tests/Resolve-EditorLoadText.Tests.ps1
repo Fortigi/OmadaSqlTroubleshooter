@@ -28,4 +28,11 @@ Describe 'Resolve-EditorLoadText' -Tag 'Unit' {
     It 'Should load the saved text without a tab' {
         (Resolve-EditorLoadText -TabSession $null -SavedText "SELECT saved").Restored | Should -BeFalse
     }
+
+    It 'Should load the saved text for a tab that never had a version waiting' {
+        $Load = Resolve-EditorLoadText -TabSession ([PSCustomObject]@{ Id = "a"; PendingRestoreText = $null }) -SavedText "SELECT saved"
+
+        $Load.Text | Should -Be "SELECT saved"
+        $Load.Restored | Should -BeFalse
+    }
 }

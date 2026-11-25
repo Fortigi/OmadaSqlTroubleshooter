@@ -40,5 +40,6 @@ function ConvertTo-QueryHistoryEntry {
         }
     }
 
-    @($Private:Entries) | Sort-Object -Property @{ Expression = { if ($null -eq $_.When) { [DateTime]::MinValue } else { $_.When } }; Descending = $true }
+    # Newest first; an entry whose date could not be read sorts after every dated one.
+    @($Private:Entries) | Sort-Object -Property When -Descending
 }

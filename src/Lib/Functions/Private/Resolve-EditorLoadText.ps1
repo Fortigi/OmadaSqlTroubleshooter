@@ -36,9 +36,10 @@ function Resolve-EditorLoadText {
         [string]$SavedText
     )
 
+    # A tab that never had a version waiting has no such property; that reads as nothing waiting.
     $Private:Pending = $null
-    if ($null -ne $TabSession -and $TabSession.PSObject.Properties.Name -contains "PendingRestoreText") {
-        $Private:Pending = $TabSession.PendingRestoreText
+    if ($null -ne $TabSession) {
+        $Private:Pending = $TabSession.PSObject.Properties["PendingRestoreText"].Value
     }
 
     if ($null -eq $Private:Pending) {

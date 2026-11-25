@@ -106,5 +106,6 @@ Describe 'Sync-AdHocQueryDraft' -Tag 'Unit' {
 
         Should -Invoke Save-AdHocQueryDraft -Times 0 -Exactly
         Should -Invoke Remove-AdHocQueryDraft -Times 0 -Exactly
+        $script:DraftLog.Count | Should -Be 0 -Because "it is ignored, not attempted and then failed"
     }
 }

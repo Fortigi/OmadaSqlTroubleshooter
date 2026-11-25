@@ -39,4 +39,14 @@ Describe 'ConvertTo-QueryHistoryEntry' -Tag 'Unit' {
     It 'Should return nothing for no rows' {
         @(ConvertTo-QueryHistoryEntry -Row @($null)).Count | Should -Be 0
     }
+
+    It 'Should sort every dated change newest first' {
+        $Rows = @(
+            [PSCustomObject]@{ Who = "old"; What = "Create"; When = "2020-01-01T00:00:00"; ChangedFields = "[]" }
+            [PSCustomObject]@{ Who = "new"; What = "Modify"; When = "2024-01-01T00:00:00"; ChangedFields = "[]" }
+            [PSCustomObject]@{ Who = "mid"; What = "Modify"; When = "2022-01-01T00:00:00"; ChangedFields = "[]" }
+        )
+
+        @(ConvertTo-QueryHistoryEntry -Row $Rows | ForEach-Object Who) | Should -Be @("new", "mid", "old")
+    }
 }
