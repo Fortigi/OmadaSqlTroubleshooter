@@ -67,6 +67,7 @@ Asserting on the outcome of an execute without waiting tests a race, not the fea
 | `OmadaMocks.ps1` | `script:`-scoped overrides: the REST wrapper, the editor seams, popup neutralizers, a no-dialog `Write-LogOutput`, a call recorder. |
 | `Fixtures.ps1` | Response shapes routed by normalized path + method + `dataType`; tunable per scenario. |
 | `Drivers.ps1` | In-process UI drivers (connect, select query, execute, tab helpers, call counter). |
+| `PendingRequestDrain.ps1` | What a drain timeout does: names the requests still in flight in the failure, then evicts them so later cases start clean. |
 | `Microcheck.ps1` | Tiny `E2ESuite`/`E2ECase`/`E2EAssert*` recorder + JUnit writer. |
 | `scenarios/*.ps1` | The scenarios (Core, Tabs, Regression). |
 
