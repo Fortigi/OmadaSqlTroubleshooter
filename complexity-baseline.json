@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "metricVersion": 1,
-  "generatedAt": "2026-11-23T11:34:01Z",
+  "generatedAt": "2026-11-25T12:26:15Z",
   "units": [
     {
       "file": "src/Lib/Events/MainForm.Definition.ps1",
@@ -96,8 +96,8 @@
     {
       "file": "src/Lib/Functions/Private/Complete-DuplicateTab.ps1",
       "unit": "Complete-DuplicateTab",
-      "cyclomatic": 14,
-      "cognitive": 21
+      "cyclomatic": 12,
+      "cognitive": 18
     },
     {
       "file": "src/Lib/Functions/Private/Complete-TabClose.ps1",
@@ -306,8 +306,8 @@
     {
       "file": "src/Lib/Functions/Private/Initialize-WebViewForTab.ps1",
       "unit": "Initialize-WebViewForTab",
-      "cyclomatic": 44,
-      "cognitive": 80
+      "cyclomatic": 43,
+      "cognitive": 77
     },
     {
       "file": "src/Lib/Functions/Private/Install-WebView2.ps1",
