@@ -57,4 +57,18 @@ Describe 'Get-QuerySavePromptMessage' -Tag 'Unit' {
         $Message | Should -Match "Discard them anyway"
         $Message | Should -Not -Match "Close it anyway"
     }
+
+    It 'Should ask before opening another query (<Kind>)' -ForEach @(
+        @{ Kind = "SaveExisting" }
+        @{ Kind = "SaveNew" }
+    ) {
+        $Message = Get-QuerySavePromptMessage -Kind $Kind -Name "Accounts" -OpenQuery
+
+        $Message | Should -Match "before opening another query"
+        $Message | Should -Not -Match "before closing|before starting"
+    }
+
+    It 'Should ask to discard a disconnected tab''s changes before opening another query' {
+        Get-QuerySavePromptMessage -Kind Unavailable -Name "Accounts" -OpenQuery | Should -Match "Discard them anyway"
+    }
 }

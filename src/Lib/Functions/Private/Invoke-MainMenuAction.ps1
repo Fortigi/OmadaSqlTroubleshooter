@@ -54,7 +54,12 @@ function Invoke-MainMenuAction {
             Set-TabResultOutputMode -TabSession (Get-ActiveTabSession) -Mode ($Private:Name -replace "^ResultsTo", "")
         }
         "App" {
-            $Script:MainForm.Definition.Close()
+            if ($Private:Name -eq "About") {
+                Open-AboutForm
+            }
+            else {
+                $Script:MainForm.Definition.Close()
+            }
         }
     }
 }

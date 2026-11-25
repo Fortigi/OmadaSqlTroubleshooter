@@ -379,8 +379,17 @@
                                              menu bar. A WrapPanel rather than a single row so a narrow window wraps the groups onto a
                                              second line instead of pushing buttons off the screen. Each group is one StackPanel so it
                                              wraps as a whole. -->
-                                        <Border Grid.Row="0" x:Name="BorderToolbar" BorderBrush="#FFC8C8C8" BorderThickness="0,0,0,1" Padding="4,3">
-                                                <WrapPanel x:Name="WrapPanelToolbar" Orientation="Horizontal">
+                                        <!-- Its own lighter band with a line under it, so it reads as a toolbar against the grey
+                                             form below (as in SSMS). The resources undo two of this control's implicit styles inside
+                                             the toolbar: the TextBlock one pins every TextBlock to 100x25 - which includes the text
+                                             inside each button's AccessText and the CheckBoxes' content - and the CheckBox one pins
+                                             100 wide too, which spread the groups out over the window instead of packing them left. -->
+                                        <Border Grid.Row="0" x:Name="BorderToolbar" Background="#FFF5F6F7" BorderBrush="#FFB0B7C0" BorderThickness="0,1,0,1" Padding="4,3">
+                                                <Border.Resources>
+                                                        <Style TargetType="TextBlock" />
+                                                        <Style TargetType="CheckBox" BasedOn="{StaticResource ToolbarCheckBoxStyle}" />
+                                                </Border.Resources>
+                                                <WrapPanel x:Name="WrapPanelToolbar" Orientation="Horizontal" HorizontalAlignment="Left">
                                                         <!-- Query: the query in this tab -->
                                                         <StackPanel Orientation="Horizontal">
                                                                 <Button x:Name="ButtonNewQuery" TabIndex="13" ToolTip="New query: clears the editor (offers to save unsaved changes first)" Style="{StaticResource ToolbarButtonStyle}">
@@ -536,7 +545,10 @@
                                                                         </Grid.ColumnDefinitions>
                                                                         <TextBlock Grid.Column="1" x:Name="TextBlockUrl" Text="Tenant:" ToolTip="Omada Tenant url. Enter full URL or tenant name only. Example: Enter 'comp' for 'https://comp.omada.cloud'" />
                                                                         <TextBox Grid.Column="3" x:Name="TextBoxURL" TabIndex="1" ToolTip="Enter full URL or tenant name only. Example: Enter 'comp' for 'https://comp.omada.cloud'" />
-                                                                        <TextBlock Grid.Column="5" x:Name="TextBlockUserName" Text="Username:" ToolTip="Username:" Visibility="Hidden" />
+                                                                        <!-- The middle labels are 125 wide, not the implicit 100: "Password (optional):" (set by
+                                                                             Set-AuthenticationOption) is wider than 100 and ran under its box. All three rows'
+                                                                             middle labels get it so the columns stay lined up. -->
+                                                                        <TextBlock Grid.Column="5" x:Name="TextBlockUserName" Width="125" MinWidth="125" Text="Username:" ToolTip="Username:" Visibility="Hidden" />
                                                                         <TextBox Grid.Column="7" x:Name="TextBoxUserName" TabIndex="3" Visibility="Hidden" IsEnabled="False" />
                                                                         <TextBlock Grid.Column="9" x:Name="TextBlockAppIdUri" Text="App Uri:" Visibility="Hidden" ToolTip="Application ID Uri:" />
                                                                         <TextBox Grid.Column="11" x:Name="TextBoxAppIdUri" TabIndex="5" IsEnabled="False" Visibility="Hidden" />
@@ -564,7 +576,7 @@
                                                                                 <ComboBoxItem Content="Browser-InPrivate" />
                                                                                 <ComboBoxItem Content="WebView2-InPrivate" />
                                                                         </ComboBox>
-                                                                        <TextBlock Grid.Column="5" x:Name="TextBlockPassword" Text="Password:" Visibility="Hidden" VerticalAlignment="Center" />
+                                                                        <TextBlock Grid.Column="5" x:Name="TextBlockPassword" Width="125" MinWidth="125" Text="Password:" Visibility="Hidden" VerticalAlignment="Center" />
                                                                         <PasswordBox Grid.Column="7" x:Name="TextBoxPassword" TabIndex="4" Visibility="Hidden" VerticalAlignment="Center" />
                                                                         <TextBlock Grid.Column="9" x:Name="TextBlockEntraIdTenantId" Text="Entra Tenant ID:" Visibility="Hidden" VerticalAlignment="Center" />
                                                                         <TextBox Grid.Column="11" x:Name="TextBoxEntraIdTenantId" Visibility="Hidden" TabIndex="6" VerticalAlignment="Center" />
@@ -586,7 +598,7 @@
                                                                         </Grid.ColumnDefinitions>
                                                                         <TextBlock Grid.Column="1" x:Name="TextBlockComboBoxSelectQuery" Text="Query:" ToolTip="Query list" />
                                                                         <ComboBox Grid.Column="3" x:Name="ComboBoxSelectQuery" TabIndex="7" IsEditable="True" IsTextSearchEnabled="True" StaysOpenOnEdit="True" />
-                                                                        <TextBlock Grid.Column="5" Text="Save Password:" />
+                                                                        <TextBlock Grid.Column="5" Width="125" MinWidth="125" Text="Save Password:" />
                                                                         <!-- 300 wide, like the boxes above, so Connection lines up with App Uri. -->
                                                                         <StackPanel Grid.Column="7" Orientation="Horizontal" VerticalAlignment="Center" Width="300">
                                                                                 <CheckBox x:Name="CheckBoxSavePassword" TabIndex="8" />

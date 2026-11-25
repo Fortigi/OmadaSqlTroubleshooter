@@ -17,11 +17,13 @@ semantic version.
   Results, Session) with separators and icon-only buttons except New query, Execute, Grid/Text and
   Connect; it wraps on a narrow window. The *Only my queries* filters (Created / Last updated) moved
   onto the toolbar and the connection selector moved up next to *Save password*. A new menu bar
-  (File, Query, Results, Window, Tools) holds every toolbar command plus the result grid and tab
-  context menu commands, and acts on the active tab. The main window's minimum width went from 1461
-  to 1310 pixels.
-- The query manager, query details and history windows use the main window's look: its background,
-  flat buttons with Segoe icons, and the navy accent line.
+  (File, Query, Results, Window, Tools, Help) holds every toolbar command plus the result grid and tab
+  context menu commands, and acts on the active tab; Help > About shows the startup screen's logo,
+  version and copyright in a window. The toolbar is a lighter band with a line under and over it,
+  and its groups are packed to the left. The main window's minimum width went from 1461 to 1340
+  pixels.
+- The query manager, query details and history windows use the main window's background and the
+  log and schema windows' buttons (glyph and text).
 - Restoring a version from the history now marks the tab as changed, so closing it offers to save
   the restored version. It used to leave the tab clean on purpose (a programmatic load is not an
   edit), which with the new close prompts would let a restored version be lost without a word.
@@ -67,8 +69,9 @@ semantic version.
   editor as another query. Names are asked for in a pop-up and the Display name field is removed.
   This also fixes New being left disabled for good after a save under a name that already existed.
 - **Query manager** (toolbar: Queries). Lists every `C_P_SQLTROUBLESHOOTING` object on the tenant
-  with every field OData returns, filterable, with New (an empty query), Open in tab, Rename, Delete
-  and Details. Details shows all fields, created/last changed (from the history, which OData does not
+  with every field OData returns, filterable, with New (an empty query), Open (in place of the active
+  tab's query, offering to save its unsaved changes first), Open in new tab, Rename, Delete and
+  Details. Cells and rows are selected as in the result grid, and Ctrl+C copies them. Details shows all fields, created/last changed (from the history, which OData does not
   return), the SQL read-only and the full change history, and opens the history window for that query
   to compare and restore versions; a restored version goes into the query's own tab as an unsaved
   change.
@@ -177,6 +180,7 @@ semantic version.
 
 ### Fixed
 
+- The "Password (optional):" label no longer runs under its box.
 - The query manager and the history window no longer close when a query cannot be opened in a tab
   because all tabs are in use; the warning is shown and the window stays open.
 - The query details' History and Properties tabs scroll horizontally when a row is wider than the

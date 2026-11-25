@@ -108,4 +108,16 @@ Describe 'Request-TabQuerySave' -Tag 'Unit' {
 
         Should -Invoke Open-ChoiceForm -Times 1 -Exactly -ParameterFilter { $Title -eq $ExpectedTitle -and $LeftButtonText -eq $Button }
     }
+
+    It 'Should speak of opening another query, and offer to discard, for Open' {
+        Mock Open-ChoiceForm { $true }
+
+        Request-TabQuerySave -TabSession $script:TestTab -Kind Unavailable -OpenQuery | Should -Be "Discarded"
+
+        Should -Invoke Open-ChoiceForm -Times 1 -Exactly -ParameterFilter { $LeftButtonText -eq "Discard" -and $Message -match "Discard them anyway" }
+
+        Mock Open-ChoiceForm { "Save" }
+        $null = Request-TabQuerySave -TabSession $script:TestTab -Kind SaveExisting -OpenQuery
+        Should -Invoke Open-ChoiceForm -Times 1 -Exactly -ParameterFilter { $Message -match "before opening another query" }
+    }
 }

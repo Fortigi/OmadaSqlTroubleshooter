@@ -20,6 +20,9 @@ function Get-QuerySavePromptMessage {
     .PARAMETER NewQuery
         The editor is about to be cleared for a new query (New), not closed.
 
+    .PARAMETER OpenQuery
+        Another query is about to be opened in the tab, in place of this one.
+
     .OUTPUTS
         [string]
     #>
@@ -34,17 +37,19 @@ function Get-QuerySavePromptMessage {
 
         [switch]$ClosingApplication,
 
-        [switch]$NewQuery
+        [switch]$NewQuery,
+
+        [switch]$OpenQuery
     )
 
-    $Private:Moment = if ($NewQuery) { "before starting a new query" } else { "before closing" }
+    $Private:Moment = if ($OpenQuery) { "before opening another query" } elseif ($NewQuery) { "before starting a new query" } else { "before closing" }
 
     switch ($Kind) {
         "SaveExisting" {
             return "Save changes to query '{0}' {1}?" -f $Name, $Private:Moment
         }
         "Unavailable" {
-            $Private:Anyway = if ($NewQuery) { "Discard them anyway?" } else { "Close it anyway?" }
+            $Private:Anyway = if ($NewQuery -or $OpenQuery) { "Discard them anyway?" } else { "Close it anyway?" }
             return "'{0}' has unsaved changes that cannot be saved while the tab is disconnected. {1}" -f $Name, $Private:Anyway
         }
     }

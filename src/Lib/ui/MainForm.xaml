@@ -6,8 +6,8 @@
         <Window.Style>
                 <Style TargetType="Window">
                         <!-- The toolbar wraps, so it no longer sets the window's width; the connection
-                             rows do (three 100 + 300 label/field pairs). -->
-                        <Setter Property="MinWidth" Value="1310" />
+                             rows do (three label/field pairs: 100 + 300, 125 + 300, 100 + 300). -->
+                        <Setter Property="MinWidth" Value="1340" />
                         <Setter Property="Width" Value="1461" />
                         <Setter Property="MinHeight" Value="800" />
                         <Setter Property="Height" Value="800" />
@@ -234,6 +234,11 @@
                         <MenuItem Header="_Tools">
                                 <MenuItem Header="_Log window" Tag="Button:ButtonShowLog">
                                         <MenuItem.Icon><TextBlock Style="{StaticResource MainMenuGlyphStyle}" Text="&#xE8A5;" /></MenuItem.Icon>
+                                </MenuItem>
+                        </MenuItem>
+                        <MenuItem Header="_Help">
+                                <MenuItem Header="_About..." Tag="App:About">
+                                        <MenuItem.Icon><TextBlock Style="{StaticResource MainMenuGlyphStyle}" Text="&#xE946;" /></MenuItem.Icon>
                                 </MenuItem>
                         </MenuItem>
                 </Menu>

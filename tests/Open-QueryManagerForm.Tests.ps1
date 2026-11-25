@@ -16,7 +16,7 @@ BeforeAll {
             Definition = [PSCustomObject]@{ Closed = 0 }
             Elements   = [PSCustomObject]@{
                 TextBoxQueryFilter  = [PSCustomObject]@{ Text = "" }
-                DataGridQueries     = [PSCustomObject]@{ ItemsSource = $null; SelectedItem = $null }
+                DataGridQueries     = [PSCustomObject]@{ ItemsSource = $null; SelectedItems = @(); SelectedCells = @(); CurrentItem = $null }
                 TextBlockQueryCount = [PSCustomObject]@{ Text = "" }
             }
         }
@@ -87,12 +87,61 @@ Describe 'Get-QueryManagerSelectedQuery' -Tag 'Unit' {
         Should -Invoke Write-LogOutput -Times 1 -Exactly -ParameterFilter { $LogType -eq "WARNING" }
     }
 
-    It 'Should return the selected row''s query' {
+    It 'Should return the query of the selection (<Case>)' -ForEach @(
+        @{ Case = 'a selected row'; Rows = @(0); Cells = @(); Current = $null }
+        @{ Case = 'cells in one row'; Rows = @(); Cells = @(0, 0, 0); Current = $null }
+        @{ Case = 'the row and cells in it'; Rows = @(0); Cells = @(0); Current = $null }
+        @{ Case = 'only the focused cell'; Rows = @(); Cells = @(); Current = 0 }
+        @{ Case = 'a selection over the focused cell'; Rows = @(); Cells = @(0); Current = 1 }
+    ) {
         New-ManagerState
-        $Table = ConvertTo-QueryManagerTable -Query @([PSCustomObject]@{ Id = 42; DisplayName = "Accounts" })
-        $Script:QueryManagerForm.Elements.DataGridQueries.SelectedItem = $Table.DefaultView[0]
+        Mock Write-LogOutput { }
+        $Table = ConvertTo-QueryManagerTable -Query @([PSCustomObject]@{ Id = 42; DisplayName = "Accounts" }, [PSCustomObject]@{ Id = 43; DisplayName = "Groups" })
+        $View = $Table.DefaultView
+        $Grid = $Script:QueryManagerForm.Elements.DataGridQueries
+        $Grid.SelectedItems = @($Rows | ForEach-Object { $View[$_] })
+        $Grid.SelectedCells = @($Cells | ForEach-Object { [PSCustomObject]@{ Item = $View[$_] } })
+        $Grid.CurrentItem = if ($null -ne $Current) { $View[$Current] } else { $null }
 
-        (Get-QueryManagerSelectedQuery).DoId | Should -Be "42"
+        $Query = Get-QueryManagerSelectedQuery
+
+        $Query.DoId | Should -Be "42"
+        $Query.DisplayName | Should -Be "Accounts"
+        Should -Invoke Write-LogOutput -Times 0 -Exactly
+    }
+
+    It 'Should refuse a selection over more than one query (<Case>)' -ForEach @(
+        @{ Case = 'two rows'; Rows = @(0, 1); Cells = @() }
+        @{ Case = 'cells in two rows'; Rows = @(); Cells = @(0, 1) }
+        @{ Case = 'a row and a cell in another'; Rows = @(0); Cells = @(1) }
+    ) {
+        New-ManagerState
+        Mock Write-LogOutput { }
+        $Table = ConvertTo-QueryManagerTable -Query @([PSCustomObject]@{ Id = 42; DisplayName = "Accounts" }, [PSCustomObject]@{ Id = 43; DisplayName = "Groups" })
+        $View = $Table.DefaultView
+        $Grid = $Script:QueryManagerForm.Elements.DataGridQueries
+        $Grid.SelectedItems = @($Rows | ForEach-Object { $View[$_] })
+        $Grid.SelectedCells = @($Cells | ForEach-Object { [PSCustomObject]@{ Item = $View[$_] } })
+
+        Get-QueryManagerSelectedQuery | Should -BeNullOrEmpty
+        Should -Invoke Write-LogOutput -Times 1 -Exactly -ParameterFilter { $LogType -eq "WARNING" -and $Message -match "^2 queries are selected" }
+    }
+}
+
+Describe 'Get-QueryManagerSelectionRow' -Tag 'Unit' {
+    It 'Should keep each row once, by reference, in first-seen order, and drop what is not a row' {
+        $A = [PSCustomObject]@{ Row = "a" }
+        $B = [PSCustomObject]@{ Row = "a" }
+        $Rows = @(Get-QueryManagerSelectionRow -Item @($A, $null, $B, $A, [PSCustomObject]@{ Other = 1 }, "text", $B))
+
+        $Rows.Count | Should -Be 2
+        [object]::ReferenceEquals($Rows[0], $A) | Should -BeTrue
+        [object]::ReferenceEquals($Rows[1], $B) | Should -BeTrue
+    }
+
+    It 'Should give nothing for nothing' {
+        @(Get-QueryManagerSelectionRow -Item @()).Count | Should -Be 0
+        @(Get-QueryManagerSelectionRow -Item $null).Count | Should -Be 0
     }
 }
 

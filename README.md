@@ -37,6 +37,7 @@ the editor, the results and the status bar.
   | **Results** | Copy, Copy with headers, Copy as SQL array, Copy as PowerShell array, Select all · View selected, Save results as…, Save selected as… · View in a window, Export…, Open export |
   | **Window** | New tab, Duplicate tab, Duplicate tab without query · Next tab, Previous tab · Close tab, Close other tabs, Close all tabs |
   | **Tools** | Log window |
+  | **Help** | About… — the startup screen's logo, version and copyright, in a window |
 
   The menu bar sits above the tab strip rather than between the tabs and the toolbar: it belongs to
   the window, while each tab has its own toolbar and state.
@@ -69,19 +70,26 @@ the editor, the results and the status bar.
   - The columns are whatever fields OData returns for the query objects — nothing is hard-coded, so a
     tenant that exposes more shows more. A standard tenant returns `Id`, `DisplayName` and `Name`
   - **New…** creates an empty query (a name is asked for; its text is a one-line SQL comment naming it)
-    and offers to open it. **Open in tab** shows a query in the tab that already holds it, or opens a
-    new tab with the active tab's connection. **Rename…** and **Delete…** work as on the toolbar, for
+    and offers to open it. **Open** shows a query in the active tab in place of its query; unsaved
+    changes there (a saved or an ad-hoc query, never an empty editor) are offered to be saved first
+    (Save / Don't save / Cancel), and the tab must be connected. **Open in new tab** opens a new tab
+    with the active tab's connection. Both select the tab that already holds the query instead of
+    opening it twice. **Rename…** and **Delete…** work as on the toolbar, for
     any query — also one that is open in another tab, which follows
   - **Details…** (or double-click) shows one query: every field OData returns, plus when and by whom it
     was created and last changed, taken from its history because OData does not return those; its SQL
     (read-only — it is edited in a tab); and its full change history, including renames. From there
-    you can rename it, open it in a tab, or open **Compare / restore…** — the history window for that
+    you can rename it, open it (in the active tab or a new one), or open **Compare / restore…** — the history window for that
     query, where a restored version goes into the query's own tab (opened if needed) as an unsaved
     change
   - **Open in Omada** (in the list and in the details) opens the query object's own page in Omada
     (`dataobjdlg.aspx?DOID=<id>`) in your default browser, which has its own sign-in to Omada
-  - When no tab can be opened (all tabs in use), the warning is shown and the query manager stays
-    open
+  - The list selects as the result grid does: whole rows from the row headers, single cells or
+    ranges, with `Ctrl` and `Shift`, and `Ctrl + C` copies the selection (there is no context menu).
+    The buttons act on the one query the selection is in; a selection over several queries is
+    refused with a hint
+  - When the query is not opened (cancelled at the save prompt, the tab not connected, or all tabs in
+    use), the query manager and the details stay open
 - Rename, delete and create are applied at once to every connected tab sharing the connection pool.
   A tab that has a deleted query selected while it is in the background is turned into an ad-hoc
   query that keeps its text

@@ -16,12 +16,17 @@ $Script:QueryDetailForm.Elements.ButtonRenameQueryDetail.Add_Click({
 $Script:QueryDetailForm.Elements.ButtonOpenQueryDetail.Add_Click({
         try {
             $_ | Show-EventInfo
-            $Private:Query = $Script:QueryDetailForm.Query
-            # Close only when a tab was opened; at the tab limit the windows stay as they were.
-            if ($null -ne (Open-SqlQueryInTab -DoId $Private:Query.DoId -DisplayName $Private:Query.DisplayName)) {
-                Request-QueryManagerClose
-                $Script:QueryDetailForm.Definition.Close()
-            }
+            Invoke-QueryDetailOpen -InPlace
+        }
+        catch {
+            $_.Exception.Message | Write-ContainedErrorLog -ErrorObject $_
+        }
+    })
+
+$Script:QueryDetailForm.Elements.ButtonOpenQueryDetailInTab.Add_Click({
+        try {
+            $_ | Show-EventInfo
+            Invoke-QueryDetailOpen
         }
         catch {
             $_.Exception.Message | Write-ContainedErrorLog -ErrorObject $_

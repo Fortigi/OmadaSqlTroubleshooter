@@ -13,6 +13,7 @@ BeforeAll {
     function New-SqlQueryObject { param($ExistingNames) }
     function Open-ChoiceForm { param($Title, $Message, $LeftButtonText, $RightButtonText) }
     function Open-OmadaQueryObject { param($DoId) }
+    function Open-SqlQueryInActiveTab { param($DoId, $DisplayName) }
 }
 
 Describe 'Invoke-QueryManagerAction' -Tag 'Unit' {
@@ -22,6 +23,7 @@ Describe 'Invoke-QueryManagerAction' -Tag 'Unit' {
         Mock Get-QueryManagerSelectedQuery { [PSCustomObject]@{ DoId = "42"; DisplayName = "Accounts" } }
         Mock Open-SqlQueryInTab { [PSCustomObject]@{ TabId = "t1" } }
         Mock Open-OmadaQueryObject { }
+        Mock Open-SqlQueryInActiveTab { [PSCustomObject]@{ TabId = "t0" } }
         Mock Open-QueryDetailForm { }
         Mock Complete-QueryManagerChildWindow { $false }
         Mock Update-QueryManagerList { }
@@ -31,7 +33,7 @@ Describe 'Invoke-QueryManagerAction' -Tag 'Unit' {
         Mock Open-ChoiceForm { $false }
     }
 
-    It 'Should do nothing without a selection (<Action>)' -ForEach @(@{ Action = "Open" }, @{ Action = "Details" }, @{ Action = "Rename" }, @{ Action = "Delete" }, @{ Action = "Omada" }) {
+    It 'Should do nothing without a selection (<Action>)' -ForEach @(@{ Action = "Open" }, @{ Action = "OpenInTab" }, @{ Action = "Details" }, @{ Action = "Rename" }, @{ Action = "Delete" }, @{ Action = "Omada" }) {
         Mock Get-QueryManagerSelectedQuery { }
 
         Invoke-QueryManagerAction -Action $Action
@@ -41,19 +43,37 @@ Describe 'Invoke-QueryManagerAction' -Tag 'Unit' {
         Should -Invoke Remove-SavedSqlQuery -Times 0 -Exactly
         Should -Invoke Open-QueryDetailForm -Times 0 -Exactly
         Should -Invoke Open-OmadaQueryObject -Times 0 -Exactly
+        Should -Invoke Open-SqlQueryInActiveTab -Times 0 -Exactly
     }
 
-    It 'Should open the selected query in a tab and close the manager' {
+    It 'Should open the selected query in the active tab and close the manager' {
         Invoke-QueryManagerAction -Action Open
 
+        Should -Invoke Open-SqlQueryInActiveTab -Times 1 -Exactly -ParameterFilter { $DoId -eq "42" -and $DisplayName -eq "Accounts" }
+        Should -Invoke Open-SqlQueryInTab -Times 0 -Exactly
+        $Script:QueryManagerForm.Definition.Closed | Should -Be 1
+    }
+
+    It 'Should keep the manager open when the query was not opened in the active tab (cancelled, not connected)' {
+        Mock Open-SqlQueryInActiveTab { }
+
+        Invoke-QueryManagerAction -Action Open
+
+        $Script:QueryManagerForm.Definition.Closed | Should -Be 0
+    }
+
+    It 'Should open the selected query in a new tab and close the manager' {
+        Invoke-QueryManagerAction -Action OpenInTab
+
         Should -Invoke Open-SqlQueryInTab -Times 1 -Exactly -ParameterFilter { $DoId -eq "42" -and $DisplayName -eq "Accounts" }
+        Should -Invoke Open-SqlQueryInActiveTab -Times 0 -Exactly
         $Script:QueryManagerForm.Definition.Closed | Should -Be 1
     }
 
     It 'Should keep the manager open when no tab could be opened (e.g. all tabs in use)' {
         Mock Open-SqlQueryInTab { }
 
-        Invoke-QueryManagerAction -Action Open
+        Invoke-QueryManagerAction -Action OpenInTab
 
         Should -Invoke Open-SqlQueryInTab -Times 1 -Exactly
         $Script:QueryManagerForm.Definition.Closed | Should -Be 0

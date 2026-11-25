@@ -28,6 +28,10 @@ function Request-TabQuerySave {
         The editor is about to be cleared for a new query rather than closed; the question and the
         "close anyway" answers say so.
 
+    .PARAMETER OpenQuery
+        Another query is about to be opened in the tab (Open-SqlQueryInActiveTab); as -NewQuery,
+        the question and the answers say so.
+
     .OUTPUTS
         [string] Saved, Discarded or Cancel.
     #>
@@ -43,11 +47,13 @@ function Request-TabQuerySave {
 
         [switch]$ClosingApplication,
 
-        [switch]$NewQuery
+        [switch]$NewQuery,
+
+        [switch]$OpenQuery
     )
 
-    $Private:Message = Get-QuerySavePromptMessage -Kind $Kind -Name (Get-TabName -TabSession $TabSession) -ClosingApplication:$ClosingApplication -NewQuery:$NewQuery
-    $Private:Discard = if ($NewQuery) { "Discard" } else { "Close" }
+    $Private:Message = Get-QuerySavePromptMessage -Kind $Kind -Name (Get-TabName -TabSession $TabSession) -ClosingApplication:$ClosingApplication -NewQuery:$NewQuery -OpenQuery:$OpenQuery
+    $Private:Discard = if ($NewQuery -or $OpenQuery) { "Discard" } else { "Close" }
 
     if ($Kind -eq "Unavailable") {
         $Private:Close = Open-ChoiceForm -Title "Unsaved changes" -Message $Private:Message -LeftButtonText $Private:Discard -RightButtonText "Cancel"

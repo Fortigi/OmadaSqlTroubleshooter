@@ -6,9 +6,13 @@ function Invoke-QueryManagerAction {
     .DESCRIPTION
           Create   New-SqlQueryObject; the list is read again and the new query selected, and the user
                    is offered to open it in a tab.
-          Open     Open-SqlQueryInTab, then the manager closes so the tab can be seen and load - but
-                   only when a tab was opened. At the tab limit New-TabSession refuses with a
-                   warning, and closing the manager then would only lose the user's place.
+          Open       Open-SqlQueryInActiveTab: in place of the active tab's query, after offering to
+                     save its unsaved changes. The manager then closes so the tab can be seen - but
+                     only when the query was opened; cancelled, or with the tab not connected, it
+                     stays open.
+          OpenInTab  Open-SqlQueryInTab, then the manager closes the same way - only when a tab was
+                     opened. At the tab limit New-TabSession refuses with a warning, and closing the
+                     manager then would only lose the user's place.
           Omada    Open-OmadaQueryObject: the query's own page in Omada, in the default browser.
           Details  Open-QueryDetailForm; afterwards the list is read again (it may have been renamed),
                    unless something there asked the manager to close.
@@ -24,7 +28,7 @@ function Invoke-QueryManagerAction {
     [CmdletBinding()]
     param(
         [Parameter(Mandatory = $true)]
-        [ValidateSet("Create", "Open", "Details", "Rename", "Delete", "Omada")]
+        [ValidateSet("Create", "Open", "OpenInTab", "Details", "Rename", "Delete", "Omada")]
         [string]$Action
     )
 
@@ -40,6 +44,11 @@ function Invoke-QueryManagerAction {
 
     switch ($Action) {
         "Open" {
+            if ($null -ne (Open-SqlQueryInActiveTab -DoId $Private:Query.DoId -DisplayName $Private:Query.DisplayName)) {
+                $Script:QueryManagerForm.Definition.Close()
+            }
+        }
+        "OpenInTab" {
             if ($null -ne (Open-SqlQueryInTab -DoId $Private:Query.DoId -DisplayName $Private:Query.DisplayName)) {
                 $Script:QueryManagerForm.Definition.Close()
             }

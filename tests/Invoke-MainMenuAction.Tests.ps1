@@ -12,6 +12,7 @@ BeforeAll {
     function Close-TabSession { param($TabId) }
     function Close-OtherTabSessions { param($KeepTabId) }
     function Close-AllTabSessions { }
+    function Open-AboutForm { }
 }
 
 Describe 'Invoke-MainMenuAction' -Tag 'Unit' {
@@ -70,6 +71,13 @@ Describe 'Invoke-MainMenuAction' -Tag 'Unit' {
     It 'Should switch the active tab''s results to <ExpectedMode>' -ForEach @(@{ ExpectedMode = "Grid" }, @{ ExpectedMode = "Text" }) {
         Invoke-MainMenuAction -Tag "Action:ResultsTo$ExpectedMode"
         Should -Invoke Set-TabResultOutputMode -Times 1 -Exactly -ParameterFilter { $Mode -eq $ExpectedMode -and $TabSession.TabId -eq "t1" }
+    }
+
+    It 'Should show the About window for About, and not close the main window' {
+        Mock Open-AboutForm { }
+        Invoke-MainMenuAction -Tag "App:About"
+        Should -Invoke Open-AboutForm -Times 1 -Exactly
+        $Script:MainForm.Definition.Closed | Should -Be 0
     }
 
     It 'Should close the main window for Exit' {

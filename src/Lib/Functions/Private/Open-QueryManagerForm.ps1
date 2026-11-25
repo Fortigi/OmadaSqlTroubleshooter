@@ -91,6 +91,13 @@ function Get-QueryManagerSelectedQuery {
     .SYNOPSIS
         The query selected in the manager's grid, as @{ DoId; DisplayName }, or $null with a hint.
 
+    .DESCRIPTION
+        The grid selects as the result grid does: whole rows from the row headers, single cells or
+        ranges of cells, with Ctrl and Shift. The buttons act on one query, so the selection counts
+        when every selected cell and row belongs to one and the same row; the cell with the focus
+        counts when nothing is selected. A selection over several queries is refused with a hint
+        rather than guessed at.
+
     .OUTPUTS
         [PSCustomObject] or $null.
     #>
@@ -98,13 +105,57 @@ function Get-QueryManagerSelectedQuery {
     [OutputType([PSCustomObject])]
     param()
 
-    $Private:Item = $Script:QueryManagerForm.Elements.DataGridQueries.SelectedItem
-    if ($null -eq $Private:Item) {
+    $Private:Grid = $Script:QueryManagerForm.Elements.DataGridQueries
+    $Private:Rows = @(Get-QueryManagerSelectionRow -Item (@($Private:Grid.SelectedItems) + @($Private:Grid.SelectedCells | ForEach-Object { $_.Item })))
+    if ($Private:Rows.Count -eq 0) {
+        $Private:Rows = @(Get-QueryManagerSelectionRow -Item @($Private:Grid.CurrentItem))
+    }
+
+    if ($Private:Rows.Count -eq 0) {
         "Select a query first." | Write-LogOutput -LogType WARNING
         return $null
     }
+    if ($Private:Rows.Count -gt 1) {
+        "{0} queries are selected. Select cells or the row of one query for this command." -f $Private:Rows.Count | Write-LogOutput -LogType WARNING
+        return $null
+    }
 
-    return ConvertFrom-QueryManagerRow -Row $Private:Item.Row
+    return ConvertFrom-QueryManagerRow -Row $Private:Rows[0].Row
+}
+
+function Get-QueryManagerSelectionRow {
+    <#
+    .SYNOPSIS
+        The distinct rows behind a grid selection.
+
+    .DESCRIPTION
+        A row appears once for every selected cell in it, and again when the row itself is selected;
+        it is counted once. Rows are told apart by reference, not by their text. Anything that is not
+        a row of the table (no Row property, such as the grid's new-item placeholder) is left out.
+
+    .PARAMETER Item
+        The selected items and the items of the selected cells.
+
+    .OUTPUTS
+        The distinct rows, in the order they were first seen.
+    #>
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory = $false)]
+        [AllowNull()]
+        [AllowEmptyCollection()]
+        [object[]]$Item = @()
+    )
+
+    # A plain list and ReferenceEquals: a selection is a handful of rows, and
+    # ReferenceEqualityComparer needs .NET 5 where the module still allows PowerShell 7.0.
+    $Private:Seen = [System.Collections.Generic.List[object]]::new()
+    foreach ($Private:Candidate in @($Item | Where-Object { $null -ne $_ -and $null -ne $_.PSObject.Properties["Row"] })) {
+        if (-not @($Private:Seen | Where-Object { [object]::ReferenceEquals($_, $Private:Candidate) })) {
+            $Private:Seen.Add($Private:Candidate)
+        }
+    }
+    return $Private:Seen.ToArray()
 }
 
 function ConvertFrom-QueryManagerRow {

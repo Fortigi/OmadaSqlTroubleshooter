@@ -54,38 +54,6 @@
                     Value="98"/>
             <Setter Property="Padding"
                     Value="2,3"/>
-            <Setter Property="Background"
-                    Value="Transparent"/>
-            <Setter Property="Template">
-                <Setter.Value>
-                    <ControlTemplate TargetType="Button">
-                        <Border x:Name="HistoryButtonBorder" Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="{TemplateBinding BorderThickness}" CornerRadius="2" Padding="{TemplateBinding Padding}" SnapsToDevicePixels="True">
-                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" RecognizesAccessKey="True"/>
-                        </Border>
-                        <ControlTemplate.Triggers>
-                            <Trigger Property="IsMouseOver" Value="True">
-                                <Setter TargetName="HistoryButtonBorder" Property="Background" Value="#FFD5E7F7"/>
-                                <Setter TargetName="HistoryButtonBorder" Property="BorderBrush" Value="#FF7EB4EA"/>
-                            </Trigger>
-                            <Trigger Property="IsPressed" Value="True">
-                                <Setter TargetName="HistoryButtonBorder" Property="Background" Value="#FFC4DDF4"/>
-                            </Trigger>
-                            <Trigger Property="IsKeyboardFocused" Value="True">
-                                <Setter TargetName="HistoryButtonBorder" Property="BorderBrush" Value="#FF3399FF"/>
-                            </Trigger>
-                            <Trigger Property="IsEnabled" Value="False">
-                                <Setter Property="Opacity" Value="0.4"/>
-                            </Trigger>
-                        </ControlTemplate.Triggers>
-                    </ControlTemplate>
-                </Setter.Value>
-            </Setter>
-            <Setter Property="BorderBrush"
-                    Value="#FFB0B7C0"/>
-            <Setter Property="BorderThickness"
-                    Value="1"/>
-            <Setter Property="Margin"
-                    Value="0,0,6,0"/>
         </Style>
         <Style x:Key="ButtonAccessTextStyle"
                TargetType="AccessText">
