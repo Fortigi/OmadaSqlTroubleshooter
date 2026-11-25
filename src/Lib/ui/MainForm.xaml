@@ -222,6 +222,11 @@
                                 <MenuItem Header="Request a _feature..." Tag="App:RequestFeature">
                                         <MenuItem.Icon><TextBlock Style="{StaticResource MainMenuGlyphStyle}" Text="&#xE82F;" /></MenuItem.Icon>
                                 </MenuItem>
+                                <!-- Shown only once GitHub confirms a release of the running version
+                                     (Get-GitHubReleaseLink); the header then names the release. -->
+                                <MenuItem Header="_Release notes on GitHub" Tag="App:ReleaseNotes" Visibility="Collapsed">
+                                        <MenuItem.Icon><TextBlock Style="{StaticResource MainMenuGlyphStyle}" Text="&#xE7C3;" /></MenuItem.Icon>
+                                </MenuItem>
                                 <Separator />
                                 <MenuItem Header="_About..." Tag="App:About">
                                         <MenuItem.Icon><TextBlock Style="{StaticResource MainMenuGlyphStyle}" Text="&#xE946;" /></MenuItem.Icon>

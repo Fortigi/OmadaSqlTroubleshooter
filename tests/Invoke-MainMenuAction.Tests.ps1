@@ -15,6 +15,7 @@ BeforeAll {
     function Open-AboutForm { }
     function Open-HelpForm { }
     function Open-GitHubIssue { param($Kind) }
+    function Open-GitHubReleaseNotes { }
 }
 
 Describe 'Invoke-MainMenuAction' -Tag 'Unit' {
@@ -114,6 +115,12 @@ Describe 'Invoke-MainMenuAppAction' -Tag 'Unit' {
     ) {
         Invoke-MainMenuAppAction -Action $Action
         Should -Invoke Open-GitHubIssue -Times 1 -Exactly -ParameterFilter { $Kind -eq $Expected }
+    }
+
+    It 'Should open the release notes' {
+        Mock Open-GitHubReleaseNotes { }
+        Invoke-MainMenuAppAction -Action ReleaseNotes
+        Should -Invoke Open-GitHubReleaseNotes -Times 1 -Exactly
     }
 
     It 'Should close the main window for Exit' {

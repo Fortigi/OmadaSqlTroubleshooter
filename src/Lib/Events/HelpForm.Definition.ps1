@@ -8,6 +8,10 @@ $Script:HelpForm.Elements.ButtonHelpGallery.Add_Click({
         try { Open-HelpUrl -Url (Get-HelpLink -Name Gallery) } catch { $_.Exception.Message | Write-ContainedErrorLog -ErrorObject $_ }
     })
 
+$Script:HelpForm.Elements.ButtonHelpRelease.Add_Click({
+        try { Open-GitHubReleaseNotes } catch { $_.Exception.Message | Write-ContainedErrorLog -ErrorObject $_ }
+    })
+
 $Script:HelpForm.Elements.ButtonHelpIssues.Add_Click({
         try { Open-HelpUrl -Url (Get-HelpLink -Name Issues) } catch { $_.Exception.Message | Write-ContainedErrorLog -ErrorObject $_ }
     })

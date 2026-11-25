@@ -90,6 +90,34 @@ Describe 'Open-GitHubIssue' -Tag 'Unit' {
     }
 }
 
+Describe 'Open-GitHubReleaseNotes' -Tag 'Unit' {
+    BeforeAll {
+        function Get-GitHubReleaseLink { }
+    }
+    BeforeEach {
+        $script:Log = @()
+        $Script:RunTimeConfig = [PSCustomObject]@{ ApplicationVersion = "2026.11.21.999" }
+        Mock Open-HelpUrl { }
+    }
+
+    It 'Should open the release page' {
+        Mock Get-GitHubReleaseLink { "https://github.com/Fortigi/OmadaSqlTroubleshooter/releases/tag/v2026.11.13.63" }
+
+        Open-GitHubReleaseNotes
+
+        Should -Invoke Open-HelpUrl -Times 1 -Exactly -ParameterFilter { $Url -eq "https://github.com/Fortigi/OmadaSqlTroubleshooter/releases/tag/v2026.11.13.63" }
+    }
+
+    It 'Should warn, and open nothing, when the version has no release' {
+        Mock Get-GitHubReleaseLink { $null }
+
+        Open-GitHubReleaseNotes
+
+        Should -Invoke Open-HelpUrl -Times 0 -Exactly
+        ($script:Log | Where-Object LogType -eq "WARNING").Message | Should -Match "2026.11.21.999 has no release"
+    }
+}
+
 Describe 'Open-HelpUrl' -Tag 'Unit' {
     BeforeEach {
         $script:Log = @()

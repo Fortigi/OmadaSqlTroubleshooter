@@ -58,6 +58,13 @@
                                 <AccessText Style="{StaticResource Theme.ButtonTextStyle}" Text="_PowerShell Gallery"/>
                             </StackPanel>
                         </Button>
+                        <!-- Shown by Open-HelpForm only when GitHub has a release of the running version. -->
+                        <Button x:Name="ButtonHelpRelease" Visibility="Collapsed">
+                            <StackPanel Orientation="Horizontal" IsHitTestVisible="False">
+                                <TextBlock Style="{StaticResource Theme.GlyphStyle}" Text="&#xE7C3;"/>
+                                <AccessText Style="{StaticResource Theme.ButtonTextStyle}" Text="_Release notes of this version"/>
+                            </StackPanel>
+                        </Button>
                         <Button x:Name="ButtonHelpIssues" ToolTip="Open and closed issues on GitHub">
                             <StackPanel Orientation="Horizontal" IsHitTestVisible="False">
                                 <TextBlock Style="{StaticResource Theme.GlyphStyle}" Text="&#xE8FD;"/>

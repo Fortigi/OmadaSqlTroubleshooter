@@ -7,10 +7,11 @@ BeforeAll {
     function Get-ActiveTabSession { $script:ActiveTab }
     function Update-DataGridQueryResultContextMenuState { }
     function Get-MainMenuResultItem { }
+    function Get-GitHubReleaseLink { }
 
     function New-TestMenuItem {
         param($Tag, $Header = "Original")
-        [PSCustomObject]@{ Tag = $Tag; Header = $Header; IsEnabled = $null; IsChecked = "untouched" }
+        [PSCustomObject]@{ Tag = $Tag; Header = $Header; IsEnabled = $null; IsChecked = "untouched"; Visibility = "untouched" }
     }
 }
 
@@ -47,6 +48,37 @@ Describe 'Update-MainMenuState' -Tag 'Unit' {
         $Next.IsEnabled | Should -BeTrue
         $Separator.IsEnabled | Should -BeExactly "untouched"
         $Untagged.IsEnabled | Should -BeExactly "untouched"
+    }
+
+    It 'Should show the Release notes item, named after the release, when there is one' {
+        Mock Get-GitHubReleaseLink { "https://github.com/Fortigi/OmadaSqlTroubleshooter/releases/tag/v2026.11.13.63" }
+        $Release = New-TestMenuItem "App:ReleaseNotes"
+        $Help = New-TestMenuItem "App:Help"
+
+        Update-MainMenuState -MenuItem ([PSCustomObject]@{ Items = @($Help, $Release) })
+
+        $Release.Visibility | Should -Be "Visible"
+        $Release.IsEnabled | Should -BeTrue
+        $Release.Header | Should -BeExactly "_Release notes for v2026.11.13.63 on GitHub"
+        $Help.Visibility | Should -BeExactly "untouched"
+    }
+
+    It 'Should hide the Release notes item without a release' {
+        Mock Get-GitHubReleaseLink { $null }
+        $Release = New-TestMenuItem "App:ReleaseNotes"
+
+        Update-MainMenuState -MenuItem ([PSCustomObject]@{ Items = @($Release) })
+
+        $Release.Visibility | Should -Be "Collapsed"
+        $Release.Header | Should -BeExactly "Original"
+    }
+
+    It 'Should ask GitHub only for the menu that has the Release notes item' {
+        Mock Get-GitHubReleaseLink { }
+
+        Update-MainMenuState -MenuItem ([PSCustomObject]@{ Items = @(New-TestMenuItem "Button:ButtonSaveQuery") })
+
+        Should -Invoke Get-GitHubReleaseLink -Times 0 -Exactly
     }
 
     It 'Should pass the number of open tabs' {

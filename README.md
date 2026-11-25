@@ -38,11 +38,12 @@ the editor, the results and the status bar.
   | **Results** | Copy, Copy with headers, Copy as SQL array, Copy as PowerShell array, Select all · View selected, Save results as…, Save selected as… · View in a window, Export… (`Ctrl+Shift+E`), Open export |
   | **Window** | New tab (`Ctrl+Shift+N`), Duplicate tab, Duplicate tab without query · Next tab, Previous tab · Close tab, Close other tabs, Close all tabs |
   | **Tools** | Log window |
-  | **Help** | Help and keyboard shortcuts… · Report a bug…, Request a feature… · About… |
+  | **Help** | Help and keyboard shortcuts… · Report a bug…, Request a feature…, Release notes for this version (only when GitHub has a release of it) · About… |
 
 - **Help window** (Help > Help and keyboard shortcuts) — every keyboard shortcut, from the same list
   the keys are handled from, so it shows what the keys actually do; links to the GitHub project, the
-  PowerShell Gallery and the issues; and **Report a bug** / **Request a feature**, which open the
+  PowerShell Gallery and the issues, and to the release notes of the running version when GitHub has a
+  release of it; and **Report a bug** / **Request a feature**, which open the
   repository's issue form in your browser. A bug report has the module, OmadaWeb.PS, PowerShell and
   Windows versions filled in. Nothing is sent until you submit it on GitHub, and no tenant, user or
   query data is put in it.
@@ -486,9 +487,12 @@ are no others. You can verify this for yourself in two ways: search the module s
 | **Your identity provider** (Entra ID or the tenant's own sign-in page) | On sign-in only | Your credentials, handled by the browser/WebView2 sign-in flow of [OmadaWeb.PS](https://github.com/Fortigi/OmadaWeb.PS) | Authentication |
 | `api.nuget.org` | **Not on a normal import.** Only when the WebView2 assemblies shipped inside the module are missing or fail their hash check, or on a 32-bit process | Nothing but the package request itself | Fall back to downloading the Microsoft WebView2 .NET SDK at the exact version pinned in [`src/DependencyLock.psd1`](src/DependencyLock.psd1), then verify it against the SHA-256 pinned there — see [SECURITY.md](SECURITY.md#runtime-dependency-verification) and [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md) |
 | `www.powershellgallery.com` | On module import, and only when the module was installed from the PowerShell Gallery | The module name, in a public package-lookup request | Warn you when a newer version is available |
+| `api.github.com` | **Not at start-up.** Only when the Help menu or the Help window is opened, at most once per session, and only for a released version number (never for a development build) | The version number, in two public, unauthenticated requests for this project's release with that tag (release and nightly) | Show the *Release notes* link only when that release exists on GitHub |
 
-The last two are ordinary package requests to Microsoft-operated services. They carry no
-tenant name, no user name and no query data. No other host is contacted by this module.
+`api.nuget.org` and `www.powershellgallery.com` are ordinary package requests to Microsoft-operated
+services; `api.github.com` is GitHub's public releases API. They carry no tenant name, no user name
+and no query data. No other host is contacted by this module. The GitHub answer is waited for at most
+two seconds; when GitHub cannot be reached the link is simply not shown.
 
 Some commands open a page in your default browser instead, which then talks to that site itself:
 **Open in Omada** opens the query's page on your tenant; the Help window's links open `github.com`

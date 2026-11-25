@@ -97,7 +97,7 @@ function Invoke-MainMenuAppAction {
         The application commands of the File and Help menus.
 
     .PARAMETER Action
-        Exit, About, Help, ReportBug or RequestFeature.
+        Exit, About, Help, ReportBug, RequestFeature or ReleaseNotes.
 
     .OUTPUTS
         None.
@@ -105,7 +105,7 @@ function Invoke-MainMenuAppAction {
     [CmdletBinding()]
     param(
         [Parameter(Mandatory = $true)]
-        [ValidateSet("Exit", "About", "Help", "ReportBug", "RequestFeature")]
+        [ValidateSet("Exit", "About", "Help", "ReportBug", "RequestFeature", "ReleaseNotes")]
         [string]$Action
     )
 
@@ -115,6 +115,7 @@ function Invoke-MainMenuAppAction {
         "Help" { Open-HelpForm }
         "ReportBug" { Open-GitHubIssue -Kind Bug }
         "RequestFeature" { Open-GitHubIssue -Kind Feature }
+        "ReleaseNotes" { Open-GitHubReleaseNotes }
     }
 }
 

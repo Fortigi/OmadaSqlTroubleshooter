@@ -97,6 +97,27 @@ Describe 'Resolve-MainMenuItemState' -Tag 'Unit' {
         (Resolve-MainMenuItemState -Tag "Action:ResultsToText" -Elements $Elements).IsEnabled | Should -BeTrue
     }
 
+    It 'Should show, enable and name Release notes after the release when there is one' {
+        $State = Resolve-MainMenuItemState -Tag "App:ReleaseNotes" -Elements $null -ReleaseLink "https://github.com/Fortigi/OmadaSqlTroubleshooter/releases/tag/v2026.11.20.160-nightly"
+
+        $State.IsVisible | Should -BeTrue
+        $State.IsEnabled | Should -BeTrue
+        $State.Header | Should -BeExactly "_Release notes for v2026.11.20.160-nightly on GitHub"
+    }
+
+    It 'Should hide and disable Release notes without a release (<Case>)' -ForEach @(@{ Case = 'null'; Link = $null }, @{ Case = 'empty'; Link = '' }) {
+        $State = Resolve-MainMenuItemState -Tag "App:ReleaseNotes" -Elements $Elements -ReleaseLink $Link
+
+        $State.IsVisible | Should -BeFalse
+        $State.IsEnabled | Should -BeFalse
+        $State.Header | Should -BeNullOrEmpty
+    }
+
+    It 'Should leave the visibility of every other item alone' {
+        (Resolve-MainMenuItemState -Tag "App:Help" -Elements $null).IsVisible | Should -BeNullOrEmpty
+        (Resolve-MainMenuItemState -Tag "Button:ButtonSaveQuery" -Elements $Elements).IsVisible | Should -BeNullOrEmpty
+    }
+
     It 'Should always enable Exit' {
         (Resolve-MainMenuItemState -Tag "App:Exit" -Elements $null).IsEnabled | Should -BeTrue
     }

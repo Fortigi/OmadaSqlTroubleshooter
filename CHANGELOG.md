@@ -89,6 +89,10 @@ semantic version.
 - **Help window** (Help > Help and keyboard shortcuts): the shortcuts, links to the GitHub project,
   the PowerShell Gallery and the issues, and Report a bug / Request a feature, which open the
   repository's issue form with the version fields of a bug report filled in.
+- **Release notes link** on the Help menu and in the Help window, to the GitHub release of the
+  running version (release or nightly). Shown only when GitHub confirms that release exists: asked
+  of api.github.com when the Help menu or window opens - never at start-up, never for a development
+  build, at most once per session, waited for at most two seconds.
 - **Open query in Omada** on the toolbar and the Query menu, for the tab's selected query.
 - **Open in Omada** in the query manager and the query details: opens the query object's page in
   Omada (`dataobjdlg.aspx?DOID=<id>`) in the default browser. The address is built only from an

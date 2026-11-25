@@ -17,6 +17,8 @@ function Resolve-MainMenuItemState {
                           tab; the rest need an active tab.
           Action:<Name>   a command on the active tab: needs one.
           App:<Name>      Exit, About, Help, Report a bug, Request a feature: always.
+                          ReleaseNotes: shown, enabled and named after the release only with a
+                          -ReleaseLink (Resolve-MainMenuAppItemState).
 
         Pure: no WPF, so every rule is tested.
 
@@ -32,9 +34,12 @@ function Resolve-MainMenuItemState {
     .PARAMETER TabCount
         How many tabs are open.
 
+    .PARAMETER ReleaseLink
+        The running version's GitHub release page, or $null when there is none (Get-GitHubReleaseLink).
+
     .OUTPUTS
-        [PSCustomObject] @{ IsEnabled; IsChecked; Header } - IsChecked and Header $null when the item
-        has none to set.
+        [PSCustomObject] @{ IsEnabled; IsChecked; Header; IsVisible } - IsChecked, Header and IsVisible
+        $null when the item has none to set.
     #>
     [CmdletBinding()]
     [OutputType([PSCustomObject])]
@@ -50,11 +55,16 @@ function Resolve-MainMenuItemState {
         [AllowNull()]
         [hashtable]$ResultMenuItem = @{},
 
-        [int]$TabCount = 0
+        [int]$TabCount = 0,
+
+        [Parameter(Mandatory = $false)]
+        [AllowNull()]
+        [AllowEmptyString()]
+        [string]$ReleaseLink
     )
 
     $Private:Kind, $Private:Name = $Tag -split ":", 2
-    $Private:State = [PSCustomObject]@{ IsEnabled = $false; IsChecked = $null; Header = $null }
+    $Private:State = [PSCustomObject]@{ IsEnabled = $false; IsChecked = $null; Header = $null; IsVisible = $null }
     $Private:HasTab = $null -ne $Elements
 
     switch ($Private:Kind) {
@@ -82,11 +92,48 @@ function Resolve-MainMenuItemState {
             $Private:State.IsEnabled = $Private:HasTab
         }
         "App" {
-            $Private:State.IsEnabled = $true
+            Resolve-MainMenuAppItemState -State $Private:State -Name $Private:Name -ReleaseLink $ReleaseLink
         }
     }
 
     return $Private:State
+}
+
+function Resolve-MainMenuAppItemState {
+    <#
+    .SYNOPSIS
+        Sets the state of an App: item: always enabled, except Release notes, which is shown, enabled
+        and named after the release (its tag, the last part of the page address) only when there is
+        one.
+
+    .OUTPUTS
+        None. -State is changed.
+    #>
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory = $true)]
+        $State,
+
+        [Parameter(Mandatory = $true)]
+        [string]$Name,
+
+        [Parameter(Mandatory = $false)]
+        [AllowNull()]
+        [AllowEmptyString()]
+        [string]$ReleaseLink
+    )
+
+    if ($Name -ne "ReleaseNotes") {
+        $State.IsEnabled = $true
+        return
+    }
+
+    $Private:HasRelease = -not [string]::IsNullOrWhiteSpace($ReleaseLink)
+    $State.IsEnabled = $Private:HasRelease
+    $State.IsVisible = $Private:HasRelease
+    if ($Private:HasRelease) {
+        $State.Header = "_Release notes for {0} on GitHub" -f ($ReleaseLink -split "/")[-1]
+    }
 }
 
 function Test-MainMenuTabActionEnabled {

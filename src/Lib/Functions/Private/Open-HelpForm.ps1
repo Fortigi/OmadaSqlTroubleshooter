@@ -20,6 +20,13 @@ function Open-HelpForm {
         $Script:HelpForm.Elements.DataGridShortcuts.ItemsSource = @(Get-KeyboardShortcut)
         $Script:HelpForm.Elements.TextBlockHelpVersion.Text = (Get-AboutText -Version $Script:RunTimeConfig.ApplicationVersion -Year (Get-Date).Year).Version
 
+        # Only for a version GitHub has a release of (Get-GitHubReleaseLink).
+        $Private:ReleaseLink = Get-GitHubReleaseLink
+        if (-not [string]::IsNullOrWhiteSpace($Private:ReleaseLink)) {
+            $Script:HelpForm.Elements.ButtonHelpRelease.ToolTip = $Private:ReleaseLink
+            $Script:HelpForm.Elements.ButtonHelpRelease.Visibility = "Visible"
+        }
+
         # As Open-ChoiceForm: ShowDialog pumps this thread's messages while it blocks, which could let
         # the WebView2 completion poll timer fire reentrantly.
         Suspend-WebViewCompletionPolling
@@ -155,6 +162,25 @@ function Open-GitHubIssue {
 
     $Private:Version = if ($Kind -eq "Bug") { Get-IssueVersionInfo } else { @{} }
     Open-HelpUrl -Url (New-GitHubIssueUrl -Kind $Kind -Version $Private:Version)
+}
+
+function Open-GitHubReleaseNotes {
+    <#
+    .SYNOPSIS
+        Opens the running version's release page on GitHub, when it has one.
+
+    .OUTPUTS
+        None.
+    #>
+    [CmdletBinding()]
+    param()
+
+    $Private:ReleaseLink = Get-GitHubReleaseLink
+    if ([string]::IsNullOrWhiteSpace($Private:ReleaseLink)) {
+        "Version {0} has no release on GitHub." -f $Script:RunTimeConfig.ApplicationVersion | Write-LogOutput -LogType WARNING
+        return
+    }
+    Open-HelpUrl -Url $Private:ReleaseLink
 }
 
 function Open-HelpUrl {
