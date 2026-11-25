@@ -219,9 +219,20 @@ function script:Invoke-E2EExecuteAndWait {
 function script:Wait-E2ENoPendingRequests {
     # Drain any background request still in flight, so one scenario's slow query cannot complete in
     # the middle of the next one and repoint the tab under it.
+    #
+    # On a timeout, the requests still in flight are named in the failure and then evicted (see
+    # PendingRequestDrain.ps1): the case that met the hang fails with the evidence, and the cases
+    # after it start from an empty queue instead of failing on the same stuck item.
     param([double]$TimeoutSeconds = 15)
-    Wait-E2EUntil -TimeoutSeconds $TimeoutSeconds -Message "pending background requests to drain" -Condition {
-        @($Script:PendingWebViewCompletions | Where-Object { $null -ne $_.StartedUtc }).Count -eq 0
+    try {
+        Wait-E2EUntil -TimeoutSeconds $TimeoutSeconds -Message "pending background requests to drain" -Condition {
+            @(Get-E2EInFlightRequest -Pending $Script:PendingWebViewCompletions).Count -eq 0
+        }
+    }
+    catch {
+        $Private:Stuck = Format-E2EInFlightRequest -Request $Script:PendingWebViewCompletions
+        $Private:Evicted = @(Clear-E2EInFlightRequest -Pending $Script:PendingWebViewCompletions)
+        throw ("{0}. Still in flight: {1}. Evicted {2} request(s) so later cases start clean." -f $_.Exception.Message, $Private:Stuck, $Private:Evicted.Count)
     }
 }
 

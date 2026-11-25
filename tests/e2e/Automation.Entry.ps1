@@ -9,6 +9,7 @@ $E2ERoot = Split-Path -Path $PSCommandPath -Parent
 . (Join-Path $E2ERoot "Microcheck.ps1")
 . (Join-Path $E2ERoot "Fixtures.ps1")
 . (Join-Path $E2ERoot "OmadaMocks.ps1")
+. (Join-Path $E2ERoot "PendingRequestDrain.ps1")
 . (Join-Path $E2ERoot "Drivers.ps1")
 
 # Fail loudly if the mock is not actually shadowing the app function (script: scoping problem).
