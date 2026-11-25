@@ -14,36 +14,10 @@
     <!-- Every query object (C_P_SQLTROUBLESHOOTING) on the tenant. The grid's columns are generated
          from whatever fields OData returns (Get-QueryManagerColumn). Double-click opens the details. -->
     <Window.Resources>
-        <!-- Buttons as in the log and schema windows: the standard raised button, glyph and text,
-             on the window's grey background. -->
-        <Style TargetType="Button">
-            <Setter Property="Height" Value="25"/>
-            <Setter Property="MinWidth" Value="98"/>
-            <Setter Property="Margin" Value="0,0,6,0"/>
-            <Setter Property="Padding" Value="8,2"/>
-        </Style>
-        <Style x:Key="GlyphStyle" TargetType="TextBlock">
-            <Setter Property="FontFamily" Value="Segoe Fluent Icons, Segoe MDL2 Assets"/>
-            <Setter Property="FontSize" Value="14"/>
-            <Setter Property="VerticalAlignment" Value="Center"/>
-            <Setter Property="Foreground" Value="#1F1F1F"/>
-        </Style>
-        <Style x:Key="ButtonTextStyle" TargetType="AccessText">
-            <Setter Property="Margin" Value="6,0,0,0"/>
-            <Setter Property="FontSize" Value="11"/>
-            <Setter Property="VerticalAlignment" Value="Center"/>
-        </Style>
-        <Style TargetType="DataGrid">
-            <Setter Property="Background" Value="{DynamicResource {x:Static SystemColors.WindowBrushKey}}"/>
-            <Setter Property="AlternatingRowBackground" Value="#FFF5F7FA"/>
-            <Setter Property="HorizontalGridLinesBrush" Value="#FFE1E4E8"/>
-            <Setter Property="VerticalGridLinesBrush" Value="#FFE1E4E8"/>
-            <Setter Property="FontFamily" Value="Segoe UI"/>
-            <Setter Property="IsReadOnly" Value="True"/>
-            <Setter Property="CanUserAddRows" Value="False"/>
-            <Setter Property="CanUserDeleteRows" Value="False"/>
-            <Setter Property="HeadersVisibility" Value="Column"/>
-        </Style>
+        <!-- Everything here comes from ui\Theme.xaml (docs/UI-THEME.md): the log and schema windows'
+             buttons, and grids that select as the result grid does. -->
+        <Style TargetType="Button" BasedOn="{StaticResource Theme.DialogButtonStyle}"/>
+        <Style TargetType="DataGrid" BasedOn="{StaticResource Theme.DataGridStyle}"/>
     </Window.Resources>
 
     <Grid Margin="10">
@@ -56,78 +30,71 @@
         <DockPanel Grid.Row="0" Margin="0,0,0,8">
             <Button x:Name="ButtonRefreshQueryList" ToolTip="Read the query list from the tenant again" DockPanel.Dock="Right" Margin="8,0,0,0">
                 <StackPanel Orientation="Horizontal" IsHitTestVisible="False">
-                    <TextBlock Style="{StaticResource GlyphStyle}" Text="&#xE72C;"/>
-                    <AccessText Style="{StaticResource ButtonTextStyle}" Text="_Refresh"/>
+                    <TextBlock Style="{StaticResource Theme.GlyphStyle}" Text="&#xE72C;"/>
+                    <AccessText Style="{StaticResource Theme.ButtonTextStyle}" Text="_Refresh"/>
                 </StackPanel>
             </Button>
-            <TextBlock Text="&#xE71C;" Style="{StaticResource GlyphStyle}" Margin="0,0,6,0" ToolTip="Filter"/>
+            <TextBlock Text="&#xE71C;" Style="{StaticResource Theme.GlyphStyle}" Margin="0,0,6,0" ToolTip="Filter"/>
             <TextBox x:Name="TextBoxQueryFilter" Height="25" VerticalContentAlignment="Center" FontFamily="Segoe UI"
                      Background="{DynamicResource {x:Static SystemColors.WindowBrushKey}}"
                      ToolTip="Shows the queries where any column contains this text. * and ? are wildcards."/>
         </DockPanel>
 
-        <!-- Selects as the result grid does: rows from the row headers, cells and ranges of cells,
-             with Ctrl and Shift; Ctrl+C copies the selection. The buttons act on the one query the
-             selection is in (Get-QueryManagerSelectedQuery). -->
+        <!-- Selects as the result grid does (Theme.DataGridStyle). The buttons act on the one query
+             the selection is in (Get-QueryManagerSelectedQuery). -->
         <Border Grid.Row="1" BorderBrush="Gray" BorderThickness="1">
             <DataGrid x:Name="DataGridQueries"
                       AutoGenerateColumns="True"
-                      SelectionMode="Extended"
-                      SelectionUnit="CellOrRowHeader"
-                      HeadersVisibility="All"
-                      RowHeaderWidth="16"
-                      ClipboardCopyMode="ExcludeHeader"
-                      HorizontalScrollBarVisibility="Auto"
-                      VerticalScrollBarVisibility="Auto"/>
+/>
         </Border>
 
         <DockPanel Grid.Row="2" Margin="0,8,0,0" LastChildFill="False">
             <Button x:Name="ButtonCreateQueryObject" ToolTip="Create a new, empty query on the tenant (asks for a name)">
                 <StackPanel Orientation="Horizontal" IsHitTestVisible="False">
-                    <TextBlock Style="{StaticResource GlyphStyle}" Text="&#xE710;"/>
-                    <AccessText Style="{StaticResource ButtonTextStyle}" Text="_New..."/>
+                    <TextBlock Style="{StaticResource Theme.GlyphStyle}" Text="&#xE710;"/>
+                    <AccessText Style="{StaticResource Theme.ButtonTextStyle}" Text="_New..."/>
                 </StackPanel>
             </Button>
             <Button x:Name="ButtonOpenQueryObject" ToolTip="Open the selected query in the active tab, in place of its query (offers to save unsaved changes first)">
                 <StackPanel Orientation="Horizontal" IsHitTestVisible="False">
-                    <TextBlock Style="{StaticResource GlyphStyle}" Text="&#xE8E5;"/>
-                    <AccessText Style="{StaticResource ButtonTextStyle}" Text="_Open"/>
+                    <TextBlock Style="{StaticResource Theme.GlyphStyle}" Text="&#xE8E5;"/>
+                    <AccessText Style="{StaticResource Theme.ButtonTextStyle}" Text="_Open"/>
                 </StackPanel>
             </Button>
             <Button x:Name="ButtonOpenQueryObjectInTab" ToolTip="Open the selected query in a new tab">
                 <StackPanel Orientation="Horizontal" IsHitTestVisible="False">
-                    <TextBlock Style="{StaticResource GlyphStyle}" Text="&#xE8A7;"/>
-                    <AccessText Style="{StaticResource ButtonTextStyle}" Text="Open in new _tab"/>
+                    <TextBlock Style="{StaticResource Theme.GlyphStyle}" Text="&#xE8A7;"/>
+                    <AccessText Style="{StaticResource Theme.ButtonTextStyle}" Text="Open in new _tab"/>
                 </StackPanel>
             </Button>
             <Button x:Name="ButtonShowQueryObjectDetails" ToolTip="All fields, the SQL and the history of the selected query (or double-click it)">
                 <StackPanel Orientation="Horizontal" IsHitTestVisible="False">
-                    <TextBlock Style="{StaticResource GlyphStyle}" Text="&#xE946;"/>
-                    <AccessText Style="{StaticResource ButtonTextStyle}" Text="_Details..."/>
+                    <TextBlock Style="{StaticResource Theme.GlyphStyle}" Text="&#xE946;"/>
+                    <AccessText Style="{StaticResource Theme.ButtonTextStyle}" Text="_Details..."/>
                 </StackPanel>
             </Button>
             <Button x:Name="ButtonRenameQueryObject" ToolTip="Rename the selected query">
                 <StackPanel Orientation="Horizontal" IsHitTestVisible="False">
-                    <TextBlock Style="{StaticResource GlyphStyle}" Text="&#xE8AC;"/>
-                    <AccessText Style="{StaticResource ButtonTextStyle}" Text="Ren_ame..."/>
+                    <TextBlock Style="{StaticResource Theme.GlyphStyle}" Text="&#xE8AC;"/>
+                    <AccessText Style="{StaticResource Theme.ButtonTextStyle}" Text="Ren_ame..."/>
                 </StackPanel>
             </Button>
             <Button x:Name="ButtonDeleteQueryObject" ToolTip="Delete the selected query from the tenant">
                 <StackPanel Orientation="Horizontal" IsHitTestVisible="False">
-                    <TextBlock Style="{StaticResource GlyphStyle}" Text="&#xE74D;"/>
-                    <AccessText Style="{StaticResource ButtonTextStyle}" Text="De_lete..."/>
+                    <TextBlock Style="{StaticResource Theme.GlyphStyle}" Text="&#xE74D;"/>
+                    <AccessText Style="{StaticResource Theme.ButtonTextStyle}" Text="De_lete..."/>
                 </StackPanel>
             </Button>
             <Button x:Name="ButtonOpenQueryObjectInOmada" ToolTip="Open the selected query's page in Omada, in your browser">
                 <StackPanel Orientation="Horizontal" IsHitTestVisible="False">
-                    <TextBlock Style="{StaticResource GlyphStyle}" Text="&#xE774;"/>
-                    <AccessText Style="{StaticResource ButtonTextStyle}" Text="Open in O_mada"/>
+                    <TextBlock Style="{StaticResource Theme.GlyphStyle}" Text="&#xE774;"/>
+                    <AccessText Style="{StaticResource Theme.ButtonTextStyle}" Text="Open in O_mada"/>
                 </StackPanel>
             </Button>
             <Button x:Name="ButtonCloseQueryManager" ToolTip="Close" DockPanel.Dock="Right" Margin="0" IsCancel="True">
                 <StackPanel Orientation="Horizontal" IsHitTestVisible="False">
-                    <TextBlock Style="{StaticResource GlyphStyle}" Text="&#xE711;"/>
-                    <AccessText Style="{StaticResource ButtonTextStyle}" Text="_Close"/>
+                    <TextBlock Style="{StaticResource Theme.GlyphStyle}" Text="&#xE711;"/>
+                    <AccessText Style="{StaticResource Theme.ButtonTextStyle}" Text="_Close"/>
                 </StackPanel>
             </Button>
             <TextBlock x:Name="TextBlockQueryCount" DockPanel.Dock="Right" Margin="0,0,12,0" VerticalAlignment="Center" Foreground="#FF4A4A4A" FontFamily="Segoe UI"/>

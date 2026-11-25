@@ -17,7 +17,7 @@ function Update-SavedQueryCommandState {
 
     $Private:Enabled = [bool]$Script:ConnectionStatus -and -not (Test-AdHocQuery -QueryDoId $Script:AppConfig.CurrentSqlQuery.DoId) -and $null -ne $Script:MainForm.Elements.ComboBoxSelectQuery.SelectedItem
 
-    foreach ($Private:Name in @("ButtonRenameQuery", "ButtonDeleteQuery")) {
+    foreach ($Private:Name in @("ButtonRenameQuery", "ButtonDeleteQuery", "ButtonOpenQueryInOmada")) {
         $Private:Button = $Script:MainForm.Elements.$Private:Name
         if ($null -ne $Private:Button) {
             $Private:Button.IsEnabled = $Private:Enabled

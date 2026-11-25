@@ -22,6 +22,11 @@ function Initialize-FormObject {
             [xml]$Xaml = Get-Content $FormPath -Raw
         }
 
+        # The shared look (ui\Theme.xaml) goes into every window before it is loaded, so the window's
+        # XAML can use its keys with StaticResource. See Merge-XamlTheme and docs/UI-THEME.md.
+        $ThemeResourceCount = Merge-XamlTheme -Xaml $Xaml -Theme (Get-XamlTheme)
+        "Theme resources merged: {0}" -f $ThemeResourceCount | Write-LogOutput -LogType VERBOSE
+
         $NamespaceManager = New-Object System.Xml.XmlNamespaceManager($Xaml.NameTable)
         $NamespaceManager.AddNamespace("default", "http://schemas.microsoft.com/winfx/2006/xaml/presentation")
         $NamespaceManager.AddNamespace("x", "http://schemas.microsoft.com/winfx/2006/xaml")

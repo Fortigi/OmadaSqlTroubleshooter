@@ -154,6 +154,13 @@ gh api repos/<owner>/<repo>/git/tags/<sha> --jq '.object.sha'
 
 `<description>` is lowercase, words separated by hyphens or underscores. Branch from `main`.
 
+## UI changes
+
+Colours, fonts and the shared styles live in `src/Lib/ui/Theme.xaml`, which is merged into every
+window. Use its keys rather than literal colours, and start a new window from the template in
+[docs/UI-THEME.md](docs/UI-THEME.md). A new keyboard shortcut goes in `Get-KeyboardShortcut`, which
+the Help window lists and a test holds the menu bar to.
+
 ## Pull requests
 
 1. Open the pull request against `main`. Describe what broke or was missing, what changed, and how

@@ -54,12 +54,7 @@ function Invoke-MainMenuAction {
             Set-TabResultOutputMode -TabSession (Get-ActiveTabSession) -Mode ($Private:Name -replace "^ResultsTo", "")
         }
         "App" {
-            if ($Private:Name -eq "About") {
-                Open-AboutForm
-            }
-            else {
-                $Script:MainForm.Definition.Close()
-            }
+            Invoke-MainMenuAppAction -Action $Private:Name
         }
     }
 }
@@ -93,6 +88,33 @@ function Invoke-MainMenuTabAction {
         "Close" { Close-TabSession -TabId $Private:TabId }
         "CloseOthers" { Close-OtherTabSessions -KeepTabId $Private:TabId }
         "CloseAll" { Close-AllTabSessions }
+    }
+}
+
+function Invoke-MainMenuAppAction {
+    <#
+    .SYNOPSIS
+        The application commands of the File and Help menus.
+
+    .PARAMETER Action
+        Exit, About, Help, ReportBug or RequestFeature.
+
+    .OUTPUTS
+        None.
+    #>
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory = $true)]
+        [ValidateSet("Exit", "About", "Help", "ReportBug", "RequestFeature")]
+        [string]$Action
+    )
+
+    switch ($Action) {
+        "Exit" { $Script:MainForm.Definition.Close() }
+        "About" { Open-AboutForm }
+        "Help" { Open-HelpForm }
+        "ReportBug" { Open-GitHubIssue -Kind Bug }
+        "RequestFeature" { Open-GitHubIssue -Kind Feature }
     }
 }
 

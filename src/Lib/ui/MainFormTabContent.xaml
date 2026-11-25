@@ -128,7 +128,7 @@
                 <Style x:Key="ToolbarSeparatorStyle" TargetType="Border">
                         <Setter Property="Width" Value="1" />
                         <Setter Property="Margin" Value="6,4" />
-                        <Setter Property="Background" Value="#FFB0B7C0" />
+                        <Setter Property="Background" Value="{StaticResource Theme.BorderBrush}" />
                 </Style>
                 <Style x:Key="ToolbarCheckBoxStyle" TargetType="CheckBox">
                         <Setter Property="VerticalAlignment" Value="Center" />
@@ -379,12 +379,12 @@
                                              menu bar. A WrapPanel rather than a single row so a narrow window wraps the groups onto a
                                              second line instead of pushing buttons off the screen. Each group is one StackPanel so it
                                              wraps as a whole. -->
-                                        <!-- Its own lighter band with a line under it, so it reads as a toolbar against the grey
-                                             form below (as in SSMS). The resources undo two of this control's implicit styles inside
+                                        <!-- Its own band in the tabs' colours (Theme.ToolbarBorderStyle), so it reads as a
+                                             toolbar against the grey form below (as in SSMS). The resources undo two of this control's implicit styles inside
                                              the toolbar: the TextBlock one pins every TextBlock to 100x25 - which includes the text
                                              inside each button's AccessText and the CheckBoxes' content - and the CheckBox one pins
                                              100 wide too, which spread the groups out over the window instead of packing them left. -->
-                                        <Border Grid.Row="0" x:Name="BorderToolbar" Background="#FFF5F6F7" BorderBrush="#FFB0B7C0" BorderThickness="0,1,0,1" Padding="4,3">
+                                        <Border Grid.Row="0" x:Name="BorderToolbar" Style="{StaticResource Theme.ToolbarBorderStyle}">
                                                 <Border.Resources>
                                                         <Style TargetType="TextBlock" />
                                                         <Style TargetType="CheckBox" BasedOn="{StaticResource ToolbarCheckBoxStyle}" />
@@ -420,6 +420,12 @@
                                                                         <StackPanel Orientation="Horizontal" IsHitTestVisible="False">
                                                                                 <TextBlock x:Name="ButtonDeleteQueryImage" Style="{StaticResource ToolbarGlyphStyle}" Text="&#xE74D;" />
                                                                                 <AccessText x:Name="ButtonDeleteQueryText" Text="Delete" Style="{StaticResource ToolbarTextStyle}" Visibility="Collapsed" />
+                                                                        </StackPanel>
+                                                                </Button>
+                                                                <Button x:Name="ButtonOpenQueryInOmada" TabIndex="30" ToolTip="Open the selected query's page in Omada, in your browser" Style="{StaticResource ToolbarButtonStyle}">
+                                                                        <StackPanel Orientation="Horizontal" IsHitTestVisible="False">
+                                                                                <TextBlock x:Name="ButtonOpenQueryInOmadaImage" Style="{StaticResource ToolbarGlyphStyle}" Text="&#xE774;" />
+                                                                                <AccessText x:Name="ButtonOpenQueryInOmadaText" Text="Open in Omada" Style="{StaticResource ToolbarTextStyle}" Visibility="Collapsed" />
                                                                         </StackPanel>
                                                                 </Button>
                                                         </StackPanel>

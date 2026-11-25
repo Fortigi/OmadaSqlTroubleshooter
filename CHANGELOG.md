@@ -24,6 +24,14 @@ semantic version.
   pixels.
 - The query manager, query details and history windows use the main window's background and the
   log and schema windows' buttons (glyph and text).
+- **One shared look** (`src/Lib/ui/Theme.xaml`, documented in `docs/UI-THEME.md`): colours, fonts,
+  tabs, the toolbar band, dialog buttons and data grids are defined once and merged into every window
+  as it is loaded (`Merge-XamlTheme`), and a test resolves every `StaticResource` of every window
+  against it. The toolbar is now a band in the tabs' colours (`#E4E8EC`, border `#8A97A6`). The tabs
+  in the query details and the history window look like the main window's Results / Messages tabs.
+- The history window's version list selects as the result grid does (rows, cells, ranges; Ctrl+C
+  copies); the panes show the version the selection is in, and are cleared when it spans several.
+  Its Details tab is a Property / Value grid instead of labels and text boxes.
 - Restoring a version from the history now marks the tab as changed, so closing it offers to save
   the restored version. It used to leave the tab clean on purpose (a programmatic load is not an
   edit), which with the new close prompts would let a restored version be lost without a word.
@@ -75,6 +83,13 @@ semantic version.
   return), the SQL read-only and the full change history, and opens the history window for that query
   to compare and restore versions; a restored version goes into the query's own tab as an unsaved
   change.
+- **Keyboard shortcuts** Ctrl+N (new query), Ctrl+Shift+N (new tab) and Ctrl+Shift+E (export the
+  results), from one list (`Get-KeyboardShortcut`) that also feeds the Help window and is held to the
+  menu bar's gestures by a test.
+- **Help window** (Help > Help and keyboard shortcuts): the shortcuts, links to the GitHub project,
+  the PowerShell Gallery and the issues, and Report a bug / Request a feature, which open the
+  repository's issue form with the version fields of a bug report filled in.
+- **Open query in Omada** on the toolbar and the Query menu, for the tab's selected query.
 - **Open in Omada** in the query manager and the query details: opens the query object's page in
   Omada (`dataobjdlg.aspx?DOID=<id>`) in the default browser. The address is built only from an
   absolute http(s) tenant URL and a numeric id.

@@ -1,0 +1,130 @@
+<!--
+    The application's visual template: the colours, fonts and styles every window shares.
+
+    Initialize-FormObject merges this dictionary into the resources of every window and of the tab
+    content before the XAML is loaded (Merge-XamlTheme), so a window refers to these keys with
+    StaticResource exactly as if it had declared them itself. A window that declares a resource with
+    the same key - or an implicit style for the same type - keeps its own: the theme never overrides
+    a window, so a deliberate exception stays possible and visible in that window's XAML.
+
+    Keys start with "Theme." so a reader can tell a shared resource from a window's own. Implicit
+    styles are kept to the one every window must share (TabItem); everything else is keyed, because
+    an implicit style here would reach every control of its type in every window, including ones
+    built in code.
+
+    How to use it in a new window, and which key is for what: docs/UI-THEME.md.
+-->
+<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+    <!-- Colours. Brushes rather than colours, so a setter or an attribute can use them directly. -->
+    <SolidColorBrush x:Key="Theme.WindowBackgroundBrush" Color="#FFF0F0F0" />
+    <SolidColorBrush x:Key="Theme.AccentBrush" Color="#FF293955" />
+    <SolidColorBrush x:Key="Theme.BorderBrush" Color="#FF8A97A6" />
+    <SolidColorBrush x:Key="Theme.TabBrush" Color="#FFD6DBE0" />
+    <SolidColorBrush x:Key="Theme.TabHoverBrush" Color="#FFE4E8EC" />
+    <SolidColorBrush x:Key="Theme.TabSelectedBrush" Color="Khaki" />
+    <SolidColorBrush x:Key="Theme.ToolbarBrush" Color="#FFE4E8EC" />
+    <SolidColorBrush x:Key="Theme.MenuBrush" Color="#FFF5F6F7" />
+    <SolidColorBrush x:Key="Theme.TextBrush" Color="#FF1F1F1F" />
+    <SolidColorBrush x:Key="Theme.MutedTextBrush" Color="#FF4A4A4A" />
+    <SolidColorBrush x:Key="Theme.GridLineBrush" Color="#FFE1E4E8" />
+    <SolidColorBrush x:Key="Theme.AlternatingRowBrush" Color="#FFF5F7FA" />
+    <SolidColorBrush x:Key="Theme.HoverBrush" Color="#FFD5E7F7" />
+    <SolidColorBrush x:Key="Theme.HoverBorderBrush" Color="#FF7EB4EA" />
+    <SolidColorBrush x:Key="Theme.PressedBrush" Color="#FFC4DDF4" />
+
+    <!-- Fonts. -->
+    <FontFamily x:Key="Theme.UiFont">Segoe UI</FontFamily>
+    <FontFamily x:Key="Theme.CodeFont">Consolas</FontFamily>
+    <FontFamily x:Key="Theme.GlyphFont">Segoe Fluent Icons, Segoe MDL2 Assets</FontFamily>
+
+    <!-- Tabs: square, blue-grey when inactive, lighter on hover, Khaki (the status bar's colour) when
+         selected, with the border colour on three sides. The session tabs, the Results / Messages
+         tabs, and the tabs of every other window. -->
+    <Style TargetType="TabItem">
+        <Setter Property="Foreground" Value="#FF404040" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="TabItem">
+                    <Border x:Name="TabBorder" Margin="0,0,2,0" Background="{StaticResource Theme.TabBrush}" BorderBrush="{StaticResource Theme.BorderBrush}" BorderThickness="1,1,1,0" CornerRadius="0" SnapsToDevicePixels="True">
+                        <ContentPresenter x:Name="ContentSite" ContentSource="Header" Margin="10,3,8,4" VerticalAlignment="Center" HorizontalAlignment="Stretch" />
+                    </Border>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsSelected" Value="True">
+                            <Setter TargetName="TabBorder" Property="Background" Value="{StaticResource Theme.TabSelectedBrush}" />
+                            <Setter Property="Panel.ZIndex" Value="1" />
+                            <Setter Property="Foreground" Value="{StaticResource Theme.TextBrush}" />
+                        </Trigger>
+                        <MultiTrigger>
+                            <MultiTrigger.Conditions>
+                                <Condition Property="IsSelected" Value="False" />
+                                <Condition Property="IsMouseOver" Value="True" />
+                            </MultiTrigger.Conditions>
+                            <Setter TargetName="TabBorder" Property="Background" Value="{StaticResource Theme.TabHoverBrush}" />
+                        </MultiTrigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <!-- The frame around a TabControl's pages, in the tabs' border colour. -->
+    <Style x:Key="Theme.TabControlStyle" TargetType="TabControl">
+        <Setter Property="BorderBrush" Value="{StaticResource Theme.BorderBrush}" />
+        <Setter Property="BorderThickness" Value="1" />
+        <Setter Property="Padding" Value="0" />
+    </Style>
+
+    <!-- Toolbar band: the tabs' hover colour with the tabs' border, as in SQL Server Management Studio. -->
+    <Style x:Key="Theme.ToolbarBorderStyle" TargetType="Border">
+        <Setter Property="Background" Value="{StaticResource Theme.ToolbarBrush}" />
+        <Setter Property="BorderBrush" Value="{StaticResource Theme.BorderBrush}" />
+        <Setter Property="BorderThickness" Value="1" />
+        <Setter Property="Padding" Value="4,3" />
+    </Style>
+
+    <!-- An icon from the Segoe icon font. -->
+    <Style x:Key="Theme.GlyphStyle" TargetType="TextBlock">
+        <Setter Property="FontFamily" Value="{StaticResource Theme.GlyphFont}" />
+        <Setter Property="FontSize" Value="14" />
+        <Setter Property="VerticalAlignment" Value="Center" />
+        <Setter Property="Foreground" Value="{StaticResource Theme.TextBrush}" />
+    </Style>
+
+    <!-- Dialog buttons: the standard raised button (as in the log and schema windows) with an icon and
+         text - a StackPanel holding a Theme.GlyphStyle TextBlock and a Theme.ButtonTextStyle AccessText. -->
+    <Style x:Key="Theme.DialogButtonStyle" TargetType="Button">
+        <Setter Property="Height" Value="25" />
+        <Setter Property="MinWidth" Value="98" />
+        <Setter Property="Margin" Value="0,0,6,0" />
+        <Setter Property="Padding" Value="8,2" />
+    </Style>
+    <Style x:Key="Theme.ButtonTextStyle" TargetType="AccessText">
+        <Setter Property="Margin" Value="6,0,0,0" />
+        <Setter Property="FontSize" Value="11" />
+        <Setter Property="VerticalAlignment" Value="Center" />
+    </Style>
+
+    <!-- Read-only data grids that select as the result grid does: whole rows from the row headers,
+         cells and ranges of cells with Ctrl and Shift, and Ctrl+C copies the selection. Code that acts
+         on "the selected row" reads it with Get-DataGridSelectedRow, which also understands a
+         selection of cells. -->
+    <Style x:Key="Theme.DataGridStyle" TargetType="DataGrid">
+        <Setter Property="Background" Value="{DynamicResource {x:Static SystemColors.WindowBrushKey}}" />
+        <Setter Property="AlternatingRowBackground" Value="{StaticResource Theme.AlternatingRowBrush}" />
+        <Setter Property="HorizontalGridLinesBrush" Value="{StaticResource Theme.GridLineBrush}" />
+        <Setter Property="VerticalGridLinesBrush" Value="{StaticResource Theme.GridLineBrush}" />
+        <Setter Property="FontFamily" Value="{StaticResource Theme.UiFont}" />
+        <Setter Property="IsReadOnly" Value="True" />
+        <Setter Property="CanUserAddRows" Value="False" />
+        <Setter Property="CanUserDeleteRows" Value="False" />
+        <Setter Property="SelectionMode" Value="Extended" />
+        <Setter Property="SelectionUnit" Value="CellOrRowHeader" />
+        <Setter Property="HeadersVisibility" Value="All" />
+        <Setter Property="RowHeaderWidth" Value="16" />
+        <Setter Property="ClipboardCopyMode" Value="ExcludeHeader" />
+        <Setter Property="HorizontalScrollBarVisibility" Value="Auto" />
+        <Setter Property="VerticalScrollBarVisibility" Value="Auto" />
+    </Style>
+</ResourceDictionary>

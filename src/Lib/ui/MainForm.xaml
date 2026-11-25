@@ -43,35 +43,8 @@
                         </Setter>
                 </Style>
 
-                <!-- Session tabs: square (no rounded corners), muted blue-grey when inactive, and
-                     the status-bar yellow (Khaki) when active. Implicit style so both the session
-                     tabs and the "+" add tab pick it up automatically. -->
-                <Style TargetType="TabItem">
-                        <Setter Property="Foreground" Value="#FF404040" />
-                        <Setter Property="Template">
-                                <Setter.Value>
-                                        <ControlTemplate TargetType="TabItem">
-                                                <Border x:Name="TabBorder" Margin="0,0,2,0" Background="#FFD6DBE0" BorderBrush="#FF8A97A6" BorderThickness="1,1,1,0" CornerRadius="0" SnapsToDevicePixels="True">
-                                                        <ContentPresenter x:Name="ContentSite" ContentSource="Header" Margin="10,3,8,4" VerticalAlignment="Center" HorizontalAlignment="Stretch" />
-                                                </Border>
-                                                <ControlTemplate.Triggers>
-                                                        <Trigger Property="IsSelected" Value="True">
-                                                                <Setter TargetName="TabBorder" Property="Background" Value="Khaki" />
-                                                                <Setter Property="Panel.ZIndex" Value="1" />
-                                                                <Setter Property="Foreground" Value="#FF1F1F1F" />
-                                                        </Trigger>
-                                                        <MultiTrigger>
-                                                                <MultiTrigger.Conditions>
-                                                                        <Condition Property="IsSelected" Value="False" />
-                                                                        <Condition Property="IsMouseOver" Value="True" />
-                                                                </MultiTrigger.Conditions>
-                                                                <Setter TargetName="TabBorder" Property="Background" Value="#FFE4E8EC" />
-                                                        </MultiTrigger>
-                                                </ControlTemplate.Triggers>
-                                        </ControlTemplate>
-                                </Setter.Value>
-                        </Setter>
-                </Style>
+                <!-- The tabs' look (square, blue-grey, Khaki when selected) is the implicit TabItem style in
+                     ui\Theme.xaml, shared with the Results / Messages tabs and every other window. -->
 
                 <!-- Tab right-click context menu look, matching the DataGrid result context menu
                      (rounded white card + drop shadow, flat menu rows with icon/header/gesture).
@@ -133,9 +106,9 @@
                      its enabled state, check mark and header are read from that tab when its menu opens
                      (Update-MainMenuState), because the toolbar buttons belong to each tab, not to the window.
                      The shortcuts shown are the existing ones; the menu only displays them. -->
-                <Menu x:Name="MenuMain" Grid.Row="0" Background="#FFF5F6F7" BorderBrush="#FFC8C8C8" BorderThickness="0,0,0,1" Padding="2,1" FontFamily="Segoe UI" FontSize="12">
+                <Menu x:Name="MenuMain" Grid.Row="0" Background="{StaticResource Theme.MenuBrush}" BorderBrush="#FFC8C8C8" BorderThickness="0,0,0,1" Padding="2,1" FontFamily="Segoe UI" FontSize="12">
                         <MenuItem Header="_File">
-                                <MenuItem Header="_New query" Tag="Button:ButtonNewQuery">
+                                <MenuItem Header="_New query" Tag="Button:ButtonNewQuery" InputGestureText="Ctrl+N">
                                         <MenuItem.Icon><TextBlock Style="{StaticResource MainMenuGlyphStyle}" Text="&#xE8E5;" /></MenuItem.Icon>
                                 </MenuItem>
                                 <MenuItem Header="_Save" Tag="Button:ButtonSaveQuery" InputGestureText="Ctrl+S">
@@ -181,6 +154,9 @@
                                 <MenuItem Header="_History..." Tag="Button:ButtonShowHistory">
                                         <MenuItem.Icon><TextBlock Style="{StaticResource MainMenuGlyphStyle}" Text="&#xE81C;" /></MenuItem.Icon>
                                 </MenuItem>
+                                <MenuItem Header="Open query in _Omada" Tag="Button:ButtonOpenQueryInOmada">
+                                        <MenuItem.Icon><TextBlock Style="{StaticResource MainMenuGlyphStyle}" Text="&#xE774;" /></MenuItem.Icon>
+                                </MenuItem>
                                 <MenuItem Header="S_chema" Tag="Button:ButtonShowSqlSchema">
                                         <MenuItem.Icon><TextBlock Style="{StaticResource MainMenuGlyphStyle}" Text="&#xE8FD;" /></MenuItem.Icon>
                                 </MenuItem>
@@ -206,7 +182,7 @@
                                 <MenuItem Header="View in a _window" Tag="Button:ButtonShowOutput">
                                         <MenuItem.Icon><TextBlock Style="{StaticResource MainMenuGlyphStyle}" Text="&#xE890;" /></MenuItem.Icon>
                                 </MenuItem>
-                                <MenuItem Header="_Export..." Tag="Button:ButtonSaveOutputFile">
+                                <MenuItem Header="_Export..." Tag="Button:ButtonSaveOutputFile" InputGestureText="Ctrl+Shift+E">
                                         <MenuItem.Icon><TextBlock Style="{StaticResource MainMenuGlyphStyle}" Text="&#xEDE1;" /></MenuItem.Icon>
                                 </MenuItem>
                                 <MenuItem Header="_Open export" Tag="Button:ButtonOpenOutputFile">
@@ -214,7 +190,7 @@
                                 </MenuItem>
                         </MenuItem>
                         <MenuItem Header="_Window">
-                                <MenuItem Header="_New tab" Tag="Tab:New">
+                                <MenuItem Header="_New tab" Tag="Tab:New" InputGestureText="Ctrl+Shift+N">
                                         <MenuItem.Icon><TextBlock Style="{StaticResource MainMenuGlyphStyle}" Text="&#xE710;" /></MenuItem.Icon>
                                 </MenuItem>
                                 <MenuItem Header="_Duplicate tab" Tag="Tab:Duplicate" InputGestureText="Ctrl+Shift+K">
@@ -237,6 +213,16 @@
                                 </MenuItem>
                         </MenuItem>
                         <MenuItem Header="_Help">
+                                <MenuItem Header="_Help and keyboard shortcuts..." Tag="App:Help">
+                                        <MenuItem.Icon><TextBlock Style="{StaticResource MainMenuGlyphStyle}" Text="&#xE897;" /></MenuItem.Icon>
+                                </MenuItem>
+                                <MenuItem Header="Report a _bug..." Tag="App:ReportBug">
+                                        <MenuItem.Icon><TextBlock Style="{StaticResource MainMenuGlyphStyle}" Text="&#xEBE8;" /></MenuItem.Icon>
+                                </MenuItem>
+                                <MenuItem Header="Request a _feature..." Tag="App:RequestFeature">
+                                        <MenuItem.Icon><TextBlock Style="{StaticResource MainMenuGlyphStyle}" Text="&#xE82F;" /></MenuItem.Icon>
+                                </MenuItem>
+                                <Separator />
                                 <MenuItem Header="_About..." Tag="App:About">
                                         <MenuItem.Icon><TextBlock Style="{StaticResource MainMenuGlyphStyle}" Text="&#xE946;" /></MenuItem.Icon>
                                 </MenuItem>

@@ -13,6 +13,8 @@ BeforeAll {
     function Close-OtherTabSessions { param($KeepTabId) }
     function Close-AllTabSessions { }
     function Open-AboutForm { }
+    function Open-HelpForm { }
+    function Open-GitHubIssue { param($Kind) }
 }
 
 Describe 'Invoke-MainMenuAction' -Tag 'Unit' {
@@ -73,17 +75,50 @@ Describe 'Invoke-MainMenuAction' -Tag 'Unit' {
         Should -Invoke Set-TabResultOutputMode -Times 1 -Exactly -ParameterFilter { $Mode -eq $ExpectedMode -and $TabSession.TabId -eq "t1" }
     }
 
-    It 'Should show the About window for About, and not close the main window' {
-        Mock Open-AboutForm { }
-        Invoke-MainMenuAction -Tag "App:About"
-        Should -Invoke Open-AboutForm -Times 1 -Exactly
-        $Script:MainForm.Definition.Closed | Should -Be 0
+    It 'Should hand an application command to Invoke-MainMenuAppAction' {
+        Mock Invoke-MainMenuAppAction { }
+        Invoke-MainMenuAction -Tag "App:Help"
+        Should -Invoke Invoke-MainMenuAppAction -Times 1 -Exactly -ParameterFilter { $Action -eq "Help" }
     }
 
     It 'Should close the main window for Exit' {
         Invoke-MainMenuAction -Tag "App:Exit"
         $Script:MainForm.Definition.Closed | Should -Be 1
         Should -Invoke Invoke-ElementClick -Times 0 -Exactly
+    }
+}
+
+Describe 'Invoke-MainMenuAppAction' -Tag 'Unit' {
+    BeforeEach {
+        $Script:MainForm = [PSCustomObject]@{ Definition = [PSCustomObject]@{ Closed = 0 } }
+        $Script:MainForm.Definition | Add-Member -MemberType ScriptMethod -Name Close -Value { $this.Closed++ }
+        Mock Open-AboutForm { }
+        Mock Open-HelpForm { }
+        Mock Open-GitHubIssue { }
+    }
+
+    It 'Should show the About window, and not close the main window' {
+        Invoke-MainMenuAppAction -Action About
+        Should -Invoke Open-AboutForm -Times 1 -Exactly
+        $Script:MainForm.Definition.Closed | Should -Be 0
+    }
+
+    It 'Should show the Help window' {
+        Invoke-MainMenuAppAction -Action Help
+        Should -Invoke Open-HelpForm -Times 1 -Exactly
+    }
+
+    It 'Should open a <Expected> issue on GitHub' -ForEach @(
+        @{ Action = "ReportBug"; Expected = "Bug" }
+        @{ Action = "RequestFeature"; Expected = "Feature" }
+    ) {
+        Invoke-MainMenuAppAction -Action $Action
+        Should -Invoke Open-GitHubIssue -Times 1 -Exactly -ParameterFilter { $Kind -eq $Expected }
+    }
+
+    It 'Should close the main window for Exit' {
+        Invoke-MainMenuAppAction -Action Exit
+        $Script:MainForm.Definition.Closed | Should -Be 1
     }
 }
 

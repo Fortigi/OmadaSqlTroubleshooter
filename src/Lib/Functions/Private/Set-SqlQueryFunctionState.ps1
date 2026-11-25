@@ -57,6 +57,9 @@ function Set-SqlQueryFunctionState {
             "ButtonDeleteQuery"            = @{
                 AllowedStatusChange = "Both"
             }
+            "ButtonOpenQueryInOmada"       = @{
+                AllowedStatusChange = "Both"
+            }
             # Save as works for a saved and an ad-hoc query alike; the query manager needs only a
             # connection.
             "ButtonSaveQueryAs"            = @{
@@ -81,7 +84,7 @@ function Set-SqlQueryFunctionState {
                     "DataGrid" {}
                     default {
 
-                        if ($null -eq $Script:MainForm.Elements.ComboBoxSelectQuery.SelectedItem.Content -and $Item -in ("ButtonShowSqlSchema", "ButtonSaveOutputFile", "ButtonShowOutput", "ButtonOpenOutputFile", "ButtonHistory", "ButtonRefreshQueries", "ButtonRenameQuery", "ButtonDeleteQuery")) {
+                        if ($null -eq $Script:MainForm.Elements.ComboBoxSelectQuery.SelectedItem.Content -and $Item -in ("ButtonShowSqlSchema", "ButtonSaveOutputFile", "ButtonShowOutput", "ButtonOpenOutputFile", "ButtonHistory", "ButtonRefreshQueries", "ButtonRenameQuery", "ButtonDeleteQuery", "ButtonOpenQueryInOmada")) {
                             continue
                         }
                         $Script:MainForm.Elements.$Item.IsEnabled = $true

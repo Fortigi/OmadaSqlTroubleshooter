@@ -16,7 +16,7 @@ function Resolve-MainMenuItemState {
           Tab:<Action>    the tab commands: New always; Next, Previous and Close others need a second
                           tab; the rest need an active tab.
           Action:<Name>   a command on the active tab: needs one.
-          App:<Name>      Exit and About: always.
+          App:<Name>      Exit, About, Help, Report a bug, Request a feature: always.
 
         Pure: no WPF, so every rule is tested.
 

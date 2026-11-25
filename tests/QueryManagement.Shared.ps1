@@ -39,6 +39,7 @@ function script:New-QueryTestState {
             ButtonExecuteQuery  = [PSCustomObject]@{ IsEnabled = $false }
             ButtonRenameQuery   = [PSCustomObject]@{ IsEnabled = $false }
             ButtonDeleteQuery   = [PSCustomObject]@{ IsEnabled = $false }
+            ButtonOpenQueryInOmada = [PSCustomObject]@{ IsEnabled = $false }
         }
     }
     $script:TestTab = [PSCustomObject]@{

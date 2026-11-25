@@ -16,11 +16,12 @@ the editor, the results and the status bar.
 - **Toolbar** — grouped like SQL Server Management Studio, with separators between the groups. Only
   the most used commands show text next to their icon (New query, Execute, Grid/Text, Connect); the
   others show their icon, with the name in the tooltip and on the menu. The toolbar wraps onto a
-  second row on a narrow window instead of running off-screen.
+  second row on a narrow window instead of running off-screen, and is drawn as a band in the tabs'
+  colours.
 
   | Group | Commands |
   |---|---|
-  | Query | New query, Save, Save as, Rename, Delete |
+  | Query | New query, Save, Save as, Rename, Delete, Open in Omada |
   | Queries | Refresh, Query manager, History, Schema, *Only my queries:* Created / Last updated |
   | Run | Execute, Grid/Text |
   | Results | View in a window, Export, Open export |
@@ -32,12 +33,24 @@ the editor, the results and the status bar.
 
   | Menu | Items |
   |---|---|
-  | **File** | New query, Save (`Ctrl+S`), Save as…, Rename…, Delete… · Connect, Reset application · Exit |
-  | **Query** | Execute (`F5`) · Results to grid (`Ctrl+Shift+D`), Results to text (`Ctrl+Shift+T`) · Refresh query list, Query manager…, History…, Schema · Only queries I created, Only queries I last updated |
-  | **Results** | Copy, Copy with headers, Copy as SQL array, Copy as PowerShell array, Select all · View selected, Save results as…, Save selected as… · View in a window, Export…, Open export |
-  | **Window** | New tab, Duplicate tab, Duplicate tab without query · Next tab, Previous tab · Close tab, Close other tabs, Close all tabs |
+  | **File** | New query (`Ctrl+N`), Save (`Ctrl+S`), Save as…, Rename…, Delete… · Connect, Reset application · Exit |
+  | **Query** | Execute (`F5`) · Results to grid (`Ctrl+Shift+D`), Results to text (`Ctrl+Shift+T`) · Refresh query list, Query manager…, History…, Open query in Omada, Schema · Only queries I created, Only queries I last updated |
+  | **Results** | Copy, Copy with headers, Copy as SQL array, Copy as PowerShell array, Select all · View selected, Save results as…, Save selected as… · View in a window, Export… (`Ctrl+Shift+E`), Open export |
+  | **Window** | New tab (`Ctrl+Shift+N`), Duplicate tab, Duplicate tab without query · Next tab, Previous tab · Close tab, Close other tabs, Close all tabs |
   | **Tools** | Log window |
-  | **Help** | About… — the startup screen's logo, version and copyright, in a window |
+  | **Help** | Help and keyboard shortcuts… · Report a bug…, Request a feature… · About… |
+
+- **Help window** (Help > Help and keyboard shortcuts) — every keyboard shortcut, from the same list
+  the keys are handled from, so it shows what the keys actually do; links to the GitHub project, the
+  PowerShell Gallery and the issues; and **Report a bug** / **Request a feature**, which open the
+  repository's issue form in your browser. A bug report has the module, OmadaWeb.PS, PowerShell and
+  Windows versions filled in. Nothing is sent until you submit it on GitHub, and no tenant, user or
+  query data is put in it.
+- **One look everywhere.** Colours, fonts, tabs, the toolbar band, dialog buttons and data grids are
+  defined once in `src/Lib/ui/Theme.xaml` and merged into every window when it is loaded; see
+  [docs/UI-THEME.md](docs/UI-THEME.md) for the keys and a template for a new window. Every data grid
+  in the query windows selects as the result grid does: rows from the row headers, cells and ranges
+  with `Ctrl` and `Shift`, and `Ctrl + C` copies
 
   The menu bar sits above the tab strip rather than between the tabs and the toolbar: it belongs to
   the window, while each tab has its own toolbar and state.
@@ -242,6 +255,9 @@ Tabs that share the same connection form a **connection pool**, identified by th
 | Shortcut | Action |
 |---|---|
 | `F5` | Execute query |
+| `Ctrl + N` | New query (clears the editor; offers to save unsaved changes first) |
+| `Ctrl + Shift + N` | New tab |
+| `Ctrl + Shift + E` | Export the results |
 | `Enter` (in connection field) | Initiate connection |
 | `Ctrl + S` | Save current query in Omada (an ad-hoc query is saved as a new query; a name is asked for) |
 | `Ctrl + Shift + K` | Duplicate the current tab (connection and query) |
@@ -473,6 +489,12 @@ are no others. You can verify this for yourself in two ways: search the module s
 
 The last two are ordinary package requests to Microsoft-operated services. They carry no
 tenant name, no user name and no query data. No other host is contacted by this module.
+
+Some commands open a page in your default browser instead, which then talks to that site itself:
+**Open in Omada** opens the query's page on your tenant; the Help window's links open `github.com`
+and `www.powershellgallery.com`. **Report a bug** puts the module, OmadaWeb.PS, PowerShell and
+Windows versions in the address of GitHub's issue form, and nothing else; it is sent to GitHub only
+when the browser opens the page, and becomes part of an issue only when you submit it.
 
 **A normal import contacts `nuget.org` not at all.** The four WebView2 assemblies are fetched
 and hash-verified when the module is *built*, and ship inside the package in

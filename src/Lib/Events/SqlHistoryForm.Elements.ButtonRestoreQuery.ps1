@@ -7,10 +7,11 @@ $Script:SqlHistoryForm.Elements.ButtonRestoreQuery.Add_Click({
         try {
             $_ | Show-EventInfo
 
-            $SelectedItem = $Script:SqlHistoryForm.Elements.DataGridHistory.SelectedItem
+            # The version the selection is in: cells as well as rows can be selected.
+            $SelectedItem = Get-SqlHistorySelectedItem
 
             if ($null -eq $SelectedItem) {
-                "No history item selected" | Write-LogOutput -LogType WARNING
+                "Select one version (a row, or cells in one row) to restore." | Write-LogOutput -LogType WARNING
                 return
             }
 

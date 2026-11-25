@@ -4,6 +4,7 @@
 BeforeAll {
     . (Join-Path $PSScriptRoot "QueryManager.Shared.ps1")
     . (Join-Path $Script:QmPrivatePath "Open-QueryManagerForm.ps1")
+    . (Join-Path $Script:QmPrivatePath "Get-DataGridSelectedRow.ps1")
 
     $script:Errors = [System.Collections.Generic.List[string]]::new()
     function Write-ContainedErrorLog { param([Parameter(ValueFromPipeline = $true)][string]$Message, $ErrorObject) process { $script:Errors.Add($Message) } }
@@ -125,23 +126,6 @@ Describe 'Get-QueryManagerSelectedQuery' -Tag 'Unit' {
 
         Get-QueryManagerSelectedQuery | Should -BeNullOrEmpty
         Should -Invoke Write-LogOutput -Times 1 -Exactly -ParameterFilter { $LogType -eq "WARNING" -and $Message -match "^2 queries are selected" }
-    }
-}
-
-Describe 'Get-QueryManagerSelectionRow' -Tag 'Unit' {
-    It 'Should keep each row once, by reference, in first-seen order, and drop what is not a row' {
-        $A = [PSCustomObject]@{ Row = "a" }
-        $B = [PSCustomObject]@{ Row = "a" }
-        $Rows = @(Get-QueryManagerSelectionRow -Item @($A, $null, $B, $A, [PSCustomObject]@{ Other = 1 }, "text", $B))
-
-        $Rows.Count | Should -Be 2
-        [object]::ReferenceEquals($Rows[0], $A) | Should -BeTrue
-        [object]::ReferenceEquals($Rows[1], $B) | Should -BeTrue
-    }
-
-    It 'Should give nothing for nothing' {
-        @(Get-QueryManagerSelectionRow -Item @()).Count | Should -Be 0
-        @(Get-QueryManagerSelectionRow -Item $null).Count | Should -Be 0
     }
 }
 
