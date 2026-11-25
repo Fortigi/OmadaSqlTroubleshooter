@@ -5,7 +5,8 @@ function Request-NewSqlQueryName {
         have a query with it.
 
     .DESCRIPTION
-        The suggestion is the Display name box when it holds something, otherwise the next free
+        The suggestion is the name proposed for the tab (ProposedQueryName) when it has one, otherwise
+        the next free
         "Query{#}" (Get-UniqueQueryName) starting at the tab's own number - the same name a duplicated
         tab is given.
 
@@ -14,6 +15,9 @@ function Request-NewSqlQueryName {
 
     .PARAMETER Message
         What the dialog says above the name box.
+
+    .PARAMETER DefaultName
+        The suggestion to use instead of the proposed name / Query{#} (Save as).
 
     .OUTPUTS
         [string] The name, or $null when the user cancelled or the name cannot be used (the reason has
@@ -25,12 +29,20 @@ function Request-NewSqlQueryName {
         [Parameter(Mandatory = $true)]
         $TabSession,
 
-        [string]$Message = "Save the ad-hoc query in Omada as:"
+        [string]$Message = "Save the ad-hoc query in Omada as:",
+
+        [Parameter(Mandatory = $false)]
+        [AllowNull()]
+        [AllowEmptyString()]
+        [string]$DefaultName
     )
 
     $Private:Existing = @(Get-CachedQueryName -QueryList $TabSession.RunTimeData.QueryListCache.QueryList)
 
-    $Private:Default = [string]$TabSession.Elements.TextBoxDisplayName.Text
+    $Private:Default = $DefaultName
+    if ([string]::IsNullOrWhiteSpace($Private:Default)) {
+        $Private:Default = [string]$TabSession.ProposedQueryName
+    }
     if ([string]::IsNullOrWhiteSpace($Private:Default)) {
         $Private:Default = Get-UniqueQueryName -ExistingNames $Private:Existing -StartNumber ([int]$TabSession.OpenOrder)
     }

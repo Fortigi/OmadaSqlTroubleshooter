@@ -40,4 +40,21 @@ Describe 'Get-QuerySavePromptMessage' -Tag 'Unit' {
     It 'Should refuse a kind it does not know' {
         { Get-QuerySavePromptMessage -Kind None -Name "x" } | Should -Throw
     }
+
+    It 'Should ask before starting a new query instead of before closing (<Kind>)' -ForEach @(
+        @{ Kind = "SaveExisting" }
+        @{ Kind = "SaveNew" }
+    ) {
+        $Message = Get-QuerySavePromptMessage -Kind $Kind -Name "Accounts" -NewQuery
+
+        $Message | Should -Match "before starting a new query"
+        $Message | Should -Not -Match "before closing"
+    }
+
+    It 'Should ask to discard, not close, a disconnected tab''s changes for a new query' {
+        $Message = Get-QuerySavePromptMessage -Kind Unavailable -Name "Accounts" -NewQuery
+
+        $Message | Should -Match "Discard them anyway"
+        $Message | Should -Not -Match "Close it anyway"
+    }
 }

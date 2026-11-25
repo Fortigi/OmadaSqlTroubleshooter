@@ -6,7 +6,7 @@ function Get-IncrementedQueryName {
 
     .DESCRIPTION
     Used when duplicating a tab *including* its query: the copy keeps the source query's name but
-    with the next free number appended/incremented, so the user only needs to click "New" to save
+    with the next free number appended/incremented, so the user only needs to click "Save" to save
     it. If BaseName already ends in digits, those digits are the starting number and their
     zero-padding width is preserved ("Query09" -> "Query10"); otherwise "1" is appended
     ("Users" -> "Users1", "Report 3" -> "Report 4"). When BaseName is blank the "Query{#}" scheme

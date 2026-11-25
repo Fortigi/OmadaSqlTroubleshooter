@@ -26,9 +26,6 @@ function Set-SqlQueryFunctionState {
             "ButtonNewQuery"               = @{
                 AllowedStatusChange = "Both"
             }
-            "TextBoxDisplayName"           = @{
-                AllowedStatusChange = "Both"
-            }
             "ButtonShowSqlSchema"          = @{
                 AllowedStatusChange = "Disable"
             }
@@ -58,6 +55,14 @@ function Set-SqlQueryFunctionState {
                 AllowedStatusChange = "Both"
             }
             "ButtonDeleteQuery"            = @{
+                AllowedStatusChange = "Both"
+            }
+            # Save as works for a saved and an ad-hoc query alike; the query manager needs only a
+            # connection.
+            "ButtonSaveQueryAs"            = @{
+                AllowedStatusChange = "Both"
+            }
+            "ButtonOpenQueryManager"       = @{
                 AllowedStatusChange = "Both"
             }
             # DataGridQueryResult is deliberately absent. Issue #151 retired that name when the single

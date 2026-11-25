@@ -87,4 +87,25 @@ Describe 'Request-TabQuerySave' -Tag 'Unit' {
         Should -Invoke Open-ChoiceForm -Times 1 -Exactly -ParameterFilter { $LeftButtonText -eq "Close" -and $RightButtonText -eq "Cancel" -and $null -eq $ExtraButtonText -and $Message -match "disconnected" }
         Should -Invoke Save-TabQueryForClose -Times 0 -Exactly
     }
+
+    It 'Should speak of a new query, not of closing, for New' {
+        Mock Open-ChoiceForm { "Save" }
+
+        $null = Request-TabQuerySave -TabSession $script:TestTab -Kind SaveExisting -NewQuery
+
+        Should -Invoke Open-ChoiceForm -Times 1 -Exactly -ParameterFilter { $Message -match "before starting a new query" }
+    }
+
+    It 'Should offer to discard rather than close for New (<Case>)' -ForEach @(
+        @{ Case = 'disconnected'; Kind = "Unavailable"; ExpectedTitle = "Unsaved changes"; Button = "Discard"; Saved = "n/a" }
+        @{ Case = 'failed save'; Kind = "SaveExisting"; ExpectedTitle = "Not saved"; Button = "Discard anyway"; Saved = "Failed" }
+    ) {
+        $script:Answers = [System.Collections.Generic.Queue[object]]::new(@("Save", $true, $true))
+        Mock Open-ChoiceForm { $script:Answers.Dequeue() }
+        Mock Save-TabQueryForClose { $Saved }
+
+        $null = Request-TabQuerySave -TabSession $script:TestTab -Kind $Kind -NewQuery
+
+        Should -Invoke Open-ChoiceForm -Times 1 -Exactly -ParameterFilter { $Title -eq $ExpectedTitle -and $LeftButtonText -eq $Button }
+    }
 }

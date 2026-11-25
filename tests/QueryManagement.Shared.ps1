@@ -29,12 +29,12 @@ function script:New-QueryTestState {
         QueryText        = $null
         QueryListCache   = @{ QueryList = @(@{ 42 = "Accounts" }, @{ 43 = "Other" }) }
         RestMethodParam  = @{ Uri = $null; Method = "GET"; Body = $null }
+        PendingQueryName = $null
     }
     $script:SelectedItem = [PSCustomObject]@{ Content = "{0} - {1}" -f $Name, $DoId }
     $Script:MainForm = [PSCustomObject]@{
         Elements = [PSCustomObject]@{
             ComboBoxSelectQuery = [PSCustomObject]@{ SelectedItem = $script:SelectedItem; Text = $script:SelectedItem.Content }
-            TextBoxDisplayName  = [PSCustomObject]@{ Text = $Name }
             ButtonSaveQuery     = [PSCustomObject]@{ IsEnabled = $false }
             ButtonExecuteQuery  = [PSCustomObject]@{ IsEnabled = $false }
             ButtonRenameQuery   = [PSCustomObject]@{ IsEnabled = $false }
@@ -48,6 +48,7 @@ function script:New-QueryTestState {
         IsDirty     = $false
         EditorText  = "SELECT on screen"
         DraftText   = $null
+        ProposedQueryName = $null
         AppConfig   = $Script:AppConfig
         RunTimeData = $Script:RunTimeData
         Elements    = $Script:MainForm.Elements

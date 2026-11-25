@@ -14,7 +14,7 @@ function Save-Query {
 
             # Built by New-OmadaQueryRequest so the name - user input, inside an OData $filter - has its
             # quotes escaped. "Bob's query" used to end the string literal early and fail the save.
-            $Script:RunTimeData.RestMethodParam.Uri = (New-OmadaQueryRequest -Kind "QueryNameProbe" -Context @{ BaseUrl = $Script:AppConfig.BaseUrl; QueryName = $Script:MainForm.Elements.TextBoxDisplayName.Text }).Uri
+            $Script:RunTimeData.RestMethodParam.Uri = (New-OmadaQueryRequest -Kind "QueryNameProbe" -Context @{ BaseUrl = $Script:AppConfig.BaseUrl; QueryName = $Script:RunTimeData.PendingQueryName }).Uri
             "QueryUrl: {0}" -f $Script:RunTimeData.RestMethodParam.Uri | Write-LogOutput -LogType DEBUG
             "Check if a query with this name already exists" | Write-LogOutput -LogType DEBUG
             $Script:RunTimeData.RestMethodParam.Body = $null
@@ -62,7 +62,8 @@ function Save-Query {
                 CurrentQueryText        = $Script:RunTimeData.CurrentQueryText
                 SavedQueryText          = $private:Result.C_QUERY
                 SavedDataConnectionDoId = $private:Result.C_SQLTROUBLESHOOTING_DATACONNECTION.Id
-                DisplayName             = $Script:MainForm.Elements.TextBoxDisplayName.Text
+                # Saving never renames: that is Rename-SqlQuery's job. The name sent is the one saved.
+                DisplayName             = $Script:RunTimeData.CurrentSqlQuery.DisplayName
                 CurrentDisplayName      = $Script:RunTimeData.CurrentSqlQuery.DisplayName
                 DataConnectionDoId      = $Script:AppConfig.CurrentDataConnection.DoId
             }
@@ -77,8 +78,8 @@ function Save-Query {
             if (![string]::IsNullOrWhiteSpace($Script:AppConfig.CurrentDataConnection.DoId)) {
                 $Script:RunTimeData.RestMethodParam.Body.Add("C_SQLTROUBLESHOOTING_DATACONNECTION", @{Id = $Script:AppConfig.CurrentDataConnection.DoId })
             }
-            if ($Script:RunTimeData.CurrentSqlQuery.DisplayName -ne $Script:MainForm.Elements.TextBoxDisplayName.Text) {
-                $Script:RunTimeData.RestMethodParam.Body.Add("NAME", $Script:MainForm.Elements.TextBoxDisplayName.Text)
+            if ($Script:RunTimeData.CurrentSqlQuery.DisplayName -ne $Script:RunTimeData.PendingQueryName) {
+                $Script:RunTimeData.RestMethodParam.Body.Add("NAME", $Script:RunTimeData.PendingQueryName)
             }
         }
 

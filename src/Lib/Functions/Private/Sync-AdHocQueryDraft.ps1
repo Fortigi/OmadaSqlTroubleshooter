@@ -49,7 +49,7 @@ function Sync-AdHocQueryDraft {
         $Private:Prompt = Resolve-QuerySavePrompt -QueryDoId $TabSession.AppConfig.CurrentSqlQuery.DoId -EditorText $TabSession.DraftText -IsDirty ([bool]$TabSession.IsDirty) -Connected $true
 
         if ($Private:Prompt -eq "SaveNew") {
-            $Private:TabConfig = ConvertTo-AdHocQueryDraftTabConfig -TabId $TabSession.Id -AppConfig $TabSession.AppConfig -DisplayName $TabSession.Elements.TextBoxDisplayName.Text
+            $Private:TabConfig = ConvertTo-AdHocQueryDraftTabConfig -TabId $TabSession.Id -AppConfig $TabSession.AppConfig -DisplayName $TabSession.ProposedQueryName
             Save-AdHocQueryDraft -Path $Path -TabId $TabSession.Id -Text $TabSession.DraftText -TabConfig $Private:TabConfig
             return
         }

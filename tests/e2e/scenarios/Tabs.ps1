@@ -29,13 +29,13 @@ E2ESuite -Name "DuplicateTab" -Body {
         Select-E2EQuery | Out-Null
 
         $Source = Get-ActiveTabSession
-        E2EAssertEqual "TestQuery" $Source.Elements.TextBoxDisplayName.Text "source display name should be the selected query"
+        E2EAssertEqual "TestQuery" (Get-TabName -TabSession $Source) "source tab name should be the selected query"
 
         Complete-DuplicateTab -SourceTabId $Source.Id -SourceConnected $true -EditorText "SELECT 1" -UseSourceName
 
         $Duplicate = Get-ActiveTabSession
         E2EAssertTrue ($Duplicate.Id -ne $Source.Id) "the duplicate should be a new, active tab"
-        E2EAssertEqual "TestQuery1" $Duplicate.Elements.TextBoxDisplayName.Text "duplicate-with-query should be named TestQuery1"
+        E2EAssertEqual "TestQuery1" $Duplicate.ProposedQueryName "duplicate-with-query should be named TestQuery1"
     }
 
     E2ECase -Name "duplicating a tab WITHOUT its query uses the Query{#} scheme" -Body {
@@ -48,7 +48,7 @@ E2ESuite -Name "DuplicateTab" -Body {
         Complete-DuplicateTab -SourceTabId $Source.Id -SourceConnected $true -EditorText "" -UseSourceName:$false
 
         $Duplicate = Get-ActiveTabSession
-        E2EAssertTrue ($Duplicate.Elements.TextBoxDisplayName.Text -like "Query*") "duplicate-without-query should be named Query{#}"
+        E2EAssertTrue ($Duplicate.ProposedQueryName -like "Query*") "duplicate-without-query should be named Query{#}"
     }
 }
 
@@ -209,14 +209,16 @@ E2ESuite -Name "TabRename" -Body {
         Reset-E2ETabsToOne
         $Tab = Get-ActiveTabSession
 
-        # Make the Display name field drive the tab name (no query selected -> Get-TabName rule 2),
-        # then establish a starting name.
+        # Make the proposed name drive the tab name (no query selected -> Get-TabName rule 2), then
+        # establish a starting name.
         $Tab.Elements.ComboBoxSelectQuery.SelectedItem = $null
         $Tab.Elements.ComboBoxSelectQuery.Text = ""
-        $Tab.Elements.TextBoxDisplayName.Text = "RenameStart"
+        $Tab.ProposedQueryName = "RenameStart"
+        Update-TabHeaderTitle -TabSession $Tab
 
         Clear-E2ELog
-        $Tab.Elements.TextBoxDisplayName.Text = "RenameEnd"
+        $Tab.ProposedQueryName = "RenameEnd"
+        Update-TabHeaderTitle -TabSession $Tab
 
         $Renamed = Get-E2ELogMessages -LogType DEBUG -MessageLike "*Tab renamed from 'RenameStart' to 'RenameEnd'*"
         E2EAssertTrue ($Renamed.Count -ge 1) "renaming a tab should log a 'Tab renamed from ... to ...' DEBUG trace"

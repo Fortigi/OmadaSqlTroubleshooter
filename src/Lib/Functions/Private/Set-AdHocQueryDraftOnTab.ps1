@@ -6,8 +6,8 @@ function Set-AdHocQueryDraftOnTab {
     .DESCRIPTION
         The text goes in as PendingEditorText, the same channel a duplicated tab uses: the tab's
         NavigationCompleted handler (Initialize-WebViewForTab) pushes it into Monaco once the editor
-        has loaded, after Set-EditorValue, so nothing loaded on the way can overwrite it. The Display
-        name the draft was kept with is restored the same way, through PendingDisplayName.
+        has loaded, after Set-EditorValue, so nothing loaded on the way can overwrite it. The name the
+        draft was kept with becomes the tab's proposed name (ProposedQueryName).
 
         The tab is marked dirty, because the text is not saved anywhere but the draft store: closing
         the tab or the application asks about it again, and the draft is kept until it is saved or
@@ -38,8 +38,7 @@ function Set-AdHocQueryDraftOnTab {
 
     $Private:DisplayName = [string]$Draft.TabConfig.DisplayName
     if (![string]::IsNullOrWhiteSpace($Private:DisplayName)) {
-        $TabSession.PendingDisplayName = $Private:DisplayName
-        $TabSession.Elements.TextBoxDisplayName.Text = $Private:DisplayName
+        $TabSession | Add-Member -NotePropertyName "ProposedQueryName" -NotePropertyValue $Private:DisplayName -Force
     }
 
     Update-TabHeaderTitle -TabSession $TabSession

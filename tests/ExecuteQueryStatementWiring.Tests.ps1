@@ -158,7 +158,6 @@ BeforeAll {
                 ButtonExecuteQuery          = [PSCustomObject]@{ IsEnabled = $false; ToolTip = "Execute" }
                 ButtonExecuteQueryText      = [PSCustomObject]@{ Name = "ButtonExecuteQueryText"; Text = "_Execute" }
                 ButtonExecuteQueryImage     = [PSCustomObject]@{ Name = "ButtonExecuteQueryImage"; Text = [char]0xE768 }
-                TextBoxDisplayName          = [PSCustomObject]@{ Text = "TestQuery" }
                 TextBlockStatusBarRows      = [PSCustomObject]@{ Name = "TextBlockStatusBarRows"; Text = "-" }
                 TextBlockStatusBarQueryTime = [PSCustomObject]@{ Name = "TextBlockStatusBarQueryTime"; Text = "-" }
             }

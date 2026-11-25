@@ -79,7 +79,7 @@ function Save-QueryResultToFile {
         $InvalidFileNameChars = [System.IO.Path]::GetInvalidFileNameChars()
         $CustomInvalidChars = @( ":", '"', "<", ">", "|", "[", "]", "{", "}", "?", "*", "&", "$", "#", "@", "!", '`', "'", ";", ",", "=", "+", "~", " " )
         $InvalidFileNameChars = $InvalidFileNameChars + $CustomInvalidChars | Select-Object -Unique
-        $SaveFileDisplayName = $Script:MainForm.Elements.TextBoxDisplayName.Text
+        $SaveFileDisplayName = Get-TabName -TabSession (Get-ActiveTabSession)
         if (![string]::IsNullOrWhiteSpace($SaveFileDisplayName)) {
             $SaveFileDisplayName = ($SaveFileDisplayName.ToCharArray() | ForEach-Object {
                     if ($InvalidFileNameChars -contains $_) {

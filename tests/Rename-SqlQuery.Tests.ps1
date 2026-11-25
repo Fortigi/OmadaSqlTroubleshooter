@@ -58,13 +58,12 @@ Describe 'Rename-SqlQuery' -Tag 'Unit' {
     }
 
     It 'Should apply the new name to the tab and the pool' {
-        Rename-SqlQuery
+        $null = Rename-SqlQuery
 
         $Script:AppConfig.CurrentSqlQuery.DoId | Should -Be "42"
         $Script:AppConfig.CurrentSqlQuery.DisplayName | Should -Be "Renamed"
         $Script:RunTimeData.CurrentSqlQuery.DisplayName | Should -Be "Renamed"
         $Script:RunTimeData.CurrentSqlQuery.FullName | Should -Be "Renamed - 42"
-        $Script:MainForm.Elements.TextBoxDisplayName.Text | Should -Be "Renamed"
         Should -Invoke Update-QueryInConnectedPoolTabs -Times 1 -Exactly -ParameterFilter { $DoId -eq "42" -and $DisplayName -eq "Renamed" -and -not $Remove }
         Should -Invoke Clear-RecentSqlQueryObject -Times 1 -Exactly -ParameterFilter { $DoId -eq "42" }
         Should -Invoke Update-TabHeaderTitle -Times 1 -Exactly
@@ -75,7 +74,7 @@ Describe 'Rename-SqlQuery' -Tag 'Unit' {
 
         Rename-SqlQuery
 
-        $Script:MainForm.Elements.TextBoxDisplayName.Text | Should -Be "Renamed (tenant)"
+        $Script:RunTimeData.CurrentSqlQuery.DisplayName | Should -Be "Renamed (tenant)"
     }
 
     It 'Should leave the editor text and the dirty flag alone' {
@@ -123,7 +122,7 @@ Describe 'Rename-SqlQuery' -Tag 'Unit' {
         Rename-SqlQuery
 
         ($script:QueryLog | Where-Object LogType -eq "ERROR").Message | Should -Match "Renaming query 'Accounts' failed: 401"
-        $Script:MainForm.Elements.TextBoxDisplayName.Text | Should -Be "Accounts"
+        $Script:RunTimeData.CurrentSqlQuery.DisplayName | Should -Be "Accounts"
         Should -Invoke Update-QueryInConnectedPoolTabs -Times 0 -Exactly
     }
 
@@ -140,6 +139,53 @@ Describe 'Rename-SqlQuery' -Tag 'Unit' {
 
         { Rename-SqlQuery } | Should -Not -Throw
         ($script:QueryLog | Where-Object LogType -eq "ERROR").Message | Should -Match "dialog failed"
+    }
+}
+
+Describe 'Rename-SqlQuery for a given query (query manager)' -Tag 'Unit' {
+    BeforeEach {
+        New-QueryTestState -DoId 7 -Name "Other"
+        $script:Holder = [PSCustomObject]@{
+            Id          = "tab-2"
+            AppConfig   = [PSCustomObject]@{ CurrentSqlQuery = [PSCustomObject]@{ DoId = 42; DisplayName = "Accounts"; FullName = "Accounts - 42" } }
+            RunTimeData = [PSCustomObject]@{ CurrentSqlQuery = [PSCustomObject]@{ DoId = 42; DisplayName = "Accounts"; FullName = "Accounts - 42" } }
+        }
+        $Script:Tabs = @($script:TestTab, $script:Holder)
+        Mock Read-QueryNameInput { [PSCustomObject]@{ IsValid = $true; IsUnchanged = $false; Name = "Renamed" } }
+        Mock Test-SqlQueryNameTaken { $false }
+        Mock Invoke-SavedQueryRequest { [PSCustomObject]@{ Succeeded = $true; Result = $null; Message = $null } }
+        Mock Clear-RecentSqlQueryObject { }
+        Mock Update-QueryInConnectedPoolTabs { }
+        Mock Update-TabHeaderTitle { }
+    }
+
+    It 'Should rename the query it was given and return the new name' {
+        Rename-SqlQuery -DoId "42" -DisplayName "Accounts" | Should -Be "Renamed"
+
+        Should -Invoke Invoke-SavedQueryRequest -Times 1 -Exactly -ParameterFilter { $Request.Uri -like "*(42)" }
+        Should -Invoke Read-QueryNameInput -Times 1 -Exactly -ParameterFilter { $DefaultName -eq "Accounts" -and $CurrentName -eq "Accounts" }
+    }
+
+    It 'Should update a background tab holding the query, and leave the active tab alone' {
+        $null = Rename-SqlQuery -DoId "42" -DisplayName "Accounts"
+
+        $script:Holder.AppConfig.CurrentSqlQuery.DisplayName | Should -Be "Renamed"
+        $script:Holder.AppConfig.CurrentSqlQuery.FullName | Should -Be "Renamed - 42"
+        $script:Holder.AppConfig.CurrentSqlQuery.DoId | Should -Be 42
+        $script:Holder.RunTimeData.CurrentSqlQuery.DisplayName | Should -Be "Renamed"
+        $script:Holder.RunTimeData.CurrentSqlQuery.FullName | Should -Be "Renamed - 42"
+        $Script:AppConfig.CurrentSqlQuery.DisplayName | Should -Be "Other"
+        Should -Invoke Update-TabHeaderTitle -Times 1 -Exactly -ParameterFilter { $TabSession.Id -eq "tab-2" }
+    }
+
+    It 'Should return nothing when nothing was renamed (<Case>)' -ForEach @(
+        @{ Case = 'cancelled'; Reply = $null; Succeeded = $true }
+        @{ Case = 'refused'; Reply = [PSCustomObject]@{ IsValid = $true; IsUnchanged = $false; Name = "Renamed" }; Succeeded = $false }
+    ) {
+        Mock Read-QueryNameInput { $Reply }
+        Mock Invoke-SavedQueryRequest { [PSCustomObject]@{ Succeeded = $Succeeded; Result = $null; Message = "x" } }
+
+        Rename-SqlQuery -DoId "42" -DisplayName "Accounts" | Should -BeNullOrEmpty
     }
 }
 

@@ -17,6 +17,9 @@ function Get-QuerySavePromptMessage {
     .PARAMETER ClosingApplication
         The whole application is closing, not one tab.
 
+    .PARAMETER NewQuery
+        The editor is about to be cleared for a new query (New), not closed.
+
     .OUTPUTS
         [string]
     #>
@@ -29,15 +32,20 @@ function Get-QuerySavePromptMessage {
 
         [string]$Name,
 
-        [switch]$ClosingApplication
+        [switch]$ClosingApplication,
+
+        [switch]$NewQuery
     )
+
+    $Private:Moment = if ($NewQuery) { "before starting a new query" } else { "before closing" }
 
     switch ($Kind) {
         "SaveExisting" {
-            return "Save changes to query '{0}' before closing?" -f $Name
+            return "Save changes to query '{0}' {1}?" -f $Name, $Private:Moment
         }
         "Unavailable" {
-            return "'{0}' has unsaved changes that cannot be saved while the tab is disconnected. Close it anyway?" -f $Name
+            $Private:Anyway = if ($NewQuery) { "Discard them anyway?" } else { "Close it anyway?" }
+            return "'{0}' has unsaved changes that cannot be saved while the tab is disconnected. {1}" -f $Name, $Private:Anyway
         }
     }
 
@@ -48,5 +56,5 @@ function Get-QuerySavePromptMessage {
         "If you don't save it, it is lost."
     }
 
-    return "'{0}' is an ad-hoc query that is not saved in Omada. Save it as a new query before closing?`n`n{1}" -f $Name, $Private:Outcome
+    return "'{0}' is an ad-hoc query that is not saved in Omada. Save it as a new query {1}?`n`n{2}" -f $Name, $Private:Moment, $Private:Outcome
 }

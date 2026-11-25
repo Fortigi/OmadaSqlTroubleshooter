@@ -12,8 +12,8 @@ function ConvertTo-AdHocQueryDraftTabConfig {
             DPAPI-protected one. A tab reopened from a draft asks for the password like a new tab.
           - No selected query. A draft is by definition an ad-hoc query.
 
-        The Display name the user typed is kept as the tab's DisplayName, so the reopened tab carries
-        the name it had and saving it later suggests that name.
+        The name proposed for the tab is kept as the tab's DisplayName, so the reopened tab carries the
+        name it had and saving it later suggests that name.
 
     .PARAMETER TabId
         The tab's id, kept so the draft and the tab it reopens stay matched.
@@ -22,7 +22,7 @@ function ConvertTo-AdHocQueryDraftTabConfig {
         The tab's AppConfig.
 
     .PARAMETER DisplayName
-        What the tab's Display name box holds.
+        The name proposed for the tab's unsaved query (ProposedQueryName).
 
     .OUTPUTS
         [PSCustomObject] A tab config for New-TabSession -RestoreFrom.

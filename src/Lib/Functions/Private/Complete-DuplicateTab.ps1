@@ -26,32 +26,8 @@ function Complete-DuplicateTab {
             return
         }
 
-        # New-TabSession -RestoreFrom expects the password as a DPAPI-protected string (it decrypts
-        # it back for the password box), so re-encrypt the source's live plaintext password here.
-        $Password = $null
-        $SourcePassword = $Source.Elements.TextBoxPassword.Password
-        if (![string]::IsNullOrWhiteSpace($SourcePassword)) {
-            $Password = $SourcePassword | ConvertTo-SecureString -AsPlainText -Force | ConvertFrom-SecureString
-        }
-
-        $DuplicateConfig = [PSCustomObject]@{
-            Id                    = (New-Guid).Guid
-            DisplayName           = $null
-            BaseUrl               = $Source.AppConfig.BaseUrl
-            # Deliberately NOT copied - the duplicate is a new, unsaved query.
-            CurrentSqlQuery       = [PSCustomObject]@{ DoId = $null; DisplayName = $null; FullName = $null }
-            LastAuthentication    = $Source.AppConfig.LastAuthentication
-            UserName              = $Source.AppConfig.UserName
-            Password              = $Password
-            EntraApplicationIdUri = $Source.AppConfig.EntraApplicationIdUri
-            EntraIdTenantId       = $Source.AppConfig.EntraIdTenantId
-            MyCreatedQueriesOnly  = [bool]$Source.AppConfig.MyCreatedQueriesOnly
-            MyUpdatedQueriesOnly  = [bool]$Source.AppConfig.MyUpdatedQueriesOnly
-            SavePassword          = [bool]$Source.Elements.CheckboxSavePassword.IsChecked
-            IdentityUserName      = $Source.AppConfig.IdentityUserName
-            CurrentDataConnection = $Source.AppConfig.CurrentDataConnection
-            ResultOutputMode      = $Source.AppConfig.ResultOutputMode
-        }
+        # The duplicate is a new, unsaved query: the selected query is deliberately not copied.
+        $DuplicateConfig = New-TabConfigFromTab -SourceTab $Source
 
         $NewTab = New-TabSession -RestoreFrom $DuplicateConfig -AutoConnect:$SourceConnected
         if ($null -eq $NewTab) {
@@ -80,20 +56,15 @@ function Complete-DuplicateTab {
         }
 
         if ($UseSourceName) {
-            $SourceName = $Source.Elements.TextBoxDisplayName.Text
-            if ([string]::IsNullOrWhiteSpace($SourceName)) {
-                $SourceName = $Source.DisplayName
-            }
-            $UniqueQueryName = Get-IncrementedQueryName -BaseName $SourceName -ExistingNames $ExistingQueryNames
+            # The source's own name: its selected query, the name proposed for it, or Query{#}.
+            $UniqueQueryName = Get-IncrementedQueryName -BaseName (Get-TabName -TabSession $Source) -ExistingNames $ExistingQueryNames
         }
         else {
             $UniqueQueryName = Get-UniqueQueryName -ExistingNames $ExistingQueryNames -StartNumber $NewTab.OpenOrder
         }
-        $NewTab.Elements.TextBoxDisplayName.Text = $UniqueQueryName
-        # Also re-apply it once the tab has finished loading/connecting: a connected duplicate runs
-        # Update-QueryList during auto-connect, which clears the Display name field, so the tab's
-        # NavigationCompleted handler restores it from PendingDisplayName as the final step.
-        $NewTab.PendingDisplayName = $UniqueQueryName
+        # The name the copy is proposed under: it names the tab and is suggested when it is saved.
+        # Held on the tab rather than in a control, so nothing loaded later can clear it.
+        $NewTab.ProposedQueryName = $UniqueQueryName
 
         # Hand the SQL to the new tab; its NavigationCompleted handler pushes it into Monaco once
         # the editor has loaded (pushing now would be dropped - the editor is not ready yet).

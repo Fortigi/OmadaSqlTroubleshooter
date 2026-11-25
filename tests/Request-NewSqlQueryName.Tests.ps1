@@ -18,16 +18,23 @@ Describe 'Request-NewSqlQueryName' -Tag 'Unit' {
         Mock Test-SqlQueryNameTaken { $false }
     }
 
-    It 'Should suggest the Display name when there is one' {
-        $script:TestTab.Elements.TextBoxDisplayName.Text = "Typed name"
+    It 'Should suggest the name proposed for the tab when there is one' {
+        $script:TestTab.ProposedQueryName = "Proposed name"
 
         $null = Request-NewSqlQueryName -TabSession $script:TestTab
 
-        Should -Invoke Read-QueryNameInput -Times 1 -Exactly -ParameterFilter { $DefaultName -eq "Typed name" -and $OkText -eq "Save" -and ($ExistingNames -contains "Accounts") }
+        Should -Invoke Read-QueryNameInput -Times 1 -Exactly -ParameterFilter { $DefaultName -eq "Proposed name" -and $OkText -eq "Save" -and ($ExistingNames -contains "Accounts") }
+    }
+
+    It 'Should suggest the name it was given before the proposed one (Save as)' {
+        $script:TestTab.ProposedQueryName = "Proposed name"
+
+        $null = Request-NewSqlQueryName -TabSession $script:TestTab -DefaultName "Accounts1"
+
+        Should -Invoke Read-QueryNameInput -Times 1 -Exactly -ParameterFilter { $DefaultName -eq "Accounts1" }
     }
 
     It 'Should suggest the next free Query{#} from the tab''s number otherwise' {
-        $script:TestTab.Elements.TextBoxDisplayName.Text = ""
         $Script:RunTimeData.QueryListCache.QueryList = @(@{ 1 = "Query3" })
 
         $null = Request-NewSqlQueryName -TabSession $script:TestTab

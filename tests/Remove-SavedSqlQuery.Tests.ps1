@@ -7,13 +7,15 @@ BeforeAll {
     . (Join-Path $Script:QueryPrivatePath "Get-SelectedSavedQuery.ps1")
     . (Join-Path $Script:QueryPrivatePath "New-OmadaQueryRequest.ps1")
     . (Join-Path $Script:QueryPrivatePath "Remove-SavedSqlQuery.ps1")
+    . (Join-Path $Script:QueryPrivatePath "Clear-TabSavedQuerySelection.ps1")
 
     function Open-ChoiceForm { param($Title, $Message, $LeftButtonText, $RightButtonText) }
     function Invoke-SavedQueryRequest { param($Request) }
     function Clear-RecentSqlQueryObject { param($DoId) }
     function Update-QueryInConnectedPoolTabs { param($DoId, $DisplayName, [switch]$Remove) }
     function Update-SavedQueryCommandState { }
-    function Get-ActiveTabSession { $script:TestTab }
+    function Get-ActiveTabSession { $Script:Tabs | Where-Object { $_.Id -eq $Script:ActiveTabId } | Select-Object -First 1 }
+    function Set-ActiveTabContext { param($TabSession) $Script:ActiveTabId = $TabSession.Id; $Script:AppConfig = $TabSession.AppConfig; $Script:RunTimeData = $TabSession.RunTimeData; $Script:MainForm.Elements = $TabSession.Elements }
     function Update-TabHeaderTitle { param($TabSession) }
     function Sync-AdHocQueryDraft { param($TabSession) }
 }
@@ -28,6 +30,7 @@ Describe 'Remove-SavedSqlQuery' -Tag 'Unit' {
         Mock Update-SavedQueryCommandState { }
         Mock Update-TabHeaderTitle { }
         Mock Sync-AdHocQueryDraft { }
+        Mock Set-ActiveTabContext { $Script:ActiveTabId = $TabSession.Id; $Script:AppConfig = $TabSession.AppConfig; $Script:RunTimeData = $TabSession.RunTimeData; $Script:MainForm.Elements = $TabSession.Elements }
     }
 
     It 'Should ask first, naming the query and what happens to its text' {
@@ -76,7 +79,7 @@ Describe 'Remove-SavedSqlQuery' -Tag 'Unit' {
 
         $Script:MainForm.Elements.ComboBoxSelectQuery.SelectedItem | Should -BeNullOrEmpty
         $Script:MainForm.Elements.ComboBoxSelectQuery.Text | Should -Be ""
-        $Script:MainForm.Elements.TextBoxDisplayName.Text | Should -Be "Accounts"
+        $script:TestTab.ProposedQueryName | Should -Be "Accounts" -Because "the tab keeps its name, and saving it again suggests it"
     }
 
     It 'Should drop the query from the pool, update the commands and keep the draft' {
@@ -112,5 +115,65 @@ Describe 'Remove-SavedSqlQuery' -Tag 'Unit' {
 
         { Remove-SavedSqlQuery } | Should -Not -Throw
         ($script:QueryLog | Where-Object LogType -eq "ERROR").Message | Should -Match "dialog failed"
+    }
+
+    It 'Should report whether it deleted (<Case>)' -ForEach @(
+        @{ Case = 'deleted'; Choice = $true; Succeeded = $true; Expected = $true }
+        @{ Case = 'not confirmed'; Choice = $false; Succeeded = $true; Expected = $false }
+        @{ Case = 'refused'; Choice = $true; Succeeded = $false; Expected = $false }
+    ) {
+        Mock Open-ChoiceForm { $Choice }
+        Mock Invoke-SavedQueryRequest { [PSCustomObject]@{ Succeeded = $Succeeded; Result = $null; Message = "x" } }
+
+        Remove-SavedSqlQuery | Should -Be $Expected
+    }
+
+    Context 'From the query manager, for a query open in a background tab' {
+        BeforeEach {
+            # The active tab holds another query; tab-2 holds the one being deleted.
+            New-QueryTestState -DoId 7 -Name "Other"
+            $script:Active = $script:TestTab
+            $script:Elements2 = [PSCustomObject]@{
+                ComboBoxSelectQuery = [PSCustomObject]@{ SelectedItem = [PSCustomObject]@{ Content = "Accounts - 42" }; Text = "Accounts - 42" }
+            }
+            $script:Holder = [PSCustomObject]@{
+                Id                = "tab-2"
+                DisplayName       = "Accounts"
+                IsDirty           = $false
+                EditorText        = "SELECT holder"
+                DraftText         = $null
+                ProposedQueryName = $null
+                AppConfig         = [PSCustomObject]@{ BaseUrl = "https://t"; CurrentSqlQuery = [PSCustomObject]@{ DoId = 42; DisplayName = "Accounts"; FullName = "Accounts - 42" } }
+                RunTimeData       = [PSCustomObject]@{ CurrentSqlQuery = [PSCustomObject]@{ DoId = 42; DisplayName = "Accounts"; FullName = "Accounts - 42" }; CurrentQueryText = "SELECT holder" }
+                Elements          = $script:Elements2
+            }
+            $Script:Tabs = @($script:Active, $script:Holder)
+        }
+
+        It 'Should delete the query it was given, not the active tab''s' {
+            Remove-SavedSqlQuery -DoId "42" -DisplayName "Accounts" | Should -BeTrue
+
+            Should -Invoke Invoke-SavedQueryRequest -Times 1 -Exactly -ParameterFilter { $Request.Uri -like "*(42)" }
+        }
+
+        It 'Should turn the holding tab into an ad-hoc query and leave the active tab alone' {
+            $null = Remove-SavedSqlQuery -DoId "42" -DisplayName "Accounts"
+
+            $script:Holder.AppConfig.CurrentSqlQuery.DoId | Should -BeNullOrEmpty
+            $script:Holder.IsDirty | Should -BeTrue
+            $script:Holder.DraftText | Should -Be "SELECT holder"
+            $script:Holder.ProposedQueryName | Should -Be "Accounts"
+            $script:Elements2.ComboBoxSelectQuery.SelectedItem | Should -BeNullOrEmpty
+            $script:Active.AppConfig.CurrentSqlQuery.DoId | Should -Be 7
+            $Script:ActiveTabId | Should -Be "tab-1"
+        }
+
+        It 'Should not need the active tab to hold a saved query' {
+            New-QueryTestState -DoId $null
+            $Script:Tabs = @($script:TestTab, $script:Holder)
+
+            Remove-SavedSqlQuery -DoId "42" -DisplayName "Accounts" | Should -BeTrue
+            Should -Invoke Open-ChoiceForm -Times 1 -Exactly
+        }
     }
 }

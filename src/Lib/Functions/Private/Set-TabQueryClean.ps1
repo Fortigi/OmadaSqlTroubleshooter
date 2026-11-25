@@ -9,8 +9,14 @@ function Set-TabQueryClean {
         the freshly loaded query marked as changed, and closing asked to save a query nobody had
         touched. Set-EditorValue calls this once the loaded text has been pushed into the editor.
 
+        With -Restored the opposite: the editor was loaded with an older version from the query's
+        history (Resolve-EditorLoadText), which is an unsaved change, so the tab is marked dirty.
+
     .PARAMETER TabSession
         The tab. $null is ignored.
+
+    .PARAMETER Restored
+        The editor holds a restored older version, not the saved text.
 
     .OUTPUTS
         None.
@@ -19,13 +25,15 @@ function Set-TabQueryClean {
     param(
         [Parameter(Mandatory = $true)]
         [AllowNull()]
-        $TabSession
+        $TabSession,
+
+        [switch]$Restored
     )
 
-    if ($null -eq $TabSession -or -not $TabSession.IsDirty) {
+    if ($null -eq $TabSession -or [bool]$TabSession.IsDirty -eq [bool]$Restored) {
         return
     }
 
-    $TabSession.IsDirty = $false
+    $TabSession.IsDirty = [bool]$Restored
     Update-TabHeaderTitle -TabSession $TabSession
 }

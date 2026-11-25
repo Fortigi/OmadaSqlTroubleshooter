@@ -24,6 +24,10 @@ function Request-TabQuerySave {
     .PARAMETER ClosingApplication
         The whole application is closing, which changes what the prompt says about an ad-hoc query.
 
+    .PARAMETER NewQuery
+        The editor is about to be cleared for a new query rather than closed; the question and the
+        "close anyway" answers say so.
+
     .OUTPUTS
         [string] Saved, Discarded or Cancel.
     #>
@@ -37,13 +41,16 @@ function Request-TabQuerySave {
         [ValidateSet("SaveExisting", "SaveNew", "Unavailable")]
         [string]$Kind,
 
-        [switch]$ClosingApplication
+        [switch]$ClosingApplication,
+
+        [switch]$NewQuery
     )
 
-    $Private:Message = Get-QuerySavePromptMessage -Kind $Kind -Name (Get-TabName -TabSession $TabSession) -ClosingApplication:$ClosingApplication
+    $Private:Message = Get-QuerySavePromptMessage -Kind $Kind -Name (Get-TabName -TabSession $TabSession) -ClosingApplication:$ClosingApplication -NewQuery:$NewQuery
+    $Private:Discard = if ($NewQuery) { "Discard" } else { "Close" }
 
     if ($Kind -eq "Unavailable") {
-        $Private:Close = Open-ChoiceForm -Title "Unsaved changes" -Message $Private:Message -LeftButtonText "Close" -RightButtonText "Cancel"
+        $Private:Close = Open-ChoiceForm -Title "Unsaved changes" -Message $Private:Message -LeftButtonText $Private:Discard -RightButtonText "Cancel"
         return $(if ($Private:Close -eq $true) { "Discarded" } else { "Cancel" })
     }
 
@@ -63,6 +70,6 @@ function Request-TabQuerySave {
         return "Cancel"
     }
 
-    $Private:Anyway = Open-ChoiceForm -Title "Not saved" -Message ("'{0}' could not be saved; see the log for why. Close it without saving?" -f (Get-TabName -TabSession $TabSession)) -LeftButtonText "Close anyway" -RightButtonText "Cancel"
+    $Private:Anyway = Open-ChoiceForm -Title "Not saved" -Message ("'{0}' could not be saved; see the log for why. {1} it without saving?" -f (Get-TabName -TabSession $TabSession), $Private:Discard) -LeftButtonText ("{0} anyway" -f $Private:Discard) -RightButtonText "Cancel"
     return $(if ($Private:Anyway -eq $true) { "Discarded" } else { "Cancel" })
 }

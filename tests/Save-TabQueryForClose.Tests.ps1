@@ -33,26 +33,17 @@ Describe 'Save-TabQueryForClose' -Tag 'Unit' {
         Should -Invoke Sync-AdHocQueryDraft -Times 1 -Exactly
     }
 
-    It 'Should not rename a query to nothing when the Display name was emptied' {
-        $Script:MainForm.Elements.TextBoxDisplayName.Text = ""
-
+    It 'Should not ask for or set a name when saving a selected query' {
         $null = Save-TabQueryForClose -TabSession $script:TestTab -Kind SaveExisting
 
-        $Script:MainForm.Elements.TextBoxDisplayName.Text | Should -Be "Accounts"
-    }
-
-    It 'Should keep a Display name the user changed' {
-        $Script:MainForm.Elements.TextBoxDisplayName.Text = "New name"
-
-        $null = Save-TabQueryForClose -TabSession $script:TestTab -Kind SaveExisting
-
-        $Script:MainForm.Elements.TextBoxDisplayName.Text | Should -Be "New name"
+        $Script:RunTimeData.PendingQueryName | Should -BeNullOrEmpty
+        Should -Invoke Request-NewSqlQueryName -Times 0 -Exactly
     }
 
     It 'Should ask for a name and save an ad-hoc query as a new query' {
         Save-TabQueryForClose -TabSession $script:TestTab -Kind SaveNew | Should -Be "Saved"
 
-        $Script:MainForm.Elements.TextBoxDisplayName.Text | Should -Be "Chosen"
+        $Script:RunTimeData.PendingQueryName | Should -Be "Chosen"
         Should -Invoke Request-NewSqlQueryName -Times 1 -Exactly -ParameterFilter { $Message -match "Query1" }
         Should -Invoke Save-Query -Times 1 -Exactly -ParameterFilter { $NewQuery }
     }

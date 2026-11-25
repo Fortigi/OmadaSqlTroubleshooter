@@ -78,10 +78,7 @@ function Update-QueryList {
 
                 $SelectedQuery = $Script:MainForm.Elements.ComboBoxSelectQuery.SelectedItem.Content
                 "Stored current selected query (if not empty): {0}" -f $SelectedQuery | Write-LogOutput -LogType DEBUG
-                $SelectedQueryDisplayName = $Script:MainForm.Elements.TextBoxDisplayName.Text
-                "Stored current selected query display name (if not empty): {0}" -f $SelectedQueryDisplayName | Write-LogOutput -LogType DEBUG
                 $Script:MainForm.Elements.ComboBoxSelectQuery.Items.Clear()
-                $Script:MainForm.Elements.TextBoxDisplayName.Text = $null
 
                 $ClearQuery = $true
                 if ($null -ne $Private:Result -and $Private:Result -is [System.Management.Automation.ErrorRecord]) {
@@ -116,8 +113,6 @@ function Update-QueryList {
                     if ($ClearQuery -and $null -ne $SelectedQuery -and $SelectedQuery -eq $DoIdDisplayName) {
                         "Set query {0} as selected query" -f $DoIdDisplayName | Write-LogOutput -LogType DEBUG
                         $Script:MainForm.Elements.ComboBoxSelectQuery.SelectedItem = $ComboBoxSelectQueryItem
-                        "Set query display name to: {0}" -f $SelectedQueryDisplayName | Write-LogOutput -LogType DEBUG
-                        $Script:MainForm.Elements.TextBoxDisplayName.Text = $SelectedQueryDisplayName
                         $ClearQuery = $false
                     }
                 }

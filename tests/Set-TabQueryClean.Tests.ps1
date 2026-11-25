@@ -35,4 +35,22 @@ Describe 'Set-TabQueryClean' -Tag 'Unit' {
         { Set-TabQueryClean -TabSession $null } | Should -Not -Throw
         $script:Headers | Should -Be 0
     }
+
+    It 'Should mark the tab changed when the editor was loaded with a restored older version' {
+        $Tab = [PSCustomObject]@{ IsDirty = $false }
+
+        Set-TabQueryClean -TabSession $Tab -Restored
+
+        $Tab.IsDirty | Should -BeTrue
+        $script:Headers | Should -Be 1
+    }
+
+    It 'Should not refresh the header of a tab that was already changed when a version is restored' {
+        $Tab = [PSCustomObject]@{ IsDirty = $true }
+
+        Set-TabQueryClean -TabSession $Tab -Restored
+
+        $Tab.IsDirty | Should -BeTrue
+        $script:Headers | Should -Be 0
+    }
 }

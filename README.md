@@ -10,35 +10,54 @@ OmadaSqlTroubleshooter is a PowerShell Module that contains an interactive deskt
 ### Features
 
 #### Query Management
-- Create, update, save and execute SQL queries
-- Save queries without executing
+- The query commands on the toolbar:
+
+  | Command | What it does |
+  |---|---|
+  | **New** | Starts a new query: clears the editor. Unsaved work is offered to be saved first (Save / Don't save / Cancel); an empty editor is not asked about. Nothing is created on the tenant until you save |
+  | **Save** (`Ctrl + S`) | Saves the selected query. On an ad-hoc query (none selected) it creates one and asks for its name |
+  | **Save as** | Saves the editor as another, new query and asks for its name (a saved query suggests its next free numbered variant, `Accounts` → `Accounts1`). The tab then holds the new query; the original is left as it was saved |
+  | **Rename** | Renames the selected query on the tenant. Only the name changes: the editor and any unsaved edits stay exactly as they are |
+  | **Delete** | Deletes the selected query, after confirmation. Its text stays in the editor as an unsaved ad-hoc query, so a mistaken delete costs one Save to undo |
+  | **Queries** | Opens the query manager (below) |
+
+  Names are always asked for in a pop-up; the *Display name* field is gone. A name is checked locally
+  (not empty, not `TMP_…`, not one of the queries the tab knows) and then with the tenant, which also
+  sees queries a *Filter my queries* view hides. A refused name is asked for again, with the reason
 - **Ad-hoc queries** — type SQL and press **Execute** (`F5`) without creating a query first. With no
   saved query selected, the editor runs through the same temporary `TMP_<InstanceGuid>` object an
   executed selection uses, which is deleted again after the run: nothing you own is created or
-  changed on the tenant. A selection runs just the selection. **Save** (`Ctrl + S`) on an ad-hoc
-  query saves it as a new query and asks for its name (suggesting the Display name, or the next free
-  `Query{#}`); **New** still saves the editor under the Display name as before
+  changed on the tenant. A selection runs just the selection
   - Because it runs through that temporary object, an ad-hoc query needs the same OData rights as
     executing a selection: *Create*, *Update* and *Delete* on the query object type. An account that
     may only read queries can still execute saved queries, but not ad-hoc ones; the error then names
     the missing permission
-- **Rename** a saved query — changes only its name on the tenant; the editor and any unsaved edits
-  are left exactly as they are. The name is checked locally (not empty, not `TMP_…`, not one of the
-  queries the tab knows) and then with the tenant, which also sees queries a *Filter my queries* view
-  hides
-- **Delete** a saved query, after confirmation. Its text stays in the editor as an unsaved ad-hoc
-  query, so a mistaken delete costs one Save to undo. Omada deletes data objects softly (marks them
-  *Deleted*), but this application offers no undelete
-- Rename and delete are applied at once to every connected tab sharing the connection pool. A tab
-  that has the deleted query selected while it is in the background keeps it listed until it
-  refreshes
-- Rename needs the OData *Update* right and delete the *Delete* right on the query object; a refusal
-  is reported with the tenant's message and nothing changes locally
+- **Query manager** (**Queries**) — every query object (`C_P_SQLTROUBLESHOOTING`) on the tenant in one
+  list, with a filter over every column (`*` and `?` are wildcards):
+  - The columns are whatever fields OData returns for the query objects — nothing is hard-coded, so a
+    tenant that exposes more shows more. A standard tenant returns `Id`, `DisplayName` and `Name`
+  - **New…** creates an empty query (a name is asked for; its text is a one-line SQL comment naming it)
+    and offers to open it. **Open in tab** shows a query in the tab that already holds it, or opens a
+    new tab with the active tab's connection. **Rename…** and **Delete…** work as on the toolbar, for
+    any query — also one that is open in another tab, which follows
+  - **Details…** (or double-click) shows one query: every field OData returns, plus when and by whom it
+    was created and last changed, taken from its history because OData does not return those; its SQL
+    (read-only — it is edited in a tab); and its full change history, including renames. From there
+    you can rename it, open it in a tab, or open **Compare / restore…** — the history window for that
+    query, where a restored version goes into the query's own tab (opened if needed) as an unsaved
+    change
+- Rename, delete and create are applied at once to every connected tab sharing the connection pool.
+  A tab that has a deleted query selected while it is in the background is turned into an ad-hoc
+  query that keeps its text
+- Creating needs the OData *Create* right, renaming the *Update* right and deleting the *Delete* right
+  on the query object; a refusal is reported with the tenant's message and nothing changes locally.
+  Omada deletes data objects softly (marks them *Deleted*), but this application offers no undelete
 - **Unsaved work is offered to be saved** — when a tab or the application is closed, every tab with
   unsaved changes to a selected query, or with an unsaved ad-hoc query, asks **Save / Don't save /
   Cancel**. An ad-hoc query is saved as a new query (a name is asked for). Cancel keeps the tab, or the
   window, open. An empty editor is never offered to be saved, and a disconnected tab cannot save — its
-  ad-hoc query is kept as a draft instead (below)
+  ad-hoc query is kept as a draft instead (below). A version restored from the history counts as an
+  unsaved change too
 - **Ad-hoc query drafts** — an unsaved ad-hoc query is kept in a local draft file while you type
   (written at most every two seconds, and straight away when you execute it), so it survives closing
   the application without saving it *and* a crash. At the next start you are asked whether to restore
@@ -148,8 +167,8 @@ on Selenium needs the password, because it would otherwise submit an empty one.
 - **Close tabs** — close a single tab (its **✕** button or context menu), **Close All But This**, or **Close All**
 - **Reorder tabs** — drag a tab to a new position
 - Tabs shrink to fit on a single row; long names are truncated with an ellipsis (…)
-- New and duplicated tabs are auto-named `Query{#}`, kept unique against your saved queries; the name is pre-filled into the Display name field so a duplicate can be saved with a single click
-- A query Display name cannot be empty when saving
+- New and duplicated tabs are auto-named `Query{#}`, kept unique against your saved queries; a duplicate keeps that name as its proposed name, which Save suggests when it asks for one
+- A query name cannot be empty when saving
 
 ##### Shared connections (connection pools)
 Tabs that share the same connection form a **connection pool**, identified by the combination of **tenant URL + authentication method + credentials**:
@@ -180,7 +199,7 @@ Tabs that share the same connection form a **connection pool**, identified by th
 |---|---|
 | `F5` | Execute query |
 | `Enter` (in connection field) | Initiate connection |
-| `Ctrl + S` | Save current query in Omada (an ad-hoc query is saved as a new query) |
+| `Ctrl + S` | Save current query in Omada (an ad-hoc query is saved as a new query; a name is asked for) |
 | `Ctrl + Shift + K` | Duplicate the current tab (connection and query) |
 | `Ctrl + T` | Duplicate the current tab without the query editor contents |
 | `Ctrl + W` / `Ctrl + F4` | Close the current tab |
@@ -433,7 +452,7 @@ location beyond `%APPDATA%`, and nothing is written outside your profile.
 |---|---|---|---|---|
 | `%APPDATA%\OmadaSqlTroubleshooter\config\OmadaSqlTroubleshooter.json` | Application settings only: log level, window positions and sizes, last-used export folder and file type, tab capacity, and `InstanceGuid` (see below). No credentials, no query text, no results. | NTFS permissions on your profile | Until deleted | `Invoke-OmadaSqlTroubleshooter -Reset` restores defaults, or delete the file |
 | `%APPDATA%\OmadaSqlTroubleshooter\config\tabs.clixml` | Per-tab session state written when the application closes: tenant URL, user name, Entra application ID URI and tenant ID, the selected data connection, the *name* of the selected saved query, and — only if you ticked **Save password** — your password. The SQL text itself is not stored here; a saved query lives in your Omada tenant, and an unsaved ad-hoc query in the draft file below. | The password field is encrypted with Windows DPAPI, bound to your Windows user account on that machine. The remaining fields are stored as plain CliXml. | Overwritten at each close; kept until deleted | `Invoke-OmadaSqlTroubleshooter -Reset` deletes the file, or delete it yourself |
-| `%APPDATA%\OmadaSqlTroubleshooter\config\adhoc-query-drafts.json` | **Only while there is an unsaved ad-hoc query.** The SQL text of each tab's unsaved ad-hoc query, with that tab's id, the time it was kept and its connection settings (tenant URL, authentication option, user name, Entra application ID URI and tenant ID, data connection, Display name) so a tab can be reopened for it after a crash. **Never a password**, saved or not. | NTFS permissions on your profile; plain JSON | Rewritten while you type (at most every two seconds); a draft is removed when its query is saved, emptied, or its tab closed without saving, and the file is deleted with its last draft | Choose **Discard** when asked at start-up, `Invoke-OmadaSqlTroubleshooter -Reset`, or delete the file while the application is closed |
+| `%APPDATA%\OmadaSqlTroubleshooter\config\adhoc-query-drafts.json` | **Only while there is an unsaved ad-hoc query.** The SQL text of each tab's unsaved ad-hoc query, with that tab's id, the time it was kept and its connection settings (tenant URL, authentication option, user name, Entra application ID URI and tenant ID, data connection, the tab's proposed query name) so a tab can be reopened for it after a crash. **Never a password**, saved or not. | NTFS permissions on your profile; plain JSON | Rewritten while you type (at most every two seconds); a draft is removed when its query is saved, emptied, or its tab closed without saving, and the file is deleted with its last draft | Choose **Discard** when asked at start-up, `Invoke-OmadaSqlTroubleshooter -Reset`, or delete the file while the application is closed |
 | `%APPDATA%\OmadaSqlTroubleshooter\logs\OmadaSqlTroubleshooter.log` and `OmadaSqlTroubleshooter_<start>_<part>.log` | **Only when you tick "Write log file" in the log window, which starts and stops it immediately and is remembered for the next start (the `EnableSessionLogFile` setting); off by default.** A session log, written continuously for the lifetime of the application and flushed line by line so it survives a crash. The running session writes `OmadaSqlTroubleshooter.log`; past 5 MB, and at the next start, it is renamed to a numbered part named for the session's start time. It contains exactly what the log window contains — the same text, through the same redaction layer, so credentials, tokens, session cookies and result values are masked before anything is written. Query text is masked too, unless you tick **Show request body** or start with `-SkipBodyRedaction`, in which case the query reaches this file just as it reaches the window. | NTFS permissions on your profile | Pruned on start-up to the 10 most recent sessions, all parts of a session counting as one; no size or age limit | Delete the folder, or untick "Write log file" in the log window to stop writing it immediately |
 | `%LOCALAPPDATA%\OmadaSqlTroubleshooter\Bin\...` | **Only used as a fallback.** The Microsoft WebView2 .NET SDK assemblies normally ship inside the module and this folder stays empty. It is populated only when that bundle is unusable, or on a 32-bit process: the assemblies are then downloaded from NuGet at the pinned version and hash-verified before use, plus a `WebView2.pin` stamp recording which pin they came from. No user data. | NTFS permissions on your profile | Until deleted; refreshed when the pinned version changes | `Clear-OmadaSqlTroubleshooterCache -Scope Binaries`, or delete the folder. It is re-downloaded and re-verified on the next import that needs it |
 | `%LOCALAPPDATA%\OmadaSqlTroubleshooter\Edge User Data\OmadaWebView2Profile` | A WebView2 browser-profile folder created when the first tab's editor starts. It is created but not currently used as a profile location — the editor's WebView2 uses the `%TEMP%` folder below — so it stays empty. | NTFS permissions on your profile | Until deleted | `Clear-OmadaSqlTroubleshooterCache -Scope BrowserProfiles`, or delete the folder |

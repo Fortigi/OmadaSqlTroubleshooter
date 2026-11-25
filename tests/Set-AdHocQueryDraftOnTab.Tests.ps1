@@ -14,8 +14,7 @@ BeforeAll {
             Id                 = "tab-1"
             IsDirty            = $false
             PendingEditorText  = $null
-            PendingDisplayName = $null
-            Elements           = [PSCustomObject]@{ TextBoxDisplayName = [PSCustomObject]@{ Text = $null } }
+            ProposedQueryName  = $null
         }
     }
 }
@@ -37,22 +36,20 @@ Describe 'Set-AdHocQueryDraftOnTab' -Tag 'Unit' {
         $script:Headers | Should -Be 1
     }
 
-    It 'Should restore the Display name the draft was kept with' {
+    It 'Should restore the name the draft was kept with as the tab''s proposed name' {
         $Tab = New-RestoredTab
 
         Set-AdHocQueryDraftOnTab -TabSession $Tab -Draft ([PSCustomObject]@{ Text = "SELECT 1"; TabConfig = [PSCustomObject]@{ DisplayName = "Mine" } })
 
-        $Tab.PendingDisplayName | Should -Be "Mine"
-        $Tab.Elements.TextBoxDisplayName.Text | Should -Be "Mine"
+        $Tab.ProposedQueryName | Should -Be "Mine"
     }
 
-    It 'Should leave the Display name alone when the draft has none' {
+    It 'Should leave the proposed name alone when the draft has none' {
         $Tab = New-RestoredTab
-        $Tab.Elements.TextBoxDisplayName.Text = "Existing"
+        $Tab.ProposedQueryName = "Existing"
 
         Set-AdHocQueryDraftOnTab -TabSession $Tab -Draft ([PSCustomObject]@{ Text = "SELECT 1"; TabConfig = [PSCustomObject]@{ DisplayName = " " } })
 
-        $Tab.PendingDisplayName | Should -BeNullOrEmpty
-        $Tab.Elements.TextBoxDisplayName.Text | Should -Be "Existing"
+        $Tab.ProposedQueryName | Should -Be "Existing"
     }
 }

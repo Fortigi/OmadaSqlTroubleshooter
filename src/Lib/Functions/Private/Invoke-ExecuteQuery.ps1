@@ -210,7 +210,8 @@ function Invoke-ExecuteQuery {
                         QueryDoId          = $Script:AppConfig.CurrentSqlQuery.DoId
                         QueryText          = $Script:RunTimeData.QueryText
                         CurrentQueryText   = $Script:RunTimeData.CurrentQueryText
-                        DisplayName        = $Script:MainForm.Elements.TextBoxDisplayName.Text
+                        # The saved name: executing saves the text, never a new name (that is Rename).
+                        DisplayName        = $Script:RunTimeData.CurrentSqlQuery.DisplayName
                         CurrentDisplayName = $Script:RunTimeData.CurrentSqlQuery.DisplayName
                         # Read AFTER the sticky USE above, deliberately: this is what the save writes
                         # onto the user's own query object, and a USE is the user changing the

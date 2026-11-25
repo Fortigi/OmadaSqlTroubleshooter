@@ -10,9 +10,14 @@ $PrivatePath = Join-Path $ParentPath -ChildPath "src\Lib\Functions\Private"
 
 # Computed at discovery time (top-level script scope, not inside BeforeAll) because the
 # -ForEach data below is evaluated during discovery, before any BeforeAll block runs.
+#
+# The history window's restore push moved from its click handler into Restore-SqlQueryVersion (the
+# handler only calls it now), and Open-SqlQueryInTab pushes a restored version into an open tab, so
+# both are held to the same property.
 $Script:MigratedCallSites = @(
     (Join-Path $PrivatePath -ChildPath "Set-EditorValue.ps1")
-    (Join-Path $ParentPath -ChildPath "src\Lib\Events\SqlHistoryForm.Elements.ButtonRestoreQuery.ps1")
+    (Join-Path $PrivatePath -ChildPath "Restore-SqlQueryVersion.ps1")
+    (Join-Path $PrivatePath -ChildPath "Open-SqlQueryInTab.ps1")
     (Join-Path $PrivatePath -ChildPath "Invoke-OnTreeViewItemShiftClick.ps1")
     (Join-Path $PrivatePath -ChildPath "Initialize-WebViewForTab.ps1")
 )
@@ -143,7 +148,7 @@ Describe "ConvertTo-JavaScriptLiteral" -Tag "Unit" {
         }
     }
 
-    Context "The four migrated call sites no longer hand-roll quote escaping" {
+    Context "The migrated call sites no longer hand-roll quote escaping" {
         It "does not contain the old backslash-blind quote escape chain in <Path>" -ForEach @(
             $Script:MigratedCallSites | ForEach-Object { @{ Path = $_ } }
         ) {

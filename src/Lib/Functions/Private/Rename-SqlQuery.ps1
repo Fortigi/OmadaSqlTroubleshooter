@@ -9,35 +9,48 @@ function Rename-SqlQuery {
         text and the data connection are deliberately not part of a rename: unsaved edits stay unsaved,
         exactly as they were.
 
-        Renaming could always be done by editing the Display name box and saving, but that also saved
-        the editor. This is the rename on its own.
-
         Needs the Update right on the OData auth element, like saving; a refusal is reported with the
         tenant's message.
 
+        Without -DoId it renames the active tab's selected query (the toolbar's Rename); the query
+        manager passes the query it has selected.
+
+    .PARAMETER DoId
+        The query to rename. Omitted: the active tab's selected query.
+
+    .PARAMETER DisplayName
+        That query's current name.
+
     .OUTPUTS
-        None.
+        [string] The new name, or $null when nothing was renamed.
     #>
     [CmdletBinding()]
-    param()
+    [OutputType([string])]
+    param(
+        [Parameter(Mandatory = $false)]
+        [string]$DoId,
+
+        [Parameter(Mandatory = $false)]
+        [string]$DisplayName
+    )
 
     try {
         $Script:Tracer::WriteLine(("{0}: Function: {1} - Caller: {2}({3})" -f $($Script:RunTimeConfig.ApplicationName), $($MyInvocation.MyCommand.Name), $($MyInvocation.ScriptName).Split("\")[-1], $($MyInvocation.ScriptLineNumber)))
 
-        $Private:Query = Get-SelectedSavedQuery -Action "rename"
+        $Private:Query = if ([string]::IsNullOrWhiteSpace($DoId)) { Get-SelectedSavedQuery -Action "rename" } else { [PSCustomObject]@{ DoId = $DoId; DisplayName = $DisplayName } }
         if ($null -eq $Private:Query) {
-            return
+            return $null
         }
 
         $Private:Name = Read-QueryNameInput -Title "Rename query" -Message ("New name for '{0}':" -f $Private:Query.DisplayName) -DefaultName $Private:Query.DisplayName -CurrentName $Private:Query.DisplayName -ExistingNames @(Get-CachedQueryName -QueryList $Script:RunTimeData.QueryListCache.QueryList) -OkText "Rename"
         if ($null -eq $Private:Name -or $Private:Name.IsUnchanged) {
-            return
+            return $null
         }
 
         $Private:Taken = Test-SqlQueryNameTaken -Name $Private:Name.Name -ExcludeDoId $Private:Query.DoId
         if ($false -ne $Private:Taken) {
             Write-SqlQueryNameUnavailable -Name $Private:Name.Name -Taken $Private:Taken
-            return
+            return $null
         }
 
         "Rename query {0} to '{1}'" -f $Private:Query.DoId, $Private:Name.Name | Write-LogOutput
@@ -49,21 +62,29 @@ function Rename-SqlQuery {
 
         if (-not $Private:Response.Succeeded) {
             "Renaming query '{0}' failed: {1}" -f $Private:Query.DisplayName, $Private:Response.Message | Write-ContainedErrorLog
-            return
+            return $null
         }
 
-        Complete-SqlQueryRename -DoId $Private:Query.DoId -DisplayName (Get-SavedQueryDisplayName -Result $Private:Response.Result -FallbackName $Private:Name.Name)
-        "Query renamed to '{0}'." -f $Private:Name.Name | Write-LogOutput
+        $Private:NewName = Get-SavedQueryDisplayName -Result $Private:Response.Result -FallbackName $Private:Name.Name
+        Complete-SqlQueryRename -DoId $Private:Query.DoId -DisplayName $Private:NewName
+        "Query renamed to '{0}'." -f $Private:NewName | Write-LogOutput
+        return $Private:NewName
     }
     catch {
         $_.Exception.Message | Write-ContainedErrorLog -ErrorObject $_
+        return $null
     }
 }
 
 function Complete-SqlQueryRename {
     <#
     .SYNOPSIS
-        Applies a successful rename to the tab's state and every tab sharing its connection pool.
+        Applies a successful rename to every tab holding the query and every query list of the pool.
+
+    .DESCRIPTION
+        Each tab that has the query selected - not only the active one; the query manager can rename a
+        query open in a background tab - keeps the new name in its config and run-time state, so a
+        later save or execute does not send the old name back, and its header follows.
 
     .PARAMETER DoId
         The renamed query.
@@ -85,15 +106,19 @@ function Complete-SqlQueryRename {
 
     Clear-RecentSqlQueryObject -DoId $DoId
 
-    $DoId, $DisplayName | Set-ConfigProperty -Property "CurrentSqlQuery"
-    $Script:RunTimeData.CurrentSqlQuery.DisplayName = $DisplayName
-    $Script:RunTimeData.CurrentSqlQuery.FullName = $Script:AppConfig.CurrentSqlQuery.FullName
-    $Script:MainForm.Elements.TextBoxDisplayName.Text = $DisplayName
+    $Private:FullName = "{0} - {1}" -f $DisplayName, $DoId
+    foreach ($Private:Tab in @($Script:Tabs | Where-Object { $null -ne $_ -and [string]$_.AppConfig.CurrentSqlQuery.DoId -eq $DoId })) {
+        $Private:Tab.AppConfig.CurrentSqlQuery = [PSCustomObject]@{ DoId = $Private:Tab.AppConfig.CurrentSqlQuery.DoId; DisplayName = $DisplayName; FullName = $Private:FullName }
+        $Private:Tab.RunTimeData.CurrentSqlQuery.DisplayName = $DisplayName
+        $Private:Tab.RunTimeData.CurrentSqlQuery.FullName = $Private:FullName
+        if ($Private:Tab.Id -eq $Script:ActiveTabId) {
+            $Script:AppConfig = $Private:Tab.AppConfig
+        }
+    }
 
     Update-QueryInConnectedPoolTabs -DoId $DoId -DisplayName $DisplayName
 
-    $Private:Tab = Get-ActiveTabSession
-    if ($null -ne $Private:Tab) {
+    foreach ($Private:Tab in @($Script:Tabs | Where-Object { $null -ne $_ -and [string]$_.AppConfig.CurrentSqlQuery.DoId -eq $DoId })) {
         Update-TabHeaderTitle -TabSession $Private:Tab
     }
 }

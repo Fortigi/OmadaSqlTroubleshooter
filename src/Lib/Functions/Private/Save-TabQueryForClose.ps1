@@ -43,12 +43,7 @@ function Save-TabQueryForClose {
             if ($null -eq $Private:Name) {
                 return "Cancelled"
             }
-            $Script:MainForm.Elements.TextBoxDisplayName.Text = $Private:Name
-        }
-        elseif ([string]::IsNullOrWhiteSpace($Script:MainForm.Elements.TextBoxDisplayName.Text)) {
-            # Save-Query sends the Display name box as the new NAME when it differs from the saved
-            # one; an emptied box would rename the query to nothing.
-            $Script:MainForm.Elements.TextBoxDisplayName.Text = $Script:RunTimeData.CurrentSqlQuery.DisplayName
+            $Script:RunTimeData.PendingQueryName = $Private:Name
         }
 
         $Private:Result = Save-Query -NewQuery:($Kind -eq "SaveNew")

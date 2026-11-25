@@ -12,6 +12,9 @@ semantic version.
 
 ### Changed
 
+- Restoring a version from the history now marks the tab as changed, so closing it offers to save
+  the restored version. It used to leave the tab clean on purpose (a programmatic load is not an
+  edit), which with the new close prompts would let a restored version be lost without a word.
 - Selecting a saved query marks the tab clean. The unsaved-changes flag used to be cleared only by a
   save, so typing in a tab and then picking a query left that freshly loaded query flagged as changed.
 - The Monaco editor reports its text to the host with every change, so the host knows what the editor
@@ -49,6 +52,16 @@ semantic version.
   already used (created, executed, deleted), and no save is attempted, so nothing the user owns is
   created or changed on the tenant. Execute refuses only an ad-hoc query with an empty editor. Save /
   `Ctrl+S` on an ad-hoc query saves it as a new query and asks for its name.
+- **Query commands reworked: New, Save, Save as, Rename, Delete.** New clears the editor for a new
+  query (offering to save unsaved work first) and creates nothing on the tenant. Save as saves the
+  editor as another query. Names are asked for in a pop-up and the Display name field is removed.
+  This also fixes New being left disabled for good after a save under a name that already existed.
+- **Query manager** (toolbar: Queries). Lists every `C_P_SQLTROUBLESHOOTING` object on the tenant
+  with every field OData returns, filterable, with New (an empty query), Open in tab, Rename, Delete
+  and Details. Details shows all fields, created/last changed (from the history, which OData does not
+  return), the SQL read-only and the full change history, and opens the history window for that query
+  to compare and restore versions; a restored version goes into the query's own tab as an unsaved
+  change.
 - **Rename and delete a saved query**, from two new toolbar buttons. Rename PUTs the name only - the
   editor text and unsaved edits are untouched - after checking the name locally and with the tenant.
   Delete asks first and keeps the text in the editor as an unsaved ad-hoc query. Both are applied to

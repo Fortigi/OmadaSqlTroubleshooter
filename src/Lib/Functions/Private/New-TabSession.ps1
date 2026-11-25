@@ -71,7 +71,6 @@ function New-TabSession {
             # genuine post-creation name changes, not the initial default-to-derived assignment.
             HeaderInitialized       = $false
             PendingEditorText       = $null
-            PendingDisplayName      = $null
             # A restored/auto-connected tab's first Set-EditorValue push (from
             # Initialize-WebViewForTab's NavigationCompleted handler) can run while this tab is
             # backgrounded - a later tab in the same restore loop, or the persisted active tab, is
@@ -90,6 +89,9 @@ function New-TabSession {
             # What the editor holds (EditorText) and held at the last user edit (DraftText), as Monaco
             # reports them; DraftPending queues the ad-hoc draft cache write. See Set-TabEditorText.
             EditorText              = $null
+            # The name proposed for an unsaved query: a duplicate's, a restored draft's, or a deleted
+            # query's. Names the tab (Get-TabName rule 2) and is suggested when the query is saved.
+            ProposedQueryName       = $null
             DraftText               = $null
             DraftPending            = $false
             Form                    = $Form
@@ -174,6 +176,8 @@ function New-TabSession {
                 }
                 SkipRetryRequest               = $false
                 SelectionText                  = $null
+                # The name Save-Query -NewQuery creates the query under; set from a name prompt.
+                PendingQueryName               = $null
             }
             WebView                 = @{
                 Object                  = $null

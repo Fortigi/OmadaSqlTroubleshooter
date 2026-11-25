@@ -47,7 +47,6 @@ function Complete-TabMaterialization {
                     $ComboBoxSelectQueryItem.Content = $Script:AppConfig.CurrentSqlQuery.FullName
                     $Script:MainForm.Elements.ComboBoxSelectQuery.Items.Add($ComboBoxSelectQueryItem) | Out-Null
                     $Script:RunTimeData.CurrentSqlQuery.DisplayName = $Script:AppConfig.CurrentSqlQuery.DisplayName
-                    $Script:MainForm.Elements.TextBoxDisplayName.Text = $Script:RunTimeData.CurrentSqlQuery.DisplayName
                 }
                 # SelectedItem (not SelectedValue) - Set-EditorValue's own guard checks SelectedItem
                 # directly, and Update-QueryList (the proven-working path, e.g. from clicking

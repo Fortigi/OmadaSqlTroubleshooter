@@ -9,7 +9,7 @@ BeforeAll {
 Describe 'Get-SelectedSavedQuery' -Tag 'Unit' {
     It 'Should return the selected query with the name last loaded from the tenant' {
         New-QueryTestState
-        $Script:MainForm.Elements.TextBoxDisplayName.Text = "Typed but not saved"
+        $Script:AppConfig.CurrentSqlQuery.DisplayName = "Stale config name"
 
         $Query = Get-SelectedSavedQuery -Action "rename"
 

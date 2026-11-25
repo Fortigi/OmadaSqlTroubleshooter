@@ -21,7 +21,7 @@ BeforeAll {
                 CurrentSqlQuery = [PSCustomObject]@{ DoId = $DoId; DisplayName = $null; FullName = $null }
                 Password        = "secret"
             }
-            Elements     = [PSCustomObject]@{ TextBoxDisplayName = [PSCustomObject]@{ Text = $DisplayName } }
+            ProposedQueryName = $DisplayName
         }
     }
 }
