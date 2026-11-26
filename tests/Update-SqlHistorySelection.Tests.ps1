@@ -7,6 +7,9 @@ BeforeAll {
     function Write-LogOutput { param([Parameter(ValueFromPipeline = $true)]$Message, $LogType) process { } }
     function Format-OmadaHistoryDate { param($Value) if ($null -eq $Value) { "(unknown)" } else { $Value.ToString("yyyy-MM-dd HH:mm:ss") } }
     function Invoke-GenerateDiffView { param($OldValue, $NewValue) }
+    function Update-DataGridColumnWidth { param($Grid, $Item) }
+    function Get-SqlHistoryQueryUId { param($DoId) "uid-$DoId" }
+    function Set-SqlRichText { param($RichTextBox, $Text) $RichTextBox.Text = $Text }
 
     function script:New-Blocks {
         $Blocks = [PSCustomObject]@{ Cleared = 0 }
@@ -20,8 +23,10 @@ BeforeAll {
                 DataGridHistory        = [PSCustomObject]@{ SelectedItems = @($Rows); SelectedCells = @($Cells | ForEach-Object { [PSCustomObject]@{ Item = $_ } }); CurrentItem = $null }
                 DataGridHistoryDetails = [PSCustomObject]@{ ItemsSource = $null }
                 ButtonRestoreQuery     = [PSCustomObject]@{ IsEnabled = $null }
-                TextBoxOldValue        = [PSCustomObject]@{ Text = "previous" }
-                TextBoxNewValue        = [PSCustomObject]@{ Text = "previous" }
+                ButtonExportSelectedQuery = [PSCustomObject]@{ IsEnabled = $null }
+                ButtonExportSelectedDiff  = [PSCustomObject]@{ IsEnabled = $null }
+                RichTextBoxOldValue        = [PSCustomObject]@{ Text = "previous" }
+                RichTextBoxNewValue        = [PSCustomObject]@{ Text = "previous" }
                 RichTextBoxOldDiff     = [PSCustomObject]@{ Document = (New-Blocks) }
                 RichTextBoxNewDiff     = [PSCustomObject]@{ Document = (New-Blocks) }
             }
@@ -45,10 +50,13 @@ Describe 'Update-SqlHistorySelection' -Tag 'Unit' {
         Update-SqlHistorySelection
 
         $Elements = $Script:SqlHistoryForm.Elements
-        $Elements.TextBoxOldValue.Text | Should -Be "SELECT 1"
-        $Elements.TextBoxNewValue.Text | Should -Be "SELECT 2"
+        $Elements.RichTextBoxOldValue.Text | Should -Be "SELECT 1"
+        $Elements.RichTextBoxNewValue.Text | Should -Be "SELECT 2"
         $Elements.ButtonRestoreQuery.IsEnabled | Should -BeTrue
-        @($Elements.DataGridHistoryDetails.ItemsSource).Count | Should -Be 4
+        $Elements.ButtonExportSelectedQuery.IsEnabled | Should -BeTrue
+        $Elements.ButtonExportSelectedDiff.IsEnabled | Should -BeTrue
+        @($Elements.DataGridHistoryDetails.ItemsSource).Count | Should -Be 5
+        (@($Elements.DataGridHistoryDetails.ItemsSource) | Where-Object Property -eq "Query UId").Value | Should -Be "uid-42"
         Should -Invoke Invoke-GenerateDiffView -Times 1 -Exactly -ParameterFilter { $OldValue -eq "SELECT 1" -and $NewValue -eq "SELECT 2" }
     }
 
@@ -61,9 +69,11 @@ Describe 'Update-SqlHistorySelection' -Tag 'Unit' {
         Update-SqlHistorySelection
 
         $Elements = $Script:SqlHistoryForm.Elements
-        $Elements.TextBoxOldValue.Text | Should -Be ""
-        $Elements.TextBoxNewValue.Text | Should -Be ""
+        $Elements.RichTextBoxOldValue.Text | Should -Be ""
+        $Elements.RichTextBoxNewValue.Text | Should -Be ""
         $Elements.ButtonRestoreQuery.IsEnabled | Should -BeFalse
+        $Elements.ButtonExportSelectedQuery.IsEnabled | Should -BeFalse
+        $Elements.ButtonExportSelectedDiff.IsEnabled | Should -BeFalse
         @($Elements.DataGridHistoryDetails.ItemsSource).Count | Should -Be 0
         $Elements.RichTextBoxOldDiff.Document.Blocks.Cleared | Should -Be 1
         $Elements.RichTextBoxNewDiff.Document.Blocks.Cleared | Should -Be 1
@@ -73,10 +83,10 @@ Describe 'Update-SqlHistorySelection' -Tag 'Unit' {
 
 Describe 'ConvertTo-HistoryDetailList' -Tag 'Unit' {
     It 'Should list the version''s fields as Property / Value rows' {
-        $Rows = @(ConvertTo-HistoryDetailList -Item $script:V1)
+        $Rows = @(ConvertTo-HistoryDetailList -Item $script:V1 -UId "6a0f")
 
-        $Rows.Property | Should -Be @("Query DoId", "Query name", "Changed by", "Change date")
-        $Rows.Value | Should -Be @("42", "Accounts", "Ann", "2026-11-01 10:00:00")
+        $Rows.Property | Should -Be @("Query DoId", "Query UId", "Query name", "Changed by", "Change date")
+        $Rows.Value | Should -Be @("42", "6a0f", "Accounts", "Ann", "2026-11-01 10:00:00")
     }
 
     It 'Should render an unreadable change date rather than fail on it' {

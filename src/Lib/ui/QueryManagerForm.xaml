@@ -1,9 +1,9 @@
 <Window xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         Title="Queries"
-        Width="1080"
+        Width="1200"
         Height="600"
-        MinWidth="960"
+        MinWidth="1080"
         MinHeight="350"
         WindowStartupLocation="CenterOwner"
         ShowInTaskbar="False"
@@ -12,7 +12,8 @@
         Name="QueryManagerForm">
 
     <!-- Every query object (C_P_SQLTROUBLESHOOTING) on the tenant. The grid's columns are generated
-         from whatever fields OData returns (Get-QueryManagerColumn). Double-click opens the details. -->
+         from Get-QueryManagerColumnDefinition (the same list as the details' Properties tab). Double-click
+         opens the details. -->
     <Window.Resources>
         <!-- Everything here comes from ui\Theme.xaml (docs/UI-THEME.md): the log and schema windows'
              buttons, and grids that select as the result grid does. -->
@@ -34,6 +35,13 @@
                     <AccessText Style="{StaticResource Theme.ButtonTextStyle}" Text="_Refresh"/>
                 </StackPanel>
             </Button>
+            <!-- As the main window's toolbar filters (Update-QueryList), from who created and last changed each
+                 query in the tenant's SQL Troubleshooting view (Get-QueryManagerOwnership). -->
+            <StackPanel Orientation="Horizontal" DockPanel.Dock="Right" Margin="12,0,0,0" VerticalAlignment="Center">
+                <TextBlock Text="Only my queries:" VerticalAlignment="Center" Margin="0,0,6,0" FontFamily="{StaticResource Theme.UiFont}" Foreground="{StaticResource Theme.MutedTextBrush}"/>
+                <CheckBox x:Name="CheckBoxQueryManagerMyCreated" Content="Created" VerticalAlignment="Center" Margin="0,0,10,0" ToolTip="List only the queries I created"/>
+                <CheckBox x:Name="CheckBoxQueryManagerMyUpdated" Content="Last updated" VerticalAlignment="Center" ToolTip="List only the queries I changed last"/>
+            </StackPanel>
             <TextBlock Text="&#xE71C;" Style="{StaticResource Theme.GlyphStyle}" Margin="0,0,6,0" ToolTip="Filter"/>
             <TextBox x:Name="TextBoxQueryFilter" Height="25" VerticalContentAlignment="Center" FontFamily="Segoe UI"
                      Background="{DynamicResource {x:Static SystemColors.WindowBrushKey}}"
@@ -43,9 +51,22 @@
         <!-- Selects as the result grid does (Theme.DataGridStyle). The buttons act on the one query
              the selection is in (Get-QueryManagerSelectedQuery). -->
         <Border Grid.Row="1" BorderBrush="Gray" BorderThickness="1">
-            <DataGrid x:Name="DataGridQueries"
-                      AutoGenerateColumns="True"
-/>
+            <!-- Columns as Get-QueryManagerColumnDefinition (tests/QueryManagerColumns.Tests.ps1 holds the
+                 two together); their widths are set from the content (Set-DataGridColumnWidth). -->
+            <DataGrid x:Name="DataGridQueries" AutoGenerateColumns="False">
+                <DataGrid.Columns>
+                    <DataGridTextColumn Header="Id" Binding="{Binding Id}"/>
+                    <DataGridTextColumn Header="Display name" Binding="{Binding DisplayName}"/>
+                    <DataGridTextColumn Header="Connection" Binding="{Binding Connection}"/>
+                    <DataGridTextColumn Header="Created" Binding="{Binding CreateTime}"/>
+                    <DataGridTextColumn Header="Created by" Binding="{Binding CreatedBy}"/>
+                    <DataGridTextColumn Header="Changed" Binding="{Binding ChangeTime}"/>
+                    <DataGridTextColumn Header="Changed by" Binding="{Binding ChangedBy}"/>
+                    <DataGridTextColumn Header="Is Deleted" Binding="{Binding Deleted}"/>
+                    <DataGridTextColumn Header="Deleted" Binding="{Binding DeleteTime}"/>
+                    <DataGridTextColumn Header="UId" Binding="{Binding UId}"/>
+                </DataGrid.Columns>
+            </DataGrid>
         </Border>
 
         <DockPanel Grid.Row="2" Margin="0,8,0,0" LastChildFill="False">
@@ -89,6 +110,12 @@
                 <StackPanel Orientation="Horizontal" IsHitTestVisible="False">
                     <TextBlock Style="{StaticResource Theme.GlyphStyle}" Text="&#xE774;"/>
                     <AccessText Style="{StaticResource Theme.ButtonTextStyle}" Text="Open in O_mada"/>
+                </StackPanel>
+            </Button>
+            <Button x:Name="ButtonOpenQueryObjectOData" ToolTip="Open the selected query's OData record (JSON) in your browser">
+                <StackPanel Orientation="Horizontal" IsHitTestVisible="False">
+                    <TextBlock Style="{StaticResource Theme.GlyphStyle}" Text="&#xE943;"/>
+                    <AccessText Style="{StaticResource Theme.ButtonTextStyle}" Text="View OData _record"/>
                 </StackPanel>
             </Button>
             <Button x:Name="ButtonCloseQueryManager" ToolTip="Close" DockPanel.Dock="Right" Margin="0" IsCancel="True">

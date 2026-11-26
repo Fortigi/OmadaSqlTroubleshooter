@@ -6,30 +6,46 @@ Describe 'ConvertTo-QueryPropertyList' -Tag 'Unit' {
         $script:Object = Get-QmFixture "odata.queryobject.json"
         $script:Object | Add-Member -NotePropertyName C_SQLTROUBLESHOOTING_DATACONNECTION -NotePropertyValue ([PSCustomObject]@{ Id = 3; DisplayName = "OISES" })
         $script:Entry = @(ConvertTo-QueryHistoryEntry -Row (Get-QmFixture "asmx.paging.history.json").d.Rows)
-        $script:List = @(ConvertTo-QueryPropertyList -Query $script:Object -HistoryEntry $script:Entry)
-        $script:Value = @{}
-        $script:List | ForEach-Object { $script:Value[$_.Property] = $_.Value }
+        function script:Get-Value { param($List) $Value = @{}; $List | ForEach-Object { $Value[$_.Property] = $_.Value }; $Value }
     }
 
-    It 'Should list every field OData returned, in its order' {
-        @($script:List | Select-Object -First 5 | ForEach-Object Property) | Should -Be @("Id", "Name", "DisplayName", "Deleted", "C_SQLTROUBLESHOOTING_DATACONNECTION")
-        $script:Value["Id"] | Should -Be "10521"
-        $script:Value["C_SQLTROUBLESHOOTING_DATACONNECTION"] | Should -Be "OISES - 3"
+    It 'Should list the query manager''s columns, in their order, under their names' {
+        @(ConvertTo-QueryPropertyList -Query $script:Object -HistoryEntry $script:Entry).Property | Should -Be @(Get-QueryManagerColumnDefinition).Header
     }
 
-    It 'Should leave out the query text and the OData annotations' {
-        $script:Value.ContainsKey("C_QUERY") | Should -BeFalse
-        @($script:List | Where-Object { $_.Property -like "@odata*" }).Count | Should -Be 0
+    It 'Should show the values as the list does' {
+        $Value = Get-Value (ConvertTo-QueryPropertyList -Query $script:Object)
+        $Value["Id"] | Should -Be "10521"
+        $Value["Display name"] | Should -Be "Data object overview"
+        $Value["Connection"] | Should -Be "OISES"
+        $Value["Is Deleted"] | Should -Be "No"
     }
 
-    It 'Should add the creation and last change from the history' {
-        $script:Value["Created (history)"] | Should -Be "2023-07-17 14:33:00"
-        $script:Value["Created by (history)"] | Should -Be "System (SYSTEM)"
-        $script:Value["Last changed (history)"] | Should -Be "2026-06-30 20:41:00"
-        $script:Value["Last changed by (history)"] | Should -Be "System (SYSTEM)"
+    It 'Should take created and changed from OData and the view, before the history' {
+        $Object = $script:Object.PSObject.Copy()
+        $Object | Add-Member -NotePropertyName CreateTime -NotePropertyValue ([datetime]::new(2024, 5, 6, 7, 8, 9)) -Force
+        $Ownership = @{ "10521" = [PSCustomObject]@{ CreatedBy = "CORP\\ann"; ChangedBy = "CORP\\bob" } }
+
+        $Value = Get-Value (ConvertTo-QueryPropertyList -Query $Object -Ownership $Ownership -HistoryEntry $script:Entry)
+
+        $Value["Created"] | Should -Be "2024-05-06 07:08:09"
+        $Value["Created by"] | Should -Be "CORP\\ann"
+        $Value["Changed by"] | Should -Be "CORP\\bob"
     }
 
-    It 'Should still list the history fields when the object could not be read' {
-        @(ConvertTo-QueryPropertyList -Query $null -HistoryEntry @() | ForEach-Object Property) | Should -Be @("Created (history)", "Created by (history)", "Last changed (history)", "Last changed by (history)")
+    It 'Should fill empty created and changed values from the history' {
+        $Value = Get-Value (ConvertTo-QueryPropertyList -Query $script:Object -HistoryEntry $script:Entry)
+
+        $Value["Created"] | Should -Be "2023-07-17 14:33:00"
+        $Value["Created by"] | Should -Be "System (SYSTEM)"
+        $Value["Changed"] | Should -Be "2026-06-30 20:41:00"
+        $Value["Changed by"] | Should -Be "System (SYSTEM)"
+    }
+
+    It 'Should still list every property when the object could not be read' {
+        $List = @(ConvertTo-QueryPropertyList -Query $null -HistoryEntry $script:Entry)
+        $List.Property | Should -Be @(Get-QueryManagerColumnDefinition).Header
+        (Get-Value $List)["Created by"] | Should -Be "System (SYSTEM)"
+        (Get-Value $List)["Id"] | Should -Be ""
     }
 }

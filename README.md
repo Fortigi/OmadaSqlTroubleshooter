@@ -80,9 +80,13 @@ the editor, the results and the status bar.
     may only read queries can still execute saved queries, but not ad-hoc ones; the error then names
     the missing permission
 - **Query manager** (**Queries**) — every query object (`C_P_SQLTROUBLESHOOTING`) on the tenant in one
-  list, with a filter over every column (`*` and `?` are wildcards):
-  - The columns are whatever fields OData returns for the query objects — nothing is hard-coded, so a
-    tenant that exposes more shows more. A standard tenant returns `Id`, `DisplayName` and `Name`
+  list, with a filter over every column (`*` and `?` are wildcards) and the same **Only my queries:
+  Created / Last updated** filters as the toolbar (they start as the active tab has them):
+  - Columns: **Id**, **Display name**, **Connection**, **Created**, **Created by**, **Changed**,
+    **Changed by**, **Is Deleted**, **Deleted** and **UId**. *Created by* and *Changed by* — which
+    OData does not return — come from the tenant's *SQL Troubleshooting* view, the same request the
+    "Only my queries" filters need; on a tenant without that view they stay empty and the filters have
+    no effect
   - **New…** creates an empty query (a name is asked for; its text is a one-line SQL comment naming it)
     and offers to open it. **Open** shows a query in the active tab in place of its query; unsaved
     changes there (a saved or an ad-hoc query, never an empty editor) are offered to be saved first
@@ -90,14 +94,23 @@ the editor, the results and the status bar.
     with the active tab's connection. Both select the tab that already holds the query instead of
     opening it twice. **Rename…** and **Delete…** work as on the toolbar, for
     any query — also one that is open in another tab, which follows
-  - **Details…** (or double-click) shows one query: every field OData returns, plus when and by whom it
-    was created and last changed, taken from its history because OData does not return those; its SQL
-    (read-only — it is edited in a tab); and its full change history, including renames. From there
-    you can rename it, open it (in the active tab or a new one), or open **Compare / restore…** — the history window for that
-    query, where a restored version goes into the query's own tab (opened if needed) as an unsaved
-    change
+  - **Details…** (or double-click) shows one query: the same fields as the list's columns (a value
+    the list does not have — a tenant without the view — is filled in from the query's history); its
+    SQL, highlighted as in the editor (read-only — it is edited in a tab); and its full change history,
+    including renames. From there you can rename it, open it (in the active tab or a new one), or open
+    **Compare / restore…** — the history window for that query, where a restored version goes into the
+    query's own tab (opened if needed) as an unsaved change. Double-click a row of the History tab to
+    open the history window at that version
   - **Open in Omada** (in the list and in the details) opens the query object's own page in Omada
-    (`dataobjdlg.aspx?DOID=<id>`) in your default browser, which has its own sign-in to Omada
+    (`dataobjdlg.aspx?DOID=<id>`) in your default browser, which has its own sign-in to Omada.
+    **View OData record** opens the object as the OData endpoint returns it
+    (`odata/dataobjects/C_P_SQLTROUBLESHOOTING(<id>)`, JSON)
+- **History window** — the SQL versions of a query, with old value, new value (both highlighted as in
+  the editor), a line-by-line diff and the version's details (DoId, UId, name, who and when). The list
+  selects as the result grid does; the panes show the version the selection is in. **Restore**,
+  **Export selected query** (the version's new SQL, default name
+  `SQL_History_<query name>_<change date>_query.sql`), **Export selected diff** (the diff as text,
+  `..._diff.diff`) and **Export all** (every version, `..._all`, dated by the newest change)
   - The list selects as the result grid does: whole rows from the row headers, single cells or
     ranges, with `Ctrl` and `Shift`, and `Ctrl + C` copies the selection (there is no context menu).
     The buttons act on the one query the selection is in; a selection over several queries is
@@ -201,6 +214,9 @@ table.)
 #### Results & Export
 - Results to grid or to text (**Ctrl+Shift+D** / **Ctrl+Shift+T**, the Grid/Text toolbar button or the Query menu), per tab
 - Each result grid is headed by its statement on one line, leading comment included
+- Column widths are fixed from the widest value of each column over the result's rows (at most 400
+  px; drag a column wider or narrower as you like), so they no longer jump while scrolling. The same
+  applies to the grids of the query manager, details, history and help windows
 - View results in a PowerShell GridView
 - Context menu for quick copy, select all and save
 - Select cells, columns, rows and copy to clipboard

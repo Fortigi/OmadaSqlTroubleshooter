@@ -44,4 +44,20 @@ Describe 'Get-QueryHistorySummary' -Tag 'Unit' {
         $Summary.Created | Should -Be ([DateTime]"2024-01-01")
         $Summary.ChangedBy | Should -BeExactly "second"
     }
+
+    It 'Should find the creation under the tenant''s wording (<What>)' -ForEach @(@{ What = "Created" }, @{ What = "Creation" }, @{ What = " create" }) {
+        $Entry = @(
+            [PSCustomObject]@{ When = [datetime]"2024-01-01"; Who = "ann"; What = $What }
+            [PSCustomObject]@{ When = [datetime]"2025-01-01"; Who = "bob"; What = "Modify" }
+        )
+
+        $Summary = Get-QueryHistorySummary -Entry $Entry
+
+        $Summary.CreatedBy | Should -Be "ann"
+        $Summary.ChangedBy | Should -Be "bob"
+    }
+
+    It 'Should not take a change for the creation' {
+        (Get-QueryHistorySummary -Entry @([PSCustomObject]@{ When = [datetime]"2024-01-01"; Who = "ann"; What = "Modify" })).CreatedBy | Should -BeNullOrEmpty
+    }
 }

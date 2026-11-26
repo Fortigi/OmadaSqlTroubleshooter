@@ -7,6 +7,26 @@ BeforeAll {
     $script:Errors = [System.Collections.Generic.List[string]]::new()
     function Write-ContainedErrorLog { param([Parameter(ValueFromPipeline = $true)][string]$Message, $ErrorObject) process { $script:Errors.Add($Message) } }
     function Invoke-SavedQueryRequest { param($Request) }
+    function Update-DataGridColumnWidth { param($Grid, $Item) }
+    # The highlighted view is a RichTextBox; its stand-in keeps the text it was given.
+    function Set-SqlRichText { param($RichTextBox, $Text) $RichTextBox.Text = $Text }
+}
+
+Describe 'Get-QueryDetailOwnership' -Tag 'Unit' {
+    It 'Should use the ownership the query manager read' {
+        $Script:QueryManagerForm = [PSCustomObject]@{ Ownership = @{ "1" = "x" } }
+        (Get-QueryDetailOwnership)["1"] | Should -Be "x"
+    }
+
+    It 'Should give none when the query manager has no ownership table' {
+        $Script:QueryManagerForm = [PSCustomObject]@{ Ownership = "not a table" }
+        (Get-QueryDetailOwnership).Count | Should -Be 0
+    }
+
+    It 'Should give none without a query manager' {
+        $Script:QueryManagerForm = $null
+        (Get-QueryDetailOwnership).Count | Should -Be 0
+    }
 }
 
 Describe 'Update-QueryDetailForm' -Tag 'Unit' {
@@ -19,7 +39,7 @@ Describe 'Update-QueryDetailForm' -Tag 'Unit' {
             Elements   = [PSCustomObject]@{
                 TextBlockQueryTitle     = [PSCustomObject]@{ Text = "" }
                 DataGridQueryProperties = [PSCustomObject]@{ ItemsSource = $null }
-                TextBoxQueryText        = [PSCustomObject]@{ Text = "" }
+                RichTextBoxQueryText        = [PSCustomObject]@{ Text = "" }
                 DataGridQueryHistory    = [PSCustomObject]@{ ItemsSource = $null }
             }
         }
@@ -42,8 +62,8 @@ Describe 'Update-QueryDetailForm' -Tag 'Unit' {
         $Script:QueryDetailForm.Query.DisplayName | Should -Be "Data object overview"
         $Script:QueryDetailForm.Definition.Title | Should -Be "Query details - Data object overview"
         $Script:QueryDetailForm.Elements.TextBlockQueryTitle.Text | Should -Be "Data object overview  (10521)"
-        $Script:QueryDetailForm.Elements.TextBoxQueryText.Text | Should -Match "FROM dbo.tblDataObject"
-        @($Script:QueryDetailForm.Elements.DataGridQueryProperties.ItemsSource | ForEach-Object Property) | Should -Contain "Created (history)"
+        $Script:QueryDetailForm.Elements.RichTextBoxQueryText.Text | Should -Match "FROM dbo.tblDataObject"
+        @($Script:QueryDetailForm.Elements.DataGridQueryProperties.ItemsSource | ForEach-Object Property) | Should -Contain "Created by"
         @($Script:QueryDetailForm.Elements.DataGridQueryHistory.ItemsSource).Count | Should -Be 2
     }
 
@@ -58,7 +78,7 @@ Describe 'Update-QueryDetailForm' -Tag 'Unit' {
         $script:Errors[0] | Should -Match "Reading query 'Old name' failed: 404"
         $Script:QueryDetailForm.Query.DisplayName | Should -Be "Old name"
         @($Script:QueryDetailForm.Elements.DataGridQueryHistory.ItemsSource).Count | Should -Be 2
-        $Script:QueryDetailForm.Elements.TextBoxQueryText.Text | Should -Be ""
+        $Script:QueryDetailForm.Elements.RichTextBoxQueryText.Text | Should -Be ""
     }
 
     It 'Should still show the object, and report, when its history cannot be read' {
@@ -71,6 +91,6 @@ Describe 'Update-QueryDetailForm' -Tag 'Unit' {
 
         $script:Errors[0] | Should -Match "Reading the history of query 'Old name' failed: 500"
         @($Script:QueryDetailForm.Elements.DataGridQueryHistory.ItemsSource).Count | Should -Be 0
-        $Script:QueryDetailForm.Elements.TextBoxQueryText.Text | Should -Match "SELECT"
+        $Script:QueryDetailForm.Elements.RichTextBoxQueryText.Text | Should -Match "SELECT"
     }
 }

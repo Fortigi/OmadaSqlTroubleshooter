@@ -9,16 +9,22 @@ BeforeAll {
     $script:Errors = [System.Collections.Generic.List[string]]::new()
     function Write-ContainedErrorLog { param([Parameter(ValueFromPipeline = $true)][string]$Message, $ErrorObject) process { $script:Errors.Add($Message) } }
     function Invoke-SavedQueryRequest { param($Request) }
+    function Get-SqlTroubleShooterView { }
+    function Update-DataGridColumnWidth { param($Grid, $Item) }
 
     function script:New-ManagerState {
-        $Script:AppConfig = [PSCustomObject]@{ BaseUrl = "https://t" }
+        $Script:AppConfig = [PSCustomObject]@{ BaseUrl = "https://t"; IdentityUserName = "CORP\ann" }
+        $Script:RunTimeData = [PSCustomObject]@{ DataobjdlgAspxAttributeMapping = [PSCustomObject]@{ SqlQueryDoId = "c-13"; SqlQueryCreatedBy = "c-2"; SqlQueryChangedBy = "c-4" } }
         $Script:QueryManagerForm = [PSCustomObject]@{
             Queries    = @()
+            Ownership  = @{}
             Definition = [PSCustomObject]@{ Closed = 0 }
             Elements   = [PSCustomObject]@{
                 TextBoxQueryFilter  = [PSCustomObject]@{ Text = "" }
                 DataGridQueries     = [PSCustomObject]@{ ItemsSource = $null; SelectedItems = @(); SelectedCells = @(); CurrentItem = $null }
                 TextBlockQueryCount = [PSCustomObject]@{ Text = "" }
+                CheckBoxQueryManagerMyCreated = [PSCustomObject]@{ IsChecked = $false }
+                CheckBoxQueryManagerMyUpdated = [PSCustomObject]@{ IsChecked = $false }
             }
         }
         $Script:QueryManagerForm.Definition | Add-Member -MemberType ScriptMethod -Name Close -Value { $this.Closed++ }
@@ -30,6 +36,46 @@ Describe 'Update-QueryManagerList' -Tag 'Unit' {
     BeforeEach {
         New-ManagerState
         Mock Invoke-SavedQueryRequest { [PSCustomObject]@{ Succeeded = $true; Result = (Get-QmFixture "odata.querylist.json") } }
+        Mock Get-SqlTroubleShooterView {
+            @{ "c-13" = 10521; "c-2" = "CORP\ann"; "c-4" = "CORP\bob" }
+            @{ "c-13" = 10544; "c-2" = "CORP\bob"; "c-4" = "CORP\ann" }
+            @{ "c-13" = 10560; "c-2" = "CORP\bob"; "c-4" = "CORP\bob" }
+        }
+    }
+
+    It 'Should read who created and changed each query from the view, with the list' {
+        Update-QueryManagerList -Refresh
+
+        Should -Invoke Get-SqlTroubleShooterView -Times 1 -Exactly
+        $Script:QueryManagerForm.Ownership["10521"].CreatedBy | Should -Be "CORP\ann"
+        $Row = @($Script:QueryManagerForm.Elements.DataGridQueries.ItemsSource | Where-Object { $_["Id"] -eq 10544 })[0]
+        $Row["CreatedBy"] | Should -Be "CORP\bob"
+        $Row["ChangedBy"] | Should -Be "CORP\ann"
+    }
+
+    It 'Should show only my queries when asked: <Case>' -ForEach @(
+        @{ Case = 'created'; Created = $true; Updated = $false; Expected = @(10521) }
+        @{ Case = 'last updated'; Created = $false; Updated = $true; Expected = @(10544) }
+        @{ Case = 'either'; Created = $true; Updated = $true; Expected = @(10521, 10544) }
+    ) {
+        Update-QueryManagerList -Refresh
+        $Script:QueryManagerForm.Elements.CheckBoxQueryManagerMyCreated.IsChecked = $Created
+        $Script:QueryManagerForm.Elements.CheckBoxQueryManagerMyUpdated.IsChecked = $Updated
+
+        Update-QueryManagerList
+
+        Should -Invoke Get-SqlTroubleShooterView -Times 1 -Exactly
+        @($Script:QueryManagerForm.Elements.DataGridQueries.ItemsSource | ForEach-Object { $_["Id"] }) | Should -Be $Expected
+        $Script:QueryManagerForm.Elements.TextBlockQueryCount.Text | Should -Be ("{0} of 6 queries" -f $Expected.Count)
+    }
+
+    It 'Should still list the queries when the view cannot be read' {
+        Mock Get-SqlTroubleShooterView { throw "no view" }
+
+        Update-QueryManagerList -Refresh
+
+        $Script:QueryManagerForm.Ownership.Count | Should -Be 0
+        $Script:QueryManagerForm.Elements.DataGridQueries.ItemsSource.Count | Should -Be 6
     }
 
     It 'Should read the list from the tenant and show it all' {

@@ -29,6 +29,11 @@ function Open-QueryManagerForm {
         $Script:QueryManagerCloseRequested = $false
         $Script:QueryManagerForm = Initialize-FormObject -FormPath (Join-Path $Script:RunTimeConfig.ModuleFolder -ChildPath "lib\ui\QueryManagerForm.xaml")
         $Script:QueryManagerForm | Add-Member -NotePropertyName "Queries" -NotePropertyValue @() -Force
+        $Script:QueryManagerForm | Add-Member -NotePropertyName "Ownership" -NotePropertyValue @{} -Force
+        # The "Only my queries" filters start as the active tab has them; changing them here changes
+        # only this window.
+        $Script:QueryManagerForm.Elements.CheckBoxQueryManagerMyCreated.IsChecked = [bool]$Script:AppConfig.MyCreatedQueriesOnly
+        $Script:QueryManagerForm.Elements.CheckBoxQueryManagerMyUpdated.IsChecked = [bool]$Script:AppConfig.MyUpdatedQueriesOnly
         $Script:QueryManagerForm.Definition.Owner = $Script:MainForm.Definition
         $Script:QueryManagerForm.Definition.Title = "Queries - {0}" -f ([System.Uri]::new($Script:AppConfig.BaseUrl)).Authority
 
@@ -75,15 +80,55 @@ function Update-QueryManagerList {
             return
         }
         $Script:QueryManagerForm.Queries = @($Private:Response.Result.value | Where-Object { $null -ne $_ })
+        $Script:QueryManagerForm.Ownership = Get-QueryManagerOwnership
     }
 
+    $Private:Elements = $Script:QueryManagerForm.Elements
     $Private:All = @($Script:QueryManagerForm.Queries)
-    $Private:Shown = @(Select-QueryManagerQuery -Query $Private:All -Filter $Script:QueryManagerForm.Elements.TextBoxQueryFilter.Text)
+    $Private:Shown = @(Select-QueryManagerQuery -Query $Private:All -Filter $Private:Elements.TextBoxQueryFilter.Text -Ownership $Script:QueryManagerForm.Ownership `
+            -UserName $Script:AppConfig.IdentityUserName -MyCreated ([bool]$Private:Elements.CheckBoxQueryManagerMyCreated.IsChecked) -MyUpdated ([bool]$Private:Elements.CheckBoxQueryManagerMyUpdated.IsChecked))
 
-    # Columns are generated from the table, so they follow whatever fields the tenant returns.
-    $Private:Table = ConvertTo-QueryManagerTable -Query $Private:Shown
-    $Script:QueryManagerForm.Elements.DataGridQueries.ItemsSource = $Private:Table.DefaultView
+    $Private:Table = ConvertTo-QueryManagerTable -Query $Private:Shown -Ownership $Script:QueryManagerForm.Ownership
+    $Private:Elements.DataGridQueries.ItemsSource = $Private:Table.DefaultView
+    if ($Refresh) {
+        # From the whole list, once per read: a filter that shows fewer rows keeps the widths, and so
+        # does a column the user widened.
+        Update-DataGridColumnWidth -Grid $Private:Elements.DataGridQueries -Item @((ConvertTo-QueryManagerTable -Query $Private:All -Ownership $Script:QueryManagerForm.Ownership).DefaultView)
+    }
     $Script:QueryManagerForm.Elements.TextBlockQueryCount.Text = "{0} of {1} queries" -f $Private:Shown.Count, $Private:All.Count
+}
+
+function Get-QueryManagerOwnership {
+    <#
+    .SYNOPSIS
+        Who created and last changed each query, read from the tenant's "SQL Troubleshooting" view:
+        the extra request the "Only my queries" filters and the Created by / Changed by columns need.
+
+    .DESCRIPTION
+        OData does not return those two fields; the view does (Get-QueryOwnership). A tenant without
+        the view, or a view that cannot be read, gives no ownership: the columns stay empty and the
+        filters cannot be applied, which is said once in the log rather than failing the list.
+
+    .OUTPUTS
+        [hashtable] query id -> @{ CreatedBy; ChangedBy }
+    #>
+    [CmdletBinding()]
+    [OutputType([hashtable])]
+    param()
+
+    try {
+        $Private:Rows = @(Get-SqlTroubleShooterView)
+    }
+    catch {
+        "Reading the SQL Troubleshooting view failed: {0}" -f $_.Exception.Message | Write-LogOutput -LogType DEBUG
+        $Private:Rows = @()
+    }
+
+    $Private:Ownership = Get-QueryOwnership -ViewRow $Private:Rows -Mapping $Script:RunTimeData.DataobjdlgAspxAttributeMapping
+    if ($Private:Ownership.Count -eq 0) {
+        "The SQL Troubleshooting view gave no rows: Created by, Changed by and the Only my queries filters are not available." | Write-LogOutput -LogType INFO
+    }
+    return $Private:Ownership
 }
 
 function Get-QueryManagerSelectedQuery {

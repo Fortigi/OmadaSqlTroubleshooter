@@ -14,7 +14,20 @@ function Open-SqlHistoryForm {
 
         # The window to open on top of, when that is not the main window (the query details).
         [Parameter(Mandatory = $false)]
-        $Owner
+        $Owner,
+
+        # The query's UId, when the caller knows it (the query details); otherwise it is read when the
+        # Details tab first needs it (Get-SqlHistoryQueryUId).
+        [Parameter(Mandatory = $false)]
+        [string]$QueryUId,
+
+        # The version to select once the history is loaded: a row of the query details' History tab,
+        # double-clicked (Find-SqlHistoryItemIndex). Without it, the newest version is selected.
+        [Parameter(Mandatory = $false)]
+        $SelectChangeDate,
+
+        [Parameter(Mandatory = $false)]
+        [string]$SelectChangedBy
     )
     try {
 
@@ -29,8 +42,9 @@ function Open-SqlHistoryForm {
         #Log form creation
         "Opening Sql History form" | Write-LogOutput -LogType DEBUG
         $Script:SqlHistoryTarget = $null
+        $Script:SqlHistoryQueryUIdCache = $null
         if (![string]::IsNullOrWhiteSpace($DoId)) {
-            $Script:SqlHistoryTarget = [PSCustomObject]@{ DoId = $DoId; QueryName = $QueryName }
+            $Script:SqlHistoryTarget = [PSCustomObject]@{ DoId = $DoId; QueryName = $QueryName; UId = $QueryUId; SelectChangeDate = $SelectChangeDate; SelectChangedBy = $SelectChangedBy }
         }
         $Script:SqlHistoryForm = Initialize-FormObject -FormPath (Join-Path $Script:RunTimeConfig.ModuleFolder -ChildPath "lib\ui\SqlHistoryForm.xaml") -ParentForm $Script:MainForm.Definition
         if ($null -ne $Script:SqlHistoryTarget) {

@@ -92,3 +92,12 @@ Then:
   `Resolve-MainMenuItemState`). A keyboard shortcut for it goes in `Get-KeyboardShortcut`, which is
   also what the Help window lists; `tests/Get-KeyboardShortcut.Tests.ps1` holds the menu's
   `InputGestureText` to that list.
+- After giving a grid its rows, call `Update-DataGridColumnWidth -Grid <grid>`: it fixes each column's
+  width from its widest value over all rows (capped at 400 px, still resizable by hand), so the columns
+  do not jump while the grid is scrolled. A list that is filtered in place can pass its whole, unfiltered
+  rows with `-Item`, once, so a filter does not change the widths.
+- Show SQL that is not edited in a read-only `RichTextBox` filled with `Set-SqlRichText`: it is
+  highlighted with the editor's own word lists and colours.
+- A toolbar button whose label changes in code gets every label it can show as a hidden placeholder
+  (`ToolbarTextPlaceholderStyle` in `MainFormTabContent.xaml`), so its width does not change;
+  `tests/ToolbarButtonWidth.Tests.ps1` holds the labels set in code to the placeholders.

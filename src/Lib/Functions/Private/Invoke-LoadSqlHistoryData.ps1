@@ -41,9 +41,8 @@ function Invoke-LoadSqlHistoryData {
         }
 
         $Private:HistoryGrid.ItemsSource = $HistoryCollection
-        if ($HistoryCollection.Count -gt 0) {
-            $Private:HistoryGrid.SelectedIndex = 0
-        }
+        Update-DataGridColumnWidth -Grid $Private:HistoryGrid
+        Select-SqlHistoryStartItem -Grid $Private:HistoryGrid -Item @($HistoryCollection)
 
         "Loaded {0} SQL history records" -f $HistoryCollection.Count | Write-LogOutput -LogType DEBUG
     }
@@ -52,4 +51,48 @@ function Invoke-LoadSqlHistoryData {
         # into WPF's event dispatch rather than into anything that can act on it.
         $_.Exception.Message | Write-ContainedErrorLog -ErrorObject $_
     }
+}
+
+function Select-SqlHistoryStartItem {
+    <#
+    .SYNOPSIS
+        Selects, and scrolls to, the version the history window opens at: the one it was opened for
+        (a double-clicked row of the query details' History tab, Find-SqlHistoryItemIndex), else the
+        newest. A change that did not touch the SQL has no version: the newest, noted in the log.
+
+    .PARAMETER Grid
+        The version list.
+
+    .PARAMETER Item
+        Its versions, newest first.
+
+    .OUTPUTS
+        None.
+    #>
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory = $true)]
+        $Grid,
+
+        [Parameter(Mandatory = $false)]
+        [AllowEmptyCollection()]
+        [object[]]$Item = @()
+    )
+
+    if ($Item.Count -eq 0) {
+        return
+    }
+
+    $Private:Index = 0
+    $Private:Target = $Script:SqlHistoryTarget
+    if ($null -ne $Private:Target -and $null -ne $Private:Target.SelectChangeDate) {
+        $Private:Index = Find-SqlHistoryItemIndex -Item $Item -ChangeDate $Private:Target.SelectChangeDate -ChangedBy $Private:Target.SelectChangedBy
+        if ($Private:Index -lt 0) {
+            "The change of {0} did not change the SQL, so it has no version here; showing the newest." -f $Private:Target.SelectChangeDate | Write-LogOutput -LogType DEBUG
+            $Private:Index = 0
+        }
+    }
+
+    $Grid.SelectedIndex = $Private:Index
+    $Grid.ScrollIntoView($Item[$Private:Index])
 }

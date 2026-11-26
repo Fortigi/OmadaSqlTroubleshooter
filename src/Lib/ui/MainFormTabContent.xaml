@@ -124,6 +124,17 @@
                         <Setter Property="VerticalAlignment" Value="Center" />
                         <Setter Property="FontSize" Value="12" />
                 </Style>
+                <!-- A toolbar button whose label changes (Execute / Cancel, Connect / Disconnect, Grid / Text)
+                     keeps one width: its label sits in a Grid with every other label it can show, as Hidden
+                     TextBlocks in this style - Hidden takes up its space without being drawn - so the Grid,
+                     and the button, is as wide as the widest label from the start.
+                     tests/ToolbarButtonWidth.Tests.ps1 holds every label set in code to a placeholder here. -->
+                <Style x:Key="ToolbarTextPlaceholderStyle" TargetType="TextBlock">
+                        <Setter Property="Margin" Value="5,0,1,0" />
+                        <Setter Property="VerticalAlignment" Value="Center" />
+                        <Setter Property="FontSize" Value="12" />
+                        <Setter Property="Visibility" Value="Hidden" />
+                </Style>
                 <!-- A group divider: SSMS separates its toolbar groups with a thin vertical line. -->
                 <Style x:Key="ToolbarSeparatorStyle" TargetType="Border">
                         <Setter Property="Width" Value="1" />
@@ -466,13 +477,13 @@
                                                                 <Button x:Name="ButtonExecuteQuery" TabIndex="21" ToolTip="Execute (F5)" Style="{StaticResource ToolbarButtonStyle}">
                                                                         <StackPanel Orientation="Horizontal" IsHitTestVisible="False">
                                                                                 <TextBlock x:Name="ButtonExecuteQueryImage" Style="{StaticResource ToolbarGlyphStyle}" Text="&#xE768;" />
-                                                                                <AccessText x:Name="ButtonExecuteQueryText" Text="_Execute" Style="{StaticResource ToolbarTextStyle}" />
+                                                                                <Grid><TextBlock Style="{StaticResource ToolbarTextPlaceholderStyle}" Text="Execute" /><TextBlock Style="{StaticResource ToolbarTextPlaceholderStyle}" Text="Cancel" /><AccessText x:Name="ButtonExecuteQueryText" Text="_Execute" Style="{StaticResource ToolbarTextStyle}" /></Grid>
                                                                         </StackPanel>
                                                                 </Button>
                                                                 <Button x:Name="ButtonResultOutputMode" TabIndex="22" IsEnabled="True" ToolTip="Results to grid (Ctrl+Shift+D). Click for results to text (Ctrl+Shift+T)." Style="{StaticResource ToolbarButtonStyle}">
                                                                         <StackPanel Orientation="Horizontal" IsHitTestVisible="False">
                                                                                 <TextBlock x:Name="ButtonResultOutputModeImage" Style="{StaticResource ToolbarGlyphStyle}" Text="&#xE80A;" />
-                                                                                <AccessText x:Name="ButtonResultOutputModeText" Text="Grid" Style="{StaticResource ToolbarTextStyle}" />
+                                                                                <Grid><TextBlock Style="{StaticResource ToolbarTextPlaceholderStyle}" Text="Grid" /><TextBlock Style="{StaticResource ToolbarTextPlaceholderStyle}" Text="Text" /><AccessText x:Name="ButtonResultOutputModeText" Text="Grid" Style="{StaticResource ToolbarTextStyle}" /></Grid>
                                                                         </StackPanel>
                                                                 </Button>
                                                         </StackPanel>
@@ -504,7 +515,7 @@
                                                                 <Button x:Name="ButtonConnect" TabIndex="27" ToolTip="Connect to Omada" Style="{StaticResource ToolbarButtonStyle}">
                                                                         <StackPanel Orientation="Horizontal" IsHitTestVisible="False">
                                                                                 <TextBlock x:Name="ButtonConnectImage" Style="{StaticResource ToolbarGlyphStyle}" Text="&#xE8FA;" />
-                                                                                <AccessText x:Name="ButtonConnectText" Text="_Connect" Style="{StaticResource ToolbarTextStyle}" />
+                                                                                <Grid><TextBlock Style="{StaticResource ToolbarTextPlaceholderStyle}" Text="Connect" /><TextBlock Style="{StaticResource ToolbarTextPlaceholderStyle}" Text="Disconnect" /><AccessText x:Name="ButtonConnectText" Text="_Connect" Style="{StaticResource ToolbarTextStyle}" /></Grid>
                                                                         </StackPanel>
                                                                 </Button>
                                                                 <Button x:Name="ButtonReset" TabIndex="28" IsEnabled="True" ToolTip="Reset the application" Style="{StaticResource ToolbarButtonStyle}">

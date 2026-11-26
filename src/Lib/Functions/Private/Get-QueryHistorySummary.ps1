@@ -24,7 +24,8 @@ function Get-QueryHistorySummary {
     )
 
     $Private:Dated = @($Entry | Where-Object { $null -ne $_ -and $null -ne $_.When } | Sort-Object -Property When)
-    $Private:Create = @($Private:Dated | Where-Object { $_.What -eq "Create" }) | Select-Object -First 1
+    # "Create", but also "Created" or "Creation": the action text is the tenant's, not ours.
+    $Private:Create = @($Private:Dated | Where-Object { $_.What -match '^\s*Creat' }) | Select-Object -First 1
     $Private:Latest = $Private:Dated | Select-Object -Last 1
 
     return [PSCustomObject]@{

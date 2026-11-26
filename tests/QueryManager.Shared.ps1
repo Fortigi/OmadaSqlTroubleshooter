@@ -1,7 +1,7 @@
 # Shared set-up for the query manager's pure functions.
 $Script:QmPrivatePath = [System.IO.Path]::Combine((Split-Path -Path $PSScriptRoot -Parent), "src", "Lib", "Functions", "Private")
 foreach ($Private:File in @(
-        "ConvertTo-WildcardFilterPattern", "ConvertTo-OmadaHistoryDate", "ConvertTo-QueryManagerValue", "Get-QueryManagerColumn",
+        "ConvertTo-WildcardFilterPattern", "ConvertTo-OmadaHistoryDate", "ConvertTo-QueryManagerValue", "Get-QueryManagerColumnDefinition",
         "ConvertTo-QueryManagerTable", "Select-QueryManagerQuery", "ConvertTo-QueryHistoryEntry", "Get-QueryHistorySummary",
         "ConvertTo-QueryPropertyList", "New-QueryManagerRequest"
     )) {

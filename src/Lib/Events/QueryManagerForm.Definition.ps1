@@ -33,3 +33,15 @@ $Script:QueryManagerForm.Elements.DataGridQueries.Add_MouseDoubleClick({
 $Script:QueryManagerForm.Elements.ButtonCloseQueryManager.Add_Click({
         $Script:QueryManagerForm.Definition.Close()
     })
+
+# The "Only my queries" filters work on the list already read (and the view read with it); no request.
+foreach ($Private:FilterBox in @($Script:QueryManagerForm.Elements.CheckBoxQueryManagerMyCreated, $Script:QueryManagerForm.Elements.CheckBoxQueryManagerMyUpdated)) {
+    $Private:FilterBox.Add_Click({
+            try {
+                Update-QueryManagerList
+            }
+            catch {
+                $_.Exception.Message | Write-ContainedErrorLog -ErrorObject $_
+            }
+        })
+}

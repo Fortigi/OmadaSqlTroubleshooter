@@ -12,6 +12,21 @@ semantic version.
 
 ### Changed
 
+- **Query manager columns** are now a fixed set, the same as the query details' Properties tab: Id,
+  Display name, Connection, Created, Created by, Changed, Changed by, Is Deleted, Deleted, UId. Created
+  by and Changed by come from the tenant's SQL Troubleshooting view; Created and Changed from OData
+  (CreateTime, ChangeTime), with the history only as a fallback.
+- **Grid column widths** no longer jump while scrolling. Each column gets a fixed width from its widest
+  value over the rows - not only those on screen - capped at 400 px and still resizable by hand. Result
+  grids and the query manager, details, history and help windows. The longest values are found by a
+  small helper compiled on first use, so a result of thousands of rows is measured in milliseconds.
+- **Toolbar buttons keep their width** when their label changes (Execute / Cancel, Connect /
+  Disconnect, Grid / Text): the widest label is reserved.
+- The history window's export of every version is now **Export all**, with the default name
+  `SQL_History_<query name>_<change date>_all`.
+- The history window's Diff View compares lines case-sensitively, so a change that only changes case is
+  shown as a change.
+
 - **Toolbar and menu bar, laid out like SQL Server Management Studio.** The row of wide buttons
   that ran off-screen on lower resolutions is replaced by a grouped toolbar (Query, Queries, Run,
   Results, Session) with separators and icon-only buttons except New query, Execute, Grid/Text and
@@ -66,6 +81,16 @@ semantic version.
   ignored. Redaction is unchanged: the file stays behind the same single gate as the window.
 
 ### Added
+
+- **Only my queries** filters (Created / Last updated) in the query manager.
+- **View OData record** in the query manager and the query details: the query object's OData record
+  in the browser.
+- **SQL syntax highlighting** in the query details' SQL tab and the history window's old and new
+  value, with the editor's own word lists (Monaco's T-SQL grammar) and colours.
+- The query details' History tab: **double-click a row** to open the history window at that version.
+- The history window's Details tab shows the query's **UId**.
+- **Export selected query** and **Export selected diff** in the history window, with default names
+  `SQL_History_<query name>_<change date>_query` / `_diff`.
 
 - **Ad-hoc queries.** Type SQL and execute it without pressing New first. With no saved query
   selected, the editor runs through the temporary `TMP_<InstanceGuid>` object an executed selection
@@ -199,6 +224,9 @@ semantic version.
 
 ### Fixed
 
+- The query details showed no Created / Created by: they were taken from a history entry named exactly
+  "Create", which a tenant need not have. They now come from OData and the SQL Troubleshooting view,
+  and the history fallback also accepts "Created" / "Creation".
 - Starting the application again in the same PowerShell session no longer leaves the previous run's
   timers running. The 50 ms completion poll timer (which also drives the session keep-alive) and the
   validation, schema-filter and E2E timers belong to the thread's dispatcher, which outlives a run,

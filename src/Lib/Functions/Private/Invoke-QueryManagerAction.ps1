@@ -14,6 +14,7 @@ function Invoke-QueryManagerAction {
                      opened. At the tab limit New-TabSession refuses with a warning, and closing the
                      manager then would only lose the user's place.
           Omada    Open-OmadaQueryObject: the query's own page in Omada, in the default browser.
+          OData    Open-OmadaQueryObject -Kind OData: the query's OData record, in the default browser.
           Details  Open-QueryDetailForm; afterwards the list is read again (it may have been renamed),
                    unless something there asked the manager to close.
           Rename   Rename-SqlQuery for that query; the list is read again.
@@ -28,7 +29,7 @@ function Invoke-QueryManagerAction {
     [CmdletBinding()]
     param(
         [Parameter(Mandatory = $true)]
-        [ValidateSet("Create", "Open", "OpenInTab", "Details", "Rename", "Delete", "Omada")]
+        [ValidateSet("Create", "Open", "OpenInTab", "Details", "Rename", "Delete", "Omada", "OData")]
         [string]$Action
     )
 
@@ -55,6 +56,9 @@ function Invoke-QueryManagerAction {
         }
         "Omada" {
             Open-OmadaQueryObject -DoId $Private:Query.DoId
+        }
+        "OData" {
+            Open-OmadaQueryObject -DoId $Private:Query.DoId -Kind OData
         }
         "Details" {
             Open-QueryDetailForm -DoId $Private:Query.DoId -DisplayName $Private:Query.DisplayName -Owner $Script:QueryManagerForm.Definition

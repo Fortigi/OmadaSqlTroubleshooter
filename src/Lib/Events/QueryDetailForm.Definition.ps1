@@ -36,13 +36,7 @@ $Script:QueryDetailForm.Elements.ButtonOpenQueryDetailInTab.Add_Click({
 $Script:QueryDetailForm.Elements.ButtonShowQueryDetailHistory.Add_Click({
         try {
             $_ | Show-EventInfo
-            $Private:Query = $Script:QueryDetailForm.Query
-            Open-SqlHistoryForm -DoId $Private:Query.DoId -QueryName $Private:Query.DisplayName -Owner $Script:QueryDetailForm.Definition
-
-            # A version restored there opened its tab and asked the manager to close.
-            if (-not (Complete-QueryManagerChildWindow -Window $Script:QueryDetailForm.Definition)) {
-                Update-QueryDetailForm
-            }
+            Invoke-QueryDetailHistory
         }
         catch {
             $_.Exception.Message | Write-ContainedErrorLog -ErrorObject $_

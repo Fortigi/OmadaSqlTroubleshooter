@@ -12,7 +12,10 @@ $Script:SqlHistoryForm.Elements.ButtonExportHistory.Add_Click({
             $SaveFileDialog.Title = "Export SQL History"
             $SaveFileDialog.Filter = "JSON Files (*.json)|*.json|CSV Files (*.csv)|*.csv|Text Files (*.txt)|*.txt|All Files (*.*)|*.*"
             $SaveFileDialog.DefaultExt = ".json"
-            $SaveFileDialog.FileName = "SQL_History_$((Get-Date).ToString('yyyyMMdd_HHmmss'))"
+            # SQL_History_<query name>_<change date>_all, the date of the newest version (the list is
+            # newest first); see Get-SqlHistoryExportFileName.
+            $Newest = @($Script:SqlHistoryForm.Elements.DataGridHistory.ItemsSource) | Select-Object -First 1
+            $SaveFileDialog.FileName = Get-SqlHistoryExportFileName -QueryName $Newest.SqlObjectName -ChangeDate $Newest.ChangeDate -Kind All
 
             # See Suspend-WebViewCompletionPolling.ps1 - ShowDialog() pumps this thread's
             # messages while blocked, which could let the WebView2 completion poll timer fire

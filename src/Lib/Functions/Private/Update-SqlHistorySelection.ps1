@@ -19,19 +19,27 @@ function Update-SqlHistorySelection {
     $Private:Elements = $Script:SqlHistoryForm.Elements
     $Private:Item = Get-SqlHistorySelectedItem
 
-    $Private:Elements.DataGridHistoryDetails.ItemsSource = @(ConvertTo-HistoryDetailList -Item $Private:Item)
-    $Private:Elements.ButtonRestoreQuery.IsEnabled = $null -ne $Private:Item
+    $Private:UId = if ($null -ne $Private:Item) { Get-SqlHistoryQueryUId -DoId ([string]$Private:Item.DoId) } else { "" }
+    $Private:Elements.DataGridHistoryDetails.ItemsSource = @(ConvertTo-HistoryDetailList -Item $Private:Item -UId $Private:UId)
+    Update-DataGridColumnWidth -Grid $Private:Elements.DataGridHistoryDetails
+    # Restore and the two exports of the selection act on one version.
+    foreach ($Private:Name in @("ButtonRestoreQuery", "ButtonExportSelectedQuery", "ButtonExportSelectedDiff")) {
+        $Private:Button = $Private:Elements.$Private:Name
+        if ($null -ne $Private:Button) {
+            $Private:Button.IsEnabled = $null -ne $Private:Item
+        }
+    }
 
     if ($null -eq $Private:Item) {
-        $Private:Elements.TextBoxOldValue.Text = ""
-        $Private:Elements.TextBoxNewValue.Text = ""
+        Set-SqlRichText -RichTextBox $Private:Elements.RichTextBoxOldValue -Text ""
+        Set-SqlRichText -RichTextBox $Private:Elements.RichTextBoxNewValue -Text ""
         $Private:Elements.RichTextBoxOldDiff.Document.Blocks.Clear()
         $Private:Elements.RichTextBoxNewDiff.Document.Blocks.Clear()
         return
     }
 
-    $Private:Elements.TextBoxOldValue.Text = $Private:Item.OldValue
-    $Private:Elements.TextBoxNewValue.Text = $Private:Item.NewValue
+    Set-SqlRichText -RichTextBox $Private:Elements.RichTextBoxOldValue -Text $Private:Item.OldValue
+    Set-SqlRichText -RichTextBox $Private:Elements.RichTextBoxNewValue -Text $Private:Item.NewValue
     Invoke-GenerateDiffView -OldValue $Private:Item.OldValue -NewValue $Private:Item.NewValue
 
     "Selected history item: {0} - {1}" -f (Format-OmadaHistoryDate -Value $Private:Item.ChangeDate), $Private:Item.ChangedBy | Write-LogOutput -LogType DEBUG
@@ -67,6 +75,9 @@ function ConvertTo-HistoryDetailList {
     .PARAMETER Item
         The history version, or $null for none (no rows).
 
+    .PARAMETER UId
+        The query's UId (Get-SqlHistoryQueryUId).
+
     .OUTPUTS
         [PSCustomObject[]] @{ Property; Value }
     #>
@@ -74,7 +85,11 @@ function ConvertTo-HistoryDetailList {
     param(
         [Parameter(Mandatory = $false)]
         [AllowNull()]
-        $Item
+        $Item,
+
+        [Parameter(Mandatory = $false)]
+        [AllowEmptyString()]
+        [string]$UId
     )
 
     if ($null -eq $Item) {
@@ -82,6 +97,7 @@ function ConvertTo-HistoryDetailList {
     }
 
     [PSCustomObject]@{ Property = "Query DoId"; Value = [string]$Item.DoId }
+    [PSCustomObject]@{ Property = "Query UId"; Value = $UId }
     [PSCustomObject]@{ Property = "Query name"; Value = [string]$Item.SqlObjectName }
     [PSCustomObject]@{ Property = "Changed by"; Value = [string]$Item.ChangedBy }
     [PSCustomObject]@{ Property = "Change date"; Value = Format-OmadaHistoryDate -Value $Item.ChangeDate }

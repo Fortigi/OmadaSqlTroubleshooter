@@ -87,10 +87,33 @@ function Update-QueryDetailForm {
     $Private:Entry = @(ConvertTo-QueryHistoryEntry -Row @($Private:History.Result.d.Rows))
     $Private:Name = Get-SavedQueryDisplayName -Result $Private:Object.Result -FallbackName $Private:Query.DisplayName
     $Private:Query.DisplayName = $Private:Name
+    # Handed to the history window, whose Details tab shows it (Invoke-QueryDetailHistory).
+    $Private:Query | Add-Member -NotePropertyName "UId" -NotePropertyValue ([string]$Private:Object.Result.UId) -Force
 
     $Script:QueryDetailForm.Definition.Title = "Query details - {0}" -f $Private:Name
     $Script:QueryDetailForm.Elements.TextBlockQueryTitle.Text = "{0}  ({1})" -f $Private:Name, $Private:Query.DoId
-    $Script:QueryDetailForm.Elements.DataGridQueryProperties.ItemsSource = @(ConvertTo-QueryPropertyList -Query $Private:Object.Result -HistoryEntry $Private:Entry)
-    $Script:QueryDetailForm.Elements.TextBoxQueryText.Text = [string]$Private:Object.Result.C_QUERY
+    $Script:QueryDetailForm.Elements.DataGridQueryProperties.ItemsSource = @(ConvertTo-QueryPropertyList -Query $Private:Object.Result -Ownership (Get-QueryDetailOwnership) -HistoryEntry $Private:Entry)
+    Set-SqlRichText -RichTextBox $Script:QueryDetailForm.Elements.RichTextBoxQueryText -Text ([string]$Private:Object.Result.C_QUERY)
     $Script:QueryDetailForm.Elements.DataGridQueryHistory.ItemsSource = $Private:Entry
+    Update-DataGridColumnWidth -Grid $Script:QueryDetailForm.Elements.DataGridQueryProperties
+    Update-DataGridColumnWidth -Grid $Script:QueryDetailForm.Elements.DataGridQueryHistory
+}
+
+function Get-QueryDetailOwnership {
+    <#
+    .SYNOPSIS
+        Who created and last changed the queries, as the query manager behind the details read it
+        (Get-QueryManagerOwnership): the details do not ask the tenant's view again.
+
+    .OUTPUTS
+        [hashtable], empty when the manager has none.
+    #>
+    [CmdletBinding()]
+    [OutputType([hashtable])]
+    param()
+
+    if ($null -ne $Script:QueryManagerForm -and $Script:QueryManagerForm.Ownership -is [hashtable]) {
+        return $Script:QueryManagerForm.Ownership
+    }
+    return @{}
 }

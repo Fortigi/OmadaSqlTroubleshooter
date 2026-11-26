@@ -12,7 +12,7 @@ BeforeAll {
     function Remove-SavedSqlQuery { param($DoId, $DisplayName) }
     function New-SqlQueryObject { param($ExistingNames) }
     function Open-ChoiceForm { param($Title, $Message, $LeftButtonText, $RightButtonText) }
-    function Open-OmadaQueryObject { param($DoId) }
+    function Open-OmadaQueryObject { param($DoId, $Kind) }
     function Open-SqlQueryInActiveTab { param($DoId, $DisplayName) }
 }
 
@@ -76,6 +76,13 @@ Describe 'Invoke-QueryManagerAction' -Tag 'Unit' {
         Invoke-QueryManagerAction -Action OpenInTab
 
         Should -Invoke Open-SqlQueryInTab -Times 1 -Exactly
+        $Script:QueryManagerForm.Definition.Closed | Should -Be 0
+    }
+
+    It 'Should open the selected query''s OData record and keep the manager open' {
+        Invoke-QueryManagerAction -Action OData
+
+        Should -Invoke Open-OmadaQueryObject -Times 1 -Exactly -ParameterFilter { $DoId -eq "42" -and $Kind -eq "OData" }
         $Script:QueryManagerForm.Definition.Closed | Should -Be 0
     }
 
