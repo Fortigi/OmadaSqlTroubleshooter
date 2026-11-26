@@ -93,7 +93,11 @@ the editor, the results and the status bar.
     be looked at (**Details**, shown from the list itself, because OData does not return a deleted
     query by id) and **Restore**d. Restore is only available for a deleted query, and asks first when
     another query has meanwhile taken its name. Open, Rename, Delete, Open in Omada and View OData
-    record need the live query and stay greyed out for a deleted one, in the list and in its details
+    record need the live query and stay greyed out for a deleted one, in the list and in its details.
+    The tenant keeps no history for a deleted query, so its History tab is empty and Compare / restore
+    is greyed out too
+  - The details have **Delete…** and **Restore** as well, each for the state it fits; afterwards the
+    details show the query as it is now, with its buttons following
   - **New…** creates an empty query (a name is asked for; its text is a one-line SQL comment naming it)
     and asks where to open it: in this tab (with the tab's usual save prompt), in a new tab, or not. **Open** shows a query in the active tab in place of its query; unsaved
     changes there (a saved or an ad-hoc query, never an empty editor) are offered to be saved first

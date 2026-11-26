@@ -81,12 +81,19 @@ function Update-QueryDetailForm {
     $Private:Deleted = [string]$Private:Object.Result.Deleted -eq "True"
     $Private:Query | Add-Member -NotePropertyName "Deleted" -NotePropertyValue $Private:Deleted -Force
 
-    $Private:History = Invoke-SavedQueryRequest -Request (New-QueryManagerRequest -Kind "QueryHistory" -Context $Private:Context)
-    if (-not $Private:History.Succeeded) {
-        "Reading the history of query '{0}' failed: {1}" -f $Private:Query.DisplayName, $Private:History.Message | Write-ContainedErrorLog
+    # The tenant's history service answers 500 for a deleted object, so a deleted query's history is
+    # not asked for; it is there again once the query is restored.
+    $Private:Entry = @()
+    if ($Private:Deleted) {
+        "Query '{0}' is deleted; its history is available once it is restored." -f $Private:Query.DisplayName | Write-LogOutput -LogType DEBUG
     }
-
-    $Private:Entry = @(ConvertTo-QueryHistoryEntry -Row @($Private:History.Result.d.Rows))
+    else {
+        $Private:History = Invoke-SavedQueryRequest -Request (New-QueryManagerRequest -Kind "QueryHistory" -Context $Private:Context)
+        if (-not $Private:History.Succeeded) {
+            "Reading the history of query '{0}' failed: {1}" -f $Private:Query.DisplayName, $Private:History.Message | Write-ContainedErrorLog
+        }
+        $Private:Entry = @(ConvertTo-QueryHistoryEntry -Row @($Private:History.Result.d.Rows))
+    }
     $Private:Name = Get-SavedQueryDisplayName -Result $Private:Object.Result -FallbackName $Private:Query.DisplayName
     $Private:Query.DisplayName = $Private:Name
     # Handed to the history window, whose Details tab shows it (Invoke-QueryDetailHistory).
@@ -146,9 +153,14 @@ function Get-QueryDetailObject {
 function Update-QueryDetailCommandState {
     <#
     .SYNOPSIS
-        Greys out the query details' buttons that need the live query object while it is deleted: it
-        cannot be opened, renamed, or found in Omada or through OData until it is restored (in the
-        query manager). Its properties, SQL and history - and the history window - stay available.
+        Enables the query details' buttons that fit the query's state, and greys out the rest.
+
+    .DESCRIPTION
+          not deleted   everything but Restore
+          deleted       Restore only. A deleted query cannot be opened, renamed or deleted again, its
+                        page and OData record cannot be found, and the tenant has no history for it
+                        (the history window would have nothing to show). Its properties and SQL stay
+                        on screen.
 
     .PARAMETER Deleted
         The query is deleted.
@@ -161,10 +173,11 @@ function Update-QueryDetailCommandState {
         [bool]$Deleted
     )
 
-    foreach ($Private:Name in @("ButtonOpenQueryDetail", "ButtonOpenQueryDetailInTab", "ButtonRenameQueryDetail", "ButtonOpenQueryDetailInOmada", "ButtonOpenQueryDetailOData")) {
+    $Private:WhenLive = @("ButtonOpenQueryDetail", "ButtonOpenQueryDetailInTab", "ButtonRenameQueryDetail", "ButtonDeleteQueryDetail", "ButtonShowQueryDetailHistory", "ButtonOpenQueryDetailInOmada", "ButtonOpenQueryDetailOData")
+    foreach ($Private:Name in @($Private:WhenLive + "ButtonRestoreQueryDetail")) {
         $Private:Button = $Script:QueryDetailForm.Elements.$Private:Name
         if ($null -ne $Private:Button) {
-            $Private:Button.IsEnabled = -not $Deleted
+            $Private:Button.IsEnabled = ($Private:Name -in $Private:WhenLive) -ne $Deleted
         }
     }
 }
@@ -186,4 +199,51 @@ function Get-QueryDetailOwnership {
         return $Script:QueryManagerForm.Ownership
     }
     return @{}
+}
+
+function Invoke-QueryDetailStateChange {
+    <#
+    .SYNOPSIS
+        The query details' Delete and Restore: deletes or restores the query, then shows it as it is
+        now - its buttons following its new state.
+
+    .DESCRIPTION
+        Remove-SavedSqlQuery (which asks first, and turns the tabs holding the query into ad-hoc
+        queries) or Restore-SqlQueryObject (which asks first when another query has taken its name).
+
+        When it happened, the query manager behind the details reads its list again before the details
+        are read: the details take a deleted query from that list (Get-QueryDetailObject), so a list
+        that still says "not deleted" would send them to OData for a query it no longer returns, and
+        one that still says "deleted" would show a restored query as deleted.
+
+    .PARAMETER Action
+        Delete or Restore.
+
+    .OUTPUTS
+        None.
+    #>
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory = $true)]
+        [ValidateSet("Delete", "Restore")]
+        [string]$Action
+    )
+
+    $Private:Query = $Script:QueryDetailForm.Query
+    $Private:Done = if ($Action -eq "Delete") {
+        Remove-SavedSqlQuery -DoId $Private:Query.DoId -DisplayName $Private:Query.DisplayName
+    }
+    else {
+        Restore-SqlQueryObject -DoId $Private:Query.DoId -DisplayName $Private:Query.DisplayName
+    }
+    # The last thing each gives back is its answer; compared on its own, so anything written before it
+    # cannot turn the comparison into a filter.
+    if ((@($Private:Done) | Select-Object -Last 1) -ne $true) {
+        return
+    }
+
+    if ($null -ne $Script:QueryManagerForm -and $null -ne $Script:QueryManagerForm.Elements) {
+        Update-QueryManagerList -Refresh
+    }
+    Update-QueryDetailForm
 }

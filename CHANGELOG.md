@@ -93,7 +93,10 @@ semantic version.
   (`DeletedStatus=Both`) and restored through the same undelete web service the application already
   uses for its temporary query object; the application's own temporary objects are never listed. The
   details of a deleted query are shown from the list (OData does not return a deleted object by id),
-  and Open, Rename, Delete, Open in Omada and View OData record are greyed out for it.
+  and Open, Rename, Delete, Open in Omada and View OData record are greyed out for it. Its history is
+  not asked for (the tenant's history service answers 500 for a deleted object), and Compare / restore
+  is greyed out. The query details have **Delete** and **Restore** too; after either they show the
+  query as it is now.
 
 - **Only my queries** filters (Created / Last updated) in the query manager.
 - **View OData record** in the query manager and the query details: the query object's OData record
