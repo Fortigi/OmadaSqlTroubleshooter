@@ -8,6 +8,14 @@ BeforeAll {
     # 7 px a character, so the widths are easy to reason about.
     $Script:Measure = { param($MeasureGrid, $Text) 7 * ([string]$Text).Length }
 
+    # Where WPF is loaded (the Windows runner) a column's width is a DataGridLength of so many pixels;
+    # without it (the headless lane) New-DataGridPixelLength gives the plain number. The pixels either way.
+    function script:Get-WidthValue {
+        param($Width)
+        if ($null -ne $Width.PSObject.Properties["Value"]) { return [double]$Width.Value }
+        return [double]$Width
+    }
+
     function script:New-TestColumn {
         param([string]$Header, [string]$Path, [string]$SortMemberPath = "")
         [PSCustomObject]@{ Header = $Header; SortMemberPath = $SortMemberPath; Binding = [PSCustomObject]@{ Path = [PSCustomObject]@{ Path = $Path } }; Width = "Auto" }
@@ -26,8 +34,8 @@ Describe 'Set-DataGridColumnWidth' -Tag 'Unit' {
         # Name: the value "abcdefghij" (70 + 14) beats the header "Name" (28 + 26).
         # Short: the header (13 x 7 + 26 = 117) beats the values.
         $Widths | Should -Be @(84, 117)
-        $Grid.Columns[0].Width | Should -Be 84
-        $Grid.Columns[1].Width | Should -Be 117
+        Get-WidthValue $Grid.Columns[0].Width | Should -Be 84
+        Get-WidthValue $Grid.Columns[1].Width | Should -Be 117
     }
 
     It 'Should measure every row, not only the first ones on screen' {
@@ -73,6 +81,16 @@ Describe 'Set-DataGridColumnWidth' -Tag 'Unit' {
         $Grid = [PSCustomObject]@{ Columns = @([PSCustomObject]@{ Header = "Template"; SortMemberPath = ""; Binding = $null; Width = "Auto" }); ItemsSource = @([PSCustomObject]@{ V = "x" * 50 }) }
 
         @(Set-DataGridColumnWidth -Grid $Grid -Measure $Script:Measure) | Should -Be @(82)
+    }
+}
+
+Describe 'New-DataGridPixelLength' -Tag 'Unit' {
+    It 'Should give a length of the width in pixels, as a DataGridLength where WPF is loaded' {
+        $Length = New-DataGridPixelLength -Width 120
+        Get-WidthValue $Length | Should -Be 120
+        if ($null -ne ("System.Windows.Controls.DataGridLength" -as [type])) {
+            $Length.IsAbsolute | Should -BeTrue
+        }
     }
 }
 
