@@ -107,7 +107,7 @@ function Open-SqlHistoryForm {
         # while blocked, which could let the WebView2 completion poll timer fire reentrantly.
         Suspend-WebViewCompletionPolling
         try {
-            $Script:SqlHistoryForm.Definition.ShowDialog()
+            [void]$Script:SqlHistoryForm.Definition.ShowDialog()
         }
         finally {
             Resume-WebViewCompletionPolling

@@ -23,7 +23,10 @@ $Script:QueryManagerForm.Elements.ButtonRefreshQueryList.Add_Click({
 $Script:QueryManagerForm.Elements.DataGridQueries.Add_MouseDoubleClick({
         try {
             $_ | Show-EventInfo
-            Invoke-QueryManagerAction -Action "Details"
+            # Only on a query: a double-click on a column header has none, and is no reason to warn.
+            if ($null -ne (Get-QueryManagerSelectedQuery -Quiet)) {
+                Invoke-QueryManagerAction -Action "Details"
+            }
         }
         catch {
             $_.Exception.Message | Write-ContainedErrorLog -ErrorObject $_

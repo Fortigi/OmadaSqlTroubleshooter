@@ -11,9 +11,10 @@ BeforeAll {
     function Rename-SqlQuery { param($DoId, $DisplayName) }
     function Remove-SavedSqlQuery { param($DoId, $DisplayName) }
     function New-SqlQueryObject { param($ExistingNames) }
-    function Open-ChoiceForm { param($Title, $Message, $LeftButtonText, $RightButtonText) }
+    function Open-ChoiceForm { param($Title, $Message, $LeftButtonText, $RightButtonText, $ExtraButtonText, $LeftButtonReturnValue, $RightButtonReturnValue, $ExtraButtonReturnValue) }
     function Open-OmadaQueryObject { param($DoId, $Kind) }
     function Open-SqlQueryInActiveTab { param($DoId, $DisplayName) }
+    function Restore-SqlQueryObject { param($DoId, $DisplayName) }
 }
 
 Describe 'Invoke-QueryManagerAction' -Tag 'Unit' {
@@ -30,10 +31,11 @@ Describe 'Invoke-QueryManagerAction' -Tag 'Unit' {
         Mock Rename-SqlQuery { "Renamed" }
         Mock Remove-SavedSqlQuery { $true }
         Mock New-SqlQueryObject { [PSCustomObject]@{ DoId = "200"; DisplayName = "Fresh" } }
-        Mock Open-ChoiceForm { $false }
+        Mock Open-ChoiceForm { "None" }
+        Mock Restore-SqlQueryObject { $true }
     }
 
-    It 'Should do nothing without a selection (<Action>)' -ForEach @(@{ Action = "Open" }, @{ Action = "OpenInTab" }, @{ Action = "Details" }, @{ Action = "Rename" }, @{ Action = "Delete" }, @{ Action = "Omada" }) {
+    It 'Should do nothing without a selection (<Action>)' -ForEach @(@{ Action = "Open" }, @{ Action = "OpenInTab" }, @{ Action = "Details" }, @{ Action = "Rename" }, @{ Action = "Delete" }, @{ Action = "Restore" }, @{ Action = "Omada" }, @{ Action = "OData" }) {
         Mock Get-QueryManagerSelectedQuery { }
 
         Invoke-QueryManagerAction -Action $Action
@@ -44,6 +46,7 @@ Describe 'Invoke-QueryManagerAction' -Tag 'Unit' {
         Should -Invoke Open-QueryDetailForm -Times 0 -Exactly
         Should -Invoke Open-OmadaQueryObject -Times 0 -Exactly
         Should -Invoke Open-SqlQueryInActiveTab -Times 0 -Exactly
+        Should -Invoke Restore-SqlQueryObject -Times 0 -Exactly
     }
 
     It 'Should open the selected query in the active tab and close the manager' {
@@ -131,17 +134,32 @@ Describe 'Invoke-QueryManagerAction' -Tag 'Unit' {
         $Script:QueryManagerForm.Definition.Closed | Should -Be 0
     }
 
-    It 'Should open the created query and close the manager when asked to' {
-        Mock Open-ChoiceForm { $true }
+    It 'Should open the created query where asked (<Choice>) and close the manager' -ForEach @(
+        @{ Choice = "Open"; Opener = "Open-SqlQueryInActiveTab"; Other = "Open-SqlQueryInTab" }
+        @{ Choice = "OpenInTab"; Opener = "Open-SqlQueryInTab"; Other = "Open-SqlQueryInActiveTab" }
+    ) {
+        Mock Open-ChoiceForm { $Choice }
 
         Invoke-QueryManagerAction -Action Create
 
-        Should -Invoke Open-SqlQueryInTab -Times 1 -Exactly -ParameterFilter { $DoId -eq "200" -and $DisplayName -eq "Fresh" }
+        Should -Invoke Open-ChoiceForm -Times 1 -Exactly -ParameterFilter { $LeftButtonReturnValue -eq "Open" -and $RightButtonReturnValue -eq "OpenInTab" -and $ExtraButtonReturnValue -eq "None" }
+        Should -Invoke $Opener -Times 1 -Exactly -ParameterFilter { $DoId -eq "200" -and $DisplayName -eq "Fresh" }
+        Should -Invoke $Other -Times 0 -Exactly
         $Script:QueryManagerForm.Definition.Closed | Should -Be 1
     }
 
+    It 'Should restore the selected query and read the list again, but only when it was restored' {
+        Invoke-QueryManagerAction -Action Restore
+        Should -Invoke Restore-SqlQueryObject -Times 1 -Exactly -ParameterFilter { $DoId -eq "42" -and $DisplayName -eq "Accounts" }
+        Should -Invoke Update-QueryManagerList -Times 1 -Exactly
+
+        Mock Restore-SqlQueryObject { $false }
+        Invoke-QueryManagerAction -Action Restore
+        Should -Invoke Update-QueryManagerList -Times 1 -Exactly
+    }
+
     It 'Should keep the manager open when the created query could not be opened in a tab' {
-        Mock Open-ChoiceForm { $true }
+        Mock Open-ChoiceForm { "OpenInTab" }
         Mock Open-SqlQueryInTab { }
 
         Invoke-QueryManagerAction -Action Create

@@ -4,8 +4,8 @@ function Invoke-QueryManagerAction {
         Carries out one of the query manager's buttons on its selected query.
 
     .DESCRIPTION
-          Create   New-SqlQueryObject; the list is read again and the new query selected, and the user
-                   is offered to open it in a tab.
+          Create   New-SqlQueryObject; the list is read again, and the user is asked where to open
+                   it: in this tab, in a new tab, or not.
           Open       Open-SqlQueryInActiveTab: in place of the active tab's query, after offering to
                      save its unsaved changes. The manager then closes so the tab can be seen - but
                      only when the query was opened; cancelled, or with the tab not connected, it
@@ -19,6 +19,7 @@ function Invoke-QueryManagerAction {
                    unless something there asked the manager to close.
           Rename   Rename-SqlQuery for that query; the list is read again.
           Delete   Remove-SavedSqlQuery for that query; the list is read again.
+          Restore  Restore-SqlQueryObject for a deleted query; the list is read again.
 
     .PARAMETER Action
         Which button.
@@ -29,7 +30,7 @@ function Invoke-QueryManagerAction {
     [CmdletBinding()]
     param(
         [Parameter(Mandatory = $true)]
-        [ValidateSet("Create", "Open", "OpenInTab", "Details", "Rename", "Delete", "Omada", "OData")]
+        [ValidateSet("Create", "Open", "OpenInTab", "Details", "Rename", "Delete", "Restore", "Omada", "OData")]
         [string]$Action
     )
 
@@ -43,39 +44,60 @@ function Invoke-QueryManagerAction {
         return
     }
 
-    switch ($Action) {
-        "Open" {
-            if ($null -ne (Open-SqlQueryInActiveTab -DoId $Private:Query.DoId -DisplayName $Private:Query.DisplayName)) {
-                $Script:QueryManagerForm.Definition.Close()
-            }
-        }
-        "OpenInTab" {
-            if ($null -ne (Open-SqlQueryInTab -DoId $Private:Query.DoId -DisplayName $Private:Query.DisplayName)) {
-                $Script:QueryManagerForm.Definition.Close()
-            }
-        }
-        "Omada" {
-            Open-OmadaQueryObject -DoId $Private:Query.DoId
-        }
-        "OData" {
-            Open-OmadaQueryObject -DoId $Private:Query.DoId -Kind OData
-        }
+    if ($Action -in @("Open", "OpenInTab", "Omada", "OData")) {
+        Invoke-QueryManagerOpenAction -Action $Action -Query $Private:Query
+        return
+    }
+
+    # Details, rename, delete and restore can change the list; it is read again after any of them
+    # that happened.
+    $Private:Changed = switch ($Action) {
         "Details" {
-            Open-QueryDetailForm -DoId $Private:Query.DoId -DisplayName $Private:Query.DisplayName -Owner $Script:QueryManagerForm.Definition
-            if (-not (Complete-QueryManagerChildWindow -Window $Script:QueryManagerForm.Definition)) {
-                Update-QueryManagerList -Refresh
-            }
+            $null = Open-QueryDetailForm -DoId $Private:Query.DoId -DisplayName $Private:Query.DisplayName -Owner $Script:QueryManagerForm.Definition
+            -not (Complete-QueryManagerChildWindow -Window $Script:QueryManagerForm.Definition)
         }
-        "Rename" {
-            if ($null -ne (Rename-SqlQuery -DoId $Private:Query.DoId -DisplayName $Private:Query.DisplayName)) {
-                Update-QueryManagerList -Refresh
-            }
-        }
-        "Delete" {
-            if (Remove-SavedSqlQuery -DoId $Private:Query.DoId -DisplayName $Private:Query.DisplayName) {
-                Update-QueryManagerList -Refresh
-            }
-        }
+        "Rename" { $null -ne (Rename-SqlQuery -DoId $Private:Query.DoId -DisplayName $Private:Query.DisplayName) }
+        "Delete" { [bool](Remove-SavedSqlQuery -DoId $Private:Query.DoId -DisplayName $Private:Query.DisplayName) }
+        "Restore" { [bool](Restore-SqlQueryObject -DoId $Private:Query.DoId -DisplayName $Private:Query.DisplayName) }
+    }
+    if ($Private:Changed -eq $true) {
+        Update-QueryManagerList -Refresh
+    }
+}
+
+function Invoke-QueryManagerOpenAction {
+    <#
+    .SYNOPSIS
+        The query manager's opening actions for one query: in the active tab, in a new tab, its page
+        in Omada, its OData record. Opening it in a tab closes the manager - but only when the query
+        was opened (see Invoke-QueryManagerAction).
+
+    .OUTPUTS
+        None.
+    #>
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory = $true)]
+        [ValidateSet("Open", "OpenInTab", "Omada", "OData")]
+        [string]$Action,
+
+        [Parameter(Mandatory = $true)]
+        $Query
+    )
+
+    switch ($Action) {
+        "Omada" { Open-OmadaQueryObject -DoId $Query.DoId; return }
+        "OData" { Open-OmadaQueryObject -DoId $Query.DoId -Kind OData; return }
+    }
+
+    $Private:Tab = if ($Action -eq "Open") {
+        Open-SqlQueryInActiveTab -DoId $Query.DoId -DisplayName $Query.DisplayName
+    }
+    else {
+        Open-SqlQueryInTab -DoId $Query.DoId -DisplayName $Query.DisplayName
+    }
+    if ($null -ne $Private:Tab) {
+        $Script:QueryManagerForm.Definition.Close()
     }
 }
 
@@ -98,8 +120,12 @@ function Invoke-QueryManagerCreate {
 
     Update-QueryManagerList -Refresh
 
-    $Private:Open = Open-ChoiceForm -Title "Query created" -Message ("Query '{0}' was created. Open it in a tab?" -f $Private:Created.DisplayName) -LeftButtonText "Open" -RightButtonText "Not now"
-    if ($Private:Open -eq $true -and $null -ne (Open-SqlQueryInTab -DoId $Private:Created.DoId -DisplayName $Private:Created.DisplayName)) {
-        $Script:QueryManagerForm.Definition.Close()
+    # Where to open it: in place of the active tab's query (with that tab's usual save prompt), in a
+    # new tab, or not at all. The manager closes once it is open, and stays when it is not.
+    $Private:Choice = Open-ChoiceForm -Title "Query created" -Message ("Query '{0}' was created. Open it?" -f $Private:Created.DisplayName) `
+        -LeftButtonText "In this tab" -RightButtonText "In a new tab" -ExtraButtonText "Not now" `
+        -LeftButtonReturnValue "Open" -RightButtonReturnValue "OpenInTab" -ExtraButtonReturnValue "None"
+    if ($Private:Choice -in @("Open", "OpenInTab")) {
+        Invoke-QueryManagerOpenAction -Action $Private:Choice -Query $Private:Created
     }
 }

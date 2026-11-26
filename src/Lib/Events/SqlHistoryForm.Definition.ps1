@@ -42,7 +42,10 @@ $Script:SqlHistoryForm.Definition.Add_Loaded({
 
         # "SqlHistoryForm Position: {0}x{1}, Dimensions: {2}x{3}" -f $Script:SqlHistoryForm.Definition.Left, $Script:SqlHistoryForm.Definition.Top, $Script:SqlHistoryForm.Definition.Width , $Script:SqlHistoryForm.Definition.Height | Write-LogOutput -LogType DEBUG
         $Script:SqlHistoryForm.State = "Open"
-        Restore-MainFormFocus
+        # This window, not the main one: it is modal, and opened from the query details it sits on top
+        # of another modal window. Handing the focus to the main window (as this did) left it behind.
+        $Script:SqlHistoryForm.Definition.Activate() | Out-Null
+        $Script:SqlHistoryForm.Elements.DataGridHistory.Focus() | Out-Null
     })
 
 $Script:SqlHistoryForm.Definition.Add_Closing({

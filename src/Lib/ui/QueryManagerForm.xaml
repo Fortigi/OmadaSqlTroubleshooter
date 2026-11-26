@@ -1,9 +1,9 @@
 <Window xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         Title="Queries"
-        Width="1200"
+        Width="1320"
         Height="600"
-        MinWidth="1080"
+        MinWidth="1200"
         MinHeight="350"
         WindowStartupLocation="CenterOwner"
         ShowInTaskbar="False"
@@ -42,6 +42,16 @@
                 <CheckBox x:Name="CheckBoxQueryManagerMyCreated" Content="Created" VerticalAlignment="Center" Margin="0,0,10,0" ToolTip="List only the queries I created"/>
                 <CheckBox x:Name="CheckBoxQueryManagerMyUpdated" Content="Last updated" VerticalAlignment="Center" ToolTip="List only the queries I changed last"/>
             </StackPanel>
+            <!-- Which queries: not deleted (the default), deleted only, or all. One read gets them all
+                 (DeletedStatus=Both); switching only filters (Test-QueryManagerView). -->
+            <StackPanel Orientation="Horizontal" DockPanel.Dock="Left" Margin="0,0,12,0" VerticalAlignment="Center">
+                <TextBlock Text="Show:" VerticalAlignment="Center" Margin="0,0,6,0" FontFamily="{StaticResource Theme.UiFont}" Foreground="{StaticResource Theme.MutedTextBrush}"/>
+                <ComboBox x:Name="ComboBoxQueryManagerView" Width="230" Height="25" VerticalContentAlignment="Center" SelectedIndex="0" ToolTip="Which queries the list shows">
+                    <ComboBoxItem Content="All queries (excluding deleted)" Tag="Active"/>
+                    <ComboBoxItem Content="Deleted queries only" Tag="Deleted"/>
+                    <ComboBoxItem Content="All queries (including deleted)" Tag="All"/>
+                </ComboBox>
+            </StackPanel>
             <TextBlock Text="&#xE71C;" Style="{StaticResource Theme.GlyphStyle}" Margin="0,0,6,0" ToolTip="Filter"/>
             <TextBox x:Name="TextBoxQueryFilter" Height="25" VerticalContentAlignment="Center" FontFamily="Segoe UI"
                      Background="{DynamicResource {x:Static SystemColors.WindowBrushKey}}"
@@ -49,7 +59,8 @@
         </DockPanel>
 
         <!-- Selects as the result grid does (Theme.DataGridStyle). The buttons act on the one query
-             the selection is in (Get-QueryManagerSelectedQuery). -->
+             the selection is in (Get-QueryManagerSelectedQuery), and are greyed out while there is none
+             (Update-QueryManagerCommandState). -->
         <Border Grid.Row="1" BorderBrush="Gray" BorderThickness="1">
             <!-- Columns as Get-QueryManagerColumnDefinition (tests/QueryManagerColumns.Tests.ps1 holds the
                  two together); their widths are set from the content (Set-DataGridColumnWidth). -->
@@ -76,43 +87,50 @@
                     <AccessText Style="{StaticResource Theme.ButtonTextStyle}" Text="_New..."/>
                 </StackPanel>
             </Button>
-            <Button x:Name="ButtonOpenQueryObject" ToolTip="Open the selected query in the active tab, in place of its query (offers to save unsaved changes first)">
+            <Button x:Name="ButtonOpenQueryObject" IsEnabled="False" ToolTip="Open the selected query in the active tab, in place of its query (offers to save unsaved changes first)">
                 <StackPanel Orientation="Horizontal" IsHitTestVisible="False">
                     <TextBlock Style="{StaticResource Theme.GlyphStyle}" Text="&#xE8E5;"/>
                     <AccessText Style="{StaticResource Theme.ButtonTextStyle}" Text="_Open"/>
                 </StackPanel>
             </Button>
-            <Button x:Name="ButtonOpenQueryObjectInTab" ToolTip="Open the selected query in a new tab">
+            <Button x:Name="ButtonOpenQueryObjectInTab" IsEnabled="False" ToolTip="Open the selected query in a new tab">
                 <StackPanel Orientation="Horizontal" IsHitTestVisible="False">
                     <TextBlock Style="{StaticResource Theme.GlyphStyle}" Text="&#xE8A7;"/>
                     <AccessText Style="{StaticResource Theme.ButtonTextStyle}" Text="Open in new _tab"/>
                 </StackPanel>
             </Button>
-            <Button x:Name="ButtonShowQueryObjectDetails" ToolTip="All fields, the SQL and the history of the selected query (or double-click it)">
+            <Button x:Name="ButtonShowQueryObjectDetails" IsEnabled="False" ToolTip="All fields, the SQL and the history of the selected query (or double-click it)">
                 <StackPanel Orientation="Horizontal" IsHitTestVisible="False">
                     <TextBlock Style="{StaticResource Theme.GlyphStyle}" Text="&#xE946;"/>
                     <AccessText Style="{StaticResource Theme.ButtonTextStyle}" Text="_Details..."/>
                 </StackPanel>
             </Button>
-            <Button x:Name="ButtonRenameQueryObject" ToolTip="Rename the selected query">
+            <Button x:Name="ButtonRenameQueryObject" IsEnabled="False" ToolTip="Rename the selected query">
                 <StackPanel Orientation="Horizontal" IsHitTestVisible="False">
                     <TextBlock Style="{StaticResource Theme.GlyphStyle}" Text="&#xE8AC;"/>
                     <AccessText Style="{StaticResource Theme.ButtonTextStyle}" Text="Ren_ame..."/>
                 </StackPanel>
             </Button>
-            <Button x:Name="ButtonDeleteQueryObject" ToolTip="Delete the selected query from the tenant">
+            <Button x:Name="ButtonDeleteQueryObject" IsEnabled="False" ToolTip="Delete the selected query from the tenant">
                 <StackPanel Orientation="Horizontal" IsHitTestVisible="False">
                     <TextBlock Style="{StaticResource Theme.GlyphStyle}" Text="&#xE74D;"/>
                     <AccessText Style="{StaticResource Theme.ButtonTextStyle}" Text="De_lete..."/>
                 </StackPanel>
             </Button>
-            <Button x:Name="ButtonOpenQueryObjectInOmada" ToolTip="Open the selected query's page in Omada, in your browser">
+            <!-- Only for a deleted query (Get-QueryManagerCommandState). -->
+            <Button x:Name="ButtonRestoreQueryObject" IsEnabled="False" ToolTip="Restore the selected deleted query">
+                <StackPanel Orientation="Horizontal" IsHitTestVisible="False">
+                    <TextBlock Style="{StaticResource Theme.GlyphStyle}" Text="&#xE7A7;"/>
+                    <AccessText Style="{StaticResource Theme.ButtonTextStyle}" Text="Re_store"/>
+                </StackPanel>
+            </Button>
+            <Button x:Name="ButtonOpenQueryObjectInOmada" IsEnabled="False" ToolTip="Open the selected query's page in Omada, in your browser">
                 <StackPanel Orientation="Horizontal" IsHitTestVisible="False">
                     <TextBlock Style="{StaticResource Theme.GlyphStyle}" Text="&#xE774;"/>
                     <AccessText Style="{StaticResource Theme.ButtonTextStyle}" Text="Open in O_mada"/>
                 </StackPanel>
             </Button>
-            <Button x:Name="ButtonOpenQueryObjectOData" ToolTip="Open the selected query's OData record (JSON) in your browser">
+            <Button x:Name="ButtonOpenQueryObjectOData" IsEnabled="False" ToolTip="Open the selected query's OData record (JSON) in your browser">
                 <StackPanel Orientation="Horizontal" IsHitTestVisible="False">
                     <TextBlock Style="{StaticResource Theme.GlyphStyle}" Text="&#xE943;"/>
                     <AccessText Style="{StaticResource Theme.ButtonTextStyle}" Text="View OData _record"/>

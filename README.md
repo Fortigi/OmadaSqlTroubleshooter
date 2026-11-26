@@ -80,15 +80,20 @@ the editor, the results and the status bar.
     may only read queries can still execute saved queries, but not ad-hoc ones; the error then names
     the missing permission
 - **Query manager** (**Queries**) — every query object (`C_P_SQLTROUBLESHOOTING`) on the tenant in one
-  list, with a filter over every column (`*` and `?` are wildcards) and the same **Only my queries:
-  Created / Last updated** filters as the toolbar (they start as the active tab has them):
+  list, with a filter over every column (`*` and `?` are wildcards), the same **Only my queries:
+  Created / Last updated** filters as the toolbar (they start as the active tab has them, and work
+  whatever the main window's filters are set to), and a **Show** selector: all queries excluding
+  deleted (the default), deleted queries only, or all queries including deleted:
   - Columns: **Id**, **Display name**, **Connection**, **Created**, **Created by**, **Changed**,
     **Changed by**, **Is Deleted**, **Deleted** and **UId**. *Created by* and *Changed by* — which
     OData does not return — come from the tenant's *SQL Troubleshooting* view, the same request the
     "Only my queries" filters need; on a tenant without that view they stay empty and the filters have
     no effect
+  - The buttons that act on a query are greyed out until one query is selected. A deleted query can
+    be looked at (Details, Open in Omada, View OData record) and **Restore**d - Restore is only
+    available for a deleted query, and asks first when another query has meanwhile taken its name
   - **New…** creates an empty query (a name is asked for; its text is a one-line SQL comment naming it)
-    and offers to open it. **Open** shows a query in the active tab in place of its query; unsaved
+    and asks where to open it: in this tab (with the tab's usual save prompt), in a new tab, or not. **Open** shows a query in the active tab in place of its query; unsaved
     changes there (a saved or an ad-hoc query, never an empty editor) are offered to be saved first
     (Save / Don't save / Cancel), and the tab must be connected. **Open in new tab** opens a new tab
     with the active tab's connection. Both select the tab that already holds the query instead of
@@ -105,8 +110,9 @@ the editor, the results and the status bar.
     (`dataobjdlg.aspx?DOID=<id>`) in your default browser, which has its own sign-in to Omada.
     **View OData record** opens the object as the OData endpoint returns it
     (`odata/dataobjects/C_P_SQLTROUBLESHOOTING(<id>)`, JSON)
-- **History window** — the SQL versions of a query, with old value, new value (both highlighted as in
-  the editor), a line-by-line diff and the version's details (DoId, UId, name, who and when). The list
+- **History window** — the SQL versions of a query, with a line-by-line diff (the tab it opens on),
+  new value, old value (both highlighted as in the editor) and the version's details (DoId, UId, name,
+  who and when). The list
   selects as the result grid does; the panes show the version the selection is in. **Restore**,
   **Export selected query** (the version's new SQL, default name
   `SQL_History_<query name>_<change date>_query.sql`), **Export selected diff** (the diff as text,

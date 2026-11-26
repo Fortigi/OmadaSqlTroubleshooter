@@ -12,6 +12,12 @@ semantic version.
 
 ### Changed
 
+- The query manager's buttons that act on a query are greyed out until one query is selected.
+- Creating a query in the query manager asks where to open it: in this tab, in a new tab, or not.
+- The history window opens on the Diff View; its tabs are Diff View, New Value, Old Value, Details.
+- A selected row in a grid that does not have the focus stays clearly highlighted (it was a light
+  grey that was hard to see), in every grid built on the theme.
+
 - **Query manager columns** are now a fixed set, the same as the query details' Properties tab: Id,
   Display name, Connection, Created, Created by, Changed, Changed by, Is Deleted, Deleted, UId. Created
   by and Changed by come from the tenant's SQL Troubleshooting view; Created and Changed from OData
@@ -81,6 +87,11 @@ semantic version.
   ignored. Redaction is unchanged: the file stays behind the same single gate as the window.
 
 ### Added
+
+- **Restore** a deleted query from the query manager, and a **Show** selector there: queries excluding
+  deleted (the default), deleted only, or all. The list is read with deleted queries included
+  (`DeletedStatus=Both`) and restored through the same undelete web service the application already
+  uses for its temporary query object; the application's own temporary objects are never listed.
 
 - **Only my queries** filters (Created / Last updated) in the query manager.
 - **View OData record** in the query manager and the query details: the query object's OData record
@@ -223,6 +234,17 @@ semantic version.
   for selection execution, and costs a query with no prefix nothing.
 
 ### Fixed
+
+- A warning or error dialog no longer adds "OK" to the output of the function that logged it. Every
+  function that logged a warning and then returned nothing returned "OK" instead - the query manager's
+  "Select a query first" was followed by its action running without a query ("Cannot bind argument to
+  parameter 'DoId' because it is an empty string", and a delete of query '').
+- The query manager's "Only my queries" filters did nothing unless one of the main window's filters was
+  on: the user name they compare with was only read for those. The query manager now reads it itself
+  (`Get-OmadaIdentityUserName`).
+- The history window, opened from the query details, got the focus taken away from it by the main
+  window.
+- The history window's Export all and Restore buttons were cut off.
 
 - The query details showed no Created / Created by: they were taken from a history entry named exactly
   "Create", which a tenant need not have. They now come from OData and the SQL Troubleshooting view,

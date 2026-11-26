@@ -158,39 +158,8 @@
                     BorderBrush="Gray"
                     BorderThickness="1"
                     Background="{DynamicResource {x:Static SystemColors.ControlBrushKey}}">
-                <TabControl x:Name="TabControlContent">
-                    <TabItem Header="Old Value"
-                             x:Name="TabOldValue">
-                        <Border BorderBrush="Gray"
-                                BorderThickness="1"
-                                Background="{DynamicResource {x:Static SystemColors.WindowBrushKey}}">
-                            <!-- Highlighted as the editor highlights SQL (Set-SqlRichText). -->
-                            <RichTextBox x:Name="RichTextBoxOldValue"
-                                         IsReadOnly="True"
-                                         IsReadOnlyCaretVisible="True"
-                                         IsDocumentEnabled="False"
-                                         BorderThickness="0"
-                                         VerticalScrollBarVisibility="Auto"
-                                         HorizontalScrollBarVisibility="Auto"
-                                         Background="{DynamicResource {x:Static SystemColors.WindowBrushKey}}"/>
-                        </Border>
-                    </TabItem>
-                    <TabItem Header="New Value"
-                             x:Name="TabNewValue">
-                        <Border BorderBrush="Gray"
-                                BorderThickness="1"
-                                Background="{DynamicResource {x:Static SystemColors.WindowBrushKey}}">
-                            <!-- Highlighted as the editor highlights SQL (Set-SqlRichText). -->
-                            <RichTextBox x:Name="RichTextBoxNewValue"
-                                         IsReadOnly="True"
-                                         IsReadOnlyCaretVisible="True"
-                                         IsDocumentEnabled="False"
-                                         BorderThickness="0"
-                                         VerticalScrollBarVisibility="Auto"
-                                         HorizontalScrollBarVisibility="Auto"
-                                         Background="{DynamicResource {x:Static SystemColors.WindowBrushKey}}"/>
-                        </Border>
-                    </TabItem>
+                <TabControl x:Name="TabControlContent" SelectedIndex="0">
+                    <!-- Diff View first, and so the tab shown when the window opens. -->
                     <TabItem Header="Diff View"
                              x:Name="TabDiffView">
                         <Grid>
@@ -291,6 +260,38 @@
                             </Grid>
                         </Grid>
                     </TabItem>
+                    <TabItem Header="New Value"
+                             x:Name="TabNewValue">
+                        <Border BorderBrush="Gray"
+                                BorderThickness="1"
+                                Background="{DynamicResource {x:Static SystemColors.WindowBrushKey}}">
+                            <!-- Highlighted as the editor highlights SQL (Set-SqlRichText). -->
+                            <RichTextBox x:Name="RichTextBoxNewValue"
+                                         IsReadOnly="True"
+                                         IsReadOnlyCaretVisible="True"
+                                         IsDocumentEnabled="False"
+                                         BorderThickness="0"
+                                         VerticalScrollBarVisibility="Auto"
+                                         HorizontalScrollBarVisibility="Auto"
+                                         Background="{DynamicResource {x:Static SystemColors.WindowBrushKey}}"/>
+                        </Border>
+                    </TabItem>
+                    <TabItem Header="Old Value"
+                             x:Name="TabOldValue">
+                        <Border BorderBrush="Gray"
+                                BorderThickness="1"
+                                Background="{DynamicResource {x:Static SystemColors.WindowBrushKey}}">
+                            <!-- Highlighted as the editor highlights SQL (Set-SqlRichText). -->
+                            <RichTextBox x:Name="RichTextBoxOldValue"
+                                         IsReadOnly="True"
+                                         IsReadOnlyCaretVisible="True"
+                                         IsDocumentEnabled="False"
+                                         BorderThickness="0"
+                                         VerticalScrollBarVisibility="Auto"
+                                         HorizontalScrollBarVisibility="Auto"
+                                         Background="{DynamicResource {x:Static SystemColors.WindowBrushKey}}"/>
+                        </Border>
+                    </TabItem>
                     <TabItem Header="Details"
                              x:Name="TabDetails">
                         <!-- The selected version's fields, as the query details' Properties tab shows a
@@ -325,59 +326,24 @@
                     x:Name="ButtonRestoreQuery"
                     TabIndex="15"
                     ToolTip="Restore selected query version"
-                    IsEnabled="False">
-                <Border Background="Transparent"
-                        IsHitTestVisible="False">
-                    <Grid HorizontalAlignment="Center"
-                          VerticalAlignment="Center">
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="6"/>
-                            <ColumnDefinition Width="Auto"/>
-                            <ColumnDefinition Width="4"/>
-                            <ColumnDefinition Width="40"/>
-                        </Grid.ColumnDefinitions>
-                        <TextBlock Grid.Column="1"
-                                   x:Name="ButtonRestoreQueryImage"
-                                   Style="{StaticResource ToolbarGlyphStyle}"
-                                   Text="&#xE81C;"/>
-                        <AccessText Grid.Column="3"
-                                    x:Name="ButtonRestoreQueryText"
-                                    Text="_Restore"
-                                    Style="{StaticResource ButtonAccessTextStyle}"
-                                    IsHitTestVisible="False"/>
-                    </Grid>
-                </Border>
+                    IsEnabled="False" Width="Auto">
+                <StackPanel Orientation="Horizontal" Margin="6,0" IsHitTestVisible="False">
+                    <TextBlock x:Name="ButtonRestoreQueryImage" Style="{StaticResource Theme.GlyphStyle}" Text="&#xE81C;"/>
+                    <AccessText x:Name="ButtonRestoreQueryText" Style="{StaticResource Theme.ButtonTextStyle}" Text="_Restore"/>
+                </StackPanel>
             </Button>
-            <Button Grid.Column="4"
+            <Button Grid.Column="2"
                     x:Name="ButtonExportHistory"
                     TabIndex="17"
                     ToolTip="Export every version of the query to a file (JSON, CSV or text)"
-                    IsEnabled="True">
-                <Border Background="Transparent"
-                        IsHitTestVisible="False">
-                    <Grid HorizontalAlignment="Center"
-                          VerticalAlignment="Center">
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="6"/>
-                            <ColumnDefinition Width="Auto"/>
-                            <ColumnDefinition Width="4"/>
-                            <ColumnDefinition Width="Auto"/>
-                        </Grid.ColumnDefinitions>
-                        <TextBlock Grid.Column="1"
-                                   x:Name="ButtonExportHistoryImage"
-                                   Style="{StaticResource ToolbarGlyphStyle}"
-                                   Text="&#xE74E;"/>
-                        <AccessText Grid.Column="3"
-                                    x:Name="ButtonExportHistoryText"
-                                    Text="Export _all"
-                                    Style="{StaticResource ButtonAccessTextStyle}"
-                                    Width="Auto"
-                                    IsHitTestVisible="False"/>
-                    </Grid>
-                </Border>
+                    IsEnabled="True" Width="Auto">
+                <StackPanel Orientation="Horizontal" Margin="6,0" IsHitTestVisible="False">
+                    <TextBlock x:Name="ButtonExportHistoryImage" Style="{StaticResource Theme.GlyphStyle}" Text="&#xE74E;"/>
+                    <AccessText x:Name="ButtonExportHistoryText" Style="{StaticResource Theme.ButtonTextStyle}" Text="Export _all"/>
+                </StackPanel>
             </Button>
             <!-- One version: the one the selection is in (Export-SqlHistorySelection). -->
-            <Button Grid.Column="6"
+            <Button Grid.Column="4"
                     x:Name="ButtonExportSelectedQuery"
                     TabIndex="18"
                     Width="Auto"
@@ -389,7 +355,7 @@
                 </StackPanel>
             </Button>
             <!-- One version: the one the selection is in (Export-SqlHistorySelection). -->
-            <Button Grid.Column="8"
+            <Button Grid.Column="6"
                     x:Name="ButtonExportSelectedDiff"
                     TabIndex="19"
                     Width="Auto"

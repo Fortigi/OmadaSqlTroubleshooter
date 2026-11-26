@@ -14,6 +14,9 @@ function Select-QueryManagerQuery {
         Only my queries: Test-QueryOwnedBy, with who created and last changed each query from
         -Ownership.
 
+        View: Test-QueryManagerView - not deleted, deleted only, or all. The application's own
+        temporary query objects (TMP_<guid>, which it deletes after every run) are never listed.
+
     .PARAMETER Query
         The query objects.
 
@@ -31,6 +34,9 @@ function Select-QueryManagerQuery {
 
     .PARAMETER MyUpdated
         Only queries the user changed last.
+
+    .PARAMETER View
+        Active (not deleted, the default), Deleted or All.
 
     .OUTPUTS
         The matching query objects, in their original order.
@@ -57,7 +63,10 @@ function Select-QueryManagerQuery {
 
         [bool]$MyCreated,
 
-        [bool]$MyUpdated
+        [bool]$MyUpdated,
+
+        [ValidateSet("Active", "Deleted", "All")]
+        [string]$View = "Active"
     )
 
     if ($null -eq $Ownership) {
@@ -65,7 +74,7 @@ function Select-QueryManagerQuery {
     }
     $Private:Pattern = ConvertTo-WildcardFilterPattern -FilterValue $Filter
 
-    foreach ($Private:Item in @($Query | Where-Object { $null -ne $_ })) {
+    foreach ($Private:Item in @($Query | Where-Object { $null -ne $_ -and (Test-QueryManagerView -Query $_ -View $View) })) {
         if (-not (Test-QueryOwnedBy -Owner $Ownership[[string]$Private:Item.Id] -UserName $UserName -Created $MyCreated -Updated $MyUpdated)) {
             continue
         }
@@ -75,4 +84,35 @@ function Select-QueryManagerQuery {
             $Private:Item
         }
     }
+}
+
+function Test-QueryManagerView {
+    <#
+    .SYNOPSIS
+        Whether a query object belongs in the query manager's view: Active (not deleted), Deleted, or
+        All. Never the application's own temporary query objects (NAME TMP_<guid>).
+
+    .OUTPUTS
+        [bool]
+    #>
+    [CmdletBinding()]
+    [OutputType([bool])]
+    param(
+        [Parameter(Mandatory = $true)]
+        $Query,
+
+        [ValidateSet("Active", "Deleted", "All")]
+        [string]$View = "Active"
+    )
+
+    if ([string]$Query.Name -like "TMP_*") {
+        return $false
+    }
+
+    $Private:Deleted = [string]$Query.Deleted -eq "True"
+    switch ($View) {
+        "Deleted" { return $Private:Deleted }
+        "All" { return $true }
+    }
+    return -not $Private:Deleted
 }

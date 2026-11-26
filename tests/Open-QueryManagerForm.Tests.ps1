@@ -11,6 +11,8 @@ BeforeAll {
     function Invoke-SavedQueryRequest { param($Request) }
     function Get-SqlTroubleShooterView { }
     function Update-DataGridColumnWidth { param($Grid, $Item) }
+    function Get-OmadaIdentityUserName { }
+    . (Join-Path $Script:QmPrivatePath "Select-QueryManagerQuery.ps1")
 
     function script:New-ManagerState {
         $Script:AppConfig = [PSCustomObject]@{ BaseUrl = "https://t"; IdentityUserName = "CORP\ann" }
@@ -69,6 +71,16 @@ Describe 'Update-QueryManagerList' -Tag 'Unit' {
         $Script:QueryManagerForm.Elements.TextBlockQueryCount.Text | Should -Be ("{0} of 6 queries" -f $Expected.Count)
     }
 
+    It 'Should say once, in the log, that the view gave no rows, and not when it gave some' {
+        Mock Write-LogOutput { }
+        Update-QueryManagerList -Refresh
+        Should -Invoke Write-LogOutput -Times 0 -Exactly -ParameterFilter { $LogType -eq "INFO" }
+
+        Mock Get-SqlTroubleShooterView { }
+        Update-QueryManagerList -Refresh
+        Should -Invoke Write-LogOutput -Times 1 -Exactly -ParameterFilter { $LogType -eq "INFO" }
+    }
+
     It 'Should still list the queries when the view cannot be read' {
         Mock Get-SqlTroubleShooterView { throw "no view" }
 
@@ -81,7 +93,7 @@ Describe 'Update-QueryManagerList' -Tag 'Unit' {
     It 'Should read the list from the tenant and show it all' {
         Update-QueryManagerList -Refresh
 
-        Should -Invoke Invoke-SavedQueryRequest -Times 1 -Exactly -ParameterFilter { $Request.Uri -like "https://t/*Deleted ne true*" }
+        Should -Invoke Invoke-SavedQueryRequest -Times 1 -Exactly -ParameterFilter { $Request.Uri -like "https://t/*DeletedStatus=Both*" }
         $Script:QueryManagerForm.Queries.Count | Should -Be 6
         $Script:QueryManagerForm.Elements.DataGridQueries.ItemsSource.Count | Should -Be 6
         $Script:QueryManagerForm.Elements.TextBlockQueryCount.Text | Should -Be "6 of 6 queries"
@@ -191,5 +203,148 @@ Describe 'Request-QueryManagerClose and Complete-QueryManagerChildWindow' -Tag '
 
         Complete-QueryManagerChildWindow -Window $Script:QueryManagerForm.Definition | Should -BeTrue
         $Script:QueryManagerForm.Definition.Closed | Should -Be 1
+    }
+}
+
+Describe 'Query manager views, user name and buttons' -Tag 'Unit' {
+    BeforeEach {
+        New-ManagerState
+        $script:Selected = $null
+        $Script:QueryManagerForm.Elements | Add-Member -NotePropertyName ComboBoxQueryManagerView -NotePropertyValue ([PSCustomObject]@{ SelectedItem = [PSCustomObject]@{ Tag = "Active" } }) -Force
+        foreach ($Name in @("ButtonOpenQueryObject", "ButtonOpenQueryObjectInTab", "ButtonShowQueryObjectDetails", "ButtonRenameQueryObject", "ButtonDeleteQueryObject", "ButtonRestoreQueryObject", "ButtonOpenQueryObjectInOmada", "ButtonOpenQueryObjectOData")) {
+            $Script:QueryManagerForm.Elements | Add-Member -NotePropertyName $Name -NotePropertyValue ([PSCustomObject]@{ IsEnabled = $null }) -Force
+        }
+        $Lists = @(
+            [PSCustomObject]@{ Id = 1; DisplayName = "Live"; Name = "Live"; Deleted = $false }
+            [PSCustomObject]@{ Id = 2; DisplayName = "Gone"; Name = "Gone"; Deleted = $true }
+            [PSCustomObject]@{ Id = 3; DisplayName = "TMP"; Name = "TMP_0a1b"; Deleted = $true }
+        )
+        Mock Invoke-SavedQueryRequest { [PSCustomObject]@{ Succeeded = $true; Result = [PSCustomObject]@{ value = $Lists } } }
+        Mock Get-SqlTroubleShooterView { }
+    }
+
+    It 'Should show the queries of the view: <View>' -ForEach @(
+        @{ View = "Active"; Expected = @(1) }
+        @{ View = "Deleted"; Expected = @(2) }
+        @{ View = "All"; Expected = @(1, 2) }
+    ) {
+        $Script:QueryManagerForm.Elements.ComboBoxQueryManagerView.SelectedItem.Tag = $View
+
+        Update-QueryManagerList -Refresh
+
+        @($Script:QueryManagerForm.Elements.DataGridQueries.ItemsSource | ForEach-Object { $_["Id"] }) | Should -Be $Expected
+        $Script:QueryManagerForm.Elements.TextBlockQueryCount.Text | Should -Be ("{0} of {0} queries" -f $Expected.Count)
+    }
+
+    It 'Should show the not deleted queries for a view it does not know' {
+        $Script:QueryManagerForm.Elements.ComboBoxQueryManagerView.SelectedItem.Tag = "Other"
+        Get-QueryManagerView | Should -Be "Active"
+    }
+
+    It 'Should grey out every button that needs a query while none is selected' {
+        Update-QueryManagerList -Refresh
+
+        foreach ($Name in @("ButtonOpenQueryObject", "ButtonShowQueryObjectDetails", "ButtonDeleteQueryObject", "ButtonRestoreQueryObject", "ButtonOpenQueryObjectOData")) {
+            $Script:QueryManagerForm.Elements.$Name.IsEnabled | Should -BeFalse
+        }
+    }
+
+    It 'Should enable the buttons for the selected query, and Restore only for a deleted one' {
+        $Script:QueryManagerForm.Elements.ComboBoxQueryManagerView.SelectedItem.Tag = "All"
+        Update-QueryManagerList -Refresh
+        $View = $Script:QueryManagerForm.Elements.DataGridQueries.ItemsSource
+        $Grid = $Script:QueryManagerForm.Elements.DataGridQueries
+
+        $Grid.SelectedItems = @($View[1])
+        Update-QueryManagerCommandState
+        $Script:QueryManagerForm.Elements.ButtonRestoreQueryObject.IsEnabled | Should -BeTrue
+        $Script:QueryManagerForm.Elements.ButtonDeleteQueryObject.IsEnabled | Should -BeFalse
+        $Script:QueryManagerForm.Elements.ButtonShowQueryObjectDetails.IsEnabled | Should -BeTrue
+
+        $Grid.SelectedItems = @($View[0])
+        Update-QueryManagerCommandState
+        $Script:QueryManagerForm.Elements.ButtonRestoreQueryObject.IsEnabled | Should -BeFalse
+        $Script:QueryManagerForm.Elements.ButtonDeleteQueryObject.IsEnabled | Should -BeTrue
+        $Script:QueryManagerForm.Elements.ButtonOpenQueryObjectInTab.IsEnabled | Should -BeTrue
+    }
+
+    It 'Should read the user name for its filters itself when the tab has none, once' {
+        $Script:AppConfig.IdentityUserName = $null
+        Mock Get-OmadaIdentityUserName { "CORP\ann" }
+
+        Get-QueryManagerUserName -Needed $true | Should -Be "CORP\ann"
+        Get-QueryManagerUserName -Needed $true | Should -Be "CORP\ann"
+
+        Should -Invoke Get-OmadaIdentityUserName -Times 1 -Exactly
+    }
+
+    It 'Should use the tab''s user name when it has one' {
+        Mock Get-OmadaIdentityUserName { "other" }
+
+        Get-QueryManagerUserName -Needed $true | Should -Be "CORP\ann"
+        Should -Invoke Get-OmadaIdentityUserName -Times 0 -Exactly
+    }
+
+    It 'Should not ask for the user name while no filter is on' {
+        Mock Get-OmadaIdentityUserName { "x" }
+
+        Get-QueryManagerUserName -Needed $false | Should -Be ""
+        Should -Invoke Get-OmadaIdentityUserName -Times 0 -Exactly
+    }
+
+    It 'Should warn once, and ask no more, when the user name cannot be read' {
+        $Script:AppConfig.IdentityUserName = $null
+        Mock Get-OmadaIdentityUserName { throw "no page" }
+        Mock Write-LogOutput { }
+
+        Get-QueryManagerUserName -Needed $true | Should -Be ""
+        Get-QueryManagerUserName -Needed $true | Should -Be ""
+
+        Should -Invoke Get-OmadaIdentityUserName -Times 1 -Exactly
+        Should -Invoke Write-LogOutput -Times 1 -Exactly -ParameterFilter { $LogType -eq "WARNING" }
+    }
+
+    It 'Should filter on my queries when the main window''s filters are off (no user name on the tab)' {
+        $Script:AppConfig.IdentityUserName = $null
+        Mock Get-OmadaIdentityUserName { "CORP\ann" }
+        Mock Get-SqlTroubleShooterView { @{ "c-13" = 1; "c-2" = "CORP\bob"; "c-4" = "CORP\bob" }; @{ "c-13" = 2; "c-2" = "CORP\ann"; "c-4" = "CORP\ann" } }
+        $Script:QueryManagerForm.Elements.ComboBoxQueryManagerView.SelectedItem.Tag = "All"
+        $Script:QueryManagerForm.Elements.CheckBoxQueryManagerMyCreated.IsChecked = $true
+
+        Update-QueryManagerList -Refresh
+
+        @($Script:QueryManagerForm.Elements.DataGridQueries.ItemsSource | ForEach-Object { $_["Id"] }) | Should -Be @(2)
+    }
+}
+
+Describe 'Get-QueryManagerCommandState' -Tag 'Unit' {
+    It 'Should allow <Case>' -ForEach @(
+        @{ Case = 'nothing without a query'; Query = $null; Enabled = @() }
+        @{ Case = 'everything but Restore for a query'; Query = [PSCustomObject]@{ Deleted = $false }; Enabled = @("Delete", "Details", "OData", "Omada", "Open", "OpenInTab", "Rename") }
+        @{ Case = 'only looking and Restore for a deleted query'; Query = [PSCustomObject]@{ Deleted = $true }; Enabled = @("Details", "OData", "Omada", "Restore") }
+    ) {
+        $State = Get-QueryManagerCommandState -Query $Query
+        @($State.Keys | Where-Object { $State[$_] } | Sort-Object) | Should -Be $Enabled
+        $State.Keys.Count | Should -Be 8
+    }
+}
+
+Describe 'Get-QueryManagerSelectedQuery -Quiet' -Tag 'Unit' {
+    It 'Should give the one selected query, deleted or not, and nothing otherwise, without a word' {
+        New-ManagerState
+        Mock Write-LogOutput { }
+        $Table = ConvertTo-QueryManagerTable -Query @([PSCustomObject]@{ Id = 1; DisplayName = "A"; Deleted = $true }, [PSCustomObject]@{ Id = 2; DisplayName = "B"; Deleted = $false })
+        $Grid = $Script:QueryManagerForm.Elements.DataGridQueries
+
+        $Grid.SelectedItems = @($Table.DefaultView[0])
+        (Get-QueryManagerSelectedQuery -Quiet).Deleted | Should -BeTrue
+        $Grid.SelectedItems = @($Table.DefaultView[1])
+        (Get-QueryManagerSelectedQuery -Quiet).Deleted | Should -BeFalse
+        $Grid.SelectedItems = @($Table.DefaultView[0], $Table.DefaultView[1])
+        Get-QueryManagerSelectedQuery -Quiet | Should -BeNullOrEmpty
+        $Grid.SelectedItems = @()
+        Get-QueryManagerSelectedQuery -Quiet | Should -BeNullOrEmpty
+
+        Should -Invoke Write-LogOutput -Times 0 -Exactly -ParameterFilter { $LogType -eq "WARNING" }
     }
 }

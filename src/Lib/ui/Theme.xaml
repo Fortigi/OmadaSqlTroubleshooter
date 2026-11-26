@@ -111,6 +111,13 @@
          on "the selected row" reads it with Get-DataGridSelectedRow, which also understands a
          selection of cells. -->
     <Style x:Key="Theme.DataGridStyle" TargetType="DataGrid">
+        <Style.Resources>
+            <!-- What a grid's cells use for a selection while the grid does not have the focus - after
+                 another window was on top, or the focus moved to a button. Windows' default is a light
+                 grey that is hard to see; this keeps it the selection blue, a shade lighter. -->
+            <SolidColorBrush x:Key="{x:Static SystemColors.InactiveSelectionHighlightBrushKey}" Color="#FF4F9BE0" />
+            <SolidColorBrush x:Key="{x:Static SystemColors.InactiveSelectionHighlightTextBrushKey}" Color="White" />
+        </Style.Resources>
         <Setter Property="Background" Value="{DynamicResource {x:Static SystemColors.WindowBrushKey}}" />
         <Setter Property="AlternatingRowBackground" Value="{StaticResource Theme.AlternatingRowBrush}" />
         <Setter Property="HorizontalGridLinesBrush" Value="{StaticResource Theme.GridLineBrush}" />

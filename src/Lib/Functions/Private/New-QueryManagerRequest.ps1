@@ -10,17 +10,21 @@ function New-QueryManagerRequest {
     worker, which needs none of these.
 
     .PARAMETER Kind
-      QueryObjectList  GET every non-deleted query object, ordered by display name, with every field
-                       OData returns.
+      QueryObjectList  GET every query object, deleted ones included (DeletedStatus=Both, as the
+                       temporary query probe asks), ordered by display name. The query manager's view
+                       chooses which it shows (Test-QueryManagerView).
       QueryObject      GET one query object by id, with its text and data connection.
       CreateQuery      POST a new query object: NAME, C_QUERY and, when given, the data connection.
       QueryHistory     POST GetPagingData for one query object's change history, newest first - the
                        request the history window has always made, for any query.
+      RestoreQuery     POST UndeleteDataObject for a deleted query object - the call the application
+                       already makes to recover its own temporary object (New-OmadaQueryRequest
+                       TempQueryUndelete).
 
     .PARAMETER Context
     Plain values. Keys used, by Kind:
       BaseUrl              all
-      QueryDoId            QueryObject, QueryHistory
+      QueryDoId            QueryObject, QueryHistory, RestoreQuery
       QueryName            CreateQuery
       QueryText            CreateQuery
       DataConnectionDoId   CreateQuery
@@ -31,7 +35,7 @@ function New-QueryManagerRequest {
     [CmdletBinding()]
     param(
         [Parameter(Mandatory = $true)]
-        [ValidateSet("QueryObjectList", "QueryObject", "CreateQuery", "QueryHistory")]
+        [ValidateSet("QueryObjectList", "QueryObject", "CreateQuery", "QueryHistory", "RestoreQuery")]
         [string]$Kind,
 
         [Parameter(Mandatory = $true)]
@@ -46,7 +50,7 @@ function New-QueryManagerRequest {
         "QueryObjectList" {
             return @{
                 Method = "GET"
-                Uri    = "{0}?`$filter=Deleted ne true&`$orderby=DisplayName,NAME" -f $Private:EntityUrl
+                Uri    = "{0}?DeletedStatus=Both&`$orderby=DisplayName,NAME" -f $Private:EntityUrl
                 Body   = $null
             }
         }
@@ -71,6 +75,15 @@ function New-QueryManagerRequest {
                 Method = "POST"
                 Uri    = $Private:EntityUrl
                 Body   = $Private:Body
+            }
+        }
+
+        "RestoreQuery" {
+            return @{
+                Method = "POST"
+                Uri    = "{0}/WebService/DataObjectWebService.asmx/UndeleteDataObject" -f $Private:BaseUrl
+                # Pre-serialized, as TempQueryUndelete sends it: an ASMX method that wants a JSON string.
+                Body   = (@{ id = $Context.QueryDoId } | ConvertTo-Json)
             }
         }
 
