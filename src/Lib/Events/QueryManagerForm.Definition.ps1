@@ -23,7 +23,10 @@ $Script:QueryManagerForm.Elements.ButtonRefreshQueryList.Add_Click({
 $Script:QueryManagerForm.Elements.DataGridQueries.Add_MouseDoubleClick({
         try {
             $_ | Show-EventInfo
-            Invoke-QueryManagerAction -Action "Details"
+            # Only on a query: a double-click on a column header has none, and is no reason to warn.
+            if ($null -ne (Get-QueryManagerSelectedQuery -Quiet)) {
+                Invoke-QueryManagerAction -Action "Details"
+            }
         }
         catch {
             $_.Exception.Message | Write-ContainedErrorLog -ErrorObject $_
@@ -33,3 +36,15 @@ $Script:QueryManagerForm.Elements.DataGridQueries.Add_MouseDoubleClick({
 $Script:QueryManagerForm.Elements.ButtonCloseQueryManager.Add_Click({
         $Script:QueryManagerForm.Definition.Close()
     })
+
+# The "Only my queries" filters work on the list already read (and the view read with it); no request.
+foreach ($Private:FilterBox in @($Script:QueryManagerForm.Elements.CheckBoxQueryManagerMyCreated, $Script:QueryManagerForm.Elements.CheckBoxQueryManagerMyUpdated)) {
+    $Private:FilterBox.Add_Click({
+            try {
+                Update-QueryManagerList
+            }
+            catch {
+                $_.Exception.Message | Write-ContainedErrorLog -ErrorObject $_
+            }
+        })
+}

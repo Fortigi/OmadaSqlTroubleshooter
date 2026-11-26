@@ -29,6 +29,11 @@ function Open-QueryManagerForm {
         $Script:QueryManagerCloseRequested = $false
         $Script:QueryManagerForm = Initialize-FormObject -FormPath (Join-Path $Script:RunTimeConfig.ModuleFolder -ChildPath "lib\ui\QueryManagerForm.xaml")
         $Script:QueryManagerForm | Add-Member -NotePropertyName "Queries" -NotePropertyValue @() -Force
+        $Script:QueryManagerForm | Add-Member -NotePropertyName "Ownership" -NotePropertyValue @{} -Force
+        # The "Only my queries" filters start as the active tab has them; changing them here changes
+        # only this window.
+        $Script:QueryManagerForm.Elements.CheckBoxQueryManagerMyCreated.IsChecked = [bool]$Script:AppConfig.MyCreatedQueriesOnly
+        $Script:QueryManagerForm.Elements.CheckBoxQueryManagerMyUpdated.IsChecked = [bool]$Script:AppConfig.MyUpdatedQueriesOnly
         $Script:QueryManagerForm.Definition.Owner = $Script:MainForm.Definition
         $Script:QueryManagerForm.Definition.Title = "Queries - {0}" -f ([System.Uri]::new($Script:AppConfig.BaseUrl)).Authority
 
@@ -75,15 +80,128 @@ function Update-QueryManagerList {
             return
         }
         $Script:QueryManagerForm.Queries = @($Private:Response.Result.value | Where-Object { $null -ne $_ })
+        $Script:QueryManagerForm.Ownership = Get-QueryManagerOwnership
     }
 
+    $Private:Elements = $Script:QueryManagerForm.Elements
     $Private:All = @($Script:QueryManagerForm.Queries)
-    $Private:Shown = @(Select-QueryManagerQuery -Query $Private:All -Filter $Script:QueryManagerForm.Elements.TextBoxQueryFilter.Text)
+    $Private:MyCreated = [bool]$Private:Elements.CheckBoxQueryManagerMyCreated.IsChecked
+    $Private:MyUpdated = [bool]$Private:Elements.CheckBoxQueryManagerMyUpdated.IsChecked
+    $Private:Shown = @(Select-QueryManagerQuery -Query $Private:All -Filter $Private:Elements.TextBoxQueryFilter.Text -Ownership $Script:QueryManagerForm.Ownership `
+            -UserName (Get-QueryManagerUserName -Needed ($Private:MyCreated -or $Private:MyUpdated)) -MyCreated $Private:MyCreated -MyUpdated $Private:MyUpdated `
+            -View (Get-QueryManagerView))
 
-    # Columns are generated from the table, so they follow whatever fields the tenant returns.
-    $Private:Table = ConvertTo-QueryManagerTable -Query $Private:Shown
-    $Script:QueryManagerForm.Elements.DataGridQueries.ItemsSource = $Private:Table.DefaultView
-    $Script:QueryManagerForm.Elements.TextBlockQueryCount.Text = "{0} of {1} queries" -f $Private:Shown.Count, $Private:All.Count
+    $Private:Table = ConvertTo-QueryManagerTable -Query $Private:Shown -Ownership $Script:QueryManagerForm.Ownership
+    $Private:Elements.DataGridQueries.ItemsSource = $Private:Table.DefaultView
+    if ($Refresh) {
+        # From the whole list, once per read: a filter that shows fewer rows keeps the widths, and so
+        # does a column the user widened.
+        Update-DataGridColumnWidth -Grid $Private:Elements.DataGridQueries -Item @((ConvertTo-QueryManagerTable -Query $Private:All -Ownership $Script:QueryManagerForm.Ownership).DefaultView)
+    }
+    # "of" the queries in the view, before the text and "Only my queries" filters.
+    $Private:InView = @($Private:All | Where-Object { Test-QueryManagerView -Query $_ -View (Get-QueryManagerView) })
+    $Private:Elements.TextBlockQueryCount.Text = "{0} of {1} queries" -f $Private:Shown.Count, $Private:InView.Count
+    Update-QueryManagerCommandState
+}
+
+function Get-QueryManagerUserName {
+    <#
+    .SYNOPSIS
+        The signed-in user's name for the query manager's "Only my queries" filters.
+
+    .DESCRIPTION
+        The active tab knows it only while one of the main window's own filters is on: switching
+        those off clears it. So the query manager reads it itself (Get-OmadaIdentityUserName) the first
+        time one of its filters is on and the tab has none, and keeps it for as long as the window is
+        open. Without the name the filters cannot apply; that is said once.
+
+    .PARAMETER Needed
+        A filter is on. Without one, no request is made.
+
+    .OUTPUTS
+        [string] The name, or "".
+    #>
+    [CmdletBinding()]
+    [OutputType([string])]
+    param(
+        [bool]$Needed
+    )
+
+    # Asked once per window, an answer of "none" included, so a tenant that gives no name is not
+    # asked - and the user not warned - again on every keystroke in the filter.
+    if ($null -ne $Script:QueryManagerForm.PSObject.Properties["UserName"]) {
+        return [string]$Script:QueryManagerForm.UserName
+    }
+    if (-not $Needed) {
+        return ""
+    }
+
+    $Private:Name = [string]$Script:AppConfig.IdentityUserName
+    if ([string]::IsNullOrWhiteSpace($Private:Name)) {
+        try {
+            $Private:Name = [string](Get-OmadaIdentityUserName)
+        }
+        catch {
+            "Reading the user name failed: {0}" -f $_.Exception.Message | Write-LogOutput -LogType DEBUG
+        }
+    }
+
+    if ([string]::IsNullOrWhiteSpace($Private:Name)) {
+        "Your user name could not be read from Omada, so Only my queries cannot be applied." | Write-LogOutput -LogType WARNING
+        $Private:Name = ""
+    }
+    $Script:QueryManagerForm | Add-Member -NotePropertyName "UserName" -NotePropertyValue $Private:Name -Force
+    return $Private:Name
+}
+
+function Get-QueryManagerView {
+    <#
+    .SYNOPSIS
+        Which queries the query manager's view selector shows: Active (not deleted, the default),
+        Deleted, or All. Read from the selected item's Tag.
+
+    .OUTPUTS
+        [string]
+    #>
+    [CmdletBinding()]
+    [OutputType([string])]
+    param()
+
+    $Private:View = [string]$Script:QueryManagerForm.Elements.ComboBoxQueryManagerView.SelectedItem.Tag
+    return $(if ($Private:View -in @("Active", "Deleted", "All")) { $Private:View } else { "Active" })
+}
+
+function Get-QueryManagerOwnership {
+    <#
+    .SYNOPSIS
+        Who created and last changed each query, read from the tenant's "SQL Troubleshooting" view:
+        the extra request the "Only my queries" filters and the Created by / Changed by columns need.
+
+    .DESCRIPTION
+        OData does not return those two fields; the view does (Get-QueryOwnership). A tenant without
+        the view, or a view that cannot be read, gives no ownership: the columns stay empty and the
+        filters cannot be applied, which is said once in the log rather than failing the list.
+
+    .OUTPUTS
+        [hashtable] query id -> @{ CreatedBy; ChangedBy }
+    #>
+    [CmdletBinding()]
+    [OutputType([hashtable])]
+    param()
+
+    try {
+        $Private:Rows = @(Get-SqlTroubleShooterView)
+    }
+    catch {
+        "Reading the SQL Troubleshooting view failed: {0}" -f $_.Exception.Message | Write-LogOutput -LogType DEBUG
+        $Private:Rows = @()
+    }
+
+    $Private:Ownership = Get-QueryOwnership -ViewRow $Private:Rows -Mapping $Script:RunTimeData.DataobjdlgAspxAttributeMapping
+    if ($Private:Ownership.Count -eq 0) {
+        "The SQL Troubleshooting view gave no rows: Created by, Changed by and the Only my queries filters are not available." | Write-LogOutput -LogType INFO
+    }
+    return $Private:Ownership
 }
 
 function Get-QueryManagerSelectedQuery {
@@ -103,10 +221,16 @@ function Get-QueryManagerSelectedQuery {
     #>
     [CmdletBinding()]
     [OutputType([PSCustomObject])]
-    param()
+    param(
+        # No hint: for the buttons' enabled state, which is worked out on every selection change.
+        [switch]$Quiet
+    )
 
     $Private:Rows = @(Get-DataGridSelectedRow -Grid $Script:QueryManagerForm.Elements.DataGridQueries | Where-Object { $null -ne $_.PSObject.Properties["Row"] })
 
+    if ($Quiet) {
+        return $(if ($Private:Rows.Count -eq 1) { ConvertFrom-QueryManagerRow -Row $Private:Rows[0].Row } else { $null })
+    }
     if ($Private:Rows.Count -eq 0) {
         "Select a query first." | Write-LogOutput -LogType WARNING
         return $null
@@ -145,8 +269,81 @@ function ConvertFrom-QueryManagerRow {
     return [PSCustomObject]@{
         DoId        = [string]$Row["Id"]
         DisplayName = $Private:Name
+        Deleted     = $Row.Table.Columns.Contains("Deleted") -and [string]$Row["Deleted"] -eq "Yes"
     }
 }
+
+function Update-QueryManagerCommandState {
+    <#
+    .SYNOPSIS
+        Enables the query manager's buttons that can act on the selection, and greys out the rest
+        (Get-QueryManagerCommandState). Run on every selection change and after the list is shown.
+
+    .OUTPUTS
+        None.
+    #>
+    [CmdletBinding()]
+    param()
+
+    $Private:State = Get-QueryManagerCommandState -Query (Get-QueryManagerSelectedQuery -Quiet)
+    $Private:Buttons = @{
+        Open      = "ButtonOpenQueryObject"
+        OpenInTab = "ButtonOpenQueryObjectInTab"
+        Details   = "ButtonShowQueryObjectDetails"
+        Rename    = "ButtonRenameQueryObject"
+        Delete    = "ButtonDeleteQueryObject"
+        Restore   = "ButtonRestoreQueryObject"
+        Omada     = "ButtonOpenQueryObjectInOmada"
+        OData     = "ButtonOpenQueryObjectOData"
+    }
+    foreach ($Private:Action in $Private:Buttons.Keys) {
+        $Private:Button = $Script:QueryManagerForm.Elements.($Private:Buttons[$Private:Action])
+        if ($null -ne $Private:Button) {
+            $Private:Button.IsEnabled = $Private:State[$Private:Action]
+        }
+    }
+}
+
+function Get-QueryManagerCommandState {
+    <#
+    .SYNOPSIS
+        Which of the query manager's actions can act on the selected query.
+
+    .DESCRIPTION
+          no single query selected   none of them (New and Refresh do not need one)
+          a query                    everything but Restore
+          a deleted query            Details and Restore. It cannot be opened, renamed or deleted
+                                     until it is restored, and neither its Omada page nor its OData
+                                     record can be found while it is deleted
+
+    .PARAMETER Query
+        The selected query (Get-QueryManagerSelectedQuery -Quiet), or $null.
+
+    .OUTPUTS
+        [hashtable] action -> [bool]
+    #>
+    [CmdletBinding()]
+    [OutputType([hashtable])]
+    param(
+        [Parameter(Mandatory = $false)]
+        [AllowNull()]
+        $Query
+    )
+
+    $Private:Selected = $null -ne $Query
+    $Private:Active = $Private:Selected -and $Query.Deleted -ne $true
+    return @{
+        Open      = $Private:Active
+        OpenInTab = $Private:Active
+        Rename    = $Private:Active
+        Delete    = $Private:Active
+        Details   = $Private:Selected
+        Omada     = $Private:Active
+        OData     = $Private:Active
+        Restore   = $Private:Selected -and -not $Private:Active
+    }
+}
+
 
 function Request-QueryManagerClose {
     <#

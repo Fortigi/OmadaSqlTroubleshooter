@@ -1,9 +1,9 @@
 <Window xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         Title="Query details"
-        Width="900"
+        Width="1180"
         Height="580"
-        MinWidth="820"
+        MinWidth="1120"
         MinHeight="350"
         WindowStartupLocation="CenterOwner"
         ShowInTaskbar="False"
@@ -43,9 +43,15 @@
                 </DataGrid>
             </TabItem>
             <TabItem Header="SQL">
-                <TextBox x:Name="TextBoxQueryText" IsReadOnly="True" AcceptsReturn="True" TextWrapping="NoWrap"
-                         Background="{DynamicResource {x:Static SystemColors.WindowBrushKey}}"
-                         VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Auto" FontFamily="Consolas" FontSize="13"/>
+                <!-- Read-only (it is edited in a tab), highlighted as the editor highlights SQL (Set-SqlRichText). -->
+                <RichTextBox x:Name="RichTextBoxQueryText"
+                                         IsReadOnly="True"
+                                         IsReadOnlyCaretVisible="True"
+                                         IsDocumentEnabled="False"
+                                         BorderThickness="0"
+                                         VerticalScrollBarVisibility="Auto"
+                                         HorizontalScrollBarVisibility="Auto"
+                                         Background="{DynamicResource {x:Static SystemColors.WindowBrushKey}}"/>
             </TabItem>
             <TabItem Header="History">
                 <!-- Every column sizes to its content (no star column, which would pin the grid to the
@@ -81,6 +87,19 @@
                     <AccessText Style="{StaticResource Theme.ButtonTextStyle}" Text="Ren_ame..."/>
                 </StackPanel>
             </Button>
+            <!-- Delete for a query, Restore for a deleted one (Update-QueryDetailCommandState). -->
+            <Button x:Name="ButtonDeleteQueryDetail" IsEnabled="False" ToolTip="Delete this query from the tenant">
+                <StackPanel Orientation="Horizontal" IsHitTestVisible="False">
+                    <TextBlock Style="{StaticResource Theme.GlyphStyle}" Text="&#xE74D;"/>
+                    <AccessText Style="{StaticResource Theme.ButtonTextStyle}" Text="De_lete..."/>
+                </StackPanel>
+            </Button>
+            <Button x:Name="ButtonRestoreQueryDetail" IsEnabled="False" ToolTip="Restore this deleted query">
+                <StackPanel Orientation="Horizontal" IsHitTestVisible="False">
+                    <TextBlock Style="{StaticResource Theme.GlyphStyle}" Text="&#xE7A7;"/>
+                    <AccessText Style="{StaticResource Theme.ButtonTextStyle}" Text="Re_store"/>
+                </StackPanel>
+            </Button>
             <Button x:Name="ButtonShowQueryDetailHistory" ToolTip="The history window for this query: compare versions, restore one, export">
                 <StackPanel Orientation="Horizontal" IsHitTestVisible="False">
                     <TextBlock Style="{StaticResource Theme.GlyphStyle}" Text="&#xE81C;"/>
@@ -91,6 +110,12 @@
                 <StackPanel Orientation="Horizontal" IsHitTestVisible="False">
                     <TextBlock Style="{StaticResource Theme.GlyphStyle}" Text="&#xE774;"/>
                     <AccessText Style="{StaticResource Theme.ButtonTextStyle}" Text="Open in O_mada"/>
+                </StackPanel>
+            </Button>
+            <Button x:Name="ButtonOpenQueryDetailOData" ToolTip="Open this query's OData record (JSON) in your browser">
+                <StackPanel Orientation="Horizontal" IsHitTestVisible="False">
+                    <TextBlock Style="{StaticResource Theme.GlyphStyle}" Text="&#xE943;"/>
+                    <AccessText Style="{StaticResource Theme.ButtonTextStyle}" Text="View OData _record"/>
                 </StackPanel>
             </Button>
             <Button x:Name="ButtonCloseQueryDetail" ToolTip="Close" DockPanel.Dock="Right" Margin="0" IsCancel="True">

@@ -10,17 +10,9 @@ $Script:MainForm.Elements.CheckboxMyCreatedQueries.Add_Checked({
 
             $true | Set-ConfigProperty -Property "MyCreatedQueriesOnly"
             if ($Script:ConnectionStatus) {
-                $Script:RunTimeData.RestMethodParam.Uri = "{0}/actusersettingsdlg.aspx?HIDEBACKARRICON=1" -f $Script:AppConfig.BaseUrl
-                $Script:RunTimeData.RestMethodParam.Body = $null
-                $Script:RunTimeData.RestMethodParam.Method = "GET"
-                $Result = Invoke-OmadaPSWebRequestWrapper
-
-                if ($Result -match [regex]("identityUserName:.\S+")) {
-                    $Match = $Matches[0]
-                    $IdentityUserName = $Match.Split(":")[1].Trim().TrimStart("'").TrimEnd(",").TrimEnd("'")
-                    if (![string]::IsNullOrWhiteSpace($IdentityUserName)) {
-                        $IdentityUserName | Set-ConfigProperty -Property "IdentityUserName"
-                    }
+                $IdentityUserName = Get-OmadaIdentityUserName
+                if ($null -ne $IdentityUserName) {
+                    $IdentityUserName | Set-ConfigProperty -Property "IdentityUserName"
                 }
                 else {
                     if (!$Script:AppConfig.MyUpdatedQueriesOnly) {

@@ -81,6 +81,11 @@ function Register-QueryResultGridHandler {
                 UserSized = $false
             }
 
+            # Fixed column widths from the widest value of each column, over all rows, so the columns
+            # do not jump while the result is scrolled. Here, once per grid: a grid is wired once per
+            # execute, after its columns were generated, and a width the user drags afterwards stays.
+            Update-DataGridColumnWidth -Grid $Private:Grid
+
             # PLAIN scriptblocks, every one of them - never .GetNewClosure() (issue #169). The rule is
             # the one MainForm.Definition.ps1 states for the whole application: a closure runs in a
             # detached dynamic module that resolves commands through the GLOBAL scope, so it cannot

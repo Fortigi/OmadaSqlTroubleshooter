@@ -12,6 +12,8 @@ BeforeAll {
     $PrivatePath = Join-Path $ParentPath -ChildPath "src\Lib\Functions\Private"
     . (Join-Path $PrivatePath -ChildPath "Write-ContainedErrorLog.ps1")
     . (Join-Path $PrivatePath -ChildPath "Invoke-LoadSqlHistoryData.ps1")
+    . (Join-Path $PrivatePath -ChildPath "Export-SqlHistorySelection.ps1")
+    function Update-DataGridColumnWidth { param($Grid, $Item) }
 
     $script:LogMessages = [System.Collections.Generic.List[object]]::new()
     function Write-LogOutput {
@@ -20,7 +22,9 @@ BeforeAll {
     }
 
     function script:New-GridStub {
-        return [pscustomobject]@{ ItemsSource = $null; SelectedIndex = -1 }
+        $Grid = [pscustomobject]@{ ItemsSource = $null; SelectedIndex = -1; ScrolledTo = $null }
+        $Grid | Add-Member -MemberType ScriptMethod -Name ScrollIntoView -Value { param($Item) $this.ScrolledTo = $Item }
+        return $Grid
     }
 
     function script:Initialize-HistoryState {
@@ -51,7 +55,7 @@ BeforeAll {
         return [pscustomobject]@{ SqlObjectName = $Name; ChangeDate = $ChangeDate }
     }
 
-    function Get-SqlHistory { return $script:HistoryRows }
+    function Get-SqlHistory { param($DoId) $script:HistoryDoId = $DoId; return $script:HistoryRows }
 }
 
 Describe "Invoke-LoadSqlHistoryData" {
@@ -64,6 +68,67 @@ Describe "Invoke-LoadSqlHistoryData" {
             Invoke-LoadSqlHistoryData
 
             @($Script:SqlHistoryForm.Elements.DataGridHistory.ItemsSource).Count | Should -Be 2
+        }
+
+        It "selects the version it was opened for, and scrolls to it" {
+            $Old = New-Row -Name "old" -ChangeDate ([DateTime]::new(2026, 1, 1))
+            $Old | Add-Member -NotePropertyName ChangedBy -NotePropertyValue "ann"
+            $New = New-Row -Name "new" -ChangeDate ([DateTime]::new(2026, 8, 25))
+            $New | Add-Member -NotePropertyName ChangedBy -NotePropertyValue "bob"
+            Set-History -Rows @($Old, $New)
+            $Script:SqlHistoryTarget = [pscustomobject]@{ DoId = "1"; SelectChangeDate = [DateTime]::new(2026, 1, 1); SelectChangedBy = "ann" }
+
+            try {
+                Invoke-LoadSqlHistoryData
+            }
+            finally {
+                $Script:SqlHistoryTarget = $null
+            }
+
+            $Grid = $Script:SqlHistoryForm.Elements.DataGridHistory
+            $Grid.SelectedIndex | Should -Be 1
+            $Grid.ScrolledTo.SqlObjectName | Should -Be "old"
+        }
+
+        It "selects the newest when the version it was opened for has no SQL change" {
+            Set-History -Rows @((New-Row -Name "a"))
+            $Script:SqlHistoryTarget = [pscustomobject]@{ DoId = "1"; SelectChangeDate = [DateTime]::new(2020, 1, 1); SelectChangedBy = "ann" }
+
+            try {
+                Invoke-LoadSqlHistoryData
+            }
+            finally {
+                $Script:SqlHistoryTarget = $null
+            }
+
+            $Script:SqlHistoryForm.Elements.DataGridHistory.SelectedIndex | Should -Be 0
+            ($script:LogMessages | Where-Object LogType -eq "DEBUG").Message | Should -Contain "The change of 2020-01-01 00:00:00 did not change the SQL, so it has no version here; showing the newest."
+        }
+
+        It "reads the history of the query it was opened for" {
+            Set-History -Rows @((New-Row -Name "a"))
+            $Script:SqlHistoryTarget = [pscustomobject]@{ DoId = "77" }
+            try { Invoke-LoadSqlHistoryData } finally { $Script:SqlHistoryTarget = $null }
+
+            $script:HistoryDoId | Should -Be "77"
+        }
+
+        It "selects the newest, quietly, when it was opened without a version, or found it first" {
+            $First = New-Row -Name "new" -ChangeDate ([DateTime]::new(2026, 8, 25))
+            $First | Add-Member -NotePropertyName ChangedBy -NotePropertyValue "bob"
+            Set-History -Rows @($First, (New-Row -Name "old" -ChangeDate ([DateTime]::new(2026, 1, 1))))
+
+            foreach ($Target in @(
+                    [pscustomobject]@{ DoId = "1"; SelectChangeDate = $null; SelectChangedBy = "" }
+                    [pscustomobject]@{ DoId = "1"; SelectChangeDate = [DateTime]::new(2026, 8, 25); SelectChangedBy = "bob" }
+                )) {
+                Initialize-HistoryState
+                $Script:SqlHistoryTarget = $Target
+                try { Invoke-LoadSqlHistoryData } finally { $Script:SqlHistoryTarget = $null }
+
+                $Script:SqlHistoryForm.Elements.DataGridHistory.SelectedIndex | Should -Be 0
+                @($script:LogMessages | Where-Object { $_.Message -like "*did not change the SQL*" }).Count | Should -Be 0
+            }
         }
 
         It "selects the first row" {
@@ -136,7 +201,8 @@ Describe "Invoke-LoadSqlHistoryData" {
             Set-History -Rows @()
 
             { Invoke-LoadSqlHistoryData } | Should -Not -Throw
-            $Script:SqlHistoryForm.Elements.DataGridHistory.ItemsSource | Should -BeNullOrEmpty
+            $null -eq $Script:SqlHistoryForm.Elements.DataGridHistory.ItemsSource | Should -BeTrue
+            ($script:LogMessages | Where-Object LogType -eq "WARNING").Message | Should -Contain "No SQL history data found"
         }
 
         It "returns quietly for a null result" {

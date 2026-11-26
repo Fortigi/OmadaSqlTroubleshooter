@@ -9,8 +9,8 @@ function Remove-SavedSqlQuery {
         the tab or the application still asks about it (and keeps it in the draft cache meanwhile).
 
         Omada deletes data objects softly - they are marked Deleted, which is also how this
-        application's own temporary query objects are removed and later undeleted - but this
-        application offers no undelete for user queries; the confirmation says the query is deleted.
+        application's own temporary query objects are removed and later undeleted. A deleted query is
+        restored from the query manager (its Deleted view, then Restore: Restore-SqlQueryObject).
 
         Needs the Delete right on the OData auth element; a refusal is reported with the tenant's
         message and nothing changes locally.

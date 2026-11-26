@@ -1,16 +1,22 @@
 function ConvertTo-QueryPropertyList {
     <#
     .SYNOPSIS
-        The name / value pairs the query details show for one query object.
+        The name / value pairs the query details' Properties tab shows for one query object.
 
     .DESCRIPTION
-        Every field OData returned for the object, shown as the list shows it (ConvertTo-QueryManagerValue),
-        except the OData annotations and the query text, which has its own tab. Then the creation and
-        last change, taken from the object's history (Get-QueryHistorySummary), because OData does not
-        return them.
+        The query manager's columns (Get-QueryManagerColumnDefinition), in the same order, under the
+        same names and shown the same way, so the list and the details agree.
+
+        Created and Changed come from OData (CreateTime, ChangeTime), Created by and Changed by from
+        the tenant's SQL Troubleshooting view (-Ownership). When one of those four is empty - a tenant
+        without the view, an object that could not be read - the object's history fills it in
+        (Get-QueryHistorySummary), so a value is shown whenever any source has it.
 
     .PARAMETER Query
         The query object, as returned by GET C_P_SQLTROUBLESHOOTING(<id>).
+
+    .PARAMETER Ownership
+        Who created and last changed each query (Get-QueryOwnership).
 
     .PARAMETER HistoryEntry
         Its history, from ConvertTo-QueryHistoryEntry.
@@ -26,22 +32,28 @@ function ConvertTo-QueryPropertyList {
 
         [Parameter(Mandatory = $false)]
         [AllowNull()]
+        [hashtable]$Ownership = @{},
+
+        [Parameter(Mandatory = $false)]
+        [AllowNull()]
         [AllowEmptyCollection()]
         [object[]]$HistoryEntry = @()
     )
 
-    if ($null -ne $Query) {
-        foreach ($Private:Property in $Query.PSObject.Properties) {
-            if ($Private:Property.Name -like "@odata.*" -or $Private:Property.Name -eq "C_QUERY") {
-                continue
-            }
-            [PSCustomObject]@{ Property = $Private:Property.Name; Value = ConvertTo-QueryManagerValue -Value $Private:Property.Value }
-        }
+    $Private:Values = if ($null -ne $Query) { ConvertTo-QueryManagerRow -Query $Query -Ownership $Ownership } else { @{} }
+    $Private:Summary = Get-QueryHistorySummary -Entry $HistoryEntry
+    $Private:Fallback = @{
+        CreateTime = ConvertTo-QueryManagerValue -Value $Private:Summary.Created
+        CreatedBy  = [string]$Private:Summary.CreatedBy
+        ChangeTime = ConvertTo-QueryManagerValue -Value $Private:Summary.Changed
+        ChangedBy  = [string]$Private:Summary.ChangedBy
     }
 
-    $Private:Summary = Get-QueryHistorySummary -Entry $HistoryEntry
-    [PSCustomObject]@{ Property = "Created (history)"; Value = ConvertTo-QueryManagerValue -Value $Private:Summary.Created }
-    [PSCustomObject]@{ Property = "Created by (history)"; Value = [string]$Private:Summary.CreatedBy }
-    [PSCustomObject]@{ Property = "Last changed (history)"; Value = ConvertTo-QueryManagerValue -Value $Private:Summary.Changed }
-    [PSCustomObject]@{ Property = "Last changed by (history)"; Value = [string]$Private:Summary.ChangedBy }
+    foreach ($Private:Column in @(Get-QueryManagerColumnDefinition)) {
+        $Private:Value = [string]$Private:Values[$Private:Column.Name]
+        if ([string]::IsNullOrWhiteSpace($Private:Value) -and $Private:Fallback.ContainsKey($Private:Column.Name)) {
+            $Private:Value = $Private:Fallback[$Private:Column.Name]
+        }
+        [PSCustomObject]@{ Property = $Private:Column.Header; Value = $Private:Value }
+    }
 }

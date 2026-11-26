@@ -2,12 +2,20 @@
 BeforeAll { . (Join-Path $PSScriptRoot "QueryManager.Shared.ps1"); $script:Base = "https://tenant.omada.cloud" }
 
 Describe 'New-QueryManagerRequest' -Tag 'Unit' {
-    It 'Should list every non-deleted query, ordered by name' {
+    It 'Should list every query, deleted ones included, ordered by name' {
         $Request = New-QueryManagerRequest -Kind QueryObjectList -Context @{ BaseUrl = $script:Base }
 
         $Request.Method | Should -Be "GET"
-        $Request.Uri | Should -Be "$script:Base/odata/dataobjects/C_P_SQLTROUBLESHOOTING?`$filter=Deleted ne true&`$orderby=DisplayName,NAME"
+        $Request.Uri | Should -Be "$script:Base/odata/dataobjects/C_P_SQLTROUBLESHOOTING?DeletedStatus=Both&`$orderby=DisplayName,NAME"
         $Request.Body | Should -BeNullOrEmpty
+    }
+
+    It 'Should restore a deleted query through the undelete web service' {
+        $Request = New-QueryManagerRequest -Kind RestoreQuery -Context @{ BaseUrl = $script:Base; QueryDoId = 4711 }
+
+        $Request.Method | Should -Be "POST"
+        $Request.Uri | Should -Be "$script:Base/WebService/DataObjectWebService.asmx/UndeleteDataObject"
+        ($Request.Body | ConvertFrom-Json).id | Should -Be 4711
     }
 
     It 'Should read one query by id' {

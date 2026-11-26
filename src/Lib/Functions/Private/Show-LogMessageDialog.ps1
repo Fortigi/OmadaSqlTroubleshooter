@@ -36,12 +36,11 @@ function Show-LogMessageDialog {
     try {
         $Private:DialogOwner = Get-MainFormMessageBoxOwner
         try {
-            if ($null -ne $Private:DialogOwner) {
-                [System.Windows.Forms.MessageBox]::Show($Private:DialogOwner, (Limit-MessageBoxText -Text $Text), $Title, [System.Windows.Forms.MessageBoxButtons]::OK, $Icon)
-            }
-            else {
-                [System.Windows.Forms.MessageBox]::Show((Limit-MessageBoxText -Text $Text), $Title, [System.Windows.Forms.MessageBoxButtons]::OK, $Icon)
-            }
+            # Discarded, deliberately. MessageBox.Show returns the button pressed ("OK"), and anything
+            # not discarded here becomes output of Write-LogOutput - and so of every function that logs
+            # a warning and then returns a value: "Select a query first" followed by "return $null"
+            # returned "OK" instead, and the caller went on with no query (a DoId of "").
+            $null = Show-WinFormsMessageBox -Owner $Private:DialogOwner -Text (Limit-MessageBoxText -Text $Text) -Title $Title -Icon $Icon
         }
         finally {
             if ($null -ne $Private:DialogOwner) {
@@ -54,4 +53,31 @@ function Show-LogMessageDialog {
     finally {
         Resume-WebViewCompletionPolling
     }
+}
+
+function Show-WinFormsMessageBox {
+    <#
+    .SYNOPSIS
+        Shows a WinForms message box with an OK button, owned by -Owner when there is one.
+
+    .OUTPUTS
+        [System.Windows.Forms.DialogResult]
+    #>
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory = $false)]
+        [AllowNull()]
+        $Owner,
+
+        [string]$Text,
+
+        [string]$Title,
+
+        $Icon
+    )
+
+    if ($null -ne $Owner) {
+        return [System.Windows.Forms.MessageBox]::Show($Owner, $Text, $Title, [System.Windows.Forms.MessageBoxButtons]::OK, $Icon)
+    }
+    return [System.Windows.Forms.MessageBox]::Show($Text, $Title, [System.Windows.Forms.MessageBoxButtons]::OK, $Icon)
 }

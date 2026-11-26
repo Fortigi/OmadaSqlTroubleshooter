@@ -18,6 +18,15 @@ Describe 'Get-OmadaQueryObjectUrl' -Tag 'Unit' {
         Get-OmadaQueryObjectUrl -BaseUrl $BaseUrl -DoId "1234" | Should -BeExactly $Expected
     }
 
+    It 'Should build the OData record address' {
+        Get-OmadaQueryObjectUrl -BaseUrl "https://tenant.omada.cloud/" -DoId "1234" -Kind OData | Should -BeExactly "https://tenant.omada.cloud/odata/dataobjects/C_P_SQLTROUBLESHOOTING(1234)"
+    }
+
+    It 'Should give nothing for an unusable id or tenant for the OData record either' {
+        Get-OmadaQueryObjectUrl -BaseUrl "https://tenant.omada.cloud" -DoId "12)" -Kind OData | Should -BeNullOrEmpty
+        Get-OmadaQueryObjectUrl -BaseUrl "file:///c:/x" -DoId "12" -Kind OData | Should -BeNullOrEmpty
+    }
+
     It 'Should give nothing for a tenant URL that is not an absolute web address (<BaseUrl>)' -ForEach @(
         @{ BaseUrl = $null }
         @{ BaseUrl = "" }
@@ -51,6 +60,12 @@ Describe 'Open-OmadaQueryObject' -Tag 'Unit' {
 
         Should -Invoke Start-Process -Times 1 -Exactly -ParameterFilter { $FilePath -eq "https://tenant.omada.cloud/dataobjdlg.aspx?DOID=77" }
         ($script:Log | Where-Object LogType -eq "WARNING") | Should -BeNullOrEmpty
+    }
+
+    It 'Should open the query''s OData record' {
+        Open-OmadaQueryObject -DoId "77" -Kind OData
+
+        Should -Invoke Start-Process -Times 1 -Exactly -ParameterFilter { $FilePath -eq "https://tenant.omada.cloud/odata/dataobjects/C_P_SQLTROUBLESHOOTING(77)" }
     }
 
     It 'Should warn and open nothing when no address can be built' {

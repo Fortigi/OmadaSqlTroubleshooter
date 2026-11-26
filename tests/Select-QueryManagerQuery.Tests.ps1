@@ -32,6 +32,37 @@ Describe 'Select-QueryManagerQuery' -Tag 'Unit' {
         @(Select-QueryManagerQuery -Query @($Query) -Filter "secret").Count | Should -Be 0
     }
 
+    It 'Should find a query by who created it' {
+        $Ownership = @{ "10560" = [PSCustomObject]@{ CreatedBy = "CORP\\ann"; ChangedBy = "" } }
+        @(Select-QueryManagerQuery -Query $script:List -Filter "corp\\ann" -Ownership $Ownership | ForEach-Object Id) | Should -Be @(10560)
+    }
+
+    It 'Should keep only my queries when asked' {
+        $Ownership = @{ "10560" = [PSCustomObject]@{ CreatedBy = "ann"; ChangedBy = "bob" }; "10577" = [PSCustomObject]@{ CreatedBy = "bob"; ChangedBy = "ann" } }
+
+        @(Select-QueryManagerQuery -Query $script:List -Ownership $Ownership -UserName "ann" -MyCreated $true | ForEach-Object Id) | Should -Be @(10560)
+        @(Select-QueryManagerQuery -Query $script:List -Ownership $Ownership -UserName "ann" -MyUpdated $true | ForEach-Object Id) | Should -Be @(10577)
+        @(Select-QueryManagerQuery -Query $script:List -Ownership $Ownership -UserName "ann" -MyCreated $true -MyUpdated $true | ForEach-Object Id) | Should -Be @(10560, 10577)
+    }
+
+    It 'Should treat no ownership as none known' {
+        @(Select-QueryManagerQuery -Query $script:List -Ownership $null -Filter "").Count | Should -Be 6
+    }
+
+    It 'Should show the queries of the view (<View>), never the temporary ones' -ForEach @(
+        @{ View = "Active"; Expected = @(1) }
+        @{ View = "Deleted"; Expected = @(2) }
+        @{ View = "All"; Expected = @(1, 2) }
+    ) {
+        $Queries = @(
+            [PSCustomObject]@{ Id = 1; Name = "A"; Deleted = $false }
+            [PSCustomObject]@{ Id = 2; Name = "B"; Deleted = $true }
+            [PSCustomObject]@{ Id = 3; Name = "TMP_1f2e"; Deleted = $true }
+            [PSCustomObject]@{ Id = 4; Name = "TMP_9a8b"; Deleted = $false }
+        )
+        @(Select-QueryManagerQuery -Query $Queries -View $View | ForEach-Object Id) | Should -Be $Expected
+    }
+
     It 'Should keep the original order and drop nulls' {
         @(Select-QueryManagerQuery -Query @($null, $script:List[2], $script:List[0]) -Filter "" | ForEach-Object Id) | Should -Be @(10560, 10521)
     }

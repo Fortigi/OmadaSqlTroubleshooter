@@ -18,6 +18,7 @@ function Open-HelpForm {
         Import-EventObjects -ClassName "HelpForm"
 
         $Script:HelpForm.Elements.DataGridShortcuts.ItemsSource = @(Get-KeyboardShortcut)
+        Update-DataGridColumnWidth -Grid $Script:HelpForm.Elements.DataGridShortcuts
         $Script:HelpForm.Elements.TextBlockHelpVersion.Text = (Get-AboutText -Version $Script:RunTimeConfig.ApplicationVersion -Year (Get-Date).Year).Version
 
         # Only for a version GitHub has a release of (Get-GitHubReleaseLink).

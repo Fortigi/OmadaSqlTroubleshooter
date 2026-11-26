@@ -42,7 +42,9 @@ function Invoke-GenerateDiffView {
             $OldRun.FontSize = 14
             $NewRun.FontSize = 14
 
-            if ($OldLine -ne $NewLine) {
+            # -cne: SQL keywords are case-insensitive, but a change that only changes case is still a
+            # change to the saved text, and the exported diff (ConvertTo-HistoryDiffText) shows it.
+            if ($OldLine -cne $NewLine) {
                 if ($i -ge $OldLines.Count) {
                     $NewRun.Background = New-Object System.Windows.Media.SolidColorBrush([System.Windows.Media.Color]::FromRgb(170, 255, 170))
                     $NewParagraph.Background = New-Object System.Windows.Media.SolidColorBrush([System.Windows.Media.Color]::FromRgb(170, 255, 170))
