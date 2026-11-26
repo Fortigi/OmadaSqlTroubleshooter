@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "metricVersion": 1,
-  "generatedAt": "2026-11-25T12:26:15Z",
+  "generatedAt": "2026-11-26T12:56:15Z",
   "units": [
     {
       "file": "src/Lib/Events/MainForm.Definition.ps1",
@@ -24,14 +24,14 @@
     {
       "file": "src/Lib/Events/MainFormTabContent.Elements.CheckboxCheckboxMyUpdatedQueries.ps1",
       "unit": "<script-body>",
-      "cyclomatic": 10,
-      "cognitive": 24
+      "cyclomatic": 9,
+      "cognitive": 20
     },
     {
       "file": "src/Lib/Events/MainFormTabContent.Elements.CheckboxMyCreatedQueries.ps1",
       "unit": "<script-body>",
-      "cyclomatic": 10,
-      "cognitive": 24
+      "cyclomatic": 9,
+      "cognitive": 20
     },
     {
       "file": "src/Lib/Events/MainFormTabContent.Elements.ComboBoxSelectAuthenticationOption.ps1",
