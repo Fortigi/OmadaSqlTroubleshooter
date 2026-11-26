@@ -88,7 +88,8 @@ function Select-SqlHistoryStartItem {
     if ($null -ne $Private:Target -and $null -ne $Private:Target.SelectChangeDate) {
         $Private:Index = Find-SqlHistoryItemIndex -Item $Item -ChangeDate $Private:Target.SelectChangeDate -ChangedBy $Private:Target.SelectChangedBy
         if ($Private:Index -lt 0) {
-            "The change of {0} did not change the SQL, so it has no version here; showing the newest." -f $Private:Target.SelectChangeDate | Write-LogOutput -LogType DEBUG
+            # The date in one format whatever the machine's culture, so the log reads the same everywhere.
+            "The change of {0} did not change the SQL, so it has no version here; showing the newest." -f (Get-Date -Date $Private:Target.SelectChangeDate -Format "yyyy-MM-dd HH:mm:ss") | Write-LogOutput -LogType DEBUG
             $Private:Index = 0
         }
     }

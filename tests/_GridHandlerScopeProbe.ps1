@@ -107,6 +107,17 @@ $ProbeModule = New-Module -Name GridHandlerScopeProbe -ArgumentList $HandlerPath
         return 10.0
     }
 
+    # Set-DataGridColumnWidth.ps1's entry point, which the handler calls once per grid. A stand-in, as
+    # the others here: what is measured is that the handler reaches it from the module's own scope.
+    function Update-DataGridColumnWidth {
+        param(
+            $Grid,
+            $Item
+        )
+
+        $script:Recorded.Add("ColumnWidth")
+    }
+
     function Write-LogOutput {
         param(
             [Parameter(ValueFromPipeline = $true)]

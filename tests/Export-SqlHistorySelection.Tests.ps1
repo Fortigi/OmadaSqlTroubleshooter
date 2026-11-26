@@ -82,7 +82,7 @@ Describe 'Export-SqlHistorySelection' -Tag 'Unit' {
         $Path = Export-SqlHistorySelection -Kind Diff
 
         $Path | Should -BeLike "*SQL_History_Accounts_open_closed_20261126_090507_diff.diff"
-        Get-Content -Path $Path -Raw | Should -Match "(?m)^\+ FROM b$"
+        Get-Content -Path $Path -Raw | Should -Match "(?m)^\+ FROM b\r?$"
     }
 
     It 'Should write nothing when the dialog is cancelled' {

@@ -183,6 +183,10 @@ Describe "The handlers run with the installed module's visibility" -Tag 'Sta' {
         ($Private:Focused | Select-Object -Unique) | Should -Be "Focus:1"
     }
 
+    It "sizes the columns of each grid it wires (Update-DataGridColumnWidth)" {
+        $Script:Probe.Recorded | Should -Contain "ColumnWidth"
+    }
+
     It "clears the column-selection anchor and refreshes the context menu" {
         $Script:Probe.Recorded | Should -Contain "ClearAnchor"
         $Script:Probe.Recorded | Should -Contain "MenuState"

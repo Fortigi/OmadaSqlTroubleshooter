@@ -102,7 +102,7 @@ Describe "Invoke-LoadSqlHistoryData" {
             }
 
             $Script:SqlHistoryForm.Elements.DataGridHistory.SelectedIndex | Should -Be 0
-            ($script:LogMessages | Where-Object LogType -eq "DEBUG").Message | Should -Contain "The change of 01/01/2020 00:00:00 did not change the SQL, so it has no version here; showing the newest."
+            ($script:LogMessages | Where-Object LogType -eq "DEBUG").Message | Should -Contain "The change of 2020-01-01 00:00:00 did not change the SQL, so it has no version here; showing the newest."
         }
 
         It "reads the history of the query it was opened for" {
