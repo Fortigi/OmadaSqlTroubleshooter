@@ -10,6 +10,8 @@ BeforeAll {
     function Update-DataGridColumnWidth { param($Grid, $Item) }
     # The highlighted view is a RichTextBox; its stand-in keeps the text it was given.
     function Set-SqlRichText { param($RichTextBox, $Text) $RichTextBox.Text = $Text }
+
+    $script:DetailButtons = @("ButtonOpenQueryDetail", "ButtonOpenQueryDetailInTab", "ButtonRenameQueryDetail", "ButtonOpenQueryDetailInOmada", "ButtonOpenQueryDetailOData")
 }
 
 Describe 'Get-QueryDetailOwnership' -Tag 'Unit' {
@@ -92,5 +94,71 @@ Describe 'Update-QueryDetailForm' -Tag 'Unit' {
         $script:Errors[0] | Should -Match "Reading the history of query 'Old name' failed: 500"
         @($Script:QueryDetailForm.Elements.DataGridQueryHistory.ItemsSource).Count | Should -Be 0
         $Script:QueryDetailForm.Elements.RichTextBoxQueryText.Text | Should -Match "SELECT"
+    }
+}
+
+Describe 'Update-QueryDetailForm for a deleted query' -Tag 'Unit' {
+    BeforeEach {
+        $script:Errors.Clear()
+        $Script:AppConfig = [PSCustomObject]@{ BaseUrl = "https://t" }
+        $Elements = [PSCustomObject]@{
+            TextBlockQueryTitle     = [PSCustomObject]@{ Text = "" }
+            DataGridQueryProperties = [PSCustomObject]@{ ItemsSource = $null }
+            RichTextBoxQueryText    = [PSCustomObject]@{ Text = "" }
+            DataGridQueryHistory    = [PSCustomObject]@{ ItemsSource = $null }
+        }
+        foreach ($Name in $script:DetailButtons) { $Elements | Add-Member -NotePropertyName $Name -NotePropertyValue ([PSCustomObject]@{ IsEnabled = $null }) }
+        $Script:QueryDetailForm = [PSCustomObject]@{ Query = [PSCustomObject]@{ DoId = "77"; DisplayName = "Gone" }; Definition = [PSCustomObject]@{ Title = "" }; Elements = $Elements }
+        $Script:QueryManagerForm = [PSCustomObject]@{
+            Ownership = @{}
+            Queries   = @(
+                [PSCustomObject]@{ Id = 76; DisplayName = "Live"; Deleted = $false; C_QUERY = "SELECT live" }
+                [PSCustomObject]@{ Id = 77; DisplayName = "Gone"; Deleted = $true; UId = "u-77"; C_QUERY = "SELECT gone" }
+            )
+        }
+        Mock Invoke-SavedQueryRequest {
+            if ($Request.Method -eq "GET") { [PSCustomObject]@{ Succeeded = $false; Message = "404" } }
+            else { [PSCustomObject]@{ Succeeded = $true; Result = (Get-QmFixture "asmx.paging.history.json") } }
+        }
+    }
+
+    AfterEach {
+        $Script:QueryManagerForm = $null
+    }
+
+    It 'Should show the query from the list instead of asking OData for it' {
+        Update-QueryDetailForm
+
+        Should -Invoke Invoke-SavedQueryRequest -Times 0 -Exactly -ParameterFilter { $Request.Method -eq "GET" }
+        $script:Errors.Count | Should -Be 0
+        $Script:QueryDetailForm.Elements.RichTextBoxQueryText.Text | Should -Be "SELECT gone"
+        $Script:QueryDetailForm.Query.UId | Should -Be "u-77"
+        $Script:QueryDetailForm.Query.Deleted | Should -BeTrue
+        $Script:QueryDetailForm.Definition.Title | Should -Be "Query details - Gone - deleted"
+        (@($Script:QueryDetailForm.Elements.DataGridQueryProperties.ItemsSource) | Where-Object Property -eq "Is Deleted").Value | Should -Be "Yes"
+    }
+
+    It 'Should grey out what needs the live query, and leave the history' {
+        Update-QueryDetailForm
+
+        foreach ($Name in $script:DetailButtons) {
+            $Script:QueryDetailForm.Elements.$Name.IsEnabled | Should -BeFalse
+        }
+    }
+
+    It 'Should still read a query that is not deleted from OData, and enable its buttons' {
+        $Script:QueryDetailForm.Query.DoId = "76"
+        Mock Invoke-SavedQueryRequest {
+            if ($Request.Method -eq "GET") { [PSCustomObject]@{ Succeeded = $true; Result = [PSCustomObject]@{ Id = 76; DisplayName = "Live"; Deleted = $false; C_QUERY = "SELECT fresh" } } }
+            else { [PSCustomObject]@{ Succeeded = $true; Result = (Get-QmFixture "asmx.paging.history.json") } }
+        }
+
+        Update-QueryDetailForm
+
+        Should -Invoke Invoke-SavedQueryRequest -Times 1 -Exactly -ParameterFilter { $Request.Uri -like "*C_P_SQLTROUBLESHOOTING(76)" }
+        $Script:QueryDetailForm.Elements.RichTextBoxQueryText.Text | Should -Be "SELECT fresh"
+        foreach ($Name in $script:DetailButtons) {
+            $Script:QueryDetailForm.Elements.$Name.IsEnabled | Should -BeTrue
+        }
     }
 }

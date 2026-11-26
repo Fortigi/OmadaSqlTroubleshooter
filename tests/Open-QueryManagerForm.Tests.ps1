@@ -321,7 +321,7 @@ Describe 'Get-QueryManagerCommandState' -Tag 'Unit' {
     It 'Should allow <Case>' -ForEach @(
         @{ Case = 'nothing without a query'; Query = $null; Enabled = @() }
         @{ Case = 'everything but Restore for a query'; Query = [PSCustomObject]@{ Deleted = $false }; Enabled = @("Delete", "Details", "OData", "Omada", "Open", "OpenInTab", "Rename") }
-        @{ Case = 'only looking and Restore for a deleted query'; Query = [PSCustomObject]@{ Deleted = $true }; Enabled = @("Details", "OData", "Omada", "Restore") }
+        @{ Case = 'only Details and Restore for a deleted query'; Query = [PSCustomObject]@{ Deleted = $true }; Enabled = @("Details", "Restore") }
     ) {
         $State = Get-QueryManagerCommandState -Query $Query
         @($State.Keys | Where-Object { $State[$_] } | Sort-Object) | Should -Be $Enabled

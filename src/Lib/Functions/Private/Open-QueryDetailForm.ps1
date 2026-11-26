@@ -74,10 +74,12 @@ function Update-QueryDetailForm {
     $Private:Query = $Script:QueryDetailForm.Query
     $Private:Context = @{ BaseUrl = $Script:AppConfig.BaseUrl; QueryDoId = $Private:Query.DoId }
 
-    $Private:Object = Invoke-SavedQueryRequest -Request (New-QueryManagerRequest -Kind "QueryObject" -Context $Private:Context)
+    $Private:Object = Get-QueryDetailObject -DoId $Private:Query.DoId -Context $Private:Context
     if (-not $Private:Object.Succeeded) {
         "Reading query '{0}' failed: {1}" -f $Private:Query.DisplayName, $Private:Object.Message | Write-ContainedErrorLog
     }
+    $Private:Deleted = [string]$Private:Object.Result.Deleted -eq "True"
+    $Private:Query | Add-Member -NotePropertyName "Deleted" -NotePropertyValue $Private:Deleted -Force
 
     $Private:History = Invoke-SavedQueryRequest -Request (New-QueryManagerRequest -Kind "QueryHistory" -Context $Private:Context)
     if (-not $Private:History.Succeeded) {
@@ -90,13 +92,81 @@ function Update-QueryDetailForm {
     # Handed to the history window, whose Details tab shows it (Invoke-QueryDetailHistory).
     $Private:Query | Add-Member -NotePropertyName "UId" -NotePropertyValue ([string]$Private:Object.Result.UId) -Force
 
-    $Script:QueryDetailForm.Definition.Title = "Query details - {0}" -f $Private:Name
-    $Script:QueryDetailForm.Elements.TextBlockQueryTitle.Text = "{0}  ({1})" -f $Private:Name, $Private:Query.DoId
+    $Private:Suffix = if ($Private:Deleted) { " - deleted" } else { "" }
+    $Script:QueryDetailForm.Definition.Title = "Query details - {0}{1}" -f $Private:Name, $Private:Suffix
+    $Script:QueryDetailForm.Elements.TextBlockQueryTitle.Text = "{0}  ({1}){2}" -f $Private:Name, $Private:Query.DoId, $Private:Suffix
+    Update-QueryDetailCommandState -Deleted $Private:Deleted
     $Script:QueryDetailForm.Elements.DataGridQueryProperties.ItemsSource = @(ConvertTo-QueryPropertyList -Query $Private:Object.Result -Ownership (Get-QueryDetailOwnership) -HistoryEntry $Private:Entry)
     Set-SqlRichText -RichTextBox $Script:QueryDetailForm.Elements.RichTextBoxQueryText -Text ([string]$Private:Object.Result.C_QUERY)
     $Script:QueryDetailForm.Elements.DataGridQueryHistory.ItemsSource = $Private:Entry
     Update-DataGridColumnWidth -Grid $Script:QueryDetailForm.Elements.DataGridQueryProperties
     Update-DataGridColumnWidth -Grid $Script:QueryDetailForm.Elements.DataGridQueryHistory
+}
+
+function Get-QueryDetailObject {
+    <#
+    .SYNOPSIS
+        The query object the details show: read from OData, or - for a deleted query, which OData does
+        not return by id - the one the query manager's list already holds.
+
+    .DESCRIPTION
+        The query manager reads its list with deleted queries included (DeletedStatus=Both), so a
+        deleted query's fields and SQL are already there; asking OData for it by id only fails. A query
+        that is not deleted is read afresh, as before, so the details show its current state.
+
+    .PARAMETER DoId
+        The query.
+
+    .PARAMETER Context
+        The request context (BaseUrl, QueryDoId).
+
+    .OUTPUTS
+        [PSCustomObject] @{ Succeeded; Result; Message }, as Invoke-SavedQueryRequest gives.
+    #>
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$DoId,
+
+        [Parameter(Mandatory = $true)]
+        [hashtable]$Context
+    )
+
+    $Private:Listed = $null
+    if ($null -ne $Script:QueryManagerForm) {
+        $Private:Listed = @($Script:QueryManagerForm.Queries | Where-Object { $null -ne $_ -and [string]$_.Id -eq $DoId }) | Select-Object -First 1
+    }
+    if ($null -ne $Private:Listed -and [string]$Private:Listed.Deleted -eq "True") {
+        return [PSCustomObject]@{ Succeeded = $true; Result = $Private:Listed; Message = $null }
+    }
+
+    return Invoke-SavedQueryRequest -Request (New-QueryManagerRequest -Kind "QueryObject" -Context $Context)
+}
+
+function Update-QueryDetailCommandState {
+    <#
+    .SYNOPSIS
+        Greys out the query details' buttons that need the live query object while it is deleted: it
+        cannot be opened, renamed, or found in Omada or through OData until it is restored (in the
+        query manager). Its properties, SQL and history - and the history window - stay available.
+
+    .PARAMETER Deleted
+        The query is deleted.
+
+    .OUTPUTS
+        None.
+    #>
+    [CmdletBinding()]
+    param(
+        [bool]$Deleted
+    )
+
+    foreach ($Private:Name in @("ButtonOpenQueryDetail", "ButtonOpenQueryDetailInTab", "ButtonRenameQueryDetail", "ButtonOpenQueryDetailInOmada", "ButtonOpenQueryDetailOData")) {
+        $Private:Button = $Script:QueryDetailForm.Elements.$Private:Name
+        if ($null -ne $Private:Button) {
+            $Private:Button.IsEnabled = -not $Deleted
+        }
+    }
 }
 
 function Get-QueryDetailOwnership {

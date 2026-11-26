@@ -312,8 +312,9 @@ function Get-QueryManagerCommandState {
     .DESCRIPTION
           no single query selected   none of them (New and Refresh do not need one)
           a query                    everything but Restore
-          a deleted query            Details, Open in Omada, View OData record and Restore: it cannot
-                                     be opened, renamed or deleted until it is restored
+          a deleted query            Details and Restore. It cannot be opened, renamed or deleted
+                                     until it is restored, and neither its Omada page nor its OData
+                                     record can be found while it is deleted
 
     .PARAMETER Query
         The selected query (Get-QueryManagerSelectedQuery -Quiet), or $null.
@@ -337,8 +338,8 @@ function Get-QueryManagerCommandState {
         Rename    = $Private:Active
         Delete    = $Private:Active
         Details   = $Private:Selected
-        Omada     = $Private:Selected
-        OData     = $Private:Selected
+        Omada     = $Private:Active
+        OData     = $Private:Active
         Restore   = $Private:Selected -and -not $Private:Active
     }
 }

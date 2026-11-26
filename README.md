@@ -90,8 +90,10 @@ the editor, the results and the status bar.
     "Only my queries" filters need; on a tenant without that view they stay empty and the filters have
     no effect
   - The buttons that act on a query are greyed out until one query is selected. A deleted query can
-    be looked at (Details, Open in Omada, View OData record) and **Restore**d - Restore is only
-    available for a deleted query, and asks first when another query has meanwhile taken its name
+    be looked at (**Details**, shown from the list itself, because OData does not return a deleted
+    query by id) and **Restore**d. Restore is only available for a deleted query, and asks first when
+    another query has meanwhile taken its name. Open, Rename, Delete, Open in Omada and View OData
+    record need the live query and stay greyed out for a deleted one, in the list and in its details
   - **New…** creates an empty query (a name is asked for; its text is a one-line SQL comment naming it)
     and asks where to open it: in this tab (with the tab's usual save prompt), in a new tab, or not. **Open** shows a query in the active tab in place of its query; unsaved
     changes there (a saved or an ad-hoc query, never an empty editor) are offered to be saved first

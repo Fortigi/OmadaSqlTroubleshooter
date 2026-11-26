@@ -91,7 +91,9 @@ semantic version.
 - **Restore** a deleted query from the query manager, and a **Show** selector there: queries excluding
   deleted (the default), deleted only, or all. The list is read with deleted queries included
   (`DeletedStatus=Both`) and restored through the same undelete web service the application already
-  uses for its temporary query object; the application's own temporary objects are never listed.
+  uses for its temporary query object; the application's own temporary objects are never listed. The
+  details of a deleted query are shown from the list (OData does not return a deleted object by id),
+  and Open, Rename, Delete, Open in Omada and View OData record are greyed out for it.
 
 - **Only my queries** filters (Created / Last updated) in the query manager.
 - **View OData record** in the query manager and the query details: the query object's OData record
